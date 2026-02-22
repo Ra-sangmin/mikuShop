@@ -372,7 +372,19 @@ export default function CartPage() {
                 </span>
             </div>
 
-            <button style={{ width: '100%', padding: '18px', backgroundColor: '#2d3e61', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' }}>
+            <button 
+              onClick={() => {
+                if (selectedForPayment.length === 0) {
+                  alert("결제할 상품을 선택해주세요.");
+                  return;
+                }
+                if (confirm(`선택하신 ${selectedForPayment.length}개의 상품에 대해 1차 결제를 진행하시겠습니까?\n총 예상 결제 금액: ${expectedTotalPayment.toLocaleString()}원`)) {
+                  alert(`1차 결제가 완료되었습니다.\n최종 결제 금액: ${expectedTotalPayment.toLocaleString()}원\n[1차결제완료] 리스트로 이동합니다.`);
+                  // 실제 결제 처리 로직이 들어갈 자리
+                }
+              }}
+              style={{ width: '100%', padding: '18px', backgroundColor: '#2d3e61', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' }}
+            >
                 전체 결제 전송하기
             </button>
         </div>
