@@ -12,7 +12,7 @@ export default function SortBar({ currentSort , setSelectedItem }: any) {
     const params = new URLSearchParams(searchParams.toString());
     params.set('sort', sortType);
     params.set('page', '1');
-    router.push(`/rakuten?${params.toString()}`);
+    router.push(`/main_shop/rakuten?${params.toString()}`);
   };
 
   const sortOptions = [

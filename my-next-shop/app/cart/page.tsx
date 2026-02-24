@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import ProductDetail from '../rakuten/ProductDetail';
+import ProductDetail from '../main_shop/rakuten/ProductDetail';
 import { useExchangeRate } from '../context/ExchangeRateContext';
 
 // 서브 컴포넌트: 상태 아이콘
@@ -32,6 +32,23 @@ export default function CartPage() {
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const ITEMS_PER_PAGE = 5;
+
+  // ★ 브라우저 뒤로가기 제어
+  useEffect(() => {
+    if (selectedItem) {
+      window.history.pushState({ isDetail: true }, "");
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (selectedItem) {
+        setSelectedItem(null);
+        window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [selectedItem]);
 
   useEffect(() => {
     // 자동 번역을 위한 쿠키 설정 (라쿠텐 페이지와 동일)

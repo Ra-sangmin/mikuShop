@@ -13,6 +13,23 @@ export default function WishlistPage() {
   const { exchangeRate } = useExchangeRate();
   const detailRef = useRef<HTMLDivElement>(null);
 
+  // ★ 브라우저 뒤로가기 제어
+  useEffect(() => {
+    if (selectedItem) {
+      window.history.pushState({ isDetail: true }, "");
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (selectedItem) {
+        setSelectedItem(null);
+        window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [selectedItem]);
+
   useEffect(() => {
     // 자동 번역을 위한 쿠키 설정
     const domain = window.location.hostname;

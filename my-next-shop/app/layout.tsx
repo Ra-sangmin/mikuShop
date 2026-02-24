@@ -2,7 +2,6 @@
 import './globals.css'; // 기존 style.css 내용을 여기에 통합
 import Header from './components/Header';
 import Footer from './components/Footer';
-import FloatingButtons from './components/FloatingButtons';
 import { ExchangeRateProvider } from './context/ExchangeRateContext';
 
 export const metadata = {
@@ -35,8 +34,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}>
             {children}
           </main>
-          <FloatingButtons />
-            
           <Footer />
         </ExchangeRateProvider>
       </body>

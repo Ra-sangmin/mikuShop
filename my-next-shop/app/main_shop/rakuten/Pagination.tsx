@@ -17,7 +17,7 @@ export default function Pagination({ currentPage, pageCount, sort }: Props) {
     if (page < 1 || page > pageCount) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set('page', page.toString());
-    router.push(`/rakuten?${params.toString()}`);
+    router.push(`/main_shop/rakuten?${params.toString()}`);
   };
 
   // 기존 EJS 로직: 시작 및 끝 페이지 계산

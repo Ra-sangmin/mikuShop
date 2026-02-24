@@ -1,0 +1,92 @@
+1. XAMPP Control Panel 실행
+2. Apache start 버튼 클릭
+3. 터미널 접속후 cd C:\xampp\miku 로 이동
+4. node server.js 실행
+5. http://localhost:3000/  URL 접속
+
+예시 사이트 - https://www.jinsight.co.kr/
+
+express-js-on-vercel-orcin-six-60.vercel.app
+
+
+
+npm run dev
+npm run start:dev 
+
+
+
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* 라쿠텐 페이지 전용 스타일 */
+        .rakuten-header { background-color: #BF0000; color: white; padding: 20px 0; text-align: center; }
+        
+        .search-wrap { margin: 30px auto; max-width: 600px; display: flex; gap: 10px; }
+        .search-wrap input { flex: 1; padding: 15px; border: 2px solid #BF0000; border-radius: 5px; font-size: 16px; }
+        .search-wrap button { background: #BF0000; color: white; border: none; padding: 15px 30px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 16px; }
+        
+        /* 상품 리스트 그리드 (4열 배치) */
+        .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; padding: 20px 0; }
+        .item-card { border: 1px solid #eee; border-radius: 8px; overflow: hidden; transition: transform 0.2s; background: white; }
+        .item-card:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .item-img { width: 100%; height: 200px; object-fit: cover; border-bottom: 1px solid #eee; }
+        .item-info { padding: 15px; }
+        .item-price { color: #BF0000; font-weight: bold; font-size: 18px; margin-top: 10px; }
+        .item-title { font-size: 14px; color: #333; height: 40px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    </style>
+</head>
+<body>
+
+    <header class="ji-header">
+        <div class="top-bar" style="background:#333; color:white; padding:10px; text-align:center;">
+             <a href="/" style="color:white; text-decoration:none;">⬅ 메인으로 돌아가기</a>
+        </div>
+        <div class="rakuten-header">
+            <h1><i class="fa-solid fa-r"></i> Rakuten 검색</h1>
+        </div>
+    </header>
+
+    <main class="container">
+        <form action="/rakuten" method="GET" class="search-wrap">
+            <input type="text" name="q" placeholder="라쿠텐 상품 검색 (예: 피규어, 낚시)" value="<%= searchQuery %>">
+            <button type="submit">검색</button>
+        </form>
+
+        <h2 style="text-align: center; margin-top: 20px;"><%= msg %></h2>
+
+        <div class="item-grid">
+            <% if (items && items.length > 0) { %>
+                <% items.forEach(function(entry) { 
+                    const item = entry.Item; // 라쿠텐 데이터 구조에 맞춤
+                %>
+                <div class="item-card">
+                    <a href="<%= item.itemUrl %>" target="_blank">
+                        <% if (item.mediumImageUrls.length > 0) { %>
+                            <img src="<%= item.mediumImageUrls[0].imageUrl %>" class="item-img" alt="<%= item.itemName %>">
+                        <% } else { %>
+                            <div class="item-img" style="background:#eee;">이미지 없음</div>
+                        <% } %>
+                        
+                        <div class="item-info">
+                            <div class="item-title"><%= item.itemName %></div>
+                            <div class="item-price">¥<%= item.itemPrice.toLocaleString() %></div>
+                        </div>
+                    </a>
+                </div>
+                <% }); %>
+            <% } else { %>
+                <p style="text-align: center; grid-column: 1/-1; color: #999;">
+                    검색 결과가 없습니다. 다른 검색어를 입력해보세요.
+                </p>
+            <% } %>
+        </div>
+    </main>
+
+</body>
+</html>

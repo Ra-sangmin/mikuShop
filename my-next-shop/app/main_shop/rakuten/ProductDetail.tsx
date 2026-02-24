@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useMemo } from 'react';
-import { DELIVERY_FEE_DATA } from '../lib/shippingData';
+import { DELIVERY_FEE_DATA } from '@/app/lib/shippingData';
 
 // 1. 배송 방법별 데이터 정의
 const SHIPPING_METHODS = {

@@ -1,14 +1,10 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import ProductCard from './ProductCard';
-import ProductDetail from './ProductDetail';
-import SortBar from './SortBar';
-import Pagination from './Pagination';
 import Link from 'next/link';
-import { useExchangeRate } from '../context/ExchangeRateContext';
+import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 
-export default function RakutenPage() {
+export default function YahooShoppingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -25,6 +21,25 @@ export default function RakutenPage() {
   const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 0, sort : 'standard' });
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
+
+  // ★ 브라우저 뒤로가기 제어
+  useEffect(() => {
+    if (selectedItem) {
+      // 상세보기가 열릴 때 히스토리에 가짜 상태 추가
+      window.history.pushState({ isDetail: true }, "");
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (selectedItem) {
+        // 뒤로가기 발생 시 상세보기를 닫고 히스토리 이동을 막음
+        setSelectedItem(null);
+        window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [selectedItem]);
 
   // ★ 2. ProductDetail의 위치를 기억할 ref 생성
   const detailRef = useRef<HTMLDivElement>(null);

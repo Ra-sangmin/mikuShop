@@ -1,60 +1,492 @@
-// src/app/page.tsx
-import Image from 'next/image';
+"use client";
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 export default function HomePage() {
-  return (
-    <section className="main-content container">
-      {/* 배너 슬라이더 영역 */}
-      <div className="banner-slider">
-        <div className="slide-item">
-          <div className="text-content">
-            <span className="badge">신규주문 고객 대상 EVENT</span>
-            <h2>업계최고<br />신규가입 적립금</h2>
-            <p>
-              모든 신규 주문건에 대하여 <strong>만원의 구매지원금</strong>을 지원해 드립니다. 
-              신규회원 가입시 자동으로 적립되며, 즉시 사용 가능합니다. 
-            </p>
-          </div>
-          <div className="image-content">
-            {/* banner_illust.png 파일은 public 폴더에 있어야 합니다 */}
-            <img src="/banner_illust.png" alt="Event Banner" /> 
-          </div>
-          <button className="prev-btn">&lt;</button> 
-          <button className="next-btn">&gt;</button> 
-          <div className="dots">
-            <span className="dot active"></span>
-            <span className="dot"></span>
-            <span className="dot"></span>
-            <span className="dot"></span>
-          </div>
-        </div>
-      </div>
+  const banners = [
+    {
+      title: <>안전포장 빠른배송<br />평일 매일 국제발송</>,
+      subTitle: "합리적이고 저렴한 배송비",
+      bgColor: "#B1C9A7",
+      image: "/images/hero.png"
+    },
+    {
+      title: <>일본 쇼핑의 시작<br />미쿠짱과 함께하세요</>,
+      subTitle: "최저가 구매대행 서비스",
+      bgColor: "#fcd34d",
+      image: "/images/hero.png"
+    },
+    {
+      title: <>메루카리·야후옥션<br />실시간 입찰 및 구매</>,
+      subTitle: "간편한 일본 직구 솔루션",
+      bgColor: "#93c5fd",
+      image: "/images/hero.png"
+    },
+    {
+      title: <>다양한 혜택과 이벤트<br />회원 등급별 포인트 적립</>,
+      subTitle: "신규 가입 시 적립금 증정",
+      bgColor: "#fda4af",
+      image: "/images/hero.png"
+    }
+  ];
 
-      {/* 사이드 메뉴 영역 */}
-      <div className="side-menu">
-        <div className="quick-grid">
-          <QuickGridItem icon="ℹ️" label="이용가이드" />
-          <QuickGridItem icon="🔒" label="개인통관고유부호" />
-          <QuickGridItem icon="🏅" label="회원등급/혜택" /> 
-          <QuickGridItem icon="✈️" label="국제배송 요금표" />
-          <QuickGridItem icon="%" label="관/부가세 안내" /> 
-          <QuickGridItem icon="➕" label="예상비용 계산" /> 
+  // 무한 슬라이드를 위해 양 끝에 클론 추가 [마지막 클론, 1, 2, 3, 4, 첫번째 클론]
+  const extendedBanners = [banners[banners.length - 1], ...banners, banners[0]];
+
+  const [currentBanner, setCurrentBanner] = useState(1); // 실제 첫번째 배너는 인덱스 1
+  const [dragStartX, setDragStartX] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(true);
+  const [isPaused, setIsPaused] = useState(false);
+
+  const nextSlide = () => {
+    if (!isTransitioning) return;
+    setCurrentBanner((prev) => prev + 1);
+  };
+
+  const prevSlide = () => {
+    if (!isTransitioning) return;
+    setCurrentBanner((prev) => prev - 1);
+  };
+
+  // 트랜지션이 끝났을 때 클론 위치라면 원래 위치로 순간이동
+  const handleTransitionEnd = () => {
+    if (currentBanner === 0) {
+      setIsTransitioning(false);
+      setCurrentBanner(banners.length);
+    } else if (currentBanner === banners.length + 1) {
+      setIsTransitioning(false);
+      setCurrentBanner(1);
+    }
+  };
+
+  // 순간이동 후 다시 트랜지션 활성화
+  useEffect(() => {
+    if (!isTransitioning) {
+        // 리페인트 이후에 실행되도록 비동기 처리
+        const timer = setTimeout(() => setIsTransitioning(true), 50);
+        return () => clearTimeout(timer);
+    }
+  }, [isTransitioning]);
+
+  useEffect(() => {
+    if (isPaused) return; // 클릭/드래그 중이면 정지
+    const timer = setInterval(nextSlide, 5000);
+    return () => clearInterval(timer);
+  }, [isTransitioning, isPaused]); 
+
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    setDragStartX(clientX);
+    setIsPaused(true); // 자동 스크롤 정지
+  };
+
+  const handleDragMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (dragStartX === null) return;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    setDragOffset(clientX - dragStartX);
+  };
+
+  const handleDragEnd = (e: React.MouseEvent | React.TouchEvent) => {
+    if (dragStartX === null) return;
+    setIsPaused(false); // 자동 스크롤 재개
+    
+    if (Math.abs(dragOffset) > 100) {
+      if (dragOffset > 0) {
+        prevSlide();
+      } else {
+        nextSlide();
+      }
+    }
+    setDragStartX(null);
+    setDragOffset(0);
+  };
+
+  return (
+    <div style={{ backgroundColor: '#fff', minHeight: '100vh', paddingBottom: '50px' }}>
+      
+      {/* 1. Hero Banner Section */}
+      <section 
+        onMouseDown={handleDragStart}
+        onMouseMove={handleDragMove}
+        onMouseUp={handleDragEnd}
+        onMouseLeave={handleDragEnd}
+        onTouchStart={handleDragStart}
+        onTouchMove={handleDragMove}
+        onTouchEnd={handleDragEnd}
+        style={{ 
+            height: '600px', 
+            position: 'relative', 
+            overflow: 'hidden',
+            cursor: 'grab',
+            userSelect: 'none',
+            backgroundColor: '#eee'
+        }}
+      >
+        {/* 슬라이드 트랙 */}
+        <div 
+          onTransitionEnd={handleTransitionEnd}
+          style={{
+            display: 'flex',
+            height: '100%',
+            width: `${extendedBanners.length * 100}%`,
+            transform: `translateX(calc(-${currentBanner * (100 / extendedBanners.length)}% + ${dragOffset}px))`,
+            transition: (dragStartX === null && isTransitioning) ? 'transform 0.5s ease-in-out' : 'none'
+        }}>
+          {extendedBanners.map((banner, index) => (
+            <div key={index} style={{
+                width: `${100 / extendedBanners.length}%`,
+                height: '100%',
+                backgroundColor: banner.bgColor,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background-color 0.5s ease'
+            }}>
+              <div className="container" style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between', 
+                  width: '100%', 
+                  maxWidth: '1200px', 
+                  padding: '0 20px'
+              }}>
+                <div style={{ color: '#000', zIndex: 2 }}>
+                  <h1 style={{ fontSize: '56px', fontWeight: '900', lineHeight: '1.1', marginBottom: '20px' }}>
+                    {banner.title}
+                  </h1>
+                  <div style={{ backgroundColor: '#000', color: banner.bgColor, display: 'inline-block', padding: '10px 25px', borderRadius: '30px', fontSize: '24px', fontWeight: 'bold' }}>
+                    {banner.subTitle}
+                  </div>
+                </div>
+                <div style={{ position: 'relative', height: '100%' }}>
+                  <img 
+                      src={banner.image} 
+                      alt="Miku Raccoon" 
+                      draggable="false"
+                      style={{ height: '350px', objectFit: 'contain', pointerEvents: 'none' }} 
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-        <a href="#" className="btn-qna">
-          <span>🎧 빠른 질문게시판</span>
-          <span className="arrow">&gt;</span>
-        </a>
-      </div>
-    </section>
+        {/* Carousel Dots */}
+        <div style={{ position: 'absolute', bottom: '20px', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '10px' }}>
+            {banners.map((_, i) => {
+                const activeIndex = currentBanner === 0 ? banners.length - 1 : (currentBanner === banners.length + 1 ? 0 : currentBanner - 1);
+                return (
+                    <div 
+                        key={i} 
+                        onClick={() => setCurrentBanner(i + 1)}
+                        style={{ 
+                            width: '12px', 
+                            height: '12px', 
+                            borderRadius: '50%', 
+                            backgroundColor: i === activeIndex ? '#ff4b2b' : '#fff', 
+                            opacity: i === activeIndex ? 1 : 0.5,
+                            cursor: 'pointer',
+                            transition: 'all 0.3s ease'
+                        }}
+                    ></div>
+                );
+            })}
+        </div>
+      </section>
+
+      {/* 2. Quick Service Icons */}
+      <section style={{ maxWidth: '1400px', margin: '60px auto', display: 'flex', justifyContent: 'center', gap: '50px', padding: '20px', flexWrap: 'wrap' }}>
+          <Link href="/purchase/quote" style={{ textDecoration: 'none' }}>
+            <QuickIcon icon="fa-desktop" label="견적문의" color="#ff0000" />
+          </Link>
+          <Link href="/purchase/request" style={{ textDecoration: 'none' }}>
+            <QuickIcon icon="fa-wallet" label="구매신청" color="#000000" />
+          </Link>
+          <Link href="/fee-guide" style={{ textDecoration: 'none' }}>
+            <QuickIcon icon="fa-file-invoice-dollar" label="수수료 안내" color="#000000" />
+          </Link>
+          <Link href="/shipping-fee" style={{ textDecoration: 'none' }}>
+            <QuickIcon icon="fa-plane" label="국제배송요금" color="#000000" />
+          </Link>
+          <Link href="/contact" style={{ textDecoration: 'none' }}>
+            <QuickIcon icon="fa-headset" label="카톡문의" color="#000000" />
+          </Link>
+      </section>
+
+      {/* 3. Frequently Visited Sites */}
+      <section className="container" style={{ maxWidth: '2200px', margin: '100px auto', padding: '0 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <h2 style={{ fontSize: '40px', fontWeight: 'bold', marginBottom: '40px', letterSpacing: '-1px', color: '#111', textAlign: 'center' }}>
+            자주 방문하는 사이트
+        </h2>
+        
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', width: '100%' }}>
+            <Link href="/main_shop/rakuten" style={{ textDecoration: 'none' }}>
+                <SiteCard logoSrc="/images/rakuten_logo.png" name="라쿠텐" desc="일본 대표 종합 쇼핑몰" />
+            </Link>
+            <Link href="/main_shop/yahoo_shopping" style={{ textDecoration: 'none' }}>
+                <SiteCard logoSrc="/images/yahoo_shopping_logo.png" name="야후 쇼핑" desc="다양한 혜택의 야후 쇼핑" />
+            </Link>
+            <Link href="/main_shop/amazon" style={{ textDecoration: 'none' }}>
+                <SiteCard logoSrc="/images/amazon_logo.png" name="아마존" desc="빠른 배송의 아마존 재팬" />
+            </Link>
+            
+            <Link href="/main_shop/merukari" style={{ textDecoration: 'none' }}>
+                <SiteCard logoSrc="/images/merukari_logo.png" name="메루카리" desc="일본 최대 중고거래 사이트" />
+            </Link>
+            <Link href="/main_shop/yahoo_auction" style={{ textDecoration: 'none' }}>
+                <SiteCard logoSrc="/images/yahoo_auction_logo.png" name="야후 옥션" desc="실시간 일본 옥션 입찰" />
+            </Link>
+        </div>
+      </section>
+
+      {/* 4. Popular Sites */}
+      <section style={{ backgroundColor: '#fff', padding: '60px 0', borderTop: '1px solid #f1f5f9' }}>
+        <h2 style={{ 
+            fontSize: '40px', 
+            fontWeight: 'bold', 
+            marginBottom: '40px', 
+            letterSpacing: '-1px', 
+            color: '#111',
+            textAlign: 'center' 
+        }}>
+            일본 전문 쇼핑몰
+        </h2>
+        <div className="container" style={{ maxWidth: '1700px', margin: '0 auto', padding: '0 50px' }}>
+            <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                gap: '20px', 
+                marginBottom: '40px' 
+            }}>
+                <div style={{ height: '1px', backgroundColor: '#e2e8f0', flex: 1 }}></div>
+                
+                <div style={{ height: '1px', backgroundColor: '#e2e8f0', flex: 1 }}></div>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '50px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <Link href="https://www.amiami.jp/?srsltid=AfmBOoq9udhzSLyTTnssQZ60tRSdyzcShLiOkUIknOlpRsoX4w6CKadf" target="_blank" style={{ textDecoration: 'none' }}>
+                    <SocialIcon src="/images/amiami_logo.png" brandColor="#BF0000" desc="아미아미" />
+                </Link>
+                <Link href="https://zozo.jp/?srsltid=AfmBOorUkO1J5QjiTBtP2Iz2_EU3s-pIINCpu7zYzH5cDXve3kybwImT" target="_blank" style={{ textDecoration: 'none' }}>
+                    <SocialIcon src="/images/zozotown_logo.png" brandColor="#FF0033" desc="조조타운" />
+                </Link>
+                <Link href="https://www.beams.co.jp/en/" target="_blank" style={{ textDecoration: 'none' }}>
+                    <SocialIcon src="/images/beams_logo.png" brandColor="#FF9900" desc="빔스" />
+                </Link>
+                <Link href="https://www.suruga-ya.jp/" target="_blank" style={{ textDecoration: 'none' }}>
+                    <SocialIcon src="/images/surugaya_logo.png" brandColor="#E60012" desc="스루가야" />
+                </Link>
+                <Link href="https://toy.bandai.co.jp/" target="_blank" style={{ textDecoration: 'none' }}>
+                    <SocialIcon src="/images/bandai_logo.PNG" brandColor="#FFB300" desc="반다이" />
+                </Link>
+                <Link href="https://www.animate-onlineshop.jp/?srsltid=AfmBOoq4K07Hrj5S9Kemh8MYLE0Je7pjCXZchk14DDdp7tDa7wP__iRs" target="_blank" style={{ textDecoration: 'none' }}>
+                    <SocialIcon src="/images/animate_logo.png" brandColor="#FF0033" desc="애니메이트" />
+                </Link>
+                <Link href="https://www.toranoana.jp/" target="_blank" style={{ textDecoration: 'none' }}>
+                    <SocialIcon src="/images/toranoana_logo.png" brandColor="#FF0033" desc="토라노아나" />
+                </Link>
+            </div>
+        </div>
+      </section>
+
+      {/* 5. Bottom Info Section */}
+      <section className="container" style={{ maxWidth: '1200px', margin: '80px auto', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '30px', padding: '0 20px', alignItems: 'stretch' }}>
+          {/* 고객센터 */}
+          <div style={{ backgroundColor: '#fff', padding: '40px 30px', borderRadius: '24px', boxShadow: '0 10px 40px rgba(0,0,0,0.03)', border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '25px', color: '#1e293b' }}>
+                  <i className="fa fa-headset" style={{ fontSize: '20px', color: '#6366f1' }}></i>
+                  <span style={{ fontSize: '18px', fontWeight: 'bold', letterSpacing: '-0.5px' }}>CUSTOMER CENTER</span>
+              </div>
+              <h3 style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a', marginBottom: '12px' }}>1:1문의 - 카카오톡</h3>
+              <p style={{ fontSize: '15px', color: '#64748b', lineHeight: '1.6', marginBottom: '30px' }}>
+                상담시간 ⏰ 10:00 ~ 24:00<br/>
+                <span style={{ color: '#6366f1', fontWeight: '600' }}>365일 연중무휴</span> 실시간 대응
+              </p>
+              <div style={{ display: 'flex', gap: '12px', marginTop: 'auto' }}>
+                  <button style={{ flex: 1, padding: '14px', backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.3s' }}>카카오톡</button>
+                  <button style={{ flex: 1, padding: '14px', backgroundColor: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.3s' }}>이용후기</button>
+              </div>
+          </div>
+
+          {/* 공지사항 */}
+          <div style={{ backgroundColor: '#fff', padding: '40px 30px', borderRadius: '24px', boxShadow: '0 10px 40px rgba(0,0,0,0.03)', border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '25px', color: '#1e293b' }}>
+                  <i className="fa fa-bullhorn" style={{ fontSize: '20px', color: '#f59e0b' }}></i>
+                  <span style={{ fontSize: '18px', fontWeight: 'bold', letterSpacing: '-0.5px' }}>NOTICE</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <NoticeItem title="미쿠짱 2026년 2월 국제 발송일정 안내" date="02.06" />
+                  <NoticeItem title="미쿠짱 2026년 1월 국제 발송일정 안내" date="01.03" />
+                  <NoticeItem title="아마존재팬 일본내 배송비 무료 혜택" date="10.15" />
+                  <NoticeItem title="일본 구매대행 [미쿠짱] 이용 가이드" date="09.19" />
+              </div>
+              <Link href="#" style={{ display: 'inline-block', marginTop: 'auto', paddingTop: '20px', fontSize: '14px', color: '#94a3b8', textDecoration: 'none', fontWeight: '600' }}>
+                전체보기 <i className="fa fa-arrow-right" style={{ fontSize: '10px' }}></i>
+              </Link>
+          </div>
+
+          {/* 입금계좌안내 */}
+          <div style={{ backgroundColor: '#fff', padding: '40px 30px', borderRadius: '24px', boxShadow: '0 10px 40px rgba(0,0,0,0.03)', border: '1px solid #f1f5f9', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '25px', color: '#1e293b' }}>
+                  <i className="fa fa-university" style={{ fontSize: '20px', color: '#b91c1c' }}></i>
+                  <span style={{ fontSize: '18px', fontWeight: 'bold', letterSpacing: '-0.5px' }}>BANK INFO</span>
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                  <div style={{ fontSize: '16px', color: '#64748b', marginBottom: '8px', fontWeight: 'bold' }}>🏦 KB 국민은행</div>
+                  <div style={{ fontSize: '28px', fontWeight: '900', letterSpacing: '1px', marginBottom: '8px', color: '#b91c1c' }}>896701-00-094205</div>
+                  <div style={{ fontSize: '15px', color: '#334155', fontWeight: '500' }}>예금주: 김수현(키오넥스)</div>
+              </div>
+              <div style={{ marginTop: 'auto', paddingTop: '30px' }}>
+                <div style={{ padding: '12px', backgroundColor: '#fef2f2', borderRadius: '12px', textAlign: 'center', fontSize: '13px', color: '#b91c1c', fontWeight: '600' }}>
+                    입금 확인은 실시간으로 처리됩니다.
+                </div>
+              </div>
+          </div>
+      </section>
+
+    </div>
   );
 }
 
-// 반복되는 사이드 메뉴 아이템을 위한 컴포넌트
-function QuickGridItem({ icon, label }: { icon: string; label: string }) {
-  return (
-    <a href="#" className="grid-item">
-      <div className="icon">{icon}</div>
-      <span>{label}</span>
-    </a>
-  );
+function QuickIcon({ icon, label, color }: any) {
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', cursor: 'pointer' }}>
+            <div style={{ 
+                width: '180px', height: '180px', borderRadius: '40px', 
+                backgroundColor: '#fff', border: '1px solid #eee', boxShadow: '0 10px 25px rgba(0,0,0,0.08)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+                <i className={`fa ${icon}`} style={{ fontSize: '96px', color: color || '#333' }}></i>
+            </div>
+            <span style={{ fontSize: '22px', fontWeight: 'bold', color: '#333' }}>{label}</span>
+        </div>
+    );
+}
+
+function SiteCard({ logoSrc, name, desc }: any) {
+    return (
+        <div style={{ 
+            backgroundColor: '#fff', padding: '50px 20px', borderRadius: '15px', border: '1px solid #eee', 
+            textAlign: 'center', cursor: 'pointer', width: '280px', height: '360px',
+            transition: 'all 0.3s ease',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start'
+        }}
+        onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-8px)';
+            e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)';
+            e.currentTarget.style.borderColor = '#cbd5e1';
+        }}
+        onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'none';
+            e.currentTarget.style.borderColor = '#e2e8f0';
+        }}
+        >
+            <div style={{ width: '100%', height: '160px', marginBottom: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <img 
+                    src={logoSrc} 
+                    alt={name} 
+                    style={{ maxWidth: '90%', maxHeight: '100%', objectFit: 'contain' }}
+                    onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent) {
+                            parent.innerHTML = `<div style="font-size: 48px; font-weight: 900; color: #cbd5e1">${name[0]}</div>`;
+                        }
+                    }}
+                />
+            </div>
+            <h3 style={{ fontSize: '22px', fontWeight: 'bold', color: '#333', marginBottom: '8px' }}>{name}</h3>
+            <p style={{ fontSize: '15px', color: '#888', lineHeight: '1.4' }}>{desc}</p>
+        </div>
+    );
+}
+
+function SocialIcon({ src, brandColor, desc }: any) {
+    const [isHover, setIsHover] = useState(false);
+
+    return (
+        <div 
+            style={{ position: 'relative', display: 'inline-flex', justifyContent: 'center' }}
+            onMouseEnter={() => setIsHover(true)}
+            onMouseLeave={() => setIsHover(false)}
+        >
+            {/* 아이콘 본체 */}
+            <div style={{ 
+                width: '180px', height: '180px', borderRadius: '48px', 
+                backgroundColor: '#fff', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                cursor: 'pointer', 
+                border: `3px solid ${isHover ? brandColor : brandColor + '33'}`,
+                boxShadow: isHover ? `0 20px 40px -10px ${brandColor + '44'}` : '0 10px 20px -5px rgba(0,0,0,0.05)',
+                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                transform: isHover ? 'translateY(-15px)' : 'none',
+                overflow: 'hidden',
+                padding: '35px'
+            }}>
+                <img 
+                    src={src} 
+                    alt={desc} 
+                    style={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        objectFit: 'contain',
+                        transition: 'all 0.4s'
+                    }}
+                    onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent) {
+                            parent.innerHTML = `<div style="font-size: 48px; font-weight: 900; color: ${brandColor}">${desc[0]}</div>`;
+                        }
+                    }}
+                />
+            </div>
+
+            {/* 툴팁 */}
+            <div style={{
+                position: 'absolute',
+                bottom: '-45px',
+                backgroundColor: '#111',
+                color: '#fff',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap',
+                opacity: isHover ? 1 : 0,
+                visibility: isHover ? 'visible' : 'hidden',
+                transform: isHover ? 'translateY(0)' : 'translateY(-10px)',
+                transition: 'all 0.3s ease',
+                pointerEvents: 'none',
+                zIndex: 10,
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+            }}>
+                {desc}
+                <div style={{
+                    position: 'absolute',
+                    top: '-4px',
+                    left: '50%',
+                    transform: 'translateX(-50%) rotate(45deg)',
+                    width: '10px',
+                    height: '10px',
+                    backgroundColor: '#111'
+                }}></div>
+            </div>
+        </div>
+    );
+}
+
+function NoticeItem({ title, date }: any) {
+    return (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 0', borderBottom: '1px solid #f8fafc', cursor: 'pointer', transition: 'all 0.2s' }}>
+            <span style={{ color: '#334155', fontSize: '15px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginRight: '15px' }}>
+                {title}
+            </span>
+            <span style={{ color: '#cbd5e1', fontSize: '13px', fontWeight: '600', flexShrink: 0 }}>{date}</span>
+        </div>
+    );
 }
