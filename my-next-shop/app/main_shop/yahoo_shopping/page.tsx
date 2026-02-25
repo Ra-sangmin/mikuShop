@@ -1,6 +1,10 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import ProductCard from '../rakuten/ProductCard';
+import ProductDetail from '../rakuten/ProductDetail';
+import SortBar from '../rakuten/SortBar';
+import Pagination from '../rakuten/Pagination';
 import Link from 'next/link';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 
@@ -52,7 +56,14 @@ export default function YahooShoppingPage() {
   // API 주소를 동적으로 생성하는 함수
   const getDynamicApiUrl = (path: string, queryParams: string) => {
     const hostName = window.location.hostname; 
-    return `http://${hostName}:4000/rakuten/${path}?${queryParams}`;
+    const protocol = window.location.protocol;
+    
+    // ngrok 도메인인 경우 포트 없이 요청 (타임아웃 방지)
+    if (hostName.includes('ngrok-free.dev')) {
+        return `${protocol}//${hostName}/rakuten/${path}?${queryParams}`;
+    }
+
+    return `${protocol}//${hostName}:4000/rakuten/${path}?${queryParams}`;
   };
 
   // ★ 장바구니 개수를 다시 계산하는 함수 (자식 컴포넌트에게도 전달됨)

@@ -7,6 +7,7 @@ import SortBar from './SortBar';
 import Pagination from './Pagination';
 import Link from 'next/link';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
+import FloatingButtons from '@/app/components/FloatingButtons';
 
 export default function RakutenPage() {
   const router = useRouter();
@@ -55,8 +56,19 @@ export default function RakutenPage() {
 
   // API 주소를 동적으로 생성하는 함수
   const getDynamicApiUrl = (path: string, queryParams: string) => {
+    // ngrok 환경에서는 포트 4000을 붙이면 타임아웃이 발생할 수 있으므로, 
+    // 로컬 개발 환경이 아닐 때는 포트를 제외한 경로를 반환하도록 처리할 수도 있으나,
+    // 현재는 Mixed Content 해결을 위해 프로토콜만 유지하고 포트는 4000 그대로 둡니다.
+    // 만약 백엔드도 ngrok으로 별도 터널링 중이라면 해당 도메인을 써야 합니다.
     const hostName = window.location.hostname; 
-    return `http://${hostName}:4000/rakuten/${path}?${queryParams}`;
+    const protocol = window.location.protocol;
+    
+    // ngrok 도메인인 경우 보통 포트 없이 80/443으로 터널링되므로 4000 포트가 문제일 수 있음
+    if (hostName.includes('ngrok-free.dev')) {
+        return `${protocol}//${hostName}/rakuten/${path}?${queryParams}`;
+    }
+
+    return `${protocol}//${hostName}:4000/rakuten/${path}?${queryParams}`;
   };
 
   // ★ 장바구니 개수를 다시 계산하는 함수 (자식 컴포넌트에게도 전달됨)
@@ -82,14 +94,21 @@ export default function RakutenPage() {
           setSelectedItem(null);
           setItems([]); 
 
-          const apiUrl = getDynamicApiUrl('categories', `genreId=${genreId}`);
-          const res = await fetch(apiUrl); 
-          const data = await res.json();
+          // ★ 수정: 외부 서버가 아닌 Next.js 내부 API(/api/rakuten/categories)를 직접 호출합니다.
+          const apiUrl = `/api/rakuten/categories?genreId=${genreId}`;
+          
+          try {
+              const res = await fetch(apiUrl); 
+              if (!res.ok) throw new Error('카테고리 로드 실패');
+              const data = await res.json();
 
-          setCategories(data.children || []); 
-          setCurrentGenre(data.current || { genreName: '' }); 
-          setParentsGenre(data.parents || []); 
-          setChildrenGenre(data.children || []); 
+              setCategories(data.children || []); 
+              setCurrentGenre(data.current || { genreName: '' }); 
+              setParentsGenre(data.parents || []); 
+              setChildrenGenre(data.children || []); 
+          } catch (error) {
+              console.error(error);
+          } 
       }
 
       fetchCategories();
@@ -104,9 +123,13 @@ export default function RakutenPage() {
       }
 
       setLoading(true);
+      
       try {
-        const apiUrl = getDynamicApiUrl('items', `genreId=${genreId}&sort=${sort}&page=${page}`);
+        // ★ 수정: 외부 서버가 아닌 Next.js 내부 API(/api/rakuten/items)를 직접 호출합니다.
+        const apiUrl = `/api/rakuten/items?genreId=${genreId}&sort=${sort}&page=${page}`;
+        
         const response = await fetch(apiUrl);
+        if (!response.ok) throw new Error('상품 로드 실패');
         const data = await response.json();
 
         setItems(data.items || []);
@@ -307,6 +330,7 @@ export default function RakutenPage() {
           </div>
 
           <Pagination currentPage={pageInfo.page} pageCount={pageInfo.pageCount} />
+          <FloatingButtons />
         </>
       ) : (
         loading && (
