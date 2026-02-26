@@ -377,3 +377,5 @@ body {
 .goog-te-spinner-pos {
     display: none !important;
 }
+
+@import "tailwindcss";

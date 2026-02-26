@@ -22,7 +22,7 @@ const contactMenuItems = [
 ];
 
 const purchaseMenuItems = [
-  { name: '전체내역', href: '/purchase/history' },
+  { name: '전체내역', href: '/mypage/status?tab=전체내역' },
   { name: '국제배송 신청', href: '/purchase/shipping-request' },
   { name: '견적문의', href: '/purchase/quote' },
   { name: '구매대행 신청', href: '/purchase/request' },
@@ -33,7 +33,12 @@ const deliveryMenuItems = [
   { name: '배송신청', href: '/delivery/request' },
 ];
 
-export default function GuideLayout({ children, title, type = 'fee', fullWidth = false }: { children: React.ReactNode, title: string, type?: 'fee' | 'guide' | 'contact' | 'purchase' | 'delivery', fullWidth?: boolean }) {
+const mypageMenuItems = [
+  { name: '내 정보', href: '/mypage' },
+  { name: '구매대행 상황', href: '/mypage/status' },
+];
+
+export default function GuideLayout({ children, title, type = 'fee', fullWidth = false }: { children: React.ReactNode, title: string, type?: 'fee' | 'guide' | 'contact' | 'purchase' | 'delivery' | 'mypage', fullWidth?: boolean }) {
   const pathname = usePathname();
   
   let menuItems;
@@ -55,6 +60,10 @@ export default function GuideLayout({ children, title, type = 'fee', fullWidth =
     case 'delivery':
       menuItems = deliveryMenuItems;
       sidebarTitle = '배송대행';
+      break;
+    case 'mypage':
+      menuItems = mypageMenuItems;
+      sidebarTitle = '마이페이지';
       break;
     case 'fee':
     default:

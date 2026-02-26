@@ -1,9 +1,44 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 export default function Header() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // 🌟 1. 페이지 로드 시 기존 로그인 정보가 있는지 확인 (새로고침 유지용)
+  useEffect(() => {
+    const userId = localStorage.getItem('user_id');
+    if (userId) {
+      setIsLoggedIn(true);
+    }
+  }, []);
+
+  // 🌟 2. 임시 로그인 핸들러 추가
+  const handleLogin = () => {
+    const tempId = "test@example.com";
+    const tempPw = "1234";
+
+    console.log(`서버로 전송할 데이터: ID=${tempId}, PW=${tempPw}`);
+    
+    // DB에 만들어두었던 1번 유저 정보라고 가정하고 브라우저에 저장
+    localStorage.setItem('id', '1');
+    localStorage.setItem('name', '테스트유저');
+    localStorage.setItem('email', tempId);
+
+    setIsLoggedIn(true);
+    alert(`${tempId} 계정으로 로그인되었습니다!`);
+  };
+
+  // 🌟 3. 로그아웃 핸들러 추가
+  const handleLogout = () => {
+    // 저장했던 유저 정보 모두 삭제
+    localStorage.removeItem('id');
+    localStorage.removeItem('name');
+    localStorage.removeItem('email');
+    
+    setIsLoggedIn(false);
+    alert('로그아웃 되었습니다.');
+  };
 
   return (
     <header style={{ width: '100%' }}>
@@ -19,7 +54,7 @@ export default function Header() {
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
-          padding: '20px 20px', // 세로 크기 키움
+          padding: '20px 20px',
         }}>
           {/* 좌측 소식/공지 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -43,7 +78,7 @@ export default function Header() {
             {!isLoggedIn ? (
               <>
                 <div 
-                  onClick={() => setIsLoggedIn(true)} 
+                  onClick={handleLogin} // 🌟 클릭 시 임시 로그인 실행
                   style={{ 
                     fontSize: '14px', 
                     fontWeight: '700', 
@@ -67,7 +102,7 @@ export default function Header() {
                   로그인
                 </div>
                 <div 
-                  onClick={() => setIsLoggedIn(true)} 
+                  onClick={() => alert('회원가입 페이지로 이동합니다.')} 
                   style={{ 
                     fontSize: '14px', 
                     fontWeight: '700', 
@@ -94,7 +129,7 @@ export default function Header() {
             ) : (
               <>
                 <div 
-                  onClick={() => setIsLoggedIn(false)} 
+                  onClick={handleLogout} // 🌟 클릭 시 로그아웃 실행
                   style={{ 
                     fontSize: '14px', 
                     fontWeight: '700', 
@@ -186,7 +221,7 @@ export default function Header() {
                   label="구매대행" 
                   activeColor="#ff4b2b"
                   items={[
-                      { label: '전체내역', href: '/purchase/history' },
+                      { label: '전체내역', href: '/mypage/status?tab=전체내역' },
                       { label: '국제배송 신청', href: '/purchase/shipping-request' },
                       { label: '견적문의', href: '/purchase/quote' },
                       { label: '구매대행 신청', href: '/purchase/request' },
