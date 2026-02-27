@@ -2,14 +2,11 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import GuideLayout from '../components/GuideLayout'; 
-// 더 이상 가짜 데이터를 쓰지 않으므로 useCart는 지우셔도 됩니다.
 
 export default function MyPage() {
   const [userName, setUserName] = useState('고객');
   const [userLevel, setUserLevel] = useState('일반회원'); 
   const [userMoney, setUserMoney] = useState(0);
-  
-  // 🌟 1. DB에서 가져온 실제 주문 목록을 담을 State 추가
   const [userOrders, setUserOrders] = useState<any[]>([]);
 
   useEffect(() => {
@@ -23,8 +20,6 @@ export default function MyPage() {
             setUserName(data.user.name);            
             setUserLevel(data.user.level);
             setUserMoney(data.user.cyberMoney);
-            
-            // 🌟 2. API에서 함께 넘겨준 주문 내역(orders)을 State에 저장합니다.
             setUserOrders(data.user.orders || []);
           }
         })
@@ -34,7 +29,6 @@ export default function MyPage() {
     }
   }, []);
 
-  // 🌟 3. 가져온 State들을 UI에 뿌려주기 위해 객체에 연결
   const userInfo = {
     name: userName, 
     level: userLevel,
@@ -44,7 +38,6 @@ export default function MyPage() {
     money: userMoney
   };
 
-  // 🌟 3. cartItems 대신 'userOrders(진짜 DB 데이터)'를 필터링하도록 전면 수정!
   const purchaseStatus = useMemo(() => [
     { label: '전체내역', count: userOrders.length, desc: '모든내역을 확인합니다.', href: '/mypage/status?tab=전체내역' },
     { label: '장바구니', count: userOrders.filter((i: any) => i.status === '장바구니').length, desc: '구매신청 장바구니 목록', href: '/mypage/status?tab=장바구니' },
@@ -56,35 +49,51 @@ export default function MyPage() {
     { label: '2차요청', count: userOrders.filter((i: any) => i.status === '2차요청').length, desc: '합포장완료 2차결제견적', href: '/mypage/status?tab=2차요청' },
     { label: '2차완료', count: userOrders.filter((i: any) => i.status === '2차완료').length, desc: '출하준비중', href: '/mypage/status?tab=2차완료' },
     { label: '국제배송', count: userOrders.filter((i: any) => i.status === '국제배송').length, desc: '국제배송추적 및 도착', href: '/mypage/status?tab=국제배송' },
-  ], [userOrders]); // 의존성 배열도 userOrders로 변경해 줍니다.
+  ], [userOrders]);
 
   return (
     <GuideLayout title="마이페이지" type="mypage">
-      <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+      {/* 🌟 전역 애니메이션 키프레임 정의 */}
+      <style jsx global>{`
+        @keyframes slideUpFade {
+          0% { opacity: 0; transform: translateY(20px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+
+        .anim-item {
+          opacity: 0;
+          animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+      `}</style>
+
+      <div style={{ maxWidth: '1000px', margin: '0 auto', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif', color: '#334155' }}>
         
         {/* User Info Header */}
-        <div style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '30px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-          <span>{userInfo.name}님</span>
-          <span style={{ color: '#ccc', fontWeight: 'normal' }}>/</span>
-          <span>회원등급 : <span style={{ color: '#5b108d' }}>{userInfo.level} 🥉</span></span>
-          <span style={{ color: '#ccc', fontWeight: 'normal' }}>/</span>
-          <span>사서함번호 : <span style={{ color: '#5b108d' }}>{userInfo.mailboxNumber}</span></span>
+        <div className="anim-item" style={{ fontSize: '24px', fontWeight: '900', marginBottom: '30px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          <span style={{ color: '#0f172a' }}>{userInfo.name}님</span>
+          <span style={{ color: '#e2e8f0', fontWeight: 'normal' }}>|</span>
+          <span style={{ fontSize: '18px' }}>회원등급 : <span style={{ color: '#f97316', fontWeight: '900' }}>{userInfo.level} 🥉</span></span>
+          <span style={{ color: '#e2e8f0', fontWeight: 'normal' }}>|</span>
+          <span style={{ fontSize: '18px' }}>사서함번호 : <span style={{ color: '#f97316', fontWeight: '900' }}>{userInfo.mailboxNumber}</span></span>
         </div>
 
         {/* Summary Boxes */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '40px' }}>
+        <div className="anim-item delay-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '50px' }}>
           <SummaryBox label="알림메시지" value={userInfo.messages} unit="개" />
           <SummaryBox label="보유쿠폰" value={userInfo.coupons} unit="장" />
-          <SummaryBox label="사루와머니" value={userInfo.money} unit="원" />
+          <SummaryBox label="미쿠짱머니" value={userInfo.money} unit="원" />
         </div>
 
         {/* Japan Shipping Address Section */}
-        <div style={{ border: '1px solid #ddd', borderRadius: '12px', overflow: 'hidden', marginBottom: '50px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-          <div style={{ backgroundColor: '#f8f8f8', padding: '15px 20px', borderBottom: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>나의 일본 배송지 주소</h2>
+        <div className="anim-item delay-2" style={{ border: '1px solid #e2e8f0', borderRadius: '20px', overflow: 'hidden', marginBottom: '60px', boxShadow: '0 10px 30px rgba(0,0,0,0.03)' }}>
+          <div style={{ backgroundColor: '#f8fafc', padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '900', margin: 0, color: '#0f172a' }}>나의 일본 배송지 주소</h2>
           </div>
-          <div style={{ padding: '25px 20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div style={{ padding: '30px 24px', backgroundColor: '#fff' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
               <div>
                 <AddressItem label="우편번호" value="123-4567" />
                 <AddressItem label="도도부현" value="東京都 (Tokyo)" />
@@ -97,18 +106,18 @@ export default function MyPage() {
                 <AddressItem label="전화번호" value="03-xxxx-xxxx" />
               </div>
             </div>
-            <div style={{ marginTop: '15px', color: '#888', fontSize: '13px' }}>
-              ※ 상세주소 2(사서함번호)를 반드시 기입해 주셔야 빠른 입고 확인이 가능합니다.
+            <div style={{ marginTop: '20px', color: '#64748b', fontSize: '14px', fontWeight: '500', padding: '16px', backgroundColor: '#fff8f6', borderRadius: '12px', border: '1px solid #ffe4e0' }}>
+              <span style={{ color: '#ea580c', fontWeight: '800' }}>ℹ️ 주의:</span> 상세주소 2(사서함번호)를 반드시 기입해 주셔야 빠른 입고 확인이 가능합니다.
             </div>
           </div>
         </div>
 
         {/* Purchase Status Section */}
-        <div id="purchase-status" style={{ marginBottom: '40px' }}>
-          <h2 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: '25px' }}>구매대행 상황</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
+        <div id="purchase-status" className="anim-item delay-3" style={{ marginBottom: '60px' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: '900', marginBottom: '30px', color: '#0f172a' }}>구매대행 상황</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
             {purchaseStatus.map((status, index) => (
-              <StatusCard key={index} {...status} />
+              <StatusCard key={index} {...status} index={index} />
             ))}
           </div>
         </div>
@@ -124,32 +133,38 @@ function AddressItem({ label, value, isHighlight }: { label: string, value: stri
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
-      <span style={{ width: '100px', fontSize: '14px', color: '#666', fontWeight: 'bold' }}>{label}</span>
+    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+      <span style={{ width: '100px', fontSize: '15px', color: '#64748b', fontWeight: '800' }}>{label}</span>
       <div style={{ 
         flex: 1, 
-        backgroundColor: '#f9f9f9', 
-        padding: '8px 12px', 
-        borderRadius: '6px', 
-        border: '1px solid #eee',
+        backgroundColor: isHighlight ? '#fff8f6' : '#f8fafc', 
+        padding: '12px 16px', 
+        borderRadius: '12px', 
+        border: `1px solid ${isHighlight ? '#ffedd5' : '#e2e8f0'}`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        color: isHighlight ? '#5b108d' : '#333',
-        fontWeight: isHighlight ? 'bold' : 'normal'
+        color: isHighlight ? '#ea580c' : '#0f172a',
+        fontWeight: isHighlight ? '800' : '600',
+        transition: 'all 0.2s'
       }}>
-        <span style={{ fontSize: '14px' }}>{value}</span>
+        <span style={{ fontSize: '15px' }}>{value}</span>
         <button 
           onClick={() => copyToClipboard(value)}
           style={{ 
             backgroundColor: '#fff', 
-            border: '1px solid #ddd', 
-            padding: '2px 8px', 
+            border: '1px solid #cbd5e1', 
+            padding: '4px 12px', 
             fontSize: '12px', 
-            borderRadius: '4px', 
+            borderRadius: '6px', 
             cursor: 'pointer',
-            marginLeft: '10px'
+            marginLeft: '10px',
+            color: '#475569',
+            fontWeight: '700',
+            transition: 'all 0.2s'
           }}
+          onMouseOver={e => { e.currentTarget.style.borderColor = '#f97316'; e.currentTarget.style.color = '#f97316'; }}
+          onMouseOut={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#475569'; }}
         >
           복사
         </button>
@@ -161,37 +176,72 @@ function AddressItem({ label, value, isHighlight }: { label: string, value: stri
 function SummaryBox({ label, value, unit }: { label: string, value: number, unit: string }) {
   return (
     <div style={{ 
-      backgroundColor: '#5b108d', 
+      backgroundColor: '#f97316', 
       color: '#fff', 
-      padding: '15px 20px', 
-      borderRadius: '8px',
+      padding: '24px', 
+      borderRadius: '20px',
       display: 'flex',
       flexDirection: 'column',
-      gap: '10px',
+      gap: '12px',
       alignItems: 'center',
-      boxShadow: '0 4px 12px rgba(91, 16, 141, 0.2)'
-    }}>
-      <span style={{ fontSize: '16px', fontWeight: 'bold' }}>{label}</span>
-      <div style={{ backgroundColor: '#fff', color: '#000', padding: '3px 12px', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold' }}>
-        {value}{unit}
+      boxShadow: '0 10px 30px rgba(249, 115, 22, 0.2)',
+      transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+    }}
+    onMouseOver={e => e.currentTarget.style.transform = 'translateY(-5px)'}
+    onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+    >
+      <span style={{ fontSize: '16px', fontWeight: '800', opacity: 0.9 }}>{label}</span>
+      <div style={{ 
+        backgroundColor: '#fff', 
+        color: '#ea580c', 
+        padding: '8px 20px', 
+        borderRadius: '12px', 
+        fontSize: '20px', 
+        fontWeight: '900',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.05)'
+      }}>
+        {value.toLocaleString()} <span style={{ fontSize: '16px' }}>{unit}</span>
       </div>
     </div>
   );
 }
 
-function StatusCard({ label, count, desc, href }: { label: string, count: number, desc: string, href: string }) {
+// 🌟 StatusCard에 계단식 애니메이션 딜레이 적용을 위해 index prop 추가
+function StatusCard({ label, count, desc, href, index }: { label: string, count: number, desc: string, href: string, index: number }) {
+  // 인덱스 기반으로 딜레이 계산 (0초, 0.05초, 0.1초 순으로 차례대로 렌더링)
+  const animationDelay = `${0.3 + index * 0.05}s`;
+
   return (
     <Link href={href} style={{ textDecoration: 'none', color: 'inherit' }}>
-      <div style={{ border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden', transition: 'transform 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
-           onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-3px)'}
-           onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
-        <div style={{ padding: '12px 15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#5b108d' }}>{label}</span>
-          <div style={{ backgroundColor: '#5b108d', color: '#fff', padding: '2px 8px', borderRadius: '4px', fontSize: '14px', fontWeight: 'bold' }}>
-            {count} 건
+      <div 
+        className="anim-item"
+        style={{ 
+          border: '1px solid #e2e8f0', 
+          borderRadius: '16px', 
+          overflow: 'hidden', 
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', 
+          boxShadow: '0 4px 10px rgba(0,0,0,0.02)',
+          backgroundColor: '#fff',
+          animationDelay // 🌟 순차 애니메이션 딜레이 적용
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-4px)';
+          e.currentTarget.style.boxShadow = '0 12px 20px rgba(249, 115, 22, 0.1)';
+          e.currentTarget.style.borderColor = '#fdba74';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 4px 10px rgba(0,0,0,0.02)';
+          e.currentTarget.style.borderColor = '#e2e8f0';
+        }}
+      >
+        <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '18px', fontWeight: '900', color: '#0f172a' }}>{label}</span>
+          <div style={{ backgroundColor: count > 0 ? '#f97316' : '#f1f5f9', color: count > 0 ? '#fff' : '#64748b', padding: '4px 12px', borderRadius: '8px', fontSize: '15px', fontWeight: '900', transition: 'all 0.3s' }}>
+            {count} <span style={{ fontSize: '13px', fontWeight: '700' }}>건</span>
           </div>
         </div>
-        <div style={{ backgroundColor: '#f5f5f5', padding: '10px 15px', fontSize: '13px', color: '#666' }}>
+        <div style={{ backgroundColor: '#f8fafc', padding: '12px 20px', fontSize: '14px', color: '#64748b', fontWeight: '500', borderTop: '1px solid #f1f5f9' }}>
           {desc}
         </div>
       </div>

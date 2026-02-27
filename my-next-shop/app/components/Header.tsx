@@ -31,164 +31,30 @@ export default function Header() {
 
   // 🌟 3. 로그아웃 핸들러 추가
   const handleLogout = () => {
-    // 저장했던 유저 정보 모두 삭제
-    localStorage.removeItem('id');
-    localStorage.removeItem('name');
-    localStorage.removeItem('email');
-    
-    setIsLoggedIn(false);
-    alert('로그아웃 되었습니다.');
+    if (window.confirm("로그아웃 하시겠습니까?")) {
+      // 저장했던 유저 정보 모두 삭제
+      localStorage.removeItem('id');
+      localStorage.removeItem('name');
+      localStorage.removeItem('email');
+      localStorage.removeItem('user_id');
+
+      setIsLoggedIn(false);
+      alert('로그아웃 되었습니다.');
+      window.location.href = '/';
+    }
   };
 
   return (
     <header style={{ width: '100%' }}>
-      {/* 상단 유틸리티 바 */}
-      <div style={{ 
-        backgroundColor: '#fff', 
-        borderBottom: '1px solid #f1f5f9',
-        color: '#1e293b'
-      }}>
-        <div className="container" style={{ 
-          maxWidth: '1200px', 
-          margin: '0 auto', 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          padding: '20px 20px',
-        }}>
-          {/* 좌측 소식/공지 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div style={{ 
-              fontSize: '12px', 
-              fontWeight: '900', 
-              backgroundColor: '#ff4b2b', 
-              color: '#fff',
-              padding: '4px 10px', 
-              borderRadius: '6px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
-            }}>NOTICE</div>
-            <div style={{ fontSize: '14px', color: '#64748b', fontWeight: '600' }}>
-              미쿠짱과 함께하는 즐거운 일본 직구 쇼핑 🇯🇵
-            </div>
-          </div>
-
-          {/* 우측 유틸리티 링크 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
-            {!isLoggedIn ? (
-              <>
-                <div 
-                  onClick={handleLogin} // 🌟 클릭 시 임시 로그인 실행
-                  style={{ 
-                    fontSize: '14px', 
-                    fontWeight: '700', 
-                    color: '#475569', 
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#ff4b2b';
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '#475569';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                >
-                  <i className="fa fa-lock" style={{ fontSize: '12px', opacity: 0.8 }}></i>
-                  로그인
-                </div>
-                <div 
-                  onClick={() => alert('회원가입 페이지로 이동합니다.')} 
-                  style={{ 
-                    fontSize: '14px', 
-                    fontWeight: '700', 
-                    color: '#475569', 
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#ff4b2b';
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '#475569';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                >
-                  <i className="fa fa-user-plus" style={{ fontSize: '12px', opacity: 0.8 }}></i>
-                  회원가입
-                </div>
-              </>
-            ) : (
-              <>
-                <div 
-                  onClick={handleLogout} // 🌟 클릭 시 로그아웃 실행
-                  style={{ 
-                    fontSize: '14px', 
-                    fontWeight: '700', 
-                    color: '#475569', 
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#ff4b2b';
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '#475569';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                >
-                  <i className="fa fa-sign-out-alt" style={{ fontSize: '12px', opacity: 0.8 }}></i>
-                  로그아웃
-                </div>
-                <Link href="/mypage" style={{ 
-                  fontSize: '14px', 
-                  fontWeight: '700', 
-                  color: '#475569', 
-                  textDecoration: 'none',
-                  transition: 'all 0.3s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-                onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#ff4b2b';
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                }}
-                onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '#475569';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                }}
-                >
-                  <i className="fa fa-user-circle" style={{ fontSize: '12px', opacity: 0.8 }}></i>
-                  마이페이지
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* 메인 헤더 영역 */}
       <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #eee' }}>
         <div className="container" style={{ 
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'flex-start', 
-          gap: '50px', 
+          gap: '30px', 
           padding: '10px 20px', 
-          maxWidth: '1200px', 
+          maxWidth: '1350px', 
           margin: '0 auto' 
         }}>
         
@@ -209,20 +75,20 @@ export default function Header() {
           </div>
 
           {/* 내비게이션 메뉴 */}
-          <nav>
+          <nav> {/* 🌟 1. style={{ flexGrow: 1 }} 제거 (넓게 퍼지는 것 방지) */}
             <ul style={{ 
               display: 'flex', 
               gap: '30px', 
               listStyle: 'none', 
               margin: 0, 
-              padding: 0 
+              padding: 0,
+              alignItems: 'center' /* 🌟 3. justifyContent: 'space-between' 제거하고 중앙 정렬 */
             }}>
               <NavItem 
                   label="구매대행" 
                   activeColor="#ff4b2b"
                   items={[
                       { label: '전체내역', href: '/mypage/status?tab=전체내역' },
-                      { label: '국제배송 신청', href: '/purchase/shipping-request' },
                       { label: '견적문의', href: '/purchase/quote' },
                       { label: '구매대행 신청', href: '/purchase/request' },
                   ]} 
@@ -231,8 +97,18 @@ export default function Header() {
                   label="배송대행" 
                   activeColor="#ff4b2b"
                   items={[
+                      { label: '전체내역', href: '/mypage/status?tab=전체내역' },
                       { label: '일본 배송주소 확인', href: '/delivery/address' },
                       { label: '배송신청', href: '/delivery/request' },
+                  ]} 
+              />
+              <NavItem 
+                  label="미쿠짱머니" 
+                  activeColor="#ff4b2b"
+                  items={[
+                      { label: '충전하기', href: '/mypage/money/charge' },
+                      { label: '이용내역', href: '/mypage/money/history' },
+                      { label: '환불신청', href: '/mypage/money/refund' },
                   ]} 
               />
               <NavItem 
@@ -240,8 +116,8 @@ export default function Header() {
                   activeColor="#ff4b2b"
                   items={[
                       { label: '회원 등급 및 혜택', href: '/guide/membership' },
-                      { label: '수수료 안내', href: '/fee-guide' },
-                      { label: '국제 배송 요금표', href: '/shipping-fee' },
+                      { label: '수수료 안내', href: '/guide/fee-guide' },
+                      { label: '국제 배송 요금표', href: '/guide/shipping-fee' },
                       { label: '예상 관부과세 안내', href: '/guide/customs' },
                   ]}
               />
@@ -259,8 +135,39 @@ export default function Header() {
                   activeColor="#ff4b2b"
                   items={[
                       { label: '카카오톡 문의', href: '/contact' },
-                  ]}
+                  ]} 
               />
+              {!isLoggedIn ? (
+                <li style={{ padding: '15px 0' }}>
+                  <Link 
+                    href="/login"
+                    style={{ 
+                      fontSize: '18px', 
+                      fontWeight: 'bold', 
+                      color: '#333', 
+                      textDecoration: 'none',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = '#ff4b2b'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#333'}
+                  >
+                    로그인
+                  </Link>
+                </li>
+              ) : (
+                <NavItem 
+                    label="마이페이지" 
+                    activeColor="#ff4b2b"
+                    items={[
+                        { label: '내 정보', href: '/mypage' },
+                        { label: '구매대행 상황', href: '/mypage/status?tab=전체내역' },
+                        { label: '관심목록', href: '/wishlist' },
+                        { label: '로그아웃', onClick: handleLogout },
+                    ]} 
+                />
+              )}
             </ul>
           </nav>
         </div>
@@ -269,8 +176,59 @@ export default function Header() {
   );
 }
 
-function NavItem({ label, items, activeColor }: { label: string, items?: { label: string, href: string }[], activeColor?: string }) {
+function NavItem({ label, items, activeColor }: { label: string, items?: { label: string, href?: string, onClick?: () => void }[], activeColor?: string }) {
   const [isHovered, setIsHovered] = useState(false);
+
+  const renderLink = (item: { label: string, href?: string, onClick?: () => void }, index: number) => {
+    const content = (
+      <div 
+        style={{ 
+          display: 'flex', 
+          alignItems: 'center',
+          gap: '12px',
+          padding: '10px 15px', 
+          fontSize: '15px', 
+          color: '#4b5563', 
+          textDecoration: 'none',
+          borderRadius: '8px',
+          transition: 'all 0.2s'
+        }}
+        onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#f8f9fa';
+            e.currentTarget.style.color = '#ff4b2b';
+            e.currentTarget.style.transform = 'translateX(5px)';
+        }}
+        onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = '#4b5563';
+            e.currentTarget.style.transform = 'translateX(0)';
+        }}
+        onClick={item.onClick}
+      >
+        <div style={{ 
+            width: '32px', height: '32px', borderRadius: '8px', 
+            backgroundColor: '#fff5f5', display: 'flex', alignItems: 'center', 
+            justifyContent: 'center', fontSize: '16px' 
+        }}>
+            {index === 0 && '📋'}
+            {index === 1 && '✈️'}
+            {index === 2 && '🛒'}
+            {index === 3 && '🚪'}
+        </div>
+        <span style={{ fontWeight: '500', whiteSpace: 'nowrap' }}>{item.label}</span>
+      </div>
+    );
+
+    if (item.href) {
+      return (
+        <Link href={item.href} style={{ textDecoration: 'none' }}>
+          {content}
+        </Link>
+      );
+    }
+
+    return content;
+  };
 
   return (
     <li 
@@ -279,17 +237,18 @@ function NavItem({ label, items, activeColor }: { label: string, items?: { label
       style={{ position: 'relative', cursor: 'pointer', padding: '15px 0' }}
     >
       <Link href="#" style={{ 
-        fontSize: '20px', 
+        fontSize: '18px', 
         fontWeight: 'bold', 
         color: isHovered && activeColor ? activeColor : '#333', 
         display: 'flex', 
         alignItems: 'center', 
-        gap: '8px', 
+        gap: '6px', 
         textDecoration: 'none',
+        whiteSpace: 'nowrap',
         transition: 'color 0.2s'
       }}>
         {label}
-        <span style={{ fontSize: '12px', color: isHovered && activeColor ? activeColor : '#999', transition: 'color 0.2s' }}>▼</span>
+        <span style={{ fontSize: '10px', color: isHovered && activeColor ? activeColor : '#999', transition: 'color 0.2s' }}>▼</span>
       </Link>
 
       {/* 드롭다운 메뉴 */}
@@ -328,41 +287,7 @@ function NavItem({ label, items, activeColor }: { label: string, items?: { label
 
           {items.map((item, index) => (
             <li key={index} style={{ padding: '2px 8px' }}>
-              <Link 
-                href={item.href} 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '10px 15px', 
-                  fontSize: '15px', 
-                  color: '#4b5563', 
-                  textDecoration: 'none',
-                  borderRadius: '8px',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#f8f9fa';
-                    e.currentTarget.style.color = '#ff4b2b';
-                    e.currentTarget.style.transform = 'translateX(5px)';
-                }}
-                onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = '#4b5563';
-                    e.currentTarget.style.transform = 'translateX(0)';
-                }}
-              >
-                <div style={{ 
-                    width: '32px', height: '32px', borderRadius: '8px', 
-                    backgroundColor: '#fff5f5', display: 'flex', alignItems: 'center', 
-                    justifyContent: 'center', fontSize: '16px' 
-                }}>
-                    {index === 0 && '📋'}
-                    {index === 1 && '✈️'}
-                    {index === 2 && '🛒'}
-                </div>
-                <span style={{ fontWeight: '500' }}>{item.label}</span>
-              </Link>
+              {renderLink(item, index)}
             </li>
           ))}
         </ul>

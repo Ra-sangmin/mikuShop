@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import AdminSidebar from '@/app/components/AdminSidebar';
 
 export default function CSManagement() {
   const router = useRouter();
@@ -24,37 +25,7 @@ export default function CSManagement() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f1f5f9', fontFamily: "'Inter', 'Noto Sans KR', sans-serif" }}>
-      <aside style={{ width: '260px', backgroundColor: '#1e293b', color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '24px', fontSize: '20px', fontWeight: 'bold', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '24px' }}>📦</span> 미쿠짱 관리자
-        </div>
-        <nav style={{ flex: 1, padding: '20px 0' }}>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {[
-              { name: '대시보드', path: '/admin/dashboard' },
-              { name: '주문 관리', path: '/admin/orders' },
-              { name: '배송 현황', path: '/admin/delivery' },
-              { name: '정산 관리', path: '/admin/settlement' },
-              { name: '환불 정보', path: '/admin/refund' },
-              { name: '고객 센터', path: '/admin/cs' },
-            ].map((item, idx) => (
-              <li key={idx} 
-                  onClick={() => router.push(item.path)}
-                  style={{ 
-                padding: '16px 24px', 
-                cursor: 'pointer',
-                backgroundColor: item.name === '고객 센터' ? '#3b82f6' : 'transparent',
-                borderLeft: item.name === '고객 센터' ? '4px solid #fff' : '4px solid transparent',
-                color: item.name === '고객 센터' ? '#fff' : '#94a3b8',
-                fontWeight: item.name === '고객 센터' ? '600' : '400',
-                transition: 'all 0.2s'
-              }}>
-                {item.name}
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </aside>
+      <AdminSidebar />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <header style={{ height: '70px', backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 30px' }}>

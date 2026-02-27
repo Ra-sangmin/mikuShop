@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import ProductDetail from '../rakuten/ProductDetail';
+import ProductDetail from '../main_shop/rakuten/ProductDetail';
 import { useExchangeRate } from '../context/ExchangeRateContext';
+import GuideLayout from '../components/GuideLayout';
 
 export default function WishlistPage() {
   const router = useRouter();
@@ -12,6 +13,8 @@ export default function WishlistPage() {
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const { exchangeRate } = useExchangeRate();
   const detailRef = useRef<HTMLDivElement>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const ITEMS_PER_PAGE = 5;
 
   // ★ 브라우저 뒤로가기 제어
   useEffect(() => {
@@ -38,6 +41,7 @@ export default function WishlistPage() {
 
     const savedWishlist = JSON.parse(localStorage.getItem('rakutenWishlist') || '[]');
     setWishlist(savedWishlist);
+    setSelectedItems(savedWishlist.map((item: any) => item.itemId));
   }, []);
 
   const updateCounts = () => {
@@ -46,9 +50,14 @@ export default function WishlistPage() {
   };
 
   const handleRemove = (itemId: string) => {
-    const updatedWishlist = wishlist.filter((item) => item.itemId !== itemId);
-    setWishlist(updatedWishlist);
-    localStorage.setItem('rakutenWishlist', JSON.stringify(updatedWishlist));
+    if (confirm("이 상품을 관심상품에서 삭제하시겠습니까?")) {
+      const updatedWishlist = wishlist.filter((item) => item.itemId !== itemId);
+      setWishlist(updatedWishlist);
+      localStorage.setItem('rakutenWishlist', JSON.stringify(updatedWishlist));
+      if (currentItems.length === 1 && currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      }
+    }
   };
 
   const handleRemoveSelected = () => {
@@ -61,6 +70,7 @@ export default function WishlistPage() {
       setWishlist(updatedWishlist);
       localStorage.setItem('rakutenWishlist', JSON.stringify(updatedWishlist));
       setSelectedItems([]);
+      setCurrentPage(1);
     }
   };
 
@@ -89,201 +99,258 @@ export default function WishlistPage() {
     }, 100);
   };
 
+  // 페이지네이션 계산
+  const totalPages = Math.ceil(wishlist.length / ITEMS_PER_PAGE);
+  const currentItems = wishlist.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '30px', fontFamily: 'dotum, sans-serif', color: '#333' }}>
+    <GuideLayout title="관심물품보기" type="mypage">
       
-      <div ref={detailRef} style={{ scrollMarginTop: '20px' }}>
-      {selectedItem && (
-        <div style={{ 
-            position: 'relative',    
-            width: '100%',            
-            margin: '20px auto 40px',     
-            backgroundColor: '#fff',
-            border: '1px solid #ddd',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-            zIndex: 1000
-        }}>
-          <div style={{ textAlign: 'right' }}>
-            <button 
-              onClick={() => setSelectedItem(null)}
-              style={{ 
-                position: 'absolute', top: '-15px', right: '-20px', width: '50px', height: '50px',
-                borderRadius: '50%', backgroundColor: '#fff', border: '2px solid #333',
-                fontSize: '25px', fontWeight: 'bold', cursor: 'pointer', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                zIndex: 1001
-              }}
-            >
-              X
-            </button>
-          </div>
-          <ProductDetail 
-            item={selectedItem} 
-            exchangeRate={exchangeRate} 
-            onCartUpdate={updateCounts}
-          />
-        </div>
-      )}
-      </div>
+      {/* 🌟 전역 애니메이션 키프레임 정의 */}
+      <style jsx global>{`
+        @keyframes slideUpFade {
+          0% { opacity: 0; transform: translateY(20px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes popIn {
+          0% { opacity: 0; transform: scale(0.95) translateY(10px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        
+        .anim-slide-up {
+          opacity: 0;
+          animation: slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .anim-pop-in {
+          animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
 
-      {/* 1. 헤더 */}
-      <h2 style={{ fontSize: '28px', fontWeight: 'bold', paddingBottom: '15px', borderBottom: '2px dashed #ccc', marginBottom: '30px' }}>
-        관심물품보기
-      </h2>
+        /* 호버 유틸리티 클래스 */
+        .hover-card {
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+        }
+        .hover-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 24px rgba(0,0,0,0.08) !important;
+        }
+        
+        .btn-transition {
+          transition: all 0.2s ease;
+        }
+        .btn-transition:active {
+          transform: scale(0.96);
+        }
+      `}</style>
 
-      {/* 2. 회원등급 및 사이버머니 */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px', border: '1px solid #ddd', fontSize: '16px' }}>
-        <tbody>
-          <tr>
-            <td style={{ width: '50%', padding: '15px', backgroundColor: '#f9f9f9', border: '1px solid #ddd', textAlign: 'center', fontWeight: 'bold' }}>회원등급</td>
-            <td style={{ width: '50%', padding: '15px', border: '1px solid #ddd', textAlign: 'center' }}>
-                일반회원 <button style={{ fontSize: '13px', padding: '3px 8px', border: '1px solid #ccc', backgroundColor: '#fff', marginLeft: '10px', cursor: 'pointer' }}>등급안내▶</button>
-            </td>
-          </tr>
-          <tr>
-            <td style={{ width: '50%', padding: '15px', backgroundColor: '#f9f9f9', border: '1px solid #ddd', textAlign: 'center', fontWeight: 'bold' }}>사이버머니</td>
-            <td style={{ width: '50%', padding: '15px', border: '1px solid #ddd', textAlign: 'center' }}>
-                <span style={{ fontWeight: 'bold', fontSize: '18px' }}>10,000 원</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* 3. 현재 대행신청 현황 */}
-      <div style={{ padding: '20px', border: '1px solid #eee', backgroundColor: '#fcfcfc', borderLeft: '5px solid #d9534f', marginBottom: '40px', fontSize: '16px' }}>
-        <span style={{ color: '#337ab7', fontWeight: 'bold' }}>라상민</span> 님의 현재 대행신청 현황입니다.
-      </div>
-
-      {/* 4. 상태 아이콘 바 */}
-      <div style={{ display: 'flex', width: '100%', border: '1px solid #ddd', marginBottom: '40px', textAlign: 'center', fontSize: '13px' }}>
-        <StatusIcon icon="fa-trash" label="경매.구매실패" count="0" />
-        <StatusIcon icon="fa-edit" label="1등경매중" count="0" />
-        <StatusIcon icon="fa-shopping-cart" label="낙찰/구매승인 1차결제" count="2" highlight />
-        <StatusIcon icon="fa-credit-card" label="1차결제완료" count="0" />
-        <StatusIcon icon="fa-truck" label="현지배송완료 국제배송신청" count="0" />
-        <StatusIcon icon="fa-boxes" label="통합포장진행중" count="0" />
-        <StatusIcon icon="fa-file-invoice" label="포장완료 2차결제요청" count="0" />
-        <StatusIcon icon="fa-wallet" label="2차결제완료" count="0" />
-        <StatusIcon icon="fa-plane" label="한국으로 국제배송" count="0" />
-        <StatusIcon icon="fa-gift" label="배송완료" count="0" last />
-      </div>
-
-      {/* 5. 안내 박스 */}
-      <div style={{ border: '1px solid #ddd', borderRadius: '4px', padding: '25px', backgroundColor: '#f9f9f9', marginBottom: '40px' }}>
-        <h4 style={{ fontWeight: 'bold', marginBottom: '20px', fontSize: '18px' }}>[관심물품보기]</h4>
-        <div style={{ fontSize: '15px', color: '#666', lineHeight: '2' }}>
-            <p>회원님의 관심 물품 리스트입니다.</p>
-            <p>구매대행 상품의 경우 해당 상품명을 누르면 바로 구매신청을 하실 수 있습니다.</p>
-            <p>야후옥션 입찰의 경우에는 해당 상품명을 클릭해서 입찰에 참여하거나 현재의 관심물품 리스트에서 바로 입찰에 참여 하실 수도 있습니다.</p>
-            <br />
-            <p>■ 현재 리스트에서 바로 입찰에 참여하는 방법 안내</p>
-            <p>- 금액을 높혀 적고 <span style={{ color: '#f0ad4e', fontWeight: 'bold' }}>입찰하기</span>를 클릭해서 바로 입찰에 참여하실 수 있습니다.</p>
-            <p>- [금액 구간별 입찰 단위]를 확인하시고 충분히 높은 금액으로 입찰하세요.</p>
-            <p>- 마감이 임박한 경매는 빠른 대응을 위해 새로고침 버튼 대신 원문에서 확인하세요. 마감 10분 내에 입찰하면 10분 연장됩니다.</p>
-        </div>
-      </div>
-
-      {/* 6. 관심물품리스트 타이틀 */}
-      <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <i className="fa fa-list-alt" style={{ fontSize: '22px' }}></i> 관심물품리스트
-      </div>
-
-      {/* 7. 리스트 본문 */}
-      <div style={{ borderTop: '3px solid #666', marginBottom: '30px' }}>
-        {wishlist.length === 0 ? (
-          <div style={{ padding: '50px', textAlign: 'center', borderBottom: '1px solid #ddd', color: '#888' }}>
-            관심물품이 없습니다.
-          </div>
-        ) : (
-          wishlist.map((item, index) => (
-            <div key={item.itemId || index} style={{ display: 'flex', padding: '30px 0', borderBottom: '1px solid #ddd' }}>
-              <div style={{ width: '120px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
-                <div style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    삭제<input 
-                      type="checkbox" 
-                      checked={selectedItems.includes(item.itemId)} 
-                      onChange={() => toggleItemSelection(item.itemId)}
-                      style={{ width: '18px', height: '18px' }}
-                    />
-                </div>
-                {item.imageUrl && (
-                    <img 
-                        src={item.imageUrl} 
-                        alt="상품" 
-                        style={{ width: '100px', height: '100px', objectFit: 'contain', border: '1px solid #eee', cursor: 'pointer' }} 
-                        onClick={() => handleItemClick(item)}
-                    />
-                )}
-                <button 
-                  onClick={() => handleItemClick(item)}
-                  style={{ backgroundColor: '#80b031', color: '#fff', border: 'none', padding: '8px 15px', fontSize: '14px', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold', width: '100px' }}
-                >
-                  Q상세정보
-                </button>
-              </div>
-              <div style={{ flex: 1, paddingLeft: '20px' }}>
-                <div 
-                    onClick={() => handleItemClick(item)}
-                    style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', marginBottom: '12px', cursor: 'pointer', lineHeight: '1.4' }}
-                >
-                    {item.itemName}
-                    <div style={{ fontSize: '14px', color: '#888', fontWeight: 'normal', marginTop: '5px' }}>
-                      ({item.itemName})
-                    </div>
-                </div>
-                <div style={{ fontSize: '14px', color: '#666', lineHeight: '1.8' }}>
-                    <span style={{ color: '#d9534f', fontWeight: 'bold' }}>• 주문번호 : </span> {String(item.itemId).substring(0, 8)}
-                    <span style={{ marginLeft: '20px', color: '#d9534f', fontWeight: 'bold' }}>• 입찰/구매금액 : </span> 
-                    <span style={{ color: '#337ab7', fontWeight: 'bold', fontSize: '16px' }}>JPY {Number(item.priceYen).toLocaleString()}</span>
-                    <span style={{ fontSize: '13px', marginLeft: '3px' }}>(₩{(Math.round(Number(item.priceYen) * exchangeRate / 100) * 100).toLocaleString()})</span>
-                    <span style={{ marginLeft: '20px', color: '#d9534f', fontWeight: 'bold' }}>• 수량 : </span> 1
-                    <span style={{ marginLeft: '20px', color: '#d9534f', fontWeight: 'bold' }}>• 경매번호/입찰ID : </span> {item.shopName}
-                </div>
-                <div style={{ fontSize: '14px', color: '#666', marginTop: '8px', lineHeight: '1.8' }}>
-                    <span style={{ color: '#d9534f', fontWeight: 'bold' }}>• 구분/종료일 : </span> 일본구매대행/{new Date(item.addedAt || Date.now()).toISOString().slice(0, 16).replace('T', ' ')}
-                    <span style={{ marginLeft: '20px', color: '#d9534f', fontWeight: 'bold' }}>• 상태/주문 : </span> 관심물품/진행중
-                </div>
-              </div>
+      <div style={{ maxWidth: '1000px', margin: '0 auto', fontFamily: 'Pretendard, "Noto Sans KR", dotum, sans-serif' }}>
+        
+        <div ref={detailRef} style={{ scrollMarginTop: '20px' }}>
+        {selectedItem && (
+          <div className="anim-pop-in" style={{ 
+              position: 'relative',    
+              width: '100%',            
+              margin: '20px auto 40px',     
+              backgroundColor: '#fff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '24px',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
+              zIndex: 1000,
+              overflow: 'hidden'
+          }}>
+            <div style={{ textAlign: 'right' }}>
+              <button 
+                onClick={() => setSelectedItem(null)}
+                className="btn-transition"
+                style={{ 
+                  position: 'absolute', top: '15px', right: '15px', width: '40px', height: '40px',
+                  borderRadius: '50%', backgroundColor: '#f8fafc', border: 'none', color: '#64748b',
+                  fontSize: '20px', fontWeight: 'bold', cursor: 'pointer', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', zIndex: 1001
+                }}
+                onMouseOver={e => { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}
+                onMouseOut={e => { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.color = '#64748b'; }}
+              >
+                ✕
+              </button>
             </div>
-          ))
+            <ProductDetail 
+              item={selectedItem} 
+              exchangeRate={exchangeRate} 
+              onCartUpdate={updateCounts}
+              showWishlistButton={false}
+            />
+          </div>
         )}
-      </div>
-
-      {/* 8. 하단 버튼 */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '40px', marginTop: '20px' }}>
-        <button 
-          onClick={toggleAllSelection}
-          style={{ padding: '8px 20px', fontSize: '14px', border: '1px solid #ccc', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
-        >
-          <i className="fa fa-check" style={{ fontSize: '12px', color: '#337ab7' }}></i> 전체 선택
-        </button>
-        <button 
-          onClick={handleRemoveSelected}
-          style={{ padding: '8px 20px', fontSize: '14px', border: '1px solid #ccc', backgroundColor: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
-        >
-          <i className="fa fa-times" style={{ fontSize: '12px', color: '#d9534f' }}></i> 선택 삭제
-        </button>
-      </div>
-
-      {/* 9. 페이지네이션 */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '5px' }}>
-        <button style={{ width: '40px', height: '40px', backgroundColor: '#337ab7', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '18px', fontWeight: 'bold' }}>1</button>
-      </div>
-
-    </div>
-  );
-}
-
-function StatusIcon({ icon, label, count, highlight, last }: any) {
-    return (
-        <div style={{ flex: 1, borderRight: last ? 'none' : '1px solid #ddd' }}>
-            <div style={{ padding: '20px 10px', height: '90px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', borderBottom: '1px solid #ddd' }}>
-                <i className={`fa ${icon}`} style={{ fontSize: '28px', marginBottom: '10px', color: highlight ? '#d9534f' : '#666' }}></i>
-                <div style={{ lineHeight: '1.2' }}>{label}</div>
-            </div>
-            <div style={{ padding: '15px 0', fontSize: '20px', fontWeight: highlight ? 'bold' : 'normal', color: highlight ? '#d9534f' : '#333' }}>
-                {count}
-            </div>
         </div>
-    );
+
+        {/* 🌟 상단 헤더 영역 */}
+        <div className="anim-slide-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          </div>
+          <div style={{ backgroundColor: '#f0f9ff', padding: '10px 18px', borderRadius: '20px', border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+              <i className="fa fa-tag" style={{ color: '#0ea5e9' }}></i>
+              <span style={{ fontSize: '14px', color: '#0ea5e9', fontWeight: '700' }}>
+                  환율 환산: 100엔 = {exchangeRate.toFixed(2)}원
+              </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '30px', alignItems: 'flex-start' }}>
+          
+          {/* 🌟 상품 리스트 영역 */}
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {wishlist.length === 0 ? (
+                  <div className="anim-slide-up" style={{ padding: '100px 0', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '20px', border: '1px dashed #cbd5e1', color: '#64748b', fontSize: '16px', fontWeight: '500' }}>
+                      <span style={{ fontSize: '40px', display: 'block', marginBottom: '15px', opacity: 0.5 }}>📭</span>
+                      담아둔 관심상품이 없습니다.
+                  </div>
+              ) : (
+                  currentItems.map((item, index) => {
+                    // 🌟 카드별 순차 등장 딜레이 적용 (0.1s, 0.2s, 0.3s ...)
+                    const animationDelay = `${0.1 + index * 0.1}s`;
+
+                    return (
+                      <div key={item.itemId || index} className="anim-slide-up" style={{ animationDelay, display: 'flex', alignItems: 'center', gap: '15px' }}>
+                          {/* 체크박스 */}
+                          <div 
+                            className="btn-transition"
+                            onClick={() => toggleItemSelection(item.itemId)} 
+                            style={{ 
+                              width: '26px', height: '26px', 
+                              backgroundColor: selectedItems.includes(item.itemId) ? '#ff4b2b' : '#fff',
+                              border: `2px solid ${selectedItems.includes(item.itemId) ? '#ff4b2b' : '#cbd5e1'}`, 
+                              borderRadius: '6px',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer'
+                          }}>
+                              {selectedItems.includes(item.itemId) && <i className="fa fa-check" style={{ fontSize: '14px' }}></i>}
+                          </div>
+
+                          {/* 상품 카드 */}
+                          <div className="hover-card" style={{ flex: 1, backgroundColor: '#fff', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 10px rgba(0,0,0,0.02)', display: 'flex', overflow: 'hidden' }}>
+                              <div style={{ padding: '20px', display: 'flex', flex: 1, gap: '24px', alignItems: 'center' }}>
+                                  <div 
+                                      onClick={() => handleItemClick(item)}
+                                      style={{ width: '120px', height: '120px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #f1f5f9', cursor: 'pointer', backgroundColor: '#fff' }}
+                                  >
+                                      <img src={item.imageUrl} alt="상품" style={{ width: '100%', height: '100%', objectFit: 'contain', transition: 'transform 0.3s' }} onMouseOver={e => e.currentTarget.style.transform='scale(1.05)'} onMouseOut={e => e.currentTarget.style.transform='scale(1)'} />
+                                  </div>
+                                  <div style={{ flex: 1 }}>
+                                      <h3 
+                                          onClick={() => handleItemClick(item)}
+                                          style={{ fontSize: '17px', fontWeight: '800', color: '#0f172a', marginBottom: '12px', cursor: 'pointer', lineHeight: '1.4' }}
+                                          onMouseOver={e => e.currentTarget.style.color='#ff4b2b'}
+                                          onMouseOut={e => e.currentTarget.style.color='#0f172a'}
+                                      >
+                                          {item.itemName}
+                                      </h3>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                          <div style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b' }}>
+                                              ¥{Number(item.priceYen).toLocaleString()}
+                                          </div>
+                                          <div style={{ fontSize: '15px', color: '#ef4444', fontWeight: '800' }}>
+                                              (₩{(Math.round(Number(item.priceYen) * exchangeRate / 100) * 100).toLocaleString()})
+                                          </div>
+                                      </div>
+                                      <div style={{ fontSize: '13px', color: '#64748b', marginTop: '12px', fontWeight: '500' }}>
+                                          <span style={{ backgroundColor: '#f1f5f9', padding: '4px 8px', borderRadius: '6px', marginRight: '8px' }}>{item.shopName}</span> 
+                                          등록일: {new Date(item.addedAt || Date.now()).toLocaleDateString()}
+                                      </div>
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                      <button 
+                                          className="btn-transition"
+                                          onClick={() => handleItemClick(item)}
+                                          style={{ padding: '10px 20px', backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 6px rgba(15, 23, 42, 0.2)' }}
+                                          onMouseOver={e => e.currentTarget.style.backgroundColor='#334155'}
+                                          onMouseOut={e => e.currentTarget.style.backgroundColor='#0f172a'}
+                                      >
+                                          상세보기
+                                      </button>
+                                  </div>
+                              </div>
+                              
+                              {/* 삭제 바 */}
+                              <div 
+                                  className="btn-transition"
+                                  onClick={() => handleRemove(item.itemId)}
+                                  style={{ width: '60px', backgroundColor: '#fff', borderLeft: '1px dashed #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                                  onMouseOver={e => { e.currentTarget.style.backgroundColor = '#fef2f2'; e.currentTarget.children[0].style.color = '#ef4444'; }}
+                                  onMouseOut={e => { e.currentTarget.style.backgroundColor = '#fff'; e.currentTarget.children[0].style.color = '#94a3b8'; }}
+                              >
+                                  <i className="fa fa-trash-alt" style={{ fontSize: '20px', color: '#94a3b8', transition: 'color 0.2s' }}></i>
+                              </div>
+                          </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+
+            {/* 🌟 하단 전체 조작 버튼 */}
+            {wishlist.length > 0 && (
+              <div className="anim-slide-up" style={{ animationDelay: '0.4s', display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '40px' }}>
+                  <button 
+                    className="btn-transition"
+                    onClick={toggleAllSelection}
+                    style={{ padding: '14px 28px', backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '12px', fontSize: '15px', color: '#334155', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: '800', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
+                    onMouseOver={e => { e.currentTarget.style.borderColor = '#0f172a'; e.currentTarget.style.color = '#0f172a'; }}
+                    onMouseOut={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#334155'; }}
+                  >
+                      <div style={{ width: '20px', height: '20px', backgroundColor: selectedItems.length === wishlist.length && wishlist.length > 0 ? '#ff4b2b' : '#fff', border: `2px solid ${selectedItems.length === wishlist.length && wishlist.length > 0 ? '#ff4b2b' : '#cbd5e1'}`, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                        {selectedItems.length === wishlist.length && wishlist.length > 0 && <i className="fa fa-check" style={{ fontSize: '10px' }}></i>}
+                      </div>
+                      전체 선택
+                  </button>
+                  <button 
+                    className="btn-transition"
+                    onClick={handleRemoveSelected}
+                    style={{ padding: '14px 28px', backgroundColor: '#fff', border: '1px solid #fca5a5', borderRadius: '12px', fontSize: '15px', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
+                    onMouseOver={e => { e.currentTarget.style.backgroundColor = '#fef2f2'; }}
+                    onMouseOut={e => { e.currentTarget.style.backgroundColor = '#fff'; }}
+                  >
+                      <i className="fa fa-trash-alt"></i>
+                      선택 삭제
+                  </button>
+              </div>
+            )}
+
+            {/* 🌟 페이지네이션 */}
+            {totalPages > 1 && (
+              <div className="anim-slide-up" style={{ animationDelay: '0.5s', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginTop: '30px' }}>
+                  <button 
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    style={{ width: '38px', height: '38px', border: '1px solid #e2e8f0', backgroundColor: '#fff', borderRadius: '10px', cursor: 'pointer', color: '#64748b', fontWeight: 'bold', transition: 'all 0.2s' }}
+                    onMouseOver={e=>e.currentTarget.style.backgroundColor='#f8fafc'} onMouseOut={e=>e.currentTarget.style.backgroundColor='#fff'}
+                  >{"<"}</button>
+                  
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <button 
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      style={{ 
+                        width: '38px', height: '38px', border: 'none', 
+                        backgroundColor: currentPage === page ? '#0f172a' : 'transparent', 
+                        color: currentPage === page ? '#fff' : '#64748b', 
+                        borderRadius: '10px', cursor: 'pointer', fontWeight: '800',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                        {page}
+                    </button>
+                  ))}
+
+                  <button 
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    style={{ width: '38px', height: '38px', border: '1px solid #e2e8f0', backgroundColor: '#fff', borderRadius: '10px', cursor: 'pointer', color: '#64748b', fontWeight: 'bold', transition: 'all 0.2s' }}
+                    onMouseOver={e=>e.currentTarget.style.backgroundColor='#f8fafc'} onMouseOut={e=>e.currentTarget.style.backgroundColor='#fff'}
+                  >{">"}</button>
+              </div>
+            )}
+          </div>
+
+        </div>
+      </div>
+    </GuideLayout>
+  );
 }

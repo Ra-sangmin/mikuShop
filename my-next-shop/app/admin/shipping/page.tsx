@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import AdminSidebar from '@/app/components/AdminSidebar';
 
 const shippingStatusOptions = ['국제배송', '국내통관중', '국내배송중', '배송완료'];
 
@@ -149,36 +150,7 @@ export default function ShippingManagement() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f1f5f9', fontFamily: "'Inter', 'Noto Sans KR', sans-serif" }}>
-      {/* 사이드바 영역 생략 (동일) */}
-      <aside style={{ width: '260px', backgroundColor: '#1e293b', color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '24px', fontSize: '20px', fontWeight: 'bold', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '24px' }}>📦</span> 미쿠짱 관리자
-        </div>
-        <nav style={{ flex: 1, padding: '20px 0' }}>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {['대시보드', '주문 관리', '배송 현황', '정산 관리', '환불 정보', '고객 센터'].map((item, idx) => (
-              <li key={idx} 
-                  onClick={() => {
-                    if (item === '대시보드') router.push('/admin/dashboard');
-                    if (item === '주문 관리') router.push('/admin/orders');
-                    if (item === '배송 현황') router.push('/admin/delivery');
-                    if (item === '정산 관리') router.push('/admin/settlement');
-                  }}
-                  style={{ 
-                padding: '16px 24px', 
-                cursor: 'pointer',
-                backgroundColor: item === '배송 현황' ? '#3b82f6' : 'transparent',
-                borderLeft: item === '배송 현황' ? '4px solid #fff' : '4px solid transparent',
-                color: item === '배송 현황' ? '#fff' : '#94a3b8',
-                fontWeight: item === '배송 현황' ? '600' : '400',
-                transition: 'all 0.2s'
-              }}>
-                {item}
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </aside>
+      <AdminSidebar />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <header style={{ height: '70px', backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 30px' }}>

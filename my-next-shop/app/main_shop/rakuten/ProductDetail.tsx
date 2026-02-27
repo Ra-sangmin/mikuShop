@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { DELIVERY_FEE_DATA } from '@/lib/shippingData';
 
 // 1. 배송 방법별 데이터 정의
@@ -10,7 +11,8 @@ const SHIPPING_METHODS = {
   SHIP_SPECIAL: { name: "선편특송(오사카)" }
 };
 
-const ProductDetail = ({ item, exchangeRate, onCartUpdate }: any) => {
+const ProductDetail = ({ item, exchangeRate, onCartUpdate, showWishlistButton = true }: any) => {
+  const router = useRouter();
   const [quantity, setQuantity] = useState<number>(1);
   const [optionMemo, setOptionMemo] = useState<string>("");
   const [selectedShipping, setSelectedShipping] = useState<keyof typeof SHIPPING_METHODS>("EMS_AIR");
@@ -63,31 +65,64 @@ const ProductDetail = ({ item, exchangeRate, onCartUpdate }: any) => {
   const extraFeesWon = Math.round((200 + 450) * exchangeRate / 100) * 100; 
   const totalPrice = Math.round(((priceWon + currentShippingFee + agencyFee + extraFeesWon) * quantity) / 100) * 100;
 
-  const handleAddToCart = () => {
-    const cartItem = {
-      itemId: item.itemCode || item.itemId,
-      itemName: title,
-      shopName: item.shopName,
-      imageUrl: mainImage,
-      priceYen: priceYen,
-      totalPriceWon: totalPrice,
-      quantity: quantity,
-      optionMemo: optionMemo,
-      shippingMethod: SHIPPING_METHODS[selectedShipping].name,
-      addedAt: new Date().toISOString()
-    };
+  const handleAddToCart = async () => {
+    // 🌟 1. 로컬 스토리지에서 현재 로그인한 유저의 ID를 가져옵니다.
+    const userId = localStorage.getItem('id');
 
-    const existingCart = JSON.parse(localStorage.getItem('rakutenCart') || '[]');
-    const isAlreadyInCart = existingCart.find((c: any) => c.itemId === cartItem.itemId);
-    
-    if (isAlreadyInCart) {
-      alert("이미 장바구니에 담긴 상품입니다!");
+    if (!userId) {
+      alert("로그인이 필요한 서비스입니다.");
       return;
     }
 
-    localStorage.setItem('rakutenCart', JSON.stringify([...existingCart, cartItem]));
-    if (onCartUpdate) onCartUpdate(); 
-    alert(`🛒 장바구니에 담겼습니다!\n배송방법: ${SHIPPING_METHODS[selectedShipping].name}`);
+    try {
+      // 🌟 2. DB에 정보를 전송합니다.
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: userId,
+          productName: title,
+          productPrice: priceYen,
+          productImageUrl: mainImage,
+          productUrl: item.itemUrl || item.url,
+          productOption: optionMemo,
+          status: "장바구니"
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // 기존 로컬스토리지 처리 (호환성을 위해 유지)
+        const cartItem = {
+          itemId: item.itemCode || item.itemId,
+          itemName: title,
+          shopName: item.shopName,
+          imageUrl: mainImage,
+          priceYen: priceYen,
+          totalPriceWon: totalPrice,
+          quantity: quantity,
+          optionMemo: optionMemo,
+          shippingMethod: SHIPPING_METHODS[selectedShipping].name,
+          addedAt: new Date().toISOString()
+        };
+
+        const existingCart = JSON.parse(localStorage.getItem('rakutenCart') || '[]');
+        localStorage.setItem('rakutenCart', JSON.stringify([...existingCart, cartItem]));
+        
+        if (onCartUpdate) onCartUpdate(); 
+        if (confirm("🛒 장바구니에 성공적으로 담겼습니다! (DB 저장 완료)\n장바구니로 이동하시겠습니까?")) {
+          router.push('/mypage/status?tab=장바구니');
+        }
+      } else {
+        alert(`장바구니 저장 중 오류가 발생했습니다: ${data.error}`);
+      }
+    } catch (error) {
+      console.error("Cart API Error:", error);
+      alert("서버 통신 중 오류가 발생했습니다.");
+    }
   };
 
   const handleAddToWishlist = () => {
@@ -136,15 +171,17 @@ const ProductDetail = ({ item, exchangeRate, onCartUpdate }: any) => {
             </tbody>
           </table>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button onClick={handleAddToCart} style={{ fontSize: '20px', backgroundColor: '#d9534f', color: '#fff', padding: '10px 20px', border: 'none', cursor: 'pointer' }}>🛒 구매신청</button>
-            <button onClick={handleAddToWishlist} style={{ fontSize: '20px', backgroundColor: '#f0ad4e', color: '#fff', padding: '10px 20px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
-              ★ 관심상품
-              {wishlistCount > 0 && (
-                <span style={{ backgroundColor: '#d9534f', color: '#fff', borderRadius: '50%', padding: '2px 8px', fontSize: '14px' }}>
-                  {wishlistCount}
-                </span>
-              )}
-            </button>
+            <button onClick={handleAddToCart} style={{ fontSize: '20px', backgroundColor: '#d9534f', color: '#fff', padding: '10px 20px', border: 'none', cursor: 'pointer' }}>🛒 장바구니 담기</button>
+            {showWishlistButton && (
+              <button onClick={handleAddToWishlist} style={{ fontSize: '20px', backgroundColor: '#f0ad4e', color: '#fff', padding: '10px 20px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                ★ 관심상품
+                {wishlistCount > 0 && (
+                  <span style={{ backgroundColor: '#d9534f', color: '#fff', borderRadius: '50%', padding: '2px 8px', fontSize: '14px' }}>
+                    {wishlistCount}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -170,16 +207,16 @@ const ProductDetail = ({ item, exchangeRate, onCartUpdate }: any) => {
               <td style={tableCellStyle}>{priceWon.toLocaleString()} 원</td>
             </tr>
             <tr>
-              <td style={tableCellStyle}>현지운송료</td>
+              <td style={tableCellStyle}>송금 수수료</td>
               <td colSpan={2} style={tableCellStyle}>실비정산 (0엔 ~ 1,000엔 : 과중량은 추가될 수 있습니다.)</td>
             </tr>
             <tr>
-              <td style={tableCellStyle}>포장비 / 송금수수료</td>
+              <td style={tableCellStyle}>현지 배송료</td>
               <td colSpan={2} style={tableCellStyle}>200엔 / 450엔 (약 {extraFeesWon.toLocaleString()}원)</td>
             </tr>
             
             <tr>
-              <td style={tableCellStyle}>국제운송료</td>
+              <td style={tableCellStyle}>국제 배송료</td>
               <td style={{ ...tableCellStyle, textAlign: 'left', paddingLeft: '50px' }}>
                 <select 
                   value={selectedShipping} 
@@ -267,7 +304,9 @@ const ProductDetail = ({ item, exchangeRate, onCartUpdate }: any) => {
           <p style={{ fontWeight: 'bold', fontSize: '20px' }}>일본구매대행만 12년 - 정직하고 착한가격</p>
           <div style={{ marginTop: '20px' }}>
             <span style={{ backgroundColor: '#fee500', padding: '15px 40px', borderRadius: '30px', fontWeight: 'bold', fontSize: '20px', cursor: 'pointer' }}>💬 실시간 견적상담 - 24시간 운영 TALK</span>
+            
           </div>
+          
         </div>
       </div>
 
@@ -279,6 +318,7 @@ const ProductDetail = ({ item, exchangeRate, onCartUpdate }: any) => {
         </div>
       </div>
     </div>
+    
   );
 };
 

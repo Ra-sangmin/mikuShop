@@ -57,22 +57,23 @@ model Order {
   user                User      @relation(fields: [userId], references: [id])
 
   // 📦 1. 식별 번호 그룹
-  bundleId            String?   @map("bundle_id")       // 합배송번호
+  bundleId            String?   @map("bundle_id")        // 합배송번호
   orderId             String    @unique @map("order_id") // 주문번호 (예: ORD-20260226-001)
-  productId           String?   @map("product_id")      // 상품번호
-  trackingNo          String?   @map("tracking_no")     // 운송장번호
+  productId           String?   @map("product_id")       // 상품번호
+  trackingNo          String?   @map("tracking_no")      // 운송장번호
 
   // 🛍️ 2. 상품 정보 그룹
-  productImageUrl     String?   @map("product_image_url") // 상품이미지 (URL)
-  productPrice        Int       @map("product_price")     // 상품가 (엔화 기준)
-  productName         String    @map("product_name")      // 상품명
-  productUrl          String?   @map("product_url")       // 상품URL
-  productOption       String?   @map("product_option")    // 상품옵션 (색상, 사이즈 등)
+  productImageUrl     String?   @db.Text @map("product_image_url")        // 상품이미지 (URL)
+  productPrice        Int       @map("product_price")                     // 상품가 (엔화 기준)
+  productName         String    @map("product_name")                      // 상품명
+  productUrl          String?   @db.Text @map("product_url")              // 상품URL
+  productOption       String?   @map("product_option")                    // 상품옵션 (색상, 사이즈 등)
+  productRequest      String?   @map("productRequest")                    // 상품 요청사항
 
   // 🗓️ 3. 날짜 정보 그룹 (아직 발생하지 않은 일자는 비워둘 수 있도록 '?' 처리)
-  registeredAt        DateTime  @default(now()) @map("registered_at") // 등록일자
-  receivedAt          DateTime? @map("received_at")       // 입고완료일
-  shippedAt           DateTime? @map("shipped_at")        // 국제배송일
+  registeredAt        DateTime  @default(now()) @map("registered_at")     // 등록일자
+  receivedAt          DateTime? @map("received_at")                       // 입고완료일
+  shippedAt           DateTime? @map("shipped_at")                        // 국제배송일
 
   // ⚙️ 4. 서비스 및 상태
   serviceRequest      String?   @map("service_request")   // 서비스 신청 (예: 정밀검수, 포장보류 등)
@@ -80,9 +81,10 @@ model Order {
   deliveryStatus      String?   @default("배송전")         // 배송 진행상태 (기본값 설정)
 
   // 💰 5. 비용 및 수취인
-  purchaseFee         Int       @default(0) @map("purchase_fee") // 구매수수료
-  domesticShippingFee Int       @default(0) @map("domestic_shipping_fee") // 일내배/착불 배송비
-  recipient           String?   @map("recipient")         // 수취인 이름
+  purchaseFee         Int       @default(0) @map("purchase_fee")           // 구매수수료
+  domesticShippingFee Int       @default(0) @map("domestic_shipping_fee")  // 일내배/착불 배송비
+  recipient           String?   @map("recipient")                          // 수취인 이름
+  secondPaymentAmount Int?      @map("second_payment_amount")              // 2차 결제 금액
 
   @@map("orders") // 실제 MySQL 테이블 이름은 'orders'로 생성됩니다.
 }

@@ -1,331 +1,454 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useExchangeRate } from '../context/ExchangeRateContext';
 import { useCart } from '../context/CartContext';
 import { useRouter } from 'next/navigation';
 
+// 🌟 상품 1개의 초기 데이터 구조 정의
+type ProductForm = {
+  id: number;
+  url: string;
+  name: string;
+  price: string;
+  quantity: string;
+  option: string;
+  request: string;
+  photoService: string;
+  packingService: string;
+  category: string;
+  isAutoFetching: boolean;
+  lastFetchedUrl: string;
+  image?: string;
+};
+
+const initialProduct: ProductForm = {
+  id: Date.now(),
+  url: '',
+  name: '',
+  price: '',
+  quantity: '1',
+  option: '',
+  request: '',
+  photoService: 'none',
+  packingService: 'none',
+  category: '',
+  isAutoFetching: false,
+  lastFetchedUrl: '',
+  image: undefined
+};
+
 export default function PurchaseFormContainer() {
-  const [url, setUrl] = useState('');
-  const [photoService, setPhotoService] = useState('none');
-  const [packingService, setPackingService] = useState('none');
-  const [price, setPrice] = useState<string>('');
-  const [quantity, setQuantity] = useState<string>('1');
-  const [option, setOption] = useState('');
-  const [request, setRequest] = useState('');
-  const [category, setCategory] = useState('');
+  const [products, setProducts] = useState<ProductForm[]>([{ ...initialProduct, name: '상품 정보 입력 1' }]);
+  const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   
   const { exchangeRate } = useExchangeRate();
   const { addToCart } = useCart();
   const router = useRouter();
 
-  const handleAddToCart = () => {
-    if (!url || !price || !quantity) {
-      alert('필수 정보를 입력해주세요.');
+  const updateProduct = (index: number, field: keyof ProductForm, value: any) => {
+    setProducts(prev => {
+      const newProducts = [...prev];
+      newProducts[index] = { ...newProducts[index], [field]: value };
+      return newProducts;
+    });
+  };
+
+  const handleAddProductForm = () => {
+    setProducts(prev => [...prev, { ...initialProduct, id: Date.now(), name: `상품 정보 입력 ${prev.length + 1}` }]);
+  };
+
+  const handleRemoveProductForm = (index: number) => {
+    if (products.length > 1) {
+      setProducts(prev => prev.filter((_, i) => i !== index));
+    } else {
+      setProducts([{ ...initialProduct, id: Date.now() }]);
+    }
+  };
+
+  const fetchProductName = async (index: number, inputUrl: string) => {
+    const product = products[index];
+    if (!inputUrl || !inputUrl.startsWith('http') || inputUrl === product.lastFetchedUrl) return;
+
+    updateProduct(index, 'isAutoFetching', true);
+    try {
+      const response = await fetch('/api/translate', {
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productUrl: inputUrl, characterLimit: 50 }),
+      });
+      const data = await response.json();
+      
+      if (data.success && data.productName) {
+        updateProduct(index, 'name', data.productName);
+        updateProduct(index, 'lastFetchedUrl', inputUrl);
+      }
+    } catch (error) {
+      console.error("상품명 추출 실패:", error);
+    } finally {
+      updateProduct(index, 'isAutoFetching', false);
+    }
+  };
+
+  const handleImageUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processImageFile(index, file);
+  };
+
+  // PurchaseFormContainer 내부 함수 수정
+  const processImageFile = async (index: number, file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('이미지 파일만 업로드 가능합니다.');
       return;
     }
 
-    addToCart({
-      url,
-      price: parseFloat(price),
-      quantity: parseInt(quantity),
-      option,
-      request,
-      photoService,
-      packingService,
-      category
-    });
+    // 🌟 1. FormData 생성 (파일 전송용)
+    const formData = new FormData();
+    formData.append('file', file);
 
-    alert('장바구니에 추가되었습니다.');
-    router.push('/mypage/status?tab=장바구니');
+    try {
+      updateProduct(index, 'isAutoFetching', true); // 로딩 표시
+
+      // 🌟 2. 이미지 업로드 API 호출
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        // 🌟 3. 서버가 저장한 이미지의 공개 URL을 상태에 저장
+        updateProduct(index, 'image', data.url);
+      } else {
+        alert('이미지 업로드에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error("Image Upload Error:", error);
+    } finally {
+      updateProduct(index, 'isAutoFetching', false);
+    }
   };
 
-  // 계산 로직
-  const numPrice = parseFloat(price) || 0;
-  const numQuantity = parseInt(quantity) || 0;
-  const totalJPY = numPrice * numQuantity;
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (index: number, e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (file) processImageFile(index, file);
+  };
+
+  const handleAddToCart = async () => {
+    for (let i = 0; i < products.length; i++) {
+      const p = products[i];
+      if (!p.url || !p.price || !p.quantity || !p.name) {
+        alert(`${i + 1}번째 상품의 필수 정보를 입력해주세요.`);
+        return;
+      }
+    }
+
+    const userId = localStorage.getItem('user_id');
+    if (!userId) {
+      alert("로그인이 필요한 서비스입니다.");
+      return;
+    }
+
+    try {
+      const promises = products.map(p => {
+        const totalPrice = parseFloat(p.price) * (parseInt(p.quantity) || 1);
+        
+        // 🌟 서비스 요청 사항 구성
+        const services = [];
+        if (p.photoService === 'apply') services.push('사진 검수');
+        if (p.packingService === 'apply') services.push('포장 보완');
+        
+        // 사용자가 직접 입력한 요청사항이 있다면 추가
+        const combinedRequest = [
+          ...services,
+          ...(p.request ? [p.request] : [])
+        ].join(', ');
+
+        return fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userId,
+            productName: p.name,
+            productPrice: totalPrice,
+            productUrl: p.url,
+            productOption: p.option,
+            productImageUrl: p.image,
+            serviceRequest: [
+              ...(p.photoService === 'apply' ? ['사진 검수'] : []),
+              ...(p.packingService === 'apply' ? ['포장 보완'] : [])
+            ].join(', '), // 서비스 신청 내역
+            productRequest: p.request, // 🌟 개별 상품 요청 사항 분리 저장
+            status: "장바구니"
+          }),
+        });
+      });
+
+      const responses = await Promise.all(promises);
+      let allSuccess = true;
+
+      for (let res of responses) {
+        const data = await res.json();
+        if (!data.success) {
+          allSuccess = false;
+          console.error("개별 상품 저장 실패:", data.error);
+        }
+      }
+
+      if (allSuccess) {
+        products.forEach(p => {
+          addToCart({
+            url: p.url, price: parseFloat(p.price), quantity: parseInt(p.quantity),
+            option: p.option, request: p.request, photoService: p.photoService, packingService: p.packingService, category: p.category
+          });
+        });
+        alert('🛒 모든 상품이 장바구니에 성공적으로 담겼습니다!');
+        router.push('/mypage/status?tab=장바구니');
+      } else {
+        alert(`일부 상품을 저장하는 중 오류가 발생했습니다.`);
+      }
+    } catch (error) {
+      console.error("Cart API Error:", error);
+      alert("서버 통신 중 오류가 발생했습니다.");
+    }
+  };
+
+  const totalJPY = products.reduce((sum, p) => sum + ((parseFloat(p.price) || 0) * (parseInt(p.quantity) || 0)), 0);
   const totalKRW = Math.floor(totalJPY * exchangeRate);
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '20px', fontFamily: '"Noto Sans KR", sans-serif', color: '#333' }}>
-      
-      {/* 유의사항 섹션 */}
-      <div style={{ border: '1px solid #dee2e6', marginBottom: '30px' }}>
-        <div style={{ backgroundColor: '#f8f9fa', padding: '10px 15px', borderBottom: '1px solid #dee2e6', display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <span style={{ fontWeight: 'bold', fontSize: '14px' }}>유의사항</span>
-          <span style={{ 
-            display: 'inline-block', 
-            width: '16px', 
-            height: '16px', 
-            borderRadius: '50%', 
-            border: '1px solid #adb5bd', 
-            fontSize: '11px', 
-            textAlign: 'center', 
-            lineHeight: '14px', 
-            color: '#adb5bd',
-            cursor: 'pointer'
-          }}>?</span>
-        </div>
-        <div style={{ padding: '20px' }}>
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-            <button style={{ backgroundColor: '#212529', color: '#fff', border: 'none', padding: '6px 12px', fontSize: '12px', borderRadius: '3px', fontWeight: 'bold', cursor: 'pointer' }}>구매대행 신청방법</button>
-            <button style={{ backgroundColor: '#212529', color: '#fff', border: 'none', padding: '6px 12px', fontSize: '12px', borderRadius: '3px', fontWeight: 'bold', cursor: 'pointer' }}>수수료/서비스안내</button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}>
-            <input type="checkbox" id="agree" />
-            <label htmlFor="agree" style={{ fontSize: '13px', fontWeight: 'bold' }}>
-              <span style={{ color: '#ff4d4f' }}>위의 내용을 모두 확인하였음을 동의</span>합니다.
-            </label>
-          </div>
-          <div style={{ fontSize: '12px', color: '#666', lineHeight: '1.8' }}>
-            <p style={{ margin: '3px 0' }}>구매대행 신청은 <span style={{ color: '#f57c00', fontWeight: 'bold' }}>사이버머니 충전</span>이후 신청가능합니다 !</p>
-            <p style={{ margin: '3px 0' }}>셀프구매신청으로 구매하실 일본사이트URL(링크) 넣어 1차결제완료하시면</p>
-            <p style={{ margin: '3px 0' }}>오쿠루 관리자가 구매를 진행해드립니다!</p>
-            <p style={{ margin: '3px 0' }}>구매신청이후 구매불가한 상품이라면 지불하신 오쿠루머니는 전액환불됩니다.</p>
-            <p style={{ margin: '3px 0' }}>그 외 자세한 문의는 <span style={{ color: '#f57c00', fontWeight: 'bold' }}>오쿠루 카페로 문의</span>해 주세요.</p>
-          </div>
-        </div>
-      </div>
-
-      {/* 상품정보 섹션 */}
-      <div style={{ border: '1px solid #dee2e6', marginBottom: '20px' }}>
-        <div style={{ backgroundColor: '#f8f9fa', padding: '8px 15px', borderBottom: '1px solid #dee2e6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 'bold', fontSize: '14px' }}>상품정보</span>
-          <button style={{ backgroundColor: '#ff4d4f', color: '#fff', border: 'none', padding: '4px 10px', fontSize: '11px', borderRadius: '3px', fontWeight: 'bold', cursor: 'pointer' }}>상품정보삭제</button>
-        </div>
+    <>
+      <style>{`
+        .premium-container { animation: fadeIn 0.6s ease-out; }
+        .premium-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); border: 1px solid #f0f0f0; overflow: hidden; margin-bottom: 24px; transition: transform 0.3s ease, box-shadow 0.3s ease; }
+        .premium-card:hover { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08); }
         
-        <div style={{ padding: '20px', display: 'flex', gap: '30px' }}>
-          {/* 이미지 영역 */}
-          <div style={{ width: '120px', textAlign: 'center' }}>
-            <div style={{ width: '120px', height: '120px', border: '1px solid #eee', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', marginBottom: '10px' }}>
-              <img src="/images/logo.png" alt="no image" style={{ width: '60px', opacity: 0.1, marginBottom: '5px' }} />
-              <span style={{ fontSize: '12px', color: '#ccc', fontWeight: 'bold' }}>NO IMAGE</span>
+        .premium-input { width: 100%; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 13px; outline: none; transition: all 0.2s ease; background: #f9fafb; }
+        .premium-input:focus { background: #fff; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); }
+        
+        .premium-btn { padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; border: none; }
+        .btn-dark { background: #1f2937; color: #fff; }
+        .btn-dark:hover { background: #374151; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(31, 41, 55, 0.2); }
+        
+        .btn-primary { background: #6366f1; color: #fff; padding: 12px 32px; font-size: 14px; }
+        .btn-primary:hover { background: #4f46e5; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(99, 102, 241, 0.3); }
+        
+        .btn-outline { background: #fff; color: #4b5563; border: 1px solid #d1d5db; }
+        .btn-outline:hover { background: #f3f4f6; color: #111827; }
+        .btn-danger { background: #fff; color: #ef4444; border: 1px solid #fecaca; }
+        .btn-danger:hover { background: #fef2f2; color: #dc2626; border-color: #f87171; }
+
+        .service-box { border: 1px solid #e5e7eb; padding: 16px; border-radius: 10px; transition: border-color 0.2s ease; cursor: pointer; }
+        .service-box:hover { border-color: #6366f1; background: #fefeff; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
+
+      <div className="premium-container" style={{ maxWidth: '1100px', margin: '0 auto', padding: '30px 20px', fontFamily: '"Noto Sans KR", sans-serif', color: '#374151' }}>
+        
+        <div className="premium-card" style={{ background: '#eff6ff', borderColor: '#bfdbfe' }}>
+          <div style={{ padding: '20px 24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+              <span style={{ fontWeight: '700', fontSize: '15px', color: '#1e3a8a' }}>💡 구매대행 유의사항</span>
             </div>
-            <p style={{ fontSize: '11px', color: '#888', marginBottom: '10px' }}>필수사항아님</p>
-            <button style={{ width: '100%', padding: '6px', backgroundColor: '#ced4da', border: 'none', borderRadius: '3px', fontSize: '11px', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>이미지선택</button>
+            <div style={{ fontSize: '13px', color: '#3b82f6', lineHeight: '1.7', backgroundColor: '#fff', padding: '16px', borderRadius: '8px', border: '1px solid #dbeafe' }}>
+              <p style={{ margin: '0' }}>• 구매대행 신청은 <strong style={{ color: '#2563eb' }}>사이버머니 충전</strong> 이후 신청 가능합니다.</p>
+              <p style={{ margin: '4px 0 0 0' }}>• 여러 상품을 한 번에 추가하고 장바구니에 담을 수 있습니다.</p>
+            </div>
           </div>
+        </div>
 
-          {/* 입력 폼 영역 */}
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 1fr', gap: '10px 15px', alignItems: 'center', marginBottom: '15px' }}>
-              <Label required>상품URL</Label>
-              <input 
-                type="text" 
-                placeholder="구매바로가능한 상품링크" 
-                style={inputStyle} 
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-              />
+        {/* 🌟 배열을 맵핑하여 여러 개의 입력 폼 생성 */}
+        {products.map((product, index) => (
+          <div key={product.id} className="premium-card" style={{ animation: 'fadeIn 0.4s ease-out' }}>
+            <div style={{ backgroundColor: '#f9fafb', padding: '16px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               
-              <Label required>가격</Label>
-              <input 
-                type="text" 
-                placeholder="상품링크의 기재된 엔화가격" 
-                style={inputStyle} 
-                value={price}
-                onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ''))}
-              />
-
-              <Label required>수량</Label>
-              <input 
-                type="text" 
-                style={inputStyle} 
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value.replace(/[^0-9]/g, ''))}
-              />
-
-              <Label>상품옵션기입</Label>
-              <input 
-                type="text" 
-                placeholder="메루카리는 작성X" 
-                style={inputStyle} 
-                value={option}
-                onChange={(e) => setOption(e.target.value)}
-              />
-
-              <Label>요청사항</Label>
-              <div style={{ gridColumn: 'span 3' }}>
+              {/* 🌟 핵심 로직: 상품명이 있으면 상품명을 띄우고, 없으면 기본 텍스트 띄움 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, marginRight: '16px' }}>
+                <span style={{ fontSize: '16px' }}>📦</span>
                 <input 
-                  type="text" 
-                  placeholder="요청사항작성가능 / 배송대행신청시에는 상품내용을 해당란에 적어주세요" 
-                  style={inputStyle} 
-                  value={request}
-                  onChange={(e) => setRequest(e.target.value)}
+                  type="text"
+                  value={product.name}
+                  onChange={(e) => updateProduct(index, 'name', e.target.value)}
+                  style={{
+                    fontWeight: '700',
+                    fontSize: '16px',
+                    color: '#111827',
+                    border: 'none',
+                    background: 'transparent',
+                    width: '100%',
+                    outline: 'none',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    transition: 'background 0.2s'
+                  }}
+                  onFocus={(e) => e.target.style.background = '#fff'}
+                  onBlur={(e) => e.target.style.background = 'transparent'}
                 />
               </div>
-            </div>
 
-            {/* 서비스 옵션 영역 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-              {/* 사진검수 */}
-              <div style={{ border: '1px solid #dee2e6', padding: '15px', borderRadius: '3px' }}>
-                <p style={{ margin: '0 0 10px 0', fontSize: '12px', fontWeight: 'bold' }}><span style={{ color: '#ff4d4f' }}>*</span> 사진검수</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={radioLabelStyle}>
-                    <input type="radio" name="photo" checked={photoService === 'none'} onChange={() => setPhotoService('none')} /> 미신청
-                  </label>
-                  <label style={radioLabelStyle}>
-                    <input type="radio" name="photo" checked={photoService === 'apply'} onChange={() => setPhotoService('apply')} /> 신청
-                  </label>
-                  <p style={serviceDescStyle}>[200엔] 도착후 상품사진 3장<br/>추가요청사항은 오쿠루 네이버카페로 문의부탁드립니다.</p>
-                </div>
-              </div>
-              {/* 포장보완 */}
-              <div style={{ border: '1px solid #dee2e6', padding: '15px', borderRadius: '3px' }}>
-                <p style={{ margin: '0 0 10px 0', fontSize: '12px', fontWeight: 'bold' }}><span style={{ color: '#ff4d4f' }}>*</span> 포장보완</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={radioLabelStyle}>
-                    <input type="radio" name="packing" checked={packingService === 'none'} onChange={() => setPackingService('none')} /> 미신청
-                  </label>
-                  <label style={radioLabelStyle}>
-                    <input type="radio" name="packing" checked={packingService === 'apply'} onChange={() => setPackingService('apply')} /> 신청
-                  </label>
-                  <p style={serviceDescStyle}>[200엔~] 뽁뽁이 상품포장보완<br/>상품에 따라 추가요금이 발생할수도 있습니다<br/>추가요청사항은 오쿠루 네이버카페로 문의부탁드립니다.</p>
-                </div>
-              </div>
+              <button 
+                className="premium-btn btn-danger" 
+                style={{ padding: '6px 12px', fontSize: '12px' }}
+                onClick={() => handleRemoveProductForm(index)}
+              >
+                {products.length === 1 ? '초기화' : '삭제'}
+              </button>
             </div>
-
-            {/* 분류 섹션 */}
-            <div style={{ border: '1px solid #dee2e6', padding: '15px', borderRadius: '3px' }}>
-              <p style={{ margin: '0 0 10px 0', fontSize: '12px', fontWeight: 'bold' }}><span style={{ color: '#ff4d4f' }}>*</span> 분류</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <select 
-                  style={selectStyle}
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
+            
+            <div style={{ padding: '24px', display: 'flex', gap: '30px' }}>
+              {/* 이미지 영역 */}
+              <div style={{ width: '140px', textAlign: 'center', flexShrink: 0 }}>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  style={{ display: 'none' }} 
+                  ref={el => { fileInputRefs.current[index] = el }}
+                  onChange={(e) => handleImageUpload(index, e)}
+                />
+                <div 
+                  style={{ width: '140px', height: '140px', borderRadius: '12px', border: '2px dashed #d1d5db', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb', marginBottom: '12px', transition: 'all 0.3s ease', cursor: 'pointer', overflow: 'hidden' }} 
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = '#6366f1'} 
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = '#d1d5db'}
+                  onClick={() => fileInputRefs.current[index]?.click()}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(index, e)}
                 >
-                  <option value="">통관품목을 선택해주세요</option>
-                  <option value="의류">의류</option>
-                  <option value="신발">신발</option>
-                  <option value="완구">완구</option>
-                </select>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <select style={{ ...selectStyle, flex: 1 }}>
-                    <option>선택하세요.</option>
-                  </select>
-                  <button style={{ backgroundColor: '#212529', color: '#fff', border: 'none', padding: '0 10px', borderRadius: '3px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>전체적용</button>
+                  {product.image ? (
+                    <img src={product.image} alt="상품 이미지" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <>
+                      <span style={{ fontSize: '24px', color: '#9ca3af', marginBottom: '8px' }}>📸</span>
+                      <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>이미지 추가</span>
+                    </>
+                  )}
+                </div>
+                <div style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '500' }}>필수 사항은 아님</div>
+              </div>
+
+              {/* 입력 폼 영역 */}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 1fr', gap: '16px', alignItems: 'center', marginBottom: '24px' }}>
+                  
+                  <Label required>상품 URL</Label>
+                  <div style={{ position: 'relative', gridColumn: 'span 3' }}>
+                    <input 
+                      type="text" 
+                      placeholder="https://" 
+                      className="premium-input" 
+                      value={product.url} 
+                      onChange={(e) => updateProduct(index, 'url', e.target.value)} 
+                      onBlur={(e) => fetchProductName(index, e.target.value)} 
+                    />
+                    
+                    <div style={{ 
+                      position: 'absolute', right: '10px', transform: 'translateY(-230%)', pointerEvents: 'none', width: '150px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+                      opacity: product.isAutoFetching ? 1 : 0,
+                      transition: product.isAutoFetching ? 'opacity 0s' : 'opacity 1.2s ease-out'
+                    }}>
+                      <span style={{ fontSize: '12px', color: '#ef4444', fontWeight: 'bold' }}>정보 가져오는 중...</span>
+                    </div>
+                  </div>
+
+                  <Label required>가격(¥)</Label>
+                  <input type="text" placeholder="0" className="premium-input" value={product.price} onChange={(e) => updateProduct(index, 'price', e.target.value.replace(/[^0-9.]/g, ''))} />
+
+                  <Label required>수량</Label>
+                  <input type="text" className="premium-input" value={product.quantity} onChange={(e) => updateProduct(index, 'quantity', e.target.value.replace(/[^0-9]/g, ''))} />
+
+                  <Label>옵션</Label>
+                  <div style={{ gridColumn: 'span 3' }}>
+                    <input type="text" placeholder="색상, 사이즈 등" className="premium-input" value={product.option} onChange={(e) => updateProduct(index, 'option', e.target.value)} />
+                  </div>
+
+                  <Label>요청사항</Label>
+                  <div style={{ gridColumn: 'span 3' }}>
+                    <input type="text" placeholder="배송 또는 포장 관련 요청사항을 적어주세요." className="premium-input" value={product.request} onChange={(e) => updateProduct(index, 'request', e.target.value)} />
+                  </div>
+                </div>
+
+                {/* 서비스 옵션 및 분류 영역 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div className="service-box" onClick={() => updateProduct(index, 'photoService', product.photoService === 'none' ? 'apply' : 'none')}>
+                    <p style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: '700', color: '#111827' }}>📷 사진 검수 (+200엔)</p>
+                    <div style={{ display: 'flex', gap: '16px', fontSize: '13px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input type="radio" checked={product.photoService === 'none'} readOnly style={{ accentColor: '#6366f1' }} /> 미신청
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input type="radio" checked={product.photoService === 'apply'} readOnly style={{ accentColor: '#6366f1' }} /> 신청
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="service-box" onClick={() => updateProduct(index, 'packingService', product.packingService === 'none' ? 'apply' : 'none')}>
+                    <p style={{ margin: '0 0 12px 0', fontSize: '13px', fontWeight: '700', color: '#111827' }}>📦 포장 보완 (+200엔~)</p>
+                    <div style={{ display: 'flex', gap: '16px', fontSize: '13px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input type="radio" checked={product.packingService === 'none'} readOnly style={{ accentColor: '#6366f1' }} /> 미신청
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input type="radio" checked={product.packingService === 'apply'} readOnly style={{ accentColor: '#6366f1' }} /> 신청
+                      </label>
+                    </div>
+                  </div>
+
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        ))}
 
-      {/* 상품 추가 버튼 영역 */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '30px' }}>
-        <button style={actionButtonStyle}>상품추가</button>
-        <button style={actionButtonStyle}>상품복사추가</button>
-      </div>
-
-      {/* 합계 테이블 */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px', textAlign: 'center', border: '1px solid #dee2e6' }}>
-        <thead>
-          <tr style={{ backgroundColor: '#f8f9fa', fontSize: '12px' }}>
-            <th style={tableThStyle}>상품(엔)</th>
-            <th style={{ ...tableThStyle, width: '50px' }}></th>
-            <th style={tableThStyle}>수수료<br/>(2차요청)</th>
-            <th style={{ ...tableThStyle, width: '50px' }}></th>
-            <th style={tableThStyle}>결제(원화)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style={tableTdStyle}><span style={{ fontSize: '20px', color: '#666' }}>¥ {totalJPY.toLocaleString()}</span></td>
-            <td style={{ ...tableTdStyle, color: '#ff4d4f', fontSize: '20px' }}>+</td>
-            <td style={tableTdStyle}><span style={{ fontSize: '20px', color: '#666' }}>¥ 0</span></td>
-            <td style={{ ...tableTdStyle, color: '#ff4d4f', fontSize: '20px' }}>=</td>
-            <td style={tableTdStyle}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <span style={{ fontSize: '20px', color: '#ff4d4f', fontWeight: 'bold' }}>¥ {totalJPY.toLocaleString()}</span>
-                <span style={{ fontSize: '16px', color: '#ff4d4f' }}>({totalKRW.toLocaleString()}원)</span>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* 하단 최종 버튼 영역 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button style={{ padding: '10px 20px', border: '1px solid #dee2e6', backgroundColor: '#fff', borderRadius: '3px', cursor: 'pointer', fontSize: '13px' }}>목록</button>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button 
-            onClick={handleAddToCart}
-            style={{ padding: '12px 30px', backgroundColor: '#212529', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}
-          >
-            장바구니
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '32px' }}>
+          <button className="premium-btn btn-dark" onClick={handleAddProductForm}>
+            ➕ 상품 폼 추가
           </button>
-          <button style={{ padding: '12px 30px', backgroundColor: '#ff4d4f', color: '#fff', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>바로결제</button>
+        </div>
+
+        {/* 합계 카드 */}
+        <div className="premium-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '32px', background: 'linear-gradient(to right, #f8fafc, #f1f5f9)' }}>
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#64748b', fontWeight: '600' }}>총 상품 금액 (엔화)</p>
+            <span style={{ fontSize: '28px', fontWeight: '700', color: '#334155' }}>¥{totalJPY.toLocaleString()}</span>
+          </div>
+          <div style={{ fontSize: '24px', color: '#94a3b8' }}>+</div>
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#64748b', fontWeight: '600' }}>예상 수수료</p>
+            <span style={{ fontSize: '28px', fontWeight: '700', color: '#334155' }}>¥0</span>
+          </div>
+          <div style={{ fontSize: '24px', color: '#94a3b8' }}>=</div>
+          <div style={{ textAlign: 'center', padding: '16px 32px', background: '#fff', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+            <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#4f46e5', fontWeight: '700' }}>총 {products.length}개 상품 결제 예상</p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <span style={{ fontSize: '32px', fontWeight: '800', color: '#111827', lineHeight: '1' }}>¥{totalJPY.toLocaleString()}</span>
+              <span style={{ fontSize: '15px', fontWeight: '600', color: '#ef4444', marginTop: '6px' }}>약 {totalKRW.toLocaleString()}원</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 하단 최종 버튼 영역 */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '40px' }}>
+          <button className="premium-btn btn-primary" onClick={handleAddToCart}>
+            🛍️ 장바구니 담기
+          </button>
         </div>
       </div>
-
-    </div>
+    </>
   );
 }
 
 function Label({ children, required }: { children: React.ReactNode, required?: boolean }) {
   return (
-    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#555' }}>
-      {required && <span style={{ color: '#ff4d4f', marginRight: '3px' }}>*</span>}
+    <div style={{ fontSize: '13px', fontWeight: '700', color: '#4b5563', display: 'flex', alignItems: 'center' }}>
       {children}
+      {required && <span style={{ color: '#ef4444', marginLeft: '4px', fontSize: '14px' }}>*</span>}
     </div>
   );
 }
-
-const inputStyle = {
-  width: '100%',
-  padding: '6px 10px',
-  border: '1px solid #ced4da',
-  borderRadius: '3px',
-  fontSize: '12px',
-  outline: 'none',
-  boxSizing: 'border-box' as const
-};
-
-const selectStyle = {
-  width: '100%',
-  padding: '6px 10px',
-  border: '1px solid #ced4da',
-  borderRadius: '3px',
-  fontSize: '12px',
-  backgroundColor: '#fff',
-  outline: 'none',
-  boxSizing: 'border-box' as const
-};
-
-const actionButtonStyle = {
-  backgroundColor: '#212529',
-  color: '#fff',
-  border: 'none',
-  padding: '8px 15px',
-  borderRadius: '3px',
-  fontSize: '12px',
-  fontWeight: 'bold',
-  cursor: 'pointer'
-};
-
-const radioLabelStyle = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '5px',
-  fontSize: '12px',
-  cursor: 'pointer',
-  color: '#666'
-};
-
-const serviceDescStyle = {
-  margin: '5px 0 0 0',
-  fontSize: '11px',
-  color: '#0056b3',
-  lineHeight: '1.5'
-};
-
-const tableThStyle = {
-  padding: '12px',
-  border: '1px solid #dee2e6',
-  fontWeight: 'normal' as const,
-  color: '#666'
-};
-
-const tableTdStyle = {
-  padding: '30px 10px',
-  border: '1px solid #dee2e6'
-};

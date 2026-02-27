@@ -3,7 +3,7 @@ import GuideLayout from '../components/GuideLayout';
 
 export default function ContactPage() {
   return (
-    <GuideLayout title="카카오톡 문의" type="contact">
+    <GuideLayout title="카카오톡 문의" type="contact" hideSidebar={true}>
       <div style={{ lineHeight: '1.8', color: '#444' }}>
         <p>카카오톡 채널을 통해 실시간 상담이 가능합니다.</p>
         <div style={{ marginTop: '30px' }}>

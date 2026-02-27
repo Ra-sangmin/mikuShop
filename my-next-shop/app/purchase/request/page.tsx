@@ -5,7 +5,7 @@ import PurchaseFormContainer from '../../components/PurchaseFormContainer';
 
 export default function PurchaseRequestPage() {
   return (
-    <GuideLayout title="구매대행 신청" type="purchase">
+    <GuideLayout title="구매대행 신청" type="purchase" hideSidebar={true}>
       <PurchaseFormContainer />
     </GuideLayout>
   );

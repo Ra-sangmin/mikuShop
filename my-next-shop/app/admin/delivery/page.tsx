@@ -1,6 +1,7 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import AdminSidebar from '@/app/components/AdminSidebar';
 
 const deliveryStatusOptions = ['배송전', '국내통관중', '국내배송중', '배송완료'];
 
@@ -19,6 +20,93 @@ export default function DeliveryManagement() {
   
   // 🌟 추가됨: 자동 동기화 로딩 상태
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // 🌟 설정 상태 관리 (항상 true로 유지)
+  const persistWidths = true;
+
+  // 🌟 컬럼 너비 상태 관리
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
+    date: 300,
+    user: 200,
+    product: 600,
+    tracking: 300,
+    status: 200,
+    manage: 150
+  });
+
+  // 로컬 스토리지에서 너비 불러오기
+  useEffect(() => {
+    const isEnabled = localStorage.getItem('admin_persist_column_widths') !== 'false';
+    if (!isEnabled) return;
+
+    const savedWidths = localStorage.getItem('admin_delivery_column_widths');
+    if (savedWidths) {
+      try {
+        setColumnWidths(JSON.parse(savedWidths));
+      } catch (e) {
+        console.error("Failed to parse column widths", e);
+      }
+    }
+  }, []);
+
+  // 너비 변경 시 로컬 스토리지에 저장
+  const saveColumnWidths = (widths: Record<string, number>) => {
+    if (persistWidths) {
+      localStorage.setItem('admin_delivery_column_widths', JSON.stringify(widths));
+    }
+  };
+
+  const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+
+  const onMouseDown = (key: string, side: 'left' | 'right', e: React.MouseEvent) => {
+    let targetKey = key;
+    const visibleCols = ['date', 'user', 'product', 'tracking', 'status', 'manage'];
+
+    if (side === 'left') {
+      const colIndex = visibleCols.indexOf(key);
+      if (colIndex > 0) {
+        targetKey = visibleCols[colIndex - 1];
+      } else {
+        return;
+      }
+    }
+
+    resizingRef.current = {
+      key: targetKey,
+      startX: e.pageX,
+      startWidth: columnWidths[targetKey]
+    };
+    
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  const onMouseMove = (e: MouseEvent) => {
+    if (!resizingRef.current) return;
+    const { key, startX, startWidth } = resizingRef.current;
+    const deltaX = e.pageX - startX;
+    
+    setColumnWidths(prev => ({
+      ...prev,
+      [key]: Math.max(50, startWidth + deltaX)
+    }));
+  };
+
+  const onMouseUp = () => {
+    if (resizingRef.current) {
+      setColumnWidths(prev => {
+        saveColumnWidths(prev);
+        return prev;
+      });
+    }
+    resizingRef.current = null;
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    document.body.style.cursor = 'default';
+    document.body.style.userSelect = 'auto';
+  };
 
   useEffect(() => {
     const storedName = localStorage.getItem('admin_name');
@@ -152,38 +240,9 @@ export default function DeliveryManagement() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f1f5f9', fontFamily: "'Inter', 'Noto Sans KR', sans-serif" }}>
-      {/* 사이드바 영역 생략 (동일) */}
-      <aside style={{ width: '260px', backgroundColor: '#1e293b', color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '24px', fontSize: '20px', fontWeight: 'bold', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '24px' }}>📦</span> 미쿠짱 관리자
-        </div>
-        <nav style={{ flex: 1, padding: '20px 0' }}>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {['대시보드', '주문 관리', '배송 현황', '정산 관리', '환불 정보', '고객 센터'].map((item, idx) => (
-              <li key={idx} 
-                  onClick={() => {
-                    if (item === '대시보드') router.push('/admin/dashboard');
-                    if (item === '주문 관리') router.push('/admin/orders');
-                    if (item === '배송 현황') router.push('/admin/delivery');
-                    if (item === '정산 관리') router.push('/admin/settlement');
-                  }}
-                  style={{ 
-                padding: '16px 24px', 
-                cursor: 'pointer',
-                backgroundColor: item === '배송 현황' ? '#3b82f6' : 'transparent',
-                borderLeft: item === '배송 현황' ? '4px solid #fff' : '4px solid transparent',
-                color: item === '배송 현황' ? '#fff' : '#94a3b8',
-                fontWeight: item === '배송 현황' ? '600' : '400',
-                transition: 'all 0.2s'
-              }}>
-                {item}
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </aside>
+      <AdminSidebar />
 
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <header style={{ height: '70px', backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 30px' }}>
           <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#0f172a', margin: 0 }}>배송 현황</h1>
           
@@ -259,15 +318,48 @@ export default function DeliveryManagement() {
               </div>
             </div>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <div style={{ width: '100%', overflowX: 'auto' }}>
+              <table style={{ borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed', border: '1px solid #e2e8f0', width: 'max-content' }}>
+              <colgroup>
+                <col style={{ width: columnWidths.date }} />
+                <col style={{ width: columnWidths.user }} />
+                <col style={{ width: columnWidths.product }} />
+                <col style={{ width: columnWidths.tracking }} />
+                <col style={{ width: columnWidths.status }} />
+                <col style={{ width: columnWidths.manage }} />
+              </colgroup>
               <thead>
                 <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#64748b', fontSize: '14px', backgroundColor: '#f8fafc' }}>
-                  <th style={{ padding: '16px 12px', width: '180px' }}>주문일시 / ID</th>
-                  <th style={{ padding: '16px 12px' }}>주문자</th>
-                  <th style={{ padding: '16px 12px' }}>상품명</th>
-                  <th style={{ padding: '16px 12px' }}>운송장번호</th>
-                  <th style={{ padding: '16px 12px', textAlign: 'center' }}>배송 상태</th>
-                  <th style={{ padding: '16px 12px', textAlign: 'center' }}>관리</th>
+                  <th style={{ padding: '16px 12px', position: 'relative', borderRight: '1px solid #e2e8f0' }}>
+                    <div onMouseDown={(e) => onMouseDown('date', 'left', e)} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} />
+                    주문일시 / ID
+                    <div onMouseDown={(e) => onMouseDown('date', 'right', e)} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} />
+                  </th>
+                  <th style={{ padding: '16px 12px', position: 'relative', borderRight: '1px solid #e2e8f0' }}>
+                    <div onMouseDown={(e) => onMouseDown('user', 'left', e)} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} />
+                    주문자
+                    <div onMouseDown={(e) => onMouseDown('user', 'right', e)} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} />
+                  </th>
+                  <th style={{ padding: '16px 12px', position: 'relative', borderRight: '1px solid #e2e8f0' }}>
+                    <div onMouseDown={(e) => onMouseDown('product', 'left', e)} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} />
+                    상품명
+                    <div onMouseDown={(e) => onMouseDown('product', 'right', e)} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} />
+                  </th>
+                  <th style={{ padding: '16px 12px', position: 'relative', borderRight: '1px solid #e2e8f0' }}>
+                    <div onMouseDown={(e) => onMouseDown('tracking', 'left', e)} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} />
+                    운송장번호
+                    <div onMouseDown={(e) => onMouseDown('tracking', 'right', e)} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} />
+                  </th>
+                  <th style={{ padding: '16px 12px', textAlign: 'center', position: 'relative', borderRight: '1px solid #e2e8f0' }}>
+                    <div onMouseDown={(e) => onMouseDown('status', 'left', e)} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} />
+                    배송 상태
+                    <div onMouseDown={(e) => onMouseDown('status', 'right', e)} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} />
+                  </th>
+                  <th style={{ padding: '16px 12px', textAlign: 'center', position: 'relative' }}>
+                    <div onMouseDown={(e) => onMouseDown('manage', 'left', e)} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} />
+                    관리
+                    <div onMouseDown={(e) => onMouseDown('manage', 'right', e)} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} />
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -282,16 +374,16 @@ export default function DeliveryManagement() {
                       color: '#334155',
                       backgroundColor: isChanged ? '#f0fdf4' : 'transparent'
                     }}>
-                      <td style={{ padding: '16px 12px' }}>
+                      <td style={{ padding: '16px 12px', borderRight: '1px solid #f1f5f9' }}>
                         <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>{order.date}</div>
                         <div style={{ fontWeight: '600', color: '#0f172a' }}>{order.id}</div>
                       </td>
-                      <td style={{ padding: '16px 12px', fontWeight: '500' }}>{order.user}</td>
-                      <td style={{ padding: '16px 12px', maxWidth: '250px' }}>
+                      <td style={{ padding: '16px 12px', fontWeight: '500', borderRight: '1px solid #f1f5f9' }}>{order.user}</td>
+                      <td style={{ padding: '16px 12px', borderRight: '1px solid #f1f5f9' }}>
                         <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{order.product}</div>
                       </td>
-                      <td style={{ padding: '16px 12px', fontWeight: '600', color: '#4b5563' }}>{order.trackingNo}</td>
-                      <td style={{ padding: '16px 12px', textAlign: 'center' }}>
+                      <td style={{ padding: '16px 12px', fontWeight: '600', color: '#4b5563', borderRight: '1px solid #f1f5f9' }}>{order.trackingNo}</td>
+                      <td style={{ padding: '16px 12px', textAlign: 'center', borderRight: '1px solid #f1f5f9' }}>
                         <select
                           value={order.status}
                           onChange={(e) => handleStatusChange(order.id, e.target.value)}
@@ -329,6 +421,7 @@ export default function DeliveryManagement() {
                 )}
               </tbody>
             </table>
+          </div>
           </div>
         </div>
       </main>

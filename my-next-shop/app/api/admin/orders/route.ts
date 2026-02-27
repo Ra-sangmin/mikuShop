@@ -23,16 +23,50 @@ export async function GET() {
 // 🌟 2. PUT: 변경된 주문 상태를 DB에 저장합니다.
 export async function PUT(request: Request) {
   try {
-    const { updates, type } = await request.json(); 
+    const { updates, type, userId, deductAmount } = await request.json(); 
+
+    const operations: any[] = [];
+
+    // 🌟 사이버머니 차감이 필요한 경우 처리
+    if (userId && deductAmount && deductAmount > 0) {
+      operations.push(prisma.user.update({
+        where: { id: parseInt(userId) },
+        data: {
+          cyberMoney: {
+            decrement: deductAmount
+          }
+        }
+      }));
+    }
 
     // DB 구조가 바뀌었으므로, 고유 문자열인 orderId를 기준으로 상태를 업데이트합니다.
-    const transaction = updates.map((order: any) => {
+    const orderUpdates = updates.map((order: any) => {
       const updateData: any = {};
       
       if (type === 'delivery') {
         updateData.deliveryStatus = order.status;
       } else {
         updateData.status = order.status;
+        // 🌟 입고완료 상태로 변경 시 입고완료일(receivedAt)을 현재 시간으로 설정
+        if (order.status === '입고완료') {
+          updateData.receivedAt = new Date();
+        }
+        // 🌟 국제배송 상태로 변경 시 국제배송일(shippedAt)을 현재 시간으로 설정
+        if (order.status === '국제배송') {
+          updateData.shippedAt = new Date();
+        }
+      }
+
+      if (order.secondPaymentAmount !== undefined) {
+        updateData.secondPaymentAmount = order.secondPaymentAmount;
+      }
+
+      if (order.bundleId !== undefined) {
+        updateData.bundleId = order.bundleId;
+      }
+
+      if (order.trackingNo !== undefined) {
+        updateData.trackingNo = order.trackingNo;
       }
 
       return prisma.order.update({
@@ -41,7 +75,9 @@ export async function PUT(request: Request) {
       });
     });
 
-    await prisma.$transaction(transaction);
+    operations.push(...orderUpdates);
+
+    await prisma.$transaction(operations);
 
     return NextResponse.json({ success: true, message: '성공적으로 저장되었습니다.' });
   } catch (error: any) {
