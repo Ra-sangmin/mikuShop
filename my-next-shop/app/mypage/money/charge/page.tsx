@@ -7,7 +7,7 @@ export default function MoneyChargePage() {
   const [amount, setAmount] = useState<string>('');
   const [method, setMethod] = useState<'card' | 'transfer'>('transfer');
   const [currentMoney, setCurrentMoney] = useState<number>(0);
-  const [isFocused, setIsFocused] = useState(false); // 🌟 포커스 상태 추가
+  const [isFocused, setIsFocused] = useState(false);
 
   const fetchUserMoney = async () => {
     const storedId = localStorage.getItem('user_id');
@@ -28,7 +28,6 @@ export default function MoneyChargePage() {
     fetchUserMoney();
   }, []);
 
-  // 🌟 숫자를 'X만 X,XXX' 형식으로 변환하는 함수
   const formatDisplay = (value: string) => {
     if (!value) return '';
     const num = parseInt(value);
@@ -79,14 +78,6 @@ export default function MoneyChargePage() {
     }
   };
 
-  const labelStyle: React.CSSProperties = {
-    display: 'block',
-    fontSize: '14px',
-    fontWeight: '800',
-    color: '#334155',
-    marginBottom: '8px'
-  };
-
   return (
     <GuideLayout title="미쿠짱머니 충전" type="money">
       <style jsx global>{`
@@ -105,7 +96,7 @@ export default function MoneyChargePage() {
         }
         @keyframes expandDown {
           0% { opacity: 0; transform: translateY(-10px); max-height: 0; overflow: hidden; }
-          100% { opacity: 1; transform: translateY(0); max-height: 150px; overflow: visible; }
+          100% { opacity: 1; transform: translateY(0); max-height: 200px; overflow: visible; }
         }
 
         .anim-item {
@@ -127,14 +118,6 @@ export default function MoneyChargePage() {
           box-shadow: 0 0 0 4px rgba(255, 75, 43, 0.15) !important;
         }
 
-        .amount-btn {
-          transition: all 0.2s ease;
-        }
-        .amount-btn:hover {
-          background-color: #f1f5f9;
-          border-color: #cbd5e1;
-        }
-
         .submit-btn {
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
@@ -143,20 +126,38 @@ export default function MoneyChargePage() {
           transform: translateY(-3px);
           box-shadow: 0 12px 24px rgba(255, 75, 43, 0.25) !important;
         }
-        .submit-btn:active {
-          transform: translateY(0) scale(0.98);
+
+        /* 📱 모바일 대응 스타일 */
+        .money-card {
+          background-color: #fff;
+          border-radius: 24px;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
+          border: 1px solid #e2e8f0;
+          padding: 40px;
+        }
+
+        @media (max-width: 768px) {
+          .charge-wrapper { padding: 20px 10px !important; }
+          .money-card { padding: 24px 20px !important; border-radius: 20px !important; }
+          .money-card h2 { fontSize: 22px !important; marginBottom: 24px !important; }
+          .balance-box { padding: 16px !important; }
+          .balance-label { font-size: 14px !important; }
+          .balance-val { font-size: 18px !important; }
+          
+          .quick-btn-group { gap: 6px !important; }
+          .quick-btn { padding: 10px 4px !important; font-size: 12px !important; }
+          
+          .method-btn { padding: 12px !important; font-size: 14px !important; }
+          .transfer-info { padding: 16px !important; }
+          .transfer-info p { font-size: 12px !important; }
+          
+          .submit-btn { padding: 16px !important; font-size: 16px !important; }
         }
       `}</style>
 
-      <div style={{ maxWidth: '672px', margin: '0 auto', padding: '48px 16px', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif' }}>
+      <div className="charge-wrapper" style={{ maxWidth: '672px', margin: '0 auto', padding: '48px 16px', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif' }}>
         
-        <div style={{ 
-          backgroundColor: '#fff', 
-          borderRadius: '24px', 
-          boxShadow: '0 10px 40px rgba(0, 0, 0, 0.04)', 
-          border: '1px solid #e2e8f0', 
-          padding: '40px' 
-        }}>
+        <div className="money-card">
           
           <h2 className="anim-item" style={{ fontSize: '26px', fontWeight: '900', color: '#0f172a', marginBottom: '32px', textAlign: 'center' }}>
             미쿠짱머니 충전
@@ -165,20 +166,19 @@ export default function MoneyChargePage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
             
             {/* 1. 현재 잔액 */}
-            <div className="anim-item delay-1" style={{ 
+            <div className="anim-item delay-1 balance-box" style={{ 
               backgroundColor: '#f8fafc', borderRadius: '16px', padding: '20px', 
               display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #f1f5f9' 
             }}>
-              <span style={{ color: '#475569', fontWeight: '600', fontSize: '15px' }}>현재 보유 머니</span>
-              <span style={{ fontSize: '22px', fontWeight: '900', color: '#ff4b2b' }}>{currentMoney.toLocaleString()}원</span>
+              <span className="balance-label" style={{ color: '#475569', fontWeight: '600', fontSize: '15px' }}>현재 보유 머니</span>
+              <span className="balance-val" style={{ fontSize: '22px', fontWeight: '900', color: '#ff4b2b' }}>{currentMoney.toLocaleString()}원</span>
             </div>
 
             {/* 2. 충전 금액 입력 */}
             <div className="anim-item delay-2">
-              <label style={labelStyle}>충전 금액</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '800', color: '#334155', marginBottom: '8px' }}>충전 금액</label>
               <div style={{ position: 'relative' }}>
                 <input
-                  // 🌟 포커스 여부에 따라 타입을 변경하여 한글 표시 지원
                   type={isFocused ? "number" : "text"}
                   value={isFocused ? amount : formatDisplay(amount)}
                   onChange={(e) => setAmount(e.target.value)}
@@ -213,14 +213,14 @@ export default function MoneyChargePage() {
               </div>
               
               {/* 금액 퀵 버튼 */}
-              <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              <div className="quick-btn-group" style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                 {[10000, 30000, 50000, 100000].map((val) => (
                   <button
                     key={val}
-                    className="amount-btn"
+                    className="quick-btn"
                     onClick={() => setAmount((prev) => (parseInt(prev || '0') + val).toString())}
                     style={{
-                      padding: '8px 12px',
+                      padding: '10px 12px',
                       borderRadius: '10px',
                       border: '1px solid #e2e8f0',
                       backgroundColor: '#fff',
@@ -229,9 +229,10 @@ export default function MoneyChargePage() {
                       color: '#475569',
                       cursor: 'pointer',
                       flex: 1,
+                      transition: 'all 0.2s ease'
                     }}
                   >
-                    +{val / 10000}만원
+                    +{val / 10000}만
                   </button>
                 ))}
               </div>
@@ -239,9 +240,10 @@ export default function MoneyChargePage() {
 
             {/* 3. 결제 수단 선택 */}
             <div className="anim-item delay-3">
-              <label style={labelStyle}>결제 수단</label>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: '800', color: '#334155', marginBottom: '8px' }}>결제 수단</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <button
+                  className="method-btn"
                   onClick={() => setMethod('transfer')}
                   style={{
                     padding: '16px', borderRadius: '16px', fontWeight: '800', fontSize: '15px', cursor: 'pointer',
@@ -254,6 +256,7 @@ export default function MoneyChargePage() {
                   무통장 입금
                 </button>
                 <button
+                  className="method-btn"
                   onClick={() => setMethod('card')}
                   style={{
                     padding: '16px', borderRadius: '16px', fontWeight: '800', fontSize: '15px', cursor: 'pointer',
@@ -271,14 +274,14 @@ export default function MoneyChargePage() {
             {/* 4. 무통장 입금 안내 */}
             {method === 'transfer' && (
               <div style={{ animation: 'expandDown 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
-                <div style={{ backgroundColor: '#fff8f6', borderRadius: '16px', padding: '20px', border: '1px solid #ffe4e0' }}>
+                <div className="transfer-info" style={{ backgroundColor: '#fff8f6', borderRadius: '16px', padding: '20px', border: '1px solid #ffe4e0' }}>
                   <p style={{ fontSize: '14px', color: '#c2410c', fontWeight: '800', margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ fontSize: '16px' }}>ℹ️</span> 무통장 입금 안내
                   </p>
                   <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.8', fontWeight: '500' }}>
                     <p style={{ margin: 0 }}>• 입금 계좌: <b>신한은행 110-xxx-xxxxxx</b> (예금주: 미쿠짱)</p>
-                    <p style={{ margin: 0 }}>• 반드시 회원가입 시 등록하신 성함으로 입금해주셔야 확인이 빠릅니다.</p>
-                    <p style={{ margin: 0 }}>• 입금 확인 후 시스템에서 10분 이내로 머니가 충전됩니다.</p>
+                    <p style={{ margin: 0 }}>• 본인 성함으로 입금해주셔야 자동 승인이 빠릅니다.</p>
+                    <p style={{ margin: 0 }}>• 입금 확인 후 약 10분 이내로 충전이 완료됩니다.</p>
                   </div>
                 </div>
               </div>
@@ -300,9 +303,9 @@ export default function MoneyChargePage() {
             </div>
 
             {/* 6. 하단 안내 문구 */}
-            <p className="anim-item delay-5" style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'center', margin: 0, lineHeight: '1.6', fontWeight: '500' }}>
-              미쿠짱머니는 상품 결제 및 배송비 결제 시 현금처럼 사용 가능합니다.<br />
-              충전된 머니의 환불은 고객센터를 통해 신청 가능합니다.
+            <p className="anim-item delay-5" style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'center', margin: 0, lineHeight: '1.6', fontWeight: '500', wordBreak: 'keep-all' }}>
+              미쿠짱머니는 상품 결제 시 현금처럼 사용 가능하며,<br className="pc-only" />
+              머니 환불은 고객센터를 통해 신청하실 수 있습니다.
             </p>
 
           </div>

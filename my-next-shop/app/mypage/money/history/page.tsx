@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import GuideLayout from '@/app/components/GuideLayout';
+import GuideLayout from '@/app/components/GuideLayout'; // 경로가 다르다면 수정해 주세요.
 
 interface Transaction {
   id: string;
@@ -14,131 +14,217 @@ interface Transaction {
 
 const mockHistory: Transaction[] = [
   { id: '1', date: '2024-02-27 13:00', type: '충전', description: '무통장 입금 충전', amount: 50000, balance: 50000 },
-  { id: '2', date: '2024-02-27 14:30', type: '사용', description: '주문 결제 (주문번호: 12345)', amount: -35000, balance: 15000 },
-  { id: '3', date: '2024-02-27 15:00', type: '사용', description: '배송비 결제 (주문번호: 12345)', amount: -8000, balance: 7000 },
+  { id: '2', date: '2024-02-27 14:30', type: '사용', description: '주문 결제 (주문번호: 12345678901234)', amount: -35000, balance: 15000 },
+  { id: '3', date: '2024-02-27 15:00', type: '사용', description: '배송비 결제 (주문번호: 12345678901234)', amount: -8000, balance: 7000 },
 ];
 
 export default function MoneyHistoryPage() {
+
+  const getBadgeStyle = (type: string) => {
+    if (type === '충전') return { backgroundColor: '#eff6ff', color: '#2563eb' };
+    if (type === '사용') return { backgroundColor: '#fef2f2', color: '#dc2626' };
+    return { backgroundColor: '#f1f5f9', color: '#475569' };
+  };
+
   return (
     <GuideLayout title="미쿠짱머니 이용내역" type="money">
-      {/* 🌟 전역 스타일: 애니메이션 키프레임 및 테이블 호버 정의 */}
       <style jsx global>{`
+        /* 🌟 핵심 해결 1: 컨테이너 내부의 모든 요소가 지정된 너비를 초과하지 않도록 강제 */
+        .history-container, .history-container * {
+          box-sizing: border-box !important;
+        }
+
         @keyframes slideUpFade {
-          0% { opacity: 0; transform: translateY(20px); }
+          0% { opacity: 0; transform: translateY(15px); }
           100% { opacity: 1; transform: translateY(0); }
         }
 
-        /* 순차 등장 애니메이션 클래스 */
-        .anim-header {
+        .anim-item {
           opacity: 0;
           animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
-        .anim-table-container {
-          opacity: 0;
-          animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+
+        .desktop-table {
+          width: 100%;
+          border-collapse: collapse;
+          text-align: left;
         }
-        
-        /* 테이블 행 애니메이션 및 호버 트랜지션 */
-        .anim-row {
-          opacity: 0;
-          animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-          transition: background-color 0.2s ease;
+        .desktop-table th {
+          padding: 16px 12px;
+          border-bottom: 2px solid #f1f5f9;
+          color: #64748b;
+          font-weight: 800;
+          font-size: 14px;
         }
-        .anim-row:hover {
-          background-color: #f8fafc; /* Tailwind bg-slate-50/50 대체 */
+        .desktop-table td {
+          padding: 16px 12px;
+          border-bottom: 1px solid #f1f5f9;
+          vertical-align: middle;
+          font-size: 14px;
+        }
+
+        .mobile-list { display: none; }
+
+        /* 📱 모바일 환경 최적화 */
+        @media (max-width: 768px) {
+          /* 🌟 핵심 해결 2: 가로 스크롤 및 여백 원천 차단 */
+          .history-container { 
+            padding: 20px 10px !important; 
+            width: 100% !important;
+            overflow-x: hidden !important; 
+          }
+          .history-card { 
+            padding: 24px 20px !important; 
+            border-radius: 20px !important; 
+            width: 100% !important;
+            overflow: hidden !important; /* 카드 밖으로 나가는 텍스트 잘라냄 */
+          }
+          .history-card h2 { font-size: 20px !important; margin-bottom: 24px !important; }
+          
+          .balance-box { padding: 16px !important; width: 100% !important; }
+          .balance-label { font-size: 14px !important; }
+          .balance-val { font-size: 18px !important; }
+
+          .desktop-table { display: none !important; }
+          .mobile-list { display: flex !important; flex-direction: column; width: 100%; }
+          
+          .mob-list-item {
+            padding: 20px 0;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+          }
+          .mob-list-item:last-child { border-bottom: none; padding-bottom: 0; }
+          
+          /* 화면 폭이 너무 좁을 때 아이템들이 겹치지 않게 flex-wrap 추가 */
+          .mob-row-1 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 8px; }
+          .mob-date { font-size: 13px; color: #64748b; font-weight: 500; }
+          
+          /* 🌟 핵심 해결 3: 아주 긴 주문번호가 나와도 화면을 밀어내지 않고 줄바꿈 되도록 설정 */
+          .mob-desc { 
+            font-size: 15px; 
+            font-weight: 700; 
+            color: #1e293b; 
+            line-height: 1.4; 
+            word-break: break-all !important; 
+            white-space: normal !important;
+          }
+          
+          .mob-row-2 { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+          .mob-balance { font-size: 13px; color: #94a3b8; font-weight: 600; }
+          .mob-amount { font-size: 18px; font-weight: 900; }
         }
       `}</style>
 
-      <div style={{ maxWidth: '896px', margin: '0 auto', padding: '48px 16px', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif' }}>
+      <div className="history-container" style={{ maxWidth: '672px', margin: '0 auto', padding: '48px 16px', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif' }}>
         
-        {/* 메인 카드 컨테이너 */}
-        <div className="anim-header" style={{ 
+        <div className="history-card" style={{ 
           backgroundColor: '#fff', 
-          borderRadius: '16px', 
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', 
+          borderRadius: '24px', 
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', 
           border: '1px solid #e2e8f0', 
-          overflow: 'hidden' 
+          padding: '40px' 
         }}>
           
-          {/* 상단 헤더 영역 (타이틀 및 현재 잔액) */}
-          <div style={{ 
-            padding: '24px', 
-            borderBottom: '1px solid #f1f5f9', 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            backgroundColor: '#f8fafc' 
-          }}>
-            <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0 }}>머니 이용내역</h2>
-            <div style={{ textAlign: 'right' }}>
-              <p style={{ fontSize: '12px', color: '#64748b', fontWeight: '600', margin: '0 0 4px 0' }}>현재 보유 머니</p>
-              <p style={{ fontSize: '24px', fontWeight: '900', color: '#f97316', margin: 0 }}>7,000원</p>
+          <h2 className="anim-item" style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', marginBottom: '32px', textAlign: 'center' }}>
+            미쿠짱머니 이용내역
+          </h2>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}>
+            
+            {/* 1. 현재 보유 머니 */}
+            <div className="anim-item delay-1 balance-box" style={{ 
+              backgroundColor: '#f8fafc', borderRadius: '16px', padding: '20px', 
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #f1f5f9', width: '100%'
+            }}>
+              <span className="balance-label" style={{ color: '#475569', fontWeight: '600', fontSize: '15px' }}>현재 보유 머니</span>
+              <span className="balance-val" style={{ fontSize: '20px', fontWeight: '800', color: '#f97316' }}>7,000원</span>
             </div>
-          </div>
 
-          {/* 데이터 테이블 영역 */}
-          <div className="anim-table-container" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', fontSize: '14px', borderCollapse: 'collapse', textAlign: 'left', whiteSpace: 'nowrap' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', fontWeight: '700', borderBottom: '1px solid #f1f5f9' }}>
-                  <th style={{ padding: '16px 24px' }}>일시</th>
-                  <th style={{ padding: '16px 24px', textAlign: 'center' }}>구분</th>
-                  <th style={{ padding: '16px 24px' }}>상세 내용</th>
-                  <th style={{ padding: '16px 24px', textAlign: 'right' }}>금액</th>
-                  <th style={{ padding: '16px 24px', textAlign: 'right' }}>잔액</th>
-                </tr>
-              </thead>
-              <tbody style={{ borderTop: '1px solid #f8fafc' }}>
-                {mockHistory.length > 0 ? (
-                  mockHistory.map((item, index) => {
-                    // 각 행마다 약간의 시간차(Delay)를 주어 순차적으로 나타나게 함
-                    const animationDelay = `${0.3 + index * 0.1}s`;
-
-                    return (
-                      <tr 
-                        key={item.id} 
-                        className="anim-row"
-                        style={{ borderBottom: '1px solid #f8fafc', animationDelay }}
-                      >
-                        <td style={{ padding: '16px 24px', color: '#64748b' }}>{item.date}</td>
-                        <td style={{ padding: '16px 24px', textAlign: 'center' }}>
-                          <span style={{ 
-                            padding: '4px 8px', 
-                            borderRadius: '6px', 
-                            fontSize: '11px', 
-                            fontWeight: '800',
-                            backgroundColor: item.type === '충전' ? '#eff6ff' : item.type === '사용' ? '#fef2f2' : '#f1f5f9',
-                            color: item.type === '충전' ? '#2563eb' : item.type === '사용' ? '#dc2626' : '#475569'
-                          }}>
+            {/* 2. 내역 리스트 영역 */}
+            <div className="anim-item delay-2" style={{ width: '100%' }}>
+              
+              {/* 💻 PC 환경: 넓게 보는 테이블 구조 */}
+              <table className="desktop-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '160px' }}>일시</th>
+                    <th style={{ width: '80px', textAlign: 'center' }}>구분</th>
+                    <th>상세 내용</th>
+                    <th style={{ width: '110px', textAlign: 'right' }}>금액</th>
+                    <th style={{ width: '110px', textAlign: 'right' }}>잔액</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mockHistory.length > 0 ? (
+                    mockHistory.map(item => (
+                      <tr key={item.id}>
+                        <td style={{ color: '#64748b' }}>{item.date}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span style={{ display: 'inline-block', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: '800', ...getBadgeStyle(item.type) }}>
                             {item.type}
                           </span>
                         </td>
-                        <td style={{ padding: '16px 24px', color: '#334155', fontWeight: '600' }}>{item.description}</td>
-                        <td style={{ 
-                          padding: '16px 24px', 
-                          textAlign: 'right', 
-                          fontWeight: '800',
-                          color: item.amount > 0 ? '#2563eb' : '#dc2626'
-                        }}>
+                        <td style={{ fontWeight: '700', color: '#1e293b' }}>{item.description}</td>
+                        <td style={{ textAlign: 'right', fontWeight: '800', color: item.amount > 0 ? '#2563eb' : '#dc2626' }}>
                           {item.amount > 0 ? '+' : ''}{item.amount.toLocaleString()}원
                         </td>
-                        <td style={{ padding: '16px 24px', textAlign: 'right', color: '#0f172a', fontWeight: '800' }}>
+                        <td style={{ textAlign: 'right', fontWeight: '700', color: '#64748b' }}>
                           {item.balance.toLocaleString()}원
                         </td>
                       </tr>
-                    );
-                  })
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} style={{ padding: '80px 20px', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic', fontSize: '15px' }}>
+                        이용내역이 없습니다.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {/* 📱 모바일 환경: 화면 가로에 꽉 차게 내려오는 리스트 구조 */}
+              <div className="mobile-list">
+                {mockHistory.length > 0 ? (
+                  mockHistory.map(item => (
+                    <div key={item.id} className="mob-list-item">
+                      
+                      <div className="mob-row-1">
+                        <span className="mob-date">{item.date}</span>
+                        <span style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', ...getBadgeStyle(item.type) }}>
+                          {item.type}
+                        </span>
+                      </div>
+                      
+                      <div className="mob-desc">
+                        {item.description}
+                      </div>
+                      
+                      <div className="mob-row-2">
+                        <span className="mob-balance">
+                          잔액: {item.balance.toLocaleString()}원
+                        </span>
+                        <span className="mob-amount" style={{ color: item.amount > 0 ? '#2563eb' : '#dc2626' }}>
+                          {item.amount > 0 ? '+' : ''}{item.amount.toLocaleString()}원
+                        </span>
+                      </div>
+                      
+                    </div>
+                  ))
                 ) : (
-                  <tr>
-                    <td colSpan={5} style={{ padding: '80px 24px', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>
-                      이용내역이 없습니다.
-                    </td>
-                  </tr>
+                  <div style={{ padding: '60px 20px', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic', fontSize: '14px' }}>
+                    이용내역이 없습니다.
+                  </div>
                 )}
-              </tbody>
-            </table>
+              </div>
+
+            </div>
           </div>
-          
         </div>
       </div>
     </GuideLayout>
