@@ -21,9 +21,10 @@ export default function OrderManagement() {
   const persistWidths = true;
 
   // 🌟 컬럼 너비 상태 관리
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
+    const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
     date: 300,
-    user: 200,
+    user: 150,
+    address: 350, // 수취인 주소 컬럼 너비 설정
     packing: 80,
     product: 600,
     request: 300,
@@ -59,7 +60,7 @@ export default function OrderManagement() {
 
   // 현재 화면에 보이는 컬럼들의 순서를 배열로 반환
   const getVisibleColumns = () => {
-    const cols = ['date', 'user'];
+    const cols = ['date', 'user', 'address']; // address 추가
     if (statusFilter === '입고완료') cols.push('packing');
     cols.push('product', 'request', 'price', 'status', 'manage');
     return cols;
@@ -143,6 +144,11 @@ export default function OrderManagement() {
             id: dbOrder.orderId, 
             date: new Date(dbOrder.registeredAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
             user: dbOrder.user?.name || '알 수 없음',
+            // 🌟 수취인 주소 정보 매칭
+            address: dbOrder.addressId 
+              ? (dbOrder.user?.addresses?.find((a: any) => a.id === dbOrder.addressId) || null)
+              : null,
+            recipient: dbOrder.recipient || '',
             source: '기본구매처',
             product: dbOrder.productName,
             jpy: dbOrder.productPrice.toLocaleString(),
@@ -319,6 +325,10 @@ export default function OrderManagement() {
             id: dbOrder.orderId, 
             date: new Date(dbOrder.registeredAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
             user: dbOrder.user?.name || '알 수 없음',
+            address: dbOrder.addressId 
+              ? (dbOrder.user?.addresses?.find((a: any) => a.id === dbOrder.addressId) || null)
+              : null,
+            recipient: dbOrder.recipient || '',
             source: '기본구매처',
             product: dbOrder.productName,
             jpy: dbOrder.productPrice.toLocaleString(),
@@ -520,6 +530,12 @@ export default function OrderManagement() {
                     주문자
                     <div onMouseDown={(e) => onMouseDown('user', 'right', e)} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} onMouseOver={(e) => e.currentTarget.style.borderRight = '3px solid #3b82f6'} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
                   </th>
+
+                  <th style={{ padding: '16px 12px', position: 'relative', borderRight: '1px solid #e2e8f0' }}>
+                    <div onMouseDown={(e) => onMouseDown('address', 'left', e)} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} onMouseOver={(e) => e.currentTarget.style.borderLeft = '3px solid #3b82f6'} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
+                    수취인 주소
+                    <div onMouseDown={(e) => onMouseDown('address', 'right', e)} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} onMouseOver={(e) => e.currentTarget.style.borderRight = '3px solid #3b82f6'} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
+                  </th>
                   
                   {statusFilter === '입고완료' && (
                     <th style={{ padding: '16px 12px', textAlign: 'center', position: 'relative', borderRight: '1px solid #e2e8f0' }}>
@@ -597,6 +613,25 @@ export default function OrderManagement() {
                         )}
                       </td>
                       <td style={{ padding: '16px 12px', fontWeight: '500', borderRight: '1px solid #f1f5f9' }}>{order.user}</td>
+                      <td style={{ padding: '16px 12px', borderRight: '1px solid #f1f5f9', fontSize: '13px' }}>
+                        {order.address ? (
+                          <>
+                            <div style={{ fontWeight: '600', color: '#0f172a', marginBottom: '2px' }}>
+                              {order.address.recipientName} ({order.address.phone})
+                            </div>
+                            <div style={{ color: '#64748b', lineHeight: '1.4' }}>
+                              [{order.address.zipCode}] {order.address.address} {order.address.detailAddress}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#3b82f6', marginTop: '2px' }}>
+                              통관번호: {order.address.personalCustomsCode}
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ color: '#94a3b8' }}>
+                            {order.recipient ? `${order.recipient} (주소 정보 없음)` : '배송지 미지정'}
+                          </div>
+                        )}
+                      </td>
                       {statusFilter === '입고완료' && (
                         <td style={{ padding: '16px 12px', textAlign: 'center', borderRight: '1px solid #f1f5f9' }}>
                           <button

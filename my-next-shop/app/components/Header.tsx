@@ -1,38 +1,59 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSession, signOut } from 'next-auth/react';
 
 export default function Header() {
+  const { data: session, status } = useSession();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // 🌟 1. 페이지 로드 시 기존 로그인 정보가 있는지 확인 (새로고침 유지용)
+  // 🌟 NextAuth 세션 정보를 기존 localStorage 기반 로그인 시스템과 동기화
   useEffect(() => {
-    const userId = localStorage.getItem('user_id');
-    if (userId) {
-      setIsLoggedIn(true);
-    }
-  }, []);
+    const syncAuth = async () => {
+      if (status === "authenticated" && session?.user) {
+        const dbUserId = (session.user as any).id;
+        if (dbUserId) {
+          localStorage.setItem('user_id', dbUserId.toString());
+          localStorage.setItem('email', session.user.email || '');
+          localStorage.setItem('name', session.user.name || '');
+          setIsLoggedIn(true);
 
-  // 🌟 2. 임시 로그인 핸들러 추가
-  const handleLogin = () => {
-    const tempId = "test@example.com";
-    const tempPw = "1234";
+          // 🌟 기본 배송지 등록 여부 체크 후 미등록 시 리다이렉트
+          try {
+            const res = await fetch(`/api/users?id=${dbUserId}`);
+            const data = await res.json();
+            if (data.success && !data.user.defaultAddressId) {
+              // 현재 페이지가 이미 프로필 페이지가 아닐 때만 이동
+              if (window.location.pathname !== '/mypage/profile') {
+                window.location.href = '/mypage/profile?newAddress=true';
+              }
+            }
+          } catch (error) {
+            console.error("기본 배송지 체크 실패:", error);
+          }
+        }
+      } else if (status === "unauthenticated") {
+        // NextAuth 세션이 없고 localStorage에도 정보가 없다면 로그아웃 상태
+        const userId = localStorage.getItem('user_id');
+        if (userId) {
+          setIsLoggedIn(true);
+        } else {
+          setIsLoggedIn(false);
+        }
+      }
+    };
 
-    console.log(`서버로 전송할 데이터: ID=${tempId}, PW=${tempPw}`);
-    
-    // DB에 만들어두었던 1번 유저 정보라고 가정하고 브라우저에 저장
-    localStorage.setItem('id', '1');
-    localStorage.setItem('name', '테스트유저');
-    localStorage.setItem('email', tempId);
+    syncAuth();
+  }, [session, status]);
 
-    setIsLoggedIn(true);
-    alert(`${tempId} 계정으로 로그인되었습니다!`);
-  };
-
-  // 🌟 3. 로그아웃 핸들러 추가
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (window.confirm("로그아웃 하시겠습니까?")) {
-      // 저장했던 유저 정보 모두 삭제
+      // 1. NextAuth 로그아웃 (소셜 로그인인 경우)
+      if (status === "authenticated") {
+        await signOut({ redirect: false });
+      }
+
+      // 2. 로컬 스토리지 정보 삭제
       localStorage.removeItem('id');
       localStorage.removeItem('name');
       localStorage.removeItem('email');
@@ -46,7 +67,6 @@ export default function Header() {
 
   return (
     <header style={{ width: '100%' }}>
-      {/* 메인 헤더 영역 */}
       <div style={{ backgroundColor: '#fff', borderBottom: '1px solid #eee' }}>
         <div className="container" style={{ 
           display: 'flex', 
@@ -58,7 +78,6 @@ export default function Header() {
           margin: '0 auto' 
         }}>
         
-          {/* 로고 영역 */}
           <div style={{ flexShrink: 0 }}>
             <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
               <img 
@@ -74,15 +93,14 @@ export default function Header() {
             </Link>
           </div>
 
-          {/* 내비게이션 메뉴 */}
-          <nav> {/* 🌟 1. style={{ flexGrow: 1 }} 제거 (넓게 퍼지는 것 방지) */}
+          <nav>
             <ul style={{ 
               display: 'flex', 
               gap: '30px', 
               listStyle: 'none', 
               margin: 0, 
               padding: 0,
-              alignItems: 'center' /* 🌟 3. justifyContent: 'space-between' 제거하고 중앙 정렬 */
+              alignItems: 'center'
             }}>
               <NavItem 
                   label="구매대행" 
@@ -163,6 +181,7 @@ export default function Header() {
                     items={[
                         { label: '내 정보', href: '/mypage' },
                         { label: '구매대행 상황', href: '/mypage/status?tab=전체내역' },
+                        { label: '나의 배송지 정보 수정', href: '/mypage/profile' },
                         { label: '관심목록', href: '/wishlist' },
                         { label: '로그아웃', onClick: handleLogout },
                     ]} 
@@ -212,8 +231,9 @@ function NavItem({ label, items, activeColor }: { label: string, items?: { label
         }}>
             {index === 0 && '📋'}
             {index === 1 && '✈️'}
-            {index === 2 && '🛒'}
-            {index === 3 && '🚪'}
+            {index === 2 && '⚙️'}
+            {index === 3 && '🛒'}
+            {index === 4 && '🚪'}
         </div>
         <span style={{ fontWeight: '500', whiteSpace: 'nowrap' }}>{item.label}</span>
       </div>
@@ -251,7 +271,6 @@ function NavItem({ label, items, activeColor }: { label: string, items?: { label
         <span style={{ fontSize: '10px', color: isHovered && activeColor ? activeColor : '#999', transition: 'color 0.2s' }}>▼</span>
       </Link>
 
-      {/* 드롭다운 메뉴 */}
       {items && (
         <ul style={{
           position: 'absolute',
@@ -272,7 +291,6 @@ function NavItem({ label, items, activeColor }: { label: string, items?: { label
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           pointerEvents: isHovered ? 'auto' : 'none'
         }}>
-          {/* 삼각형 화살표 */}
           <div style={{
             position: 'absolute',
             top: '-6px',

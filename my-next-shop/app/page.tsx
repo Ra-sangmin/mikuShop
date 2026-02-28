@@ -206,22 +206,22 @@ export default function HomePage() {
       {/* 2. Quick Service Icons (초기 로딩 시 바로 등장) */}
       <section className="anim-item delay-1" style={{ maxWidth: '1400px', margin: '60px auto', display: 'flex', justifyContent: 'center', gap: '50px', padding: '20px', flexWrap: 'wrap' }}>
           <Link href="/purchase/quote" style={{ textDecoration: 'none' }}>
-            <QuickIcon icon="fa-desktop" label="견적문의" color="#333" />
+            <QuickIcon type="견적문의" label="견적문의" />
           </Link>
           <Link href="/purchase/request" style={{ textDecoration: 'none' }}>
-            <QuickIcon icon="fa-wallet" label="구매대행신청" color="#333" />
+            <QuickIcon type="구매대행신청" label="구매대행신청" />
           </Link>
-          <Link href="/purchase/request" style={{ textDecoration: 'none' }}>
-            <QuickIcon icon="fa-wallet" label="배송대행신청" color="#333" />
+          <Link href="/delivery/request" style={{ textDecoration: 'none' }}>
+            <QuickIcon type="배송대행신청" label="배송대행신청" />
           </Link>
-          <Link href="/fee-guide" style={{ textDecoration: 'none' }}>
-            <QuickIcon icon="fa-file-invoice-dollar" label="수수료 안내" color="#333" />
+          <Link href="/guide/fee-guide" style={{ textDecoration: 'none' }}>
+            <QuickIcon type="수수료 안내" label="수수료 안내" />
           </Link>
-          <Link href="/shipping-fee" style={{ textDecoration: 'none' }}>
-            <QuickIcon icon="fa-plane" label="국제배송요금" color="#333" />
+          <Link href="/guide/shipping-fee" style={{ textDecoration: 'none' }}>
+            <QuickIcon type="국제배송요금" label="국제배송요금" />
           </Link>
           <Link href="/contact" style={{ textDecoration: 'none' }}>
-            <QuickIcon icon="fa-headset" label="카톡문의" color="#333" />
+            <QuickIcon type="카톡문의" label="카톡문의" />
           </Link>
       </section>
 
@@ -330,17 +330,31 @@ export default function HomePage() {
 }
 
 // 🌟 퀵 아이콘 컴포넌트: 내부의 스크롤 딜레이는 제거하고 공통 호버 클래스만 사용
-function QuickIcon({ icon, label, color }: any) {
+function QuickIcon({ type, label }: any) {
+    const getImageSrc = () => {
+        switch (type) {
+            case '견적문의': return '/images/main_icon/icon_0.png';
+            case '구매대행신청': return '/images/main_icon/icon_1.png';
+            case '배송대행신청': return '/images/main_icon/icon_2.png';
+            case '수수료 안내': return '/images/main_icon/icon_3.png';
+            case '국제배송요금': return '/images/main_icon/icon_4.png';
+            case '카톡문의': return '/images/main_icon/icon_5.png';
+            default: return '/images/main_icon/icon_0.png';
+        }
+    };
+
     return (
-        <div className="quick-icon-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', cursor: 'pointer' }}>
+       <div className="quick-icon-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', cursor: 'pointer' }}>
             <div className="icon-box" style={{ 
                 width: '180px', height: '180px', borderRadius: '40px', 
-                backgroundColor: '#fff', border: '1px solid #eee', boxShadow: '0 10px 25px rgba(0,0,0,0.05)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.3s ease'
+                backgroundColor: '#fff', border: '1px solid #f1f5f9', boxShadow: '0 10px 25px rgba(0,0,0,0.03)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.3s ease',
+                overflow: 'hidden', padding: '15px'
             }}>
-                <i className={`fa ${icon}`} style={{ fontSize: '80px', color: color, transition: 'all 0.3s ease' }}></i>
+                {/* 🌟 width와 height를 100%에서 65%로 줄여 아이콘 크기를 작게 만듭니다 */}
+                <img src={getImageSrc()} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             </div>
-            <span style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b' }}>{label}</span>
+            <span style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b', letterSpacing: '-0.5px' }}>{label}</span>
         </div>
     );
 }

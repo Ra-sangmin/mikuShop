@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { signIn } from "next-auth/react"; // 🌟 NextAuth signIn 추가
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -94,7 +95,8 @@ export default function LoginPage() {
                 border: '1px solid #e2e8f0',
                 fontSize: '15px',
                 outline: 'none',
-                transition: 'border-color 0.2s'
+                transition: 'border-color 0.2s',
+                boxSizing: 'border-box'
               }}
               onFocus={(e) => e.target.style.borderColor = '#ff4b2b'}
               onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
@@ -117,7 +119,8 @@ export default function LoginPage() {
                 border: '1px solid #e2e8f0',
                 fontSize: '15px',
                 outline: 'none',
-                transition: 'border-color 0.2s'
+                transition: 'border-color 0.2s',
+                boxSizing: 'border-box'
               }}
               onFocus={(e) => e.target.style.borderColor = '#ff4b2b'}
               onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
@@ -144,6 +147,84 @@ export default function LoginPage() {
             로그인하기
           </button>
         </form>
+
+        {/* 🌟 소셜 로그인 구분선 */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          margin: '24px 0',
+          color: '#94a3b8',
+          fontSize: '12px'
+        }}>
+          <div style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }}></div>
+          <span style={{ padding: '0 10px' }}>또는 간편 로그인</span>
+          <div style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }}></div>
+        </div>
+
+        {/* 🌟 카카오 로그인 버튼 추가 */}
+        <button 
+          onClick={() => signIn('kakao', { callbackUrl: '/' })}
+          style={{
+            width: '100%',
+            padding: '14px',
+            backgroundColor: '#FEE500', // 카카오 공식 옐로우
+            color: '#000000', // 카카오 공식 가이드에 따른 검은색 텍스트
+            borderRadius: '8px',
+            border: 'none',
+            fontSize: '15px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            marginBottom: '10px', // 네이버 버튼과의 간격
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#FADA0A';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#FEE500';
+            e.currentTarget.style.transform = 'translateY(0)';
+          }}
+        >
+          <span style={{ fontSize: '18px', fontWeight: '900' }}>K</span>
+          카카오로 시작하기
+        </button>
+
+        {/* 🌟 네이버 로그인 버튼 */}
+        <button 
+          onClick={() => signIn('naver', { callbackUrl: '/' })}
+          style={{
+            width: '100%',
+            padding: '14px',
+            backgroundColor: '#03C75A', // 네이버 공식 그린
+            color: '#fff',
+            borderRadius: '8px',
+            border: 'none',
+            fontSize: '15px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#02b350';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#03C75A';
+            e.currentTarget.style.transform = 'translateY(0)';
+          }}
+        >
+          <span style={{ fontSize: '18px', fontWeight: '900', fontFamily: 'Arial, sans-serif' }}>N</span>
+          네이버로 시작하기
+        </button>
 
         <div style={{ marginTop: '25px', textAlign: 'center', fontSize: '14px', color: '#64748b' }}>
           계정이 없으신가요? 

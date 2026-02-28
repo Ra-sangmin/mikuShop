@@ -1,6 +1,6 @@
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL") // Prisma 5에서는 이게 완벽하게 작동합니다!
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -21,70 +21,87 @@ model User {
   id                  Int      @id @default(autoincrement())
   
   // 👤 1. 기본 로그인 정보
-  loginId             String   @unique @map("login_id") // 로그인 아이디
-  password            String                            // 비밀번호
-  name                String                            // 실명 (수취인과 대조용)
-  nickname            String?                           // 닉네임
-  email               String?  @unique                  // 이메일
-  phone               String?                           // 연락처
+  loginId             String   @unique @map("login_id")
+  password            String
+  name                String
+  nickname            String?
+  email               String?  @unique
+  phone               String?
   
   // ✈️ 2. 구매대행 필수 배송 정보
-  personalCustomsCode String?  @map("personal_customs_code") // 개인통관고유부호 (필수)
-  zipCode             String?  @map("zip_code")              // 우편번호
-  address             String?                                // 기본 주소
-  detailAddress       String?  @map("detail_address")        // 상세 주소
+  personalCustomsCode String?  @map("personal_customs_code")
+  zipCode             String?  @map("zip_code")
+  address             String?
+  detailAddress       String?  @map("detail_address")
+  
+  // 🌟 기본 배송지 ID
+  defaultAddressId    Int?     @map("default_address_id")
   
   // 💰 3. 비즈니스 로직 (결제/등급)
-  cyberMoney          Int      @default(0) @map("cyber_money") // 사이버 머니 (예치금)
-  level               String   @default("일반회원")             // 회원 등급
+  cyberMoney          Int      @default(0) @map("cyber_money")
+  level               String   @default("일반회원")
+  addressId           String?   @map("address_id") @db.Text
   
   // 🗓️ 4. 가입 및 수정 일자
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  // 🌟 필수 추가: 이 유저가 가진 '주문 목록' (1:N 관계)
   orders              Order[]
+  addresses           Address[]
 
-  @@map("users") // 실제 MySQL 테이블 이름은 'users'로 생성됩니다.
+  @@map("users")
+}
+
+model Address {
+  id                  Int      @id @default(autoincrement())
+  userId              Int      @map("user_id")
+  user                User     @relation(fields: [userId], references: [id])
+
+  recipientName       String   @map("recipient_name")
+  recipientEnglishName String? @map("recipient_english_name")
+  phone               String   @map("phone")
+  zipCode             String   @map("zip_code")
+  address             String   @map("address")
+  detailAddress       String   @map("detail_address")
+  personalCustomsCode String?  @map("personal_customs_code")
+  isDefault           Boolean  @default(false) @map("is_default")
+  
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("addresses")
 }
 
 model Order {
   id                  Int       @id @default(autoincrement())
-  
-  userId              Int       @map("user_id") // DB에 실제로 저장될 유저의 고유 ID 숫자
-
-  // 🌟 필수 추가: 이 주문이 누구의 것인지 연결해 주는 Prisma 전용 관계선
+  userId              Int       @map("user_id")
   user                User      @relation(fields: [userId], references: [id])
 
-  // 📦 1. 식별 번호 그룹
-  bundleId            String?   @map("bundle_id")        // 합배송번호
-  orderId             String    @unique @map("order_id") // 주문번호 (예: ORD-20260226-001)
-  productId           String?   @map("product_id")       // 상품번호
-  trackingNo          String?   @map("tracking_no")      // 운송장번호
+  bundleId            String?   @map("bundle_id")
+  orderId             String    @unique @map("order_id")
+  productId           String?   @map("product_id")
+  trackingNo          String?   @map("tracking_no")
 
-  // 🛍️ 2. 상품 정보 그룹
-  productImageUrl     String?   @db.Text @map("product_image_url")        // 상품이미지 (URL)
-  productPrice        Int       @map("product_price")                     // 상품가 (엔화 기준)
-  productName         String    @map("product_name")                      // 상품명
-  productUrl          String?   @db.Text @map("product_url")              // 상품URL
-  productOption       String?   @map("product_option")                    // 상품옵션 (색상, 사이즈 등)
-  productRequest      String?   @map("productRequest")                    // 상품 요청사항
+  productImageUrl     String?   @db.Text @map("product_image_url")
+  productPrice        Int       @map("product_price")
+  productName         String    @map("product_name")
+  productUrl          String?   @db.Text @map("product_url")
+  productOption       String?   @map("product_option")
+  productRequest      String?   @map("productRequest")
 
-  // 🗓️ 3. 날짜 정보 그룹 (아직 발생하지 않은 일자는 비워둘 수 있도록 '?' 처리)
-  registeredAt        DateTime  @default(now()) @map("registered_at")     // 등록일자
-  receivedAt          DateTime? @map("received_at")                       // 입고완료일
-  shippedAt           DateTime? @map("shipped_at")                        // 국제배송일
+  registeredAt        DateTime  @default(now()) @map("registered_at")
+  receivedAt          DateTime? @map("received_at")
+  shippedAt           DateTime? @map("shipped_at")
 
-  // ⚙️ 4. 서비스 및 상태
-  serviceRequest      String?   @map("service_request")   // 서비스 신청 (예: 정밀검수, 포장보류 등)
-  status              String    @default("장바구니")       // 진행상태 (기본값 설정)
-  deliveryStatus      String?   @default("배송전")         // 배송 진행상태 (기본값 설정)
+  serviceRequest      String?   @map("service_request")
+  status              String    @default("장바구니")
+  deliveryStatus      String?   @default("배송전")
 
-  // 💰 5. 비용 및 수취인
-  purchaseFee         Int       @default(0) @map("purchase_fee")           // 구매수수료
-  domesticShippingFee Int       @default(0) @map("domestic_shipping_fee")  // 일내배/착불 배송비
-  recipient           String?   @map("recipient")                          // 수취인 이름
-  secondPaymentAmount Int?      @map("second_payment_amount")              // 2차 결제 금액
+  purchaseFee         Int       @default(0) @map("purchase_fee")
+  domesticShippingFee Int       @default(0) @map("domestic_shipping_fee")
+  recipient           String?   @map("recipient")
+  addressId           Int?      @map("address_id")
+  secondPaymentAmount Int?      @map("second_payment_amount")
 
-  @@map("orders") // 실제 MySQL 테이블 이름은 'orders'로 생성됩니다.
+  @@map("orders")
 }

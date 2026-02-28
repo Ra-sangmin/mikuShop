@@ -53,7 +53,6 @@ export default function MyPage() {
 
   return (
     <GuideLayout title="마이페이지" type="mypage">
-      {/* 🌟 전역 애니메이션 키프레임 정의 */}
       <style jsx global>{`
         @keyframes slideUpFade {
           0% { opacity: 0; transform: translateY(20px); }
@@ -71,23 +70,34 @@ export default function MyPage() {
 
       <div style={{ maxWidth: '1000px', margin: '0 auto', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif', color: '#334155' }}>
         
-        {/* User Info Header */}
         <div className="anim-item" style={{ fontSize: '24px', fontWeight: '900', marginBottom: '30px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <span style={{ color: '#0f172a' }}>{userInfo.name}님</span>
           <span style={{ color: '#e2e8f0', fontWeight: 'normal' }}>|</span>
           <span style={{ fontSize: '18px' }}>회원등급 : <span style={{ color: '#f97316', fontWeight: '900' }}>{userInfo.level} 🥉</span></span>
           <span style={{ color: '#e2e8f0', fontWeight: 'normal' }}>|</span>
           <span style={{ fontSize: '18px' }}>사서함번호 : <span style={{ color: '#f97316', fontWeight: '900' }}>{userInfo.mailboxNumber}</span></span>
+          <Link href="/mypage/profile" style={{ marginLeft: 'auto' }}>
+            <button style={{ 
+              padding: '8px 16px', 
+              fontSize: '14px', 
+              borderRadius: '8px', 
+              border: '1px solid #e2e8f0', 
+              background: '#fff', 
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              color: '#64748b'
+            }}>
+              나의 배송지 정보 수정
+            </button>
+          </Link>
         </div>
 
-        {/* Summary Boxes */}
         <div className="anim-item delay-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '50px' }}>
           <SummaryBox label="알림메시지" value={userInfo.messages} unit="개" />
           <SummaryBox label="보유쿠폰" value={userInfo.coupons} unit="장" />
           <SummaryBox label="미쿠짱머니" value={userInfo.money} unit="원" />
         </div>
 
-        {/* Japan Shipping Address Section */}
         <div className="anim-item delay-2" style={{ border: '1px solid #e2e8f0', borderRadius: '20px', overflow: 'hidden', marginBottom: '60px', boxShadow: '0 10px 30px rgba(0,0,0,0.03)' }}>
           <div style={{ backgroundColor: '#f8fafc', padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ fontSize: '20px', fontWeight: '900', margin: 0, color: '#0f172a' }}>나의 일본 배송지 주소</h2>
@@ -98,7 +108,7 @@ export default function MyPage() {
                 <AddressItem label="우편번호" value="123-4567" />
                 <AddressItem label="도도부현" value="東京都 (Tokyo)" />
                 <AddressItem label="구/군/시" value="港区 (Minato-ku)" />
-                <AddressItem label="상세주소 1" value="東麻布 1-2-3" />
+                <AddressItem label="상세주소 1" value="東麻부 1-2-3" />
               </div>
               <div>
                 <AddressItem label="상세주소 2" value={userInfo.mailboxNumber} isHighlight />
@@ -112,7 +122,6 @@ export default function MyPage() {
           </div>
         </div>
 
-        {/* Purchase Status Section */}
         <div id="purchase-status" className="anim-item delay-3" style={{ marginBottom: '60px' }}>
           <h2 style={{ fontSize: '24px', fontWeight: '900', marginBottom: '30px', color: '#0f172a' }}>구매대행 상황</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
@@ -206,9 +215,7 @@ function SummaryBox({ label, value, unit }: { label: string, value: number, unit
   );
 }
 
-// 🌟 StatusCard에 계단식 애니메이션 딜레이 적용을 위해 index prop 추가
 function StatusCard({ label, count, desc, href, index }: { label: string, count: number, desc: string, href: string, index: number }) {
-  // 인덱스 기반으로 딜레이 계산 (0초, 0.05초, 0.1초 순으로 차례대로 렌더링)
   const animationDelay = `${0.3 + index * 0.05}s`;
 
   return (
@@ -222,7 +229,7 @@ function StatusCard({ label, count, desc, href, index }: { label: string, count:
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', 
           boxShadow: '0 4px 10px rgba(0,0,0,0.02)',
           backgroundColor: '#fff',
-          animationDelay // 🌟 순차 애니메이션 딜레이 적용
+          animationDelay
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = 'translateY(-4px)';

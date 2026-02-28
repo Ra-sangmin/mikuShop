@@ -6,12 +6,17 @@ export async function GET() {
   try {
     const orders = await prisma.order.findMany({
       include: {
-        user: true, // 💡 핵심: Order 테이블과 연결된 User 테이블의 정보(이름 등)를 함께 가져옵니다!
+        user: {
+          include: {
+            // @ts-ignore - Prisma Client 재생성이 안되었을 경우 대비
+            addresses: true 
+          }
+        },
       },
       orderBy: {
         registeredAt: 'desc', // 최신 등록일 순 정렬
       }
-    });
+    }); 
 
     return NextResponse.json({ success: true, orders });
   } catch (error: any) {
@@ -67,6 +72,14 @@ export async function PUT(request: Request) {
 
       if (order.trackingNo !== undefined) {
         updateData.trackingNo = order.trackingNo;
+      }
+
+      if (order.recipient !== undefined) {
+        updateData.recipient = order.recipient;
+      }
+
+      if (order.addressId !== undefined) {
+        updateData.addressId = order.addressId ? parseInt(order.addressId) : null;
       }
 
       return prisma.order.update({

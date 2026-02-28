@@ -8,6 +8,8 @@
 
 express-js-on-vercel-orcin-six-60.vercel.app
 
+npx prisma db push
+npx prisma generate
 
 npm run dev
 npm run start:debug 

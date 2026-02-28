@@ -5,6 +5,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import { ExchangeRateProvider } from './context/ExchangeRateContext';
 import { CartProvider } from './context/CartContext';
+import { Providers } from './Providers';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -26,15 +27,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         position: 'relative',
         top: '0'
       }}>
-        <ExchangeRateProvider>
-          <CartProvider>
-            {!isAdminPage && <Header />}
-            <main style={{ flex: '1 0 auto' }}>
-              {children}
-            </main>
-            {!isAdminPage && <Footer />}
-          </CartProvider>
-        </ExchangeRateProvider>
+        <Providers>
+            <ExchangeRateProvider>
+            <CartProvider>
+              {!isAdminPage && <Header />}
+              <main style={{ flex: '1 0 auto' }}>
+                {children}
+              </main>
+              {!isAdminPage && <Footer />}
+            </CartProvider>
+          </ExchangeRateProvider>
+        </Providers>
       </body>
     </html>
   );

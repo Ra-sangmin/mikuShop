@@ -31,19 +31,39 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const { id, cyberMoney } = await request.json();
+    const { id, cyberMoney, addressId, addressMode } = await request.json();
 
     if (!id) {
       return NextResponse.json({ error: '유저 ID가 필요합니다.' }, { status: 400 });
     }
 
+    const updateData: any = {};
+    if (cyberMoney !== undefined) {
+      updateData.cyberMoney = {
+        increment: parseInt(cyberMoney) || 0
+      };
+    }
+    if (addressId !== undefined) {
+      if (addressMode === 'add') {
+        // 🌟 'add' 모드일 때만 기존 address_id 값을 가져와서 새로운 ID를 추가 (콤마로 구분)
+        const user: any = await prisma.user.findUnique({ where: { id: parseInt(id) } });
+        let currentIds = user?.addressId ? user.addressId.split(',') : [];
+        
+        const newIdStr = addressId.toString();
+        if (!currentIds.includes(newIdStr)) {
+          currentIds.push(newIdStr);
+        }
+        
+        updateData.addressId = currentIds.join(',');
+      } else {
+        // 🌟 'add' 모드가 아닐 때는 그냥 덮어쓰거나 무시 (필요에 따라 수정)
+        updateData.addressId = addressId.toString();
+      }
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: parseInt(id) },
-      data: {
-        cyberMoney: {
-          increment: parseInt(cyberMoney) || 0
-        }
-      }
+      data: updateData
     });
 
     return NextResponse.json({ success: true, user: updatedUser });

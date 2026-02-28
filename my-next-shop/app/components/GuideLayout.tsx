@@ -41,6 +41,7 @@ const moneyMenuItems = [
 const mypageMenuItems = [
   { name: '내 정보', href: '/mypage' },
   { name: '구매대행 상황', href: '/mypage/status' },
+  { name: '나의 배송지 정보 수정', href: '/mypage/profile' },
   { name: '관심목록', href: '/wishlist' },
   { name: '로그아웃', href: '#', isLogout: true },
 ];
