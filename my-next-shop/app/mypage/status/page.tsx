@@ -25,6 +25,9 @@ function MyPurchaseStatusContent() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  
+  const [selectedAddress, setSelectedAddress] = useState<any>(null);
+  
   const exchangeRate = 9.05;
 
   const fetchOrders = () => {
@@ -94,9 +97,13 @@ function MyPurchaseStatusContent() {
   const handleUpdateStatus = async (newStatus: string) => {
     if (selectedItems.length === 0) return alert('상품을 선택해주세요.');
 
+    if (newStatus === '배송 준비중' && !selectedAddress) {
+      return alert('하단 수취인 주소 리스트에서 배송지를 먼저 선택해주세요.');
+    }
+
     const confirmMsgs: any = {
       '상품 결제 완료': '선택한 상품을 결제 하시겠습니까?',
-      '배송 준비중': '선택한 상품들을 합포장 요청 하시겠습니까?',
+      '배송 준비중': '선택한 상품들을 합포장 요청 하시겠습니까?\n(선택하신 배송지가 함께 적용됩니다.)',
       '배송비 결제 완료': '선택한 상품의 배송비 결제를 진행하시겠습니까?'
     };
 
@@ -119,8 +126,13 @@ function MyPurchaseStatusContent() {
         } catch (error) { return alert('잔액 확인 중 오류가 발생했습니다.'); }
       }
 
+      // 🌟 주소의 텍스트 정보 대신 선택된 주소의 id만 address_id로 전달
+      const addressUpdateData = newStatus === '배송 준비중' && selectedAddress 
+        ? { address_id: selectedAddress.id } 
+        : {};
+
       let updates = newStatus === '배송 준비중' 
-        ? selectedItems.map(id => ({ id, status: newStatus, bundleId: 'B' + Date.now() })) 
+        ? selectedItems.map(id => ({ id, status: newStatus, bundleId: 'B' + Date.now(), ...addressUpdateData })) 
         : selectedItems.map(id => ({ id, status: newStatus }));
       
       try {
@@ -142,7 +154,6 @@ function MyPurchaseStatusContent() {
     }
   };
 
-  // 🌟 모바일/PC 반응형 텍스트 분리 렌더링
   const formatTabName = (name: string) => {
     if (name === '상품 결제 완료') {
       return (
@@ -244,7 +255,6 @@ function MyPurchaseStatusContent() {
           white-space: nowrap;
         }
 
-        /* 🌟 기본적으로 모바일 텍스트는 숨기고 PC 텍스트만 표시 */
         .mobile-text { display: none; }
         .pc-text { display: inline; }
 
@@ -262,7 +272,6 @@ function MyPurchaseStatusContent() {
             padding: 2px 4px;
           }
           
-          /* 🌟 모바일 화면일 때만 모바일 텍스트를 표시하고 PC 텍스트를 숨김 */
           .mobile-text { display: inline; }
           .pc-text { display: none; }
         }
@@ -275,8 +284,7 @@ function MyPurchaseStatusContent() {
         <div className="tab-group">{tabs.slice(5).map(renderTabItem)}</div>
       </div>
 
-      {/* 테이블 영역 (OrderTable 컴포넌트) */}
-      <OrderTable items={items} orders={orders} activeTab={activeTab} selectedItems={selectedItems} setSelectedItems={setSelectedItems} fetchOrders={fetchOrders} />
+      <OrderTable items={items} orders={orders} activeTab={activeTab} selectedItems={selectedItems} setSelectedItems={setSelectedItems} fetchOrders={fetchOrders} selectedAddress={selectedAddress} />
 
       {/* 입고완료: 합포장 버튼 & 주소 폼 */}
       {activeTab === '입고완료' && (
@@ -286,7 +294,7 @@ function MyPurchaseStatusContent() {
               📦 합포장 요청 ({selectedItems.length}개 선택됨)
             </button>
           </div>
-          <AddressForm userData={userData} selectedItems={selectedItems} fetchOrders={fetchOrders} />
+          <AddressForm userData={userData} selectedItems={selectedItems} fetchOrders={fetchOrders} selectedAddress={selectedAddress} setSelectedAddress={setSelectedAddress} />
         </>
       )}
 
@@ -300,7 +308,7 @@ function MyPurchaseStatusContent() {
 
 export default function MyPurchaseStatusPage() {
   return (
-    <GuideLayout title="구매대행 상황" type="mypage" fullWidth>
+    <GuideLayout title="구매대행 상황" type="mypage">
       <Suspense fallback={<div style={{ padding: '100px', textAlign: 'center' }}>로딩 중...</div>}>
         <MyPurchaseStatusContent />
       </Suspense>

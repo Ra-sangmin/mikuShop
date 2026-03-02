@@ -41,13 +41,12 @@ export default function MyPage() {
   const purchaseStatus = useMemo(() => [
     { label: '전체내역', count: userOrders.length, desc: '모든내역을 확인합니다.', href: '/mypage/status?tab=전체내역' },
     { label: '장바구니', count: userOrders.filter((i: any) => i.status === '장바구니').length, desc: '구매신청 장바구니 목록', href: '/mypage/status?tab=장바구니' },
-    { label: '구매실패', count: userOrders.filter((i: any) => i.status === '구매실패').length, desc: '1차완료 구매불가 목록', href: '/mypage/status?tab=구매실패' },
-    { label: '1차완료', count: userOrders.filter((i: any) => i.status === '1차완료').length, desc: '1차결제완료 목록(구매진행)', href: '/mypage/status?tab=1차완료' },
-    { label: '입고대기', count: userOrders.filter((i: any) => i.status === '입고대기').length, desc: '현지창고 도착대기중', href: '/mypage/status?tab=입고대기' },
+    { label: '구매실패', count: userOrders.filter((i: any) => i.status === '구매실패').length, desc: '상품 결제 완료 구매불가 목록', href: '/mypage/status?tab=구매실패' },
+    { label: '상품 결제 완료', count: userOrders.filter((i: any) => i.status === '상품 결제 완료').length, desc: '1차결제완료 목록(구매진행)', href: '/mypage/status?tab=상품 결제 완료' },
     { label: '입고완료', count: userOrders.filter((i: any) => i.status === '입고완료').length, desc: '현지창고 도착, 합포장신청', href: '/mypage/status?tab=입고완료' },
-    { label: '합포장중', count: userOrders.filter((i: any) => i.status === '합포장중').length, desc: '사루와창고 포장진행중', href: '/mypage/status?tab=합포장중' },
-    { label: '2차요청', count: userOrders.filter((i: any) => i.status === '2차요청').length, desc: '합포장완료 2차결제견적', href: '/mypage/status?tab=2차요청' },
-    { label: '2차완료', count: userOrders.filter((i: any) => i.status === '2차완료').length, desc: '출하준비중', href: '/mypage/status?tab=2차완료' },
+    { label: '배송 준비중', count: userOrders.filter((i: any) => i.status === '배송 준비중').length, desc: '사루와창고 포장진행중', href: '/mypage/status?tab=배송 준비중' },
+    { label: '배송비 요청', count: userOrders.filter((i: any) => i.status === '배송비 요청').length, desc: '합포장완료 2차결제견적', href: '/mypage/status?tab=배송비 요청' },
+    { label: '배송비 결제 완료', count: userOrders.filter((i: any) => i.status === '배송비 결제 완료').length, desc: '출하준비중', href: '/mypage/status?tab=배송비 결제 완료' },
     { label: '국제배송', count: userOrders.filter((i: any) => i.status === '국제배송').length, desc: '국제배송추적 및 도착', href: '/mypage/status?tab=국제배송' },
   ], [userOrders]);
 

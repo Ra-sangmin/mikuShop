@@ -3,6 +3,7 @@ import React, { useState, useRef } from 'react';
 import { useExchangeRate } from '../context/ExchangeRateContext';
 import { useCart } from '../context/CartContext';
 import { useRouter } from 'next/navigation';
+import { useMikuAlert } from '../context/MikuAlertContext';
 
 // 상품 1개의 초기 데이터 구조 정의
 type ProductForm = {
@@ -40,7 +41,7 @@ const initialProduct: ProductForm = {
 export default function PurchaseFormContainer() {
   const [products, setProducts] = useState<ProductForm[]>([{ ...initialProduct, name: '상품 정보 입력 1' }]);
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  
+  const { showAlert } = useMikuAlert();
   const { exchangeRate } = useExchangeRate();
   const { addToCart } = useCart();
   const router = useRouter();
@@ -54,7 +55,7 @@ export default function PurchaseFormContainer() {
   };
 
   const handleAddProductForm = () => {
-    setProducts(prev => [...prev, { ...initialProduct, id: Date.now(), name: `상품 정보 입력 ${prev.length + 1}` }]);
+    setProducts(prev => [...prev, { ...initialProduct, id: Date.now() }]);
   };
 
   const handleRemoveProductForm = (index: number) => {
@@ -91,7 +92,7 @@ export default function PurchaseFormContainer() {
 
   const processImageFile = async (index: number, file: File) => {
     if (!file.type.startsWith('image/')) {
-      alert('이미지 파일만 업로드 가능합니다.');
+      showAlert('이미지 파일만 업로드 가능합니다.');
       return;
     }
     const formData = new FormData();
@@ -101,7 +102,7 @@ export default function PurchaseFormContainer() {
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (data.success) updateProduct(index, 'image', data.url);
-      else alert('이미지 업로드에 실패했습니다.');
+      else showAlert('이미지 업로드에 실패했습니다.');
     } catch (error) {
       console.error("Image Upload Error:", error);
     } finally {
@@ -113,13 +114,13 @@ export default function PurchaseFormContainer() {
     for (let i = 0; i < products.length; i++) {
       const p = products[i];
       if (!p.url || !p.price || !p.quantity || !p.name) {
-        alert(`${i + 1}번째 상품의 필수 정보를 입력해주세요.`);
+        showAlert(`${i + 1}번째 상품의 필수 정보를 입력해주세요.`);
         return;
       }
     }
     const userId = localStorage.getItem('user_id');
     if (!userId) {
-      alert("로그인이 필요한 서비스입니다.");
+      showAlert("로그인이 필요한 서비스입니다.");
       return;
     }
     try {
@@ -151,13 +152,13 @@ export default function PurchaseFormContainer() {
         if (!data.success) allSuccess = false;
       }
       if (allSuccess) {
-        alert('🛒 모든 상품이 장바구니에 성공적으로 담겼습니다!');
+        showAlert('🛒 모든 상품이 장바구니에 성공적으로 담겼습니다!');
         router.push('/mypage/status?tab=장바구니');
       } else {
-        alert(`일부 상품을 저장하는 중 오류가 발생했습니다.`);
+        showAlert(`일부 상품을 저장하는 중 오류가 발생했습니다.`);
       }
     } catch (error) {
-      alert("서버 통신 중 오류가 발생했습니다.");
+      showAlert("서버 통신 중 오류가 발생했습니다.");
     }
   };
 
@@ -174,37 +175,37 @@ export default function PurchaseFormContainer() {
         .premium-btn { padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; border: none; }
         .btn-dark { background: #1f2937; color: #fff; }
         .btn-primary { background: #6366f1; color: #fff; width: 100%; max-width: 300px; }
-        .service-box { border: 1px solid #e5e7eb; padding: 16px; border-radius: 10px; cursor: pointer; }
+        
+        /* ✨ 개선된 서비스 박스 스타일 */
+        .service-box { 
+          border: 1px solid #e5e7eb; 
+          padding: 14px; 
+          border-radius: 10px; 
+          cursor: pointer; 
+          display: flex; 
+          align-items: center; 
+          gap: 12px; 
+          transition: all 0.2s ease; 
+          background-color: #fff;
+        }
+        .service-box:hover { border-color: #a5b4fc; background-color: #f8fafc; }
+        .service-box.active { border-color: #6366f1; background-color: #eef2ff; }
 
-        /* 📱 모바일 대응 핵심 CSS */
+        .custom-checkbox {
+          width: 20px; height: 20px; border: 2px solid #d1d5db; border-radius: 5px;
+          display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s ease;
+        }
+        .service-box.active .custom-checkbox { background-color: #6366f1; border-color: #6366f1; }
+
         @media (max-width: 768px) {
           .premium-container { padding: 15px 10px !important; }
           .product-card-inner { flex-direction: column !important; gap: 20px !important; padding: 20px !important; }
-          .image-upload-wrapper { width: 100% !important; display: flex; justify-content: center; }
-          .image-upload-box { width: 160px !important; height: 160px !important; }
-          
-          /* 가로 그리드를 세로 1열로 변경 */
-          .input-grid { 
-            grid-template-columns: 1fr !important; 
-            gap: 12px !important; 
-          }
+          .input-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
           .input-grid > div { grid-column: span 1 !important; }
-          .label-cell { margin-bottom: 4px; font-size: 12px !important; }
-
-          /* 서비스 옵션 1열 */
           .service-grid { grid-template-columns: 1fr !important; }
-
-          /* 합계 카드 세로 정렬 */
-          .total-card { 
-            flex-direction: column !important; 
-            padding: 24px 15px !important; 
-            gap: 15px !important;
-          }
+          .total-card { flex-direction: column !important; padding: 24px 15px !important; gap: 15px !important; }
           .total-divider { display: none; }
-          .final-summary { width: 100% !important; padding: 20px !important; }
-
-          /* 하단 고정 버튼 느낌으로 정렬 */
-          .bottom-btn-wrap { justify-content: center !important; }
+          .final-summary { width: 100% !important; }
         }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -212,7 +213,6 @@ export default function PurchaseFormContainer() {
 
       <div className="premium-container" style={{ maxWidth: '900px', margin: '0 auto', padding: '30px 20px', fontFamily: '"Noto Sans KR", sans-serif' }}>
         
-        {/* 유의사항 */}
         <div className="premium-card" style={{ background: '#eff6ff', borderColor: '#bfdbfe' }}>
           <div style={{ padding: '20px' }}>
             <span style={{ fontWeight: '700', fontSize: '14px', color: '#1e3a8a', display: 'block', marginBottom: '10px' }}>💡 구매대행 유의사항</span>
@@ -223,7 +223,6 @@ export default function PurchaseFormContainer() {
           </div>
         </div>
 
-        {/* 상품 입력 폼 배열 */}
         {products.map((product, index) => (
           <div key={product.id} className="premium-card">
             <div style={{ backgroundColor: '#f9fafb', padding: '12px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -238,18 +237,27 @@ export default function PurchaseFormContainer() {
             </div>
             
             <div className="product-card-inner" style={{ padding: '24px', display: 'flex', gap: '30px' }}>
-              {/* 이미지 업로드 */}
               <div className="image-upload-wrapper" style={{ width: '140px', flexShrink: 0 }}>
                 <div className="image-upload-box" 
-                  style={{ width: '140px', height: '140px', borderRadius: '12px', border: '2px dashed #d1d5db', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb', cursor: 'pointer', overflow: 'hidden' }}
+                  style={{ 
+                    width: '140px', height: '140px', borderRadius: '12px', border: '2px dashed #d1d5db', 
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+                    backgroundColor: '#f9fafb', cursor: 'pointer', overflow: 'hidden', padding: '8px', boxSizing: 'border-box'
+                  }}
                   onClick={() => fileInputRefs.current[index]?.click()}
                 >
-                  {product.image ? <img src={product.image} alt="product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontSize: '12px', color: '#9ca3af' }}>📸 이미지 추가</span>}
+                  {product.image ? (
+                    <img src={product.image} alt="product" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                  ) : (
+                    <span style={{ fontSize: '12px', color: '#9ca3af' }}>📸 이미지 추가</span>
+                  )}
                 </div>
-                <input type="file" accept="image/*" style={{ display: 'none' }} ref={el => { fileInputRefs.current[index] = el }} onChange={(e) => processImageFile(index, e)} />
+                <input type="file" accept="image/*" style={{ display: 'none' }} ref={el => { fileInputRefs.current[index] = el }} onChange={(e) => {
+                  const file = e.target.files?.[0]; 
+                  if (file) processImageFile(index, file);
+                }} />
               </div>
 
-              {/* 입력 필드 그리드 */}
               <div style={{ flex: 1 }}>
                 <div className="input-grid" style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 1fr', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
                   <Label required>상품 URL</Label>
@@ -271,14 +279,41 @@ export default function PurchaseFormContainer() {
                   <div style={{ gridColumn: 'span 3' }}><input type="text" placeholder="포장 등 요청사항" className="premium-input" value={product.request} onChange={(e) => updateProduct(index, 'request', e.target.value)} /></div>
                 </div>
 
-                {/* 서비스 옵션 */}
+                {/* ✨ 개선된 서비스 옵션 영역 */}
                 <div className="service-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div className="service-box" style={{ borderColor: product.photoService === 'apply' ? '#6366f1' : '#e5e7eb' }} onClick={() => updateProduct(index, 'photoService', product.photoService === 'none' ? 'apply' : 'none')}>
-                    <span style={{ fontSize: '13px', fontWeight: '700' }}>📷 사진 검수 {product.photoService === 'apply' && '✅'}</span>
+                  
+                  {/* 사진 검수 */}
+                  <div 
+                    className={`service-box ${product.photoService === 'apply' ? 'active' : ''}`} 
+                    onClick={() => updateProduct(index, 'photoService', product.photoService === 'none' ? 'apply' : 'none')}
+                  >
+                    <div className="custom-checkbox">
+                      {product.photoService === 'apply' && <span style={{ color: '#fff', fontSize: '12px' }}>✓</span>}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: '700', color: product.photoService === 'apply' ? '#4338ca' : '#374151' }}>
+                        📷 사진 검수
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#6b7280' }}>현지 도착 후 촬영</div>
+                    </div>
                   </div>
-                  <div className="service-box" style={{ borderColor: product.packingService === 'apply' ? '#6366f1' : '#e5e7eb' }} onClick={() => updateProduct(index, 'packingService', product.packingService === 'none' ? 'apply' : 'none')}>
-                    <span style={{ fontSize: '13px', fontWeight: '700' }}>📦 포장 보완 {product.packingService === 'apply' && '✅'}</span>
+
+                  {/* 포장 보완 */}
+                  <div 
+                    className={`service-box ${product.packingService === 'apply' ? 'active' : ''}`} 
+                    onClick={() => updateProduct(index, 'packingService', product.packingService === 'none' ? 'apply' : 'none')}
+                  >
+                    <div className="custom-checkbox">
+                      {product.packingService === 'apply' && <span style={{ color: '#fff', fontSize: '12px' }}>✓</span>}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: '700', color: product.packingService === 'apply' ? '#4338ca' : '#374151' }}>
+                        📦 포장 보완
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#6b7280' }}>안전한 재포장</div>
+                    </div>
                   </div>
+
                 </div>
               </div>
             </div>
@@ -289,7 +324,6 @@ export default function PurchaseFormContainer() {
           <button className="premium-btn btn-dark" onClick={handleAddProductForm}>➕ 상품 추가</button>
         </div>
 
-        {/* 합계 카드 */}
         <div className="premium-card total-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '30px', background: '#f8fafc' }}>
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>총 상품 금액</p>

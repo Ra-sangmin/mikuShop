@@ -4,18 +4,35 @@ import prisma from '@/lib/prisma';
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get('userId');
-
-  if (!userId) {
-    return NextResponse.json({ error: '유저 ID가 필요합니다.' }, { status: 400 });
-  }
+  const id = searchParams.get('id'); // 🌟 단일 주소 조회를 위한 id 파라미터 추가
 
   try {
-    const addresses = await prisma.address.findMany({
-      where: { userId: parseInt(userId) },
-      orderBy: { createdAt: 'desc' }
-    });
+    // 🌟 1. '상세 주소 보기' 클릭 시: 특정 id의 단일 주소만 가져오기
+    if (id) {
+      const address = await prisma.address.findUnique({
+        where: { id: parseInt(id, 10) }
+      });
 
-    return NextResponse.json({ success: true, addresses });
+      if (!address) {
+        return NextResponse.json({ success: false, error: '해당 주소를 찾을 수 없습니다.' }, { status: 404 });
+      }
+
+      return NextResponse.json({ success: true, address });
+    }
+
+    // 2. 기존 로직: 특정 유저(userId)의 모든 주소 목록 가져오기
+    if (userId) {
+      const addresses = await prisma.address.findMany({
+        where: { userId: parseInt(userId, 10) },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      return NextResponse.json({ success: true, addresses });
+    }
+
+    // userId나 id 둘 다 없는 잘못된 요청일 경우
+    return NextResponse.json({ error: '유저 ID 또는 주소 ID가 필요합니다.' }, { status: 400 });
+
   } catch (error) {
     console.error("Address GET Error:", error);
     return NextResponse.json({ error: '배송지 조회 실패' }, { status: 500 });

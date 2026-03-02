@@ -8,13 +8,13 @@ export async function GET() {
       include: {
         user: {
           include: {
-            // @ts-ignore - Prisma Client 재생성이 안되었을 경우 대비
+            // @ts-ignore
             addresses: true 
           }
         },
       },
       orderBy: {
-        registeredAt: 'desc', // 최신 등록일 순 정렬
+        registeredAt: 'desc', 
       }
     }); 
 
@@ -32,7 +32,7 @@ export async function PUT(request: Request) {
 
     const operations: any[] = [];
 
-    // 🌟 사이버머니 차감이 필요한 경우 처리
+    // 사이버머니 차감이 필요한 경우 처리
     if (userId && deductAmount && deductAmount > 0) {
       operations.push(prisma.user.update({
         where: { id: parseInt(userId) },
@@ -44,7 +44,6 @@ export async function PUT(request: Request) {
       }));
     }
 
-    // DB 구조가 바뀌었으므로, 고유 문자열인 orderId를 기준으로 상태를 업데이트합니다.
     const orderUpdates = updates.map((order: any) => {
       const updateData: any = {};
       
@@ -52,11 +51,11 @@ export async function PUT(request: Request) {
         updateData.deliveryStatus = order.status;
       } else {
         updateData.status = order.status;
-        // 🌟 입고완료 상태로 변경 시 입고완료일(receivedAt)을 현재 시간으로 설정
+        
         if (order.status === '입고완료') {
           updateData.receivedAt = new Date();
         }
-        // 🌟 국제배송 상태로 변경 시 국제배송일(shippedAt)을 현재 시간으로 설정
+        
         if (order.status === '국제배송') {
           updateData.shippedAt = new Date();
         }
@@ -78,8 +77,11 @@ export async function PUT(request: Request) {
         updateData.recipient = order.recipient;
       }
 
-      if (order.addressId !== undefined) {
-        updateData.addressId = order.addressId ? parseInt(order.addressId) : null;
+      // 🌟 [핵심 수정 부분] 프론트엔드에서 보낸 'address_id'를 읽어오도록 수정
+      if (order.address_id !== undefined) {
+        // 주의: Prisma 스키마 모델에 정의된 필드명이 addressId 라면 아래처럼 사용하시고, 
+        // 만약 스키마에도 address_id 로 되어있다면 updateData.address_id 로 변경해 주세요.
+        updateData.addressId = order.address_id ? parseInt(order.address_id) : null;
       }
 
       return prisma.order.update({
