@@ -73,9 +73,10 @@ export async function PUT(request: Request) {
         updateData.trackingNo = order.trackingNo;
       }
 
-      if (order.recipient !== undefined) {
-        updateData.recipient = order.recipient;
-      }
+      // ❌ 삭제된 부분: DB에 recipient 컬럼이 없으므로 업데이트 항목에서 제외
+      // if (order.recipient !== undefined) {
+      //   updateData.recipient = order.recipient;
+      // }
 
       // 🌟 [핵심 수정 부분] 프론트엔드에서 보낸 'address_id'를 읽어오도록 수정
       if (order.address_id !== undefined) {

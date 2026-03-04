@@ -14,7 +14,8 @@ export async function GET(request: Request) {
     const user = await prisma.user.findUnique({
       where: { id: parseInt(userId) },
       include: {
-        orders: true 
+        orders: true, 
+        addresses: true
       }
     });
 

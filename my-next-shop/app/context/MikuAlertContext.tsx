@@ -43,8 +43,10 @@ export function useMikuAlert() {
 }
 
 function MikuAlertComponent({ message, type, onClose }: { message: string, type: AlertType, onClose: () => void }) {
+  // 정보 확인을 위해 자동 닫기 시간을 5초로 조금 늘리거나, 
+  // 수취인 정보일 경우 사용자가 직접 닫게 하려면 아래 Effect를 수정할 수 있습니다.
   React.useEffect(() => {
-    const timer = setTimeout(onClose, 3000);
+    const timer = setTimeout(onClose, 5000); // 3초 -> 5초로 연장
     return () => clearTimeout(timer);
   }, [onClose]);
 
@@ -75,7 +77,7 @@ function MikuAlertComponent({ message, type, onClose }: { message: string, type:
         backgroundColor: style.bg,
         border: `2px solid ${style.border}`,
         color: style.text,
-        padding: '30px 50px',
+        padding: '30px 40px',
         borderRadius: '24px',
         boxShadow: '0 20px 50px rgba(0,0,0,0.15)',
         display: 'flex',
@@ -83,10 +85,9 @@ function MikuAlertComponent({ message, type, onClose }: { message: string, type:
         alignItems: 'center',
         gap: '16px',
         fontWeight: 'bold',
-        fontSize: '18px',
+        fontSize: '17px',
         minWidth: '350px',
         maxWidth: '90%',
-        textAlign: 'center',
         animation: 'mikuAlertPopIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
       }}>
         <style jsx global>{`
@@ -95,13 +96,26 @@ function MikuAlertComponent({ message, type, onClose }: { message: string, type:
             100% { transform: scale(1); opacity: 1; }
           }
         `}</style>
-        <span style={{ fontSize: '45px', marginBottom: '5px' }}>{style.icon}</span>
-        <div style={{ lineHeight: '1.6', wordBreak: 'keep-all' }}>{message}</div>
+        
+        <span style={{ fontSize: '40px' }}>{style.icon}</span>
+        
+        {/* 🌟 수정된 메시지 영역 */}
+        <div style={{ 
+          lineHeight: '1.7', 
+          whiteSpace: 'pre-wrap',  // 👈 핵심: \n 문자를 실제 줄바꿈으로 렌더링
+          wordBreak: 'break-word', // 👈 단어 단위로 줄바꿈
+          textAlign: message.includes('\n') ? 'left' : 'center', // 👈 여러 줄일 경우 왼쪽 정렬로 가독성 확보
+          width: '100%',
+          padding: '0 10px'
+        }}>
+          {message}
+        </div>
+
         <button 
           onClick={onClose} 
           style={{ 
-            marginTop: '15px',
-            padding: '10px 30px',
+            marginTop: '10px',
+            padding: '12px 40px',
             backgroundColor: style.border,
             color: '#fff',
             border: 'none',
@@ -112,8 +126,14 @@ function MikuAlertComponent({ message, type, onClose }: { message: string, type:
             transition: 'all 0.2s',
             boxShadow: `0 4px 10px ${style.border}44`
           }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 15px ${style.border}66`; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = `0 4px 10px ${style.border}44`; }}
+          onMouseEnter={e => { 
+            e.currentTarget.style.transform = 'translateY(-2px)'; 
+            e.currentTarget.style.boxShadow = `0 6px 15px ${style.border}66`; 
+          }}
+          onMouseLeave={e => { 
+            e.currentTarget.style.transform = 'translateY(0)'; 
+            e.currentTarget.style.boxShadow = `0 4px 10px ${style.border}44`; 
+          }}
         >
           확인
         </button>

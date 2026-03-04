@@ -126,6 +126,9 @@ export default function OrderManagement() {
   const [changedOrderIds, setChangedOrderIds] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
 
+  // 🌟 Debug 패널 표시 상태
+  const [showDebug, setShowDebug] = useState(false);
+
   useEffect(() => {
     const storedName = localStorage.getItem('admin_name');
     if (!localStorage.getItem('admin_id')) {
@@ -140,14 +143,15 @@ export default function OrderManagement() {
         const data = await res.json();
 
         if (data.success) {
-          const formattedOrders = data.orders.map((dbOrder: any) => ({
+          const tempOrders = data.orders.map((dbOrder: any) => ({
             id: dbOrder.orderId, 
             date: new Date(dbOrder.registeredAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
             user: dbOrder.user?.name || '알 수 없음',
-            // 🌟 수취인 주소 정보 매칭
+            // 🌟 수취인 주소 정보 매칭 로직을 남겨두고, addressId도 보관
             address: dbOrder.addressId 
               ? (dbOrder.user?.addresses?.find((a: any) => a.id === dbOrder.addressId) || null)
               : null,
+            addressId: dbOrder.addressId, 
             recipient: dbOrder.recipient || '',
             source: '기본구매처',
             product: dbOrder.productName,
@@ -163,8 +167,38 @@ export default function OrderManagement() {
             bundleId: dbOrder.bundleId || ''
           }));
 
-          setOrders(formattedOrders);
-          setOriginalOrders(formattedOrders);
+          setOrders(tempOrders);
+          setOriginalOrders(tempOrders);
+
+          // 🌟 추가 API 호출: address 정보가 없지만 addressId는 있는 경우
+          const ordersNeedingAddress = tempOrders.filter((o: any) => o.addressId && !o.address);
+          
+          if (ordersNeedingAddress.length > 0) {
+            // 중복 주소 요청 방지
+            const uniqueAddressIds = Array.from(new Set(ordersNeedingAddress.map((o: any) => o.addressId)));
+            
+            await Promise.all(uniqueAddressIds.map(async (addressId) => {
+              try {
+                const addrRes = await fetch(`/api/addresses?id=${addressId}`);
+                const addrData = await addrRes.json();
+                
+                if (addrData.success) {
+                  const fetchedAddress = addrData.address || (addrData.addresses && addrData.addresses[0]);
+                  
+                  if (fetchedAddress) {
+                    setOrders((prevOrders: any) => prevOrders.map((o: any) => 
+                      o.addressId === addressId ? { ...o, address: fetchedAddress } : o
+                    ));
+                    setOriginalOrders((prevOrders: any) => prevOrders.map((o: any) => 
+                      o.addressId === addressId ? { ...o, address: fetchedAddress } : o
+                    ));
+                  }
+                }
+              } catch (err) {
+                console.error(`주소 정보 불러오기 실패 (ID: ${addressId}):`, err);
+              }
+            }));
+          }
         }
       } catch (error) {
         console.error("데이터 가져오기 실패:", error);
@@ -318,16 +352,20 @@ export default function OrderManagement() {
       if (res.ok) {
         alert("성공적으로 저장되었습니다!");
         setChangedOrderIds(new Set()); 
+        
+        // 데이터 다시 불러오기
         const updatedRes = await fetch('/api/admin/orders');
         const updatedData = await updatedRes.json();
+        
         if (updatedData.success) {
-          const formattedOrders = updatedData.orders.map((dbOrder: any) => ({
+          const tempOrders = updatedData.orders.map((dbOrder: any) => ({
             id: dbOrder.orderId, 
             date: new Date(dbOrder.registeredAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
             user: dbOrder.user?.name || '알 수 없음',
             address: dbOrder.addressId 
               ? (dbOrder.user?.addresses?.find((a: any) => a.id === dbOrder.addressId) || null)
               : null,
+            addressId: dbOrder.addressId,
             recipient: dbOrder.recipient || '',
             source: '기본구매처',
             product: dbOrder.productName,
@@ -341,8 +379,36 @@ export default function OrderManagement() {
             productRequest: dbOrder.productRequest || '-',
             serviceRequest: dbOrder.serviceRequest || '-'
           }));
-          setOrders(formattedOrders);
-          setOriginalOrders(formattedOrders);
+          
+          setOrders(tempOrders);
+          setOriginalOrders(tempOrders);
+          
+          // 저장 후 리로드할 때도 주소를 매칭합니다.
+          const ordersNeedingAddress = tempOrders.filter((o: any) => o.addressId && !o.address);
+          
+          if (ordersNeedingAddress.length > 0) {
+            const uniqueAddressIds = Array.from(new Set(ordersNeedingAddress.map((o: any) => o.addressId)));
+            await Promise.all(uniqueAddressIds.map(async (addressId) => {
+              try {
+                const addrRes = await fetch(`/api/addresses?id=${addressId}`);
+                const addrData = await addrRes.json();
+                
+                if (addrData.success) {
+                  const fetchedAddress = addrData.address || (addrData.addresses && addrData.addresses[0]);
+                  if (fetchedAddress) {
+                    setOrders((prevOrders: any) => prevOrders.map((o: any) => 
+                      o.addressId === addressId ? { ...o, address: fetchedAddress } : o
+                    ));
+                    setOriginalOrders((prevOrders: any) => prevOrders.map((o: any) => 
+                      o.addressId === addressId ? { ...o, address: fetchedAddress } : o
+                    ));
+                  }
+                }
+              } catch (err) {
+                console.error(`주소 정보 불러오기 실패 (ID: ${addressId}):`, err);
+              }
+            }));
+          }
         }
       } else {
         alert("저장에 실패했습니다.");
@@ -439,6 +505,22 @@ export default function OrderManagement() {
           <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#0f172a', margin: 0 }}>주문 관리</h1>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            {/* 🌟 Debug 버튼 추가 */}
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#334155',
+                color: '#fff',
+                borderRadius: '8px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                border: 'none',
+              }}
+            >
+              🛠️ 디버그 {showDebug ? '끄기' : '켜기'}
+            </button>
+
             <button 
               onClick={handleSaveChanges}
               disabled={changedOrderIds.size === 0 || isSaving}
@@ -770,6 +852,25 @@ export default function OrderManagement() {
               </tbody>
             </table>
           </div>
+          
+          {/* 🌟 [디버그용] 화면에서 데이터 직접 보기 (목록 하단) */}
+          {showDebug && (
+            <div style={{ marginTop: '30px', borderTop: '2px dashed #cbd5e1', paddingTop: '20px' }}>
+              <h3 style={{ fontSize: '16px', color: '#334155', marginBottom: '16px' }}>🛠️ 내부 데이터 상태 (디버그)</h3>
+              <div style={{ display: 'flex', gap: '20px', flexDirection: 'column' }}>
+                <pre style={{ backgroundColor: '#1e293b', color: '#a5b4fc', padding: '16px', borderRadius: '8px', overflowX: 'auto', fontSize: '12px', lineHeight: '1.5', margin: 0 }}>
+                  <strong style={{ color: '#fff' }}>[📦 렌더링 중인 orders 데이터]</strong>{"\n"}
+                  {JSON.stringify(renderedOrders, null, 2)}
+                </pre>
+                
+                <pre style={{ backgroundColor: '#1e293b', color: '#86efac', padding: '16px', borderRadius: '8px', overflowX: 'auto', fontSize: '12px', lineHeight: '1.5', margin: 0 }}>
+                  <strong style={{ color: '#fff' }}>[🔄 변경된 order IDs]</strong>{"\n"}
+                  {JSON.stringify(Array.from(changedOrderIds), null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
+          
         </div>
         </div>
       </main>

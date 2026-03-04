@@ -72,10 +72,19 @@ model Address {
   @@map("addresses")
 }
 
+enum OrderType {
+  DELIVERY // 배송대행
+  PURCHASE // 구매대행
+}
+
 model Order {
   id                  Int       @id @default(autoincrement())
   userId              Int       @map("user_id")
   user                User      @relation(fields: [userId], references: [id])
+
+  // 2. 주문 타입 필드 추가
+  // 기본값을 설정하고 싶다면 @default(PURCHASE) 처럼 추가할 수 있습니다.
+  type                OrderType @map("order_type")
 
   bundleId            String?   @map("bundle_id")
   orderId             String    @unique @map("order_id")
@@ -99,7 +108,6 @@ model Order {
 
   purchaseFee         Int       @default(0) @map("purchase_fee")
   domesticShippingFee Int       @default(0) @map("domestic_shipping_fee")
-  recipient           String?   @map("recipient")
   addressId           Int?      @map("address_id")
   secondPaymentAmount Int?      @map("second_payment_amount")
 

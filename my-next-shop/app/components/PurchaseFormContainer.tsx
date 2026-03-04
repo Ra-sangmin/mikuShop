@@ -38,7 +38,13 @@ const initialProduct: ProductForm = {
   image: undefined
 };
 
-export default function PurchaseFormContainer() {
+import { ORDER_TYPE, OrderType } from '@/src/types/order';
+
+interface Props {
+  type: OrderType;
+}
+
+export default function PurchaseFormContainer({ type }: Props) {
   const [products, setProducts] = useState<ProductForm[]>([{ ...initialProduct, name: '상품 정보 입력 1' }]);
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const { showAlert } = useMikuAlert();
@@ -111,6 +117,7 @@ export default function PurchaseFormContainer() {
   };
 
   const handleAddToCart = async () => {
+    // 1. 유효성 검사 (생략 없이 진행)
     for (let i = 0; i < products.length; i++) {
       const p = products[i];
       if (!p.url || !p.price || !p.quantity || !p.name) {
@@ -118,19 +125,27 @@ export default function PurchaseFormContainer() {
         return;
       }
     }
+
     const userId = localStorage.getItem('user_id');
     if (!userId) {
       showAlert("로그인이 필요한 서비스입니다.");
       return;
     }
+
     try {
       const promises = products.map(p => {
         const totalPrice = parseFloat(p.price) * (parseInt(p.quantity) || 1);
+
+        // 2. 전달받은 props인 type(ORDER_TYPE)에 따라 초기 상태 설정
+        // 구매대행이면 "장바구니", 배송대행이면 "상품 결제 완료" (또는 "접수대기")
+        const initialStatus = type === ORDER_TYPE.PURCHASE ? "장바구니" : "상품 결제 완료";
+
         return fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: userId,
+            type: type, // ✨ 서버로 ORDER_TYPE 전송 (DELIVERY 또는 PURCHASE)
             productName: p.name,
             productPrice: totalPrice,
             productUrl: p.url,
@@ -141,19 +156,30 @@ export default function PurchaseFormContainer() {
               ...(p.packingService === 'apply' ? ['포장 보완'] : [])
             ].join(', '),
             productRequest: p.request,
-            status: "장바구니"
+            status: initialStatus // ✨ 타입에 따른 유동적 상태값
           }),
         });
       });
+
       const responses = await Promise.all(promises);
       let allSuccess = true;
+
       for (let res of responses) {
         const data = await res.json();
         if (!data.success) allSuccess = false;
       }
+
       if (allSuccess) {
-        showAlert('🛒 모든 상품이 장바구니에 성공적으로 담겼습니다!');
-        router.push('/mypage/status?tab=장바구니');
+        const successMsg = type === ORDER_TYPE.PURCHASE 
+          ? '🛒 모든 상품이 장바구니에 담겼습니다!' 
+          : '🚀 배송 신청이 완료되었습니다!';
+        
+        showAlert(successMsg);
+
+        // 3. 이동할 페이지도 타입에 맞게 분기 처리
+        const redirectTab = type === ORDER_TYPE.PURCHASE ? "장바구니" : "상품 결제 완료";
+        router.push(`/mypage/status?tab=${redirectTab}`);
+        
       } else {
         showAlert(`일부 상품을 저장하는 중 오류가 발생했습니다.`);
       }
@@ -324,26 +350,30 @@ export default function PurchaseFormContainer() {
           <button className="premium-btn btn-dark" onClick={handleAddProductForm}>➕ 상품 추가</button>
         </div>
 
-        <div className="premium-card total-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '30px', background: '#f8fafc' }}>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>총 상품 금액</p>
-            <span style={{ fontSize: '24px', fontWeight: '800' }}>¥{totalJPY.toLocaleString()}</span>
+        
+        {/* type이 "purchase"인 경우에만 전체 요약 카드를 렌더링합니다 */}
+        {type === ORDER_TYPE.PURCHASE && (
+          <div className="premium-card total-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '30px', background: '#f8fafc' }}>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>총 상품 금액</p>
+              <span style={{ fontSize: '24px', fontWeight: '800' }}>¥{totalJPY.toLocaleString()}</span>
+            </div>
+            <div className="total-divider" style={{ fontSize: '20px', color: '#cbd5e1' }}>+</div>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>예상 수수료</p>
+              <span style={{ fontSize: '24px', fontWeight: '800' }}>¥0</span>
+            </div>
+            <div className="total-divider" style={{ fontSize: '20px', color: '#cbd5e1' }}>=</div>
+            <div className="final-summary" style={{ textAlign: 'center', padding: '15px 30px', background: '#fff', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+              <p style={{ fontSize: '13px', color: '#4f46e5', fontWeight: '700', marginBottom: '5px' }}>총 {products.length}개 결제 예상</p>
+              <div style={{ fontSize: '28px', fontWeight: '900' }}>¥{totalJPY.toLocaleString()}</div>
+              <div style={{ fontSize: '14px', color: '#ef4444', fontWeight: '700', marginTop: '5px' }}>약 {totalKRW.toLocaleString()}원</div>
+            </div>
           </div>
-          <div className="total-divider" style={{ fontSize: '20px', color: '#cbd5e1' }}>+</div>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>예상 수수료</p>
-            <span style={{ fontSize: '24px', fontWeight: '800' }}>¥0</span>
-          </div>
-          <div className="total-divider" style={{ fontSize: '20px', color: '#cbd5e1' }}>=</div>
-          <div className="final-summary" style={{ textAlign: 'center', padding: '15px 30px', background: '#fff', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-            <p style={{ fontSize: '13px', color: '#4f46e5', fontWeight: '700', marginBottom: '5px' }}>총 {products.length}개 결제 예상</p>
-            <div style={{ fontSize: '28px', fontWeight: '900' }}>¥{totalJPY.toLocaleString()}</div>
-            <div style={{ fontSize: '14px', color: '#ef4444', fontWeight: '700', marginTop: '5px' }}>약 {totalKRW.toLocaleString()}원</div>
-          </div>
-        </div>
+        )}
 
         <div className="bottom-btn-wrap" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '30px' }}>
-          <button className="premium-btn btn-primary" onClick={handleAddToCart}>🛍️ 장바구니 담기</button>
+          <button className="premium-btn btn-primary" onClick={handleAddToCart} style={type === ORDER_TYPE.PURCHASE ? { backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' } : {}}>🛍️ {type === ORDER_TYPE.PURCHASE ? "장바구니 담기" : "배송대행 신청"}</button>
         </div>
       </div>
     </>

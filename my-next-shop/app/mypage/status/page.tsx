@@ -30,15 +30,75 @@ function MyPurchaseStatusContent() {
   
   const exchangeRate = 9.05;
 
+  // 🌟 개별 포장 처리 함수 추가
+  const handleIndividualPacking = async (item: any) => {
+    // 1. 배송지 선택 여부 확인
+    if (!selectedAddress) {
+      return alert('하단 수취인 주소 리스트에서 배송지를 먼저 선택해주세요.');
+    }
+
+    // 2. 사용자 확인
+    if (confirm(`[${item.productName}]\n이 상품을 개별 포장(배송 준비) 처리하시겠습니까?\n(선택하신 배송지가 적용됩니다.)`)) {
+      
+      // 3. 업데이트 데이터 준비 (상태는 '배송 준비중', 주소는 선택된 주소 id)
+      const updates = [{
+        id: item.orderId,
+        status: '배송 준비중',
+        address_id: selectedAddress.id // 사용자가 선택한 주소 ID 업데이트
+      }];
+
+      try {
+        // 4. 기존 admin/orders API 호출 (handleUpdateStatus와 동일한 엔드포인트)
+        const res = await fetch('/api/admin/orders', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updates })
+        });
+
+        if (res.ok) {
+          alert('개별 포장 처리가 완료되었습니다.');
+          fetchOrders(); // 목록 새로고침
+        } else {
+          alert('처리에 실패했습니다.');
+        }
+      } catch (error) {
+        console.error('개별 포장 오류:', error);
+        alert('서버 통신 중 오류가 발생했습니다.');
+      }
+    }
+  };
+
   const fetchOrders = () => {
     const storedId = localStorage.getItem('user_id');
+    
     if (storedId) {
+      setIsLoading(true);
       fetch(`/api/users?id=${storedId}`)
         .then(res => res.json())
         .then(data => {
           if (data.success) {
+            // 1. 유저 정보 세팅
             setUserData(data.user);
-            setOrders(data.user.orders || []);
+            
+            // 2. 원본 주문 목록과 주소록 가져오기 (없을 경우 빈 배열로 안전하게 처리)
+            const rawOrders = data.user.orders || [];
+            const userAddresses = data.user.addresses || []; 
+            
+            // 🌟 3. 주문 데이터에 주소(address) 객체 매핑
+            const formattedOrders = rawOrders.map((order: any) => {
+              // 주문의 addressId와 일치하는 주소를 userAddresses 배열에서 찾음
+              const matchedAddress = order.addressId 
+                ? userAddresses.find((a: any) => String(a.id) === String(order.addressId)) 
+                : null;
+
+              return {
+                ...order,
+                address: matchedAddress || null // 찾은 주소 객체를 그대로 삽입 (없으면 null)
+              };
+            });
+
+            // 4. 주소가 포함된 완성된 주문 목록을 상태에 저장
+            setOrders(formattedOrders);
           }
         })
         .catch(err => console.error("데이터 로드 실패:", err))
@@ -284,7 +344,7 @@ function MyPurchaseStatusContent() {
         <div className="tab-group">{tabs.slice(5).map(renderTabItem)}</div>
       </div>
 
-      <OrderTable items={items} orders={orders} activeTab={activeTab} selectedItems={selectedItems} setSelectedItems={setSelectedItems} fetchOrders={fetchOrders} selectedAddress={selectedAddress} />
+      <OrderTable items={items} orders={orders} activeTab={activeTab} selectedItems={selectedItems} setSelectedItems={setSelectedItems} fetchOrders={fetchOrders} selectedAddress={selectedAddress} onIndividualPacking={handleIndividualPacking}/>
 
       {/* 입고완료: 합포장 버튼 & 주소 폼 */}
       {activeTab === '입고완료' && (

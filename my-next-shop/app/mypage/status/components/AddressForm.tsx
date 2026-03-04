@@ -2,7 +2,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import DaumPostcode from 'react-daum-postcode';
 
-// 🌟 props로 selectedAddress 와 setSelectedAddress 를 부모(page)로부터 내려받습니다.
 export default function AddressForm({ userData, selectedItems, fetchOrders, selectedAddress, setSelectedAddress }: any) {
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [isOpenPostcode, setIsOpenPostcode] = useState(false);
@@ -12,21 +11,24 @@ export default function AddressForm({ userData, selectedItems, fetchOrders, sele
     recipientName: '', recipientEnglishName: '', phone: '', zipCode: '', address: '', detailAddress: '', personalCustomsCode: '', isDefault: false
   });
 
-  const serverAddresses = userData?.addressList || userData?.addresses || userData?.shippingAddresses || userData?.deliveries || [];
+  // 🌟 1. 하드코딩된 가짜 데이터를 완전히 삭제했습니다! 오직 백엔드에서 준 실제 데이터만 씁니다.
+  const displayAddresses = userData?.addresses || userData?.addressList || userData?.shippingAddresses || userData?.deliveries || [];
 
-  const displayAddresses = serverAddresses.length > 0 ? serverAddresses : [
-    { id: '1', isDefault: true, name: '기본배송지', phone: '090', zipCode: '63534', address: '제주특별자치도 서귀포시 가가로 14 (상예동)', detailAddress: '기본 배송지' },
-    { id: '2', isDefault: false, name: '미쿠짱 테스트5', phone: '010 123 6', zipCode: '16435', address: '경기 수원시 팔달구 덕영대로 691-12 (화서동)', detailAddress: '우리집 3' },
-    { id: '3', isDefault: false, name: '미쿠짱 테스트', phone: '010', zipCode: '16435', address: '경기 수원시 팔달구 덕영대로 691-12 (화서동)', detailAddress: '우리집' }
-  ];
-
-  // 🌟 초기 렌더링 시 기본 배송지를 선택상태로 세팅
+  // 🌟 2. 주소록 데이터가 로드되면, 가장 첫 번째 주소(또는 기본 배송지)를 자동 선택합니다.
   useEffect(() => {
-    if (!selectedAddress && displayAddresses.length > 0) {
-      const defaultAddr = displayAddresses.find((a: any) => a.isDefault);
-      setSelectedAddress(defaultAddr ? defaultAddr : displayAddresses[0]);
+    if (displayAddresses.length > 0) {
+      // 이미 선택된 주소가 새 로그인 유저의 주소록에도 존재하는지 검증
+      const isSelectedValid = selectedAddress && displayAddresses.some((a: any) => a.id === selectedAddress.id);
+      
+      if (!isSelectedValid) {
+        const defaultAddr = displayAddresses.find((a: any) => a.isDefault);
+        setSelectedAddress(defaultAddr ? defaultAddr : displayAddresses[0]);
+      }
+    } else {
+      // 주소가 아예 없다면 선택 상태도 확실하게 초기화
+      setSelectedAddress(null);
     }
-  }, [displayAddresses, selectedAddress, setSelectedAddress]);
+  }, [userData, displayAddresses, selectedAddress, setSelectedAddress]);
 
   const handleCompletePostcode = (data: any) => {
     setAddressForm(prev => ({ ...prev, zipCode: data.zonecode, address: data.address, detailAddress: '' }));
@@ -39,7 +41,6 @@ export default function AddressForm({ userData, selectedItems, fetchOrders, sele
     setAddressForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
-  // 🌟 새 배송지를 내 배송지 목록(DB)에 저장만 하고, 선택 상태로 만듦 (주문 상태변경은 개별/합포장 버튼 누를 때 진행됨)
   const handleSubmitNewAddress = async () => {
     if (!addressForm.recipientName) return alert('수취인명(한글)을 입력해주세요.');
     if (!addressForm.phone) return alert('연락처를 입력해주세요.');
@@ -61,12 +62,11 @@ export default function AddressForm({ userData, selectedItems, fetchOrders, sele
       if (data.success) {
         alert('새 배송지가 목록에 저장되었습니다.\n(위에서 개별포장 또는 합포장 버튼을 누르면 이 배송지로 적용됩니다.)');
         
-        // 방금 만든 주소를 부모 컴포넌트의 선택된 상태로 올림
-        setSelectedAddress({ ...addressForm, id: data.address?.id || Date.now(), name: addressForm.recipientName });
+        setSelectedAddress({ ...addressForm, id: data.address?.id || Date.now(), recipientName: addressForm.recipientName });
         
         setShowAddressForm(false);
         setAddressForm({ recipientName: '', recipientEnglishName: '', phone: '', zipCode: '', address: '', detailAddress: '', personalCustomsCode: '', isDefault: false });
-        if (fetchOrders) fetchOrders(); 
+        if (fetchOrders) fetchOrders(); // 부모 컴포넌트 데이터 갱신
       } else {
         alert('배송지 저장에 실패했습니다.');
       }
@@ -76,7 +76,6 @@ export default function AddressForm({ userData, selectedItems, fetchOrders, sele
     }
   };
 
-  // 🌟 카드를 클릭하면 즉시 적용하지 않고 부모(page)의 선택상태만 변경!
   const handleSelectCard = (addr: any) => {
     setSelectedAddress(addr);
   };
@@ -146,7 +145,6 @@ export default function AddressForm({ userData, selectedItems, fetchOrders, sele
           background-color: #fffaf5; 
         }
 
-        /* 모달 인풋 공통 스타일 */
         .modal-input {
           width: 100%;
           padding: 14px;
@@ -182,9 +180,9 @@ export default function AddressForm({ userData, selectedItems, fetchOrders, sele
         </div>
 
         <div className="addr-list">
+          {/* 🌟 3. 주소가 있으면 출력, 없으면 '없음' 메시지 출력 */}
           {displayAddresses.length > 0 ? (
             displayAddresses.map((addr: any, idx: number) => {
-              // 🌟 현재 아이디와 부모가 들고있는 selectedAddress.id 비교
               const isSelected = selectedAddress?.id === addr.id;
               
               return (
@@ -219,17 +217,18 @@ export default function AddressForm({ userData, selectedItems, fetchOrders, sele
                       <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2px solid #cbd5e1' }}></div>
                     )}
                   </div>
-
                 </div>
               );
             })
           ) : (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>등록된 주소 정보가 없습니다.</div>
+            <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontWeight: '600' }}>
+              등록된 배송지가 없습니다. '새 배송지 추가' 버튼을 눌러 등록해주세요.
+            </div>
           )}
         </div>
       </div>
 
-      {/* 🌟 새 배송지 추가 팝업 (Modal) */}
+      {/* 새 배송지 추가 팝업 (Modal) */}
       {showAddressForm && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: '#fff', width: '100%', maxWidth: '450px', padding: '30px', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -282,7 +281,7 @@ export default function AddressForm({ userData, selectedItems, fetchOrders, sele
         </div>
       )}
 
-      {/* 우편번호 검색 팝업 (새 배송지 모달보다 더 위에 표시되도록 zIndex 3000 설정) */}
+      {/* 우편번호 검색 팝업 */}
       {isOpenPostcode && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#fff', borderRadius: '16px', overflow: 'hidden' }}>

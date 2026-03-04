@@ -8,6 +8,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { 
       userId, 
+      type,
       productName, // 클라이언트에서 넘어온 상품명
       productPrice, 
       productImageUrl, 
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
       data: {
         userId: parseInt(userId),
         orderId: orderId,
+        type: type,
         productName: finalTitle,
         productPrice: Math.round(productPrice),
         productImageUrl: productImageUrl || "",
