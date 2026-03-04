@@ -1,9 +1,11 @@
 "use client";
-import React, { useState, useRef } from 'react';
-import { useExchangeRate } from '../context/ExchangeRateContext';
-import { useCart } from '../context/CartContext';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useExchangeRate } from '@/app/context/ExchangeRateContext';
+import { useCart } from '@/app/context/CartContext';
 import { useRouter } from 'next/navigation';
-import { useMikuAlert } from '../context/MikuAlertContext';
+// 🌟 MikuAlertContext 임포트 경로 확인
+import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
+import { ORDER_TYPE, OrderType, ORDER_STATUS } from '@/src/types/order';
 
 // 상품 1개의 초기 데이터 구조 정의
 type ProductForm = {
@@ -12,6 +14,7 @@ type ProductForm = {
   name: string;
   price: string;
   quantity: string;
+  domesticShippingFee: string;
   option: string;
   request: string;
   photoService: string;
@@ -28,6 +31,7 @@ const initialProduct: ProductForm = {
   name: '',
   price: '',
   quantity: '1',
+  domesticShippingFee: '0', // 🌟 초기값 0
   option: '',
   request: '',
   photoService: 'none',
@@ -38,8 +42,6 @@ const initialProduct: ProductForm = {
   image: undefined
 };
 
-import { ORDER_TYPE, OrderType } from '@/src/types/order';
-
 interface Props {
   type: OrderType;
 }
@@ -47,10 +49,73 @@ interface Props {
 export default function PurchaseFormContainer({ type }: Props) {
   const [products, setProducts] = useState<ProductForm[]>([{ ...initialProduct, name: '상품 정보 입력 1' }]);
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const { showAlert } = useMikuAlert();
+  const { showAlert, showConfirm } = useMikuAlert(); 
   const { exchangeRate } = useExchangeRate();
-  const { addToCart } = useCart();
   const router = useRouter();
+
+  // 🌟 수수료 상태 관리 (초기값은 기본값으로 설정)
+  const [feeSettings, setFeeSettings] = useState({
+    TRANSFER: 450,
+    AGENCY: 100
+  });
+
+  // 🌟 2. DB에서 수수료 설정 불러오기
+  useEffect(() => {
+    const fetchFees = async () => {
+      try {
+        const res = await fetch('/api/fees');
+        const data = await res.json();
+        if (data.success && data.fees) {
+          const settings = data.fees.reduce((acc: any, fee: any) => {
+            acc[fee.feeType] = fee.amount;
+            return acc;
+          }, {});
+          setFeeSettings(prev => ({ ...prev, ...settings }));
+        }
+      } catch (err) {
+        console.error("수수료 데이터 로드 실패, 기본값 사용");
+      }
+    };
+    fetchFees();
+  }, []);
+
+  // 🌟 3. 실시간 금액 계산 로직 (useMemo로 최적화)
+  const { 
+    totalProductPrice, 
+    totalDomesticShipping, 
+    totalTransferFee, 
+    totalAgencyFee, 
+    totalFees, 
+    totalJPY, 
+    totalKRW 
+  } = useMemo(() => {
+    const itemCount = products.length;
+    
+    // 순수 상품가 합계 (가격 * 수량)
+    const productPriceSum = products.reduce((sum, p) => 
+      sum + ((parseFloat(p.price) || 0) * (parseInt(p.quantity) || 0)), 0);
+    
+    // 일본내 배송료 합계
+    const shippingSum = products.reduce((sum, p) => 
+      sum + (parseFloat(p.domesticShippingFee) || 0), 0);
+
+    // 수수료 계산 (DB 설정값 * 상품 개수)
+    const transferSum = itemCount * feeSettings.TRANSFER;
+    const agencySum = itemCount * feeSettings.AGENCY;
+    
+    const feesSum = shippingSum + transferSum + agencySum;
+    const jpySum = productPriceSum + feesSum;
+
+    return {
+      totalProductPrice: productPriceSum,
+      totalDomesticShipping: shippingSum,
+      totalTransferFee: transferSum,
+      totalAgencyFee: agencySum,
+      totalFees: feesSum,
+      totalJPY: jpySum,
+      totalKRW: Math.floor(jpySum * exchangeRate)
+    };
+  }, [products, feeSettings, exchangeRate]);
 
   const updateProduct = (index: number, field: keyof ProductForm, value: any) => {
     setProducts(prev => {
@@ -108,7 +173,7 @@ export default function PurchaseFormContainer({ type }: Props) {
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (data.success) updateProduct(index, 'image', data.url);
-      else showAlert('이미지 업로드에 실패했습니다.');
+      else showAlert('이미지 업로드에 실패했습니다.', 'error');
     } catch (error) {
       console.error("Image Upload Error:", error);
     } finally {
@@ -116,80 +181,85 @@ export default function PurchaseFormContainer({ type }: Props) {
     }
   };
 
+  // 🌟 async 함수로 명확하게 정의
   const handleAddToCart = async () => {
-    // 1. 유효성 검사 (생략 없이 진행)
+    // 1. 유효성 검사
     for (let i = 0; i < products.length; i++) {
       const p = products[i];
-      if (!p.url || !p.price || !p.quantity || !p.name) {
-        showAlert(`${i + 1}번째 상품의 필수 정보를 입력해주세요.`);
+      const prefix = `${i + 1}번째 상품의`;
+
+      if (!p.url) {
+        showAlert(`${prefix} URL을 입력해주세요.`);
+        return;
+      }
+
+      if (!p.price || parseFloat(p.price) <= 0) {
+        showAlert(`${prefix} 가격을 정확히 입력해주세요.`);
+        return;
+      }
+      if (!p.quantity || parseInt(p.quantity) <= 0) {
+        showAlert(`${prefix} 수량을 입력해주세요.`);
         return;
       }
     }
 
     const userId = localStorage.getItem('user_id');
     if (!userId) {
-      showAlert("로그인이 필요한 서비스입니다.");
+      showAlert("로그인이 필요한 서비스입니다.", 'error');
       return;
     }
 
+    // 🌟 2. Miku 스타일의 showConfirm 적용 및 await 필수
+    const confirmMsg = type === ORDER_TYPE.PURCHASE 
+      ? `총 ${products.length}개의 상품을 장바구니에 담으시겠습니까?`
+      : `총 ${products.length}개의 상품에 대해 배송 신청을 하시겠습니까?`;
+
     try {
+      const isConfirmed = await showConfirm(confirmMsg);
+      if (!isConfirmed) return; // '취소' 클릭 시 중단
+
+      // 3. 주문 생성 로직
       const promises = products.map(p => {
         const totalPrice = parseFloat(p.price) * (parseInt(p.quantity) || 1);
-
-        // 2. 전달받은 props인 type(ORDER_TYPE)에 따라 초기 상태 설정
-        // 구매대행이면 "장바구니", 배송대행이면 "상품 결제 완료" (또는 "접수대기")
-        const initialStatus = type === ORDER_TYPE.PURCHASE ? "장바구니" : "상품 결제 완료";
+        const initialStatus = type === ORDER_TYPE.PURCHASE ? ORDER_STATUS.CART : ORDER_STATUS.PAID;
 
         return fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: userId,
-            type: type, // ✨ 서버로 ORDER_TYPE 전송 (DELIVERY 또는 PURCHASE)
+            type: type,
             productName: p.name,
             productPrice: totalPrice,
             productUrl: p.url,
             productOption: p.option,
             productImageUrl: p.image,
+            domesticShippingFee: Number(p.domesticShippingFee) || 0, // 🌟 추가: 배송료 데이터
             serviceRequest: [
               ...(p.photoService === 'apply' ? ['사진 검수'] : []),
               ...(p.packingService === 'apply' ? ['포장 보완'] : [])
             ].join(', '),
             productRequest: p.request,
-            status: initialStatus // ✨ 타입에 따른 유동적 상태값
+            status: initialStatus 
           }),
         });
       });
 
       const responses = await Promise.all(promises);
-      let allSuccess = true;
-
-      for (let res of responses) {
-        const data = await res.json();
-        if (!data.success) allSuccess = false;
-      }
+      let allSuccess = responses.every(async (res) => (await res.json()).success);
 
       if (allSuccess) {
-        const successMsg = type === ORDER_TYPE.PURCHASE 
-          ? '🛒 모든 상품이 장바구니에 담겼습니다!' 
-          : '🚀 배송 신청이 완료되었습니다!';
-        
-        showAlert(successMsg);
-
-        // 3. 이동할 페이지도 타입에 맞게 분기 처리
-        const redirectTab = type === ORDER_TYPE.PURCHASE ? "장바구니" : "상품 결제 완료";
-        router.push(`/mypage/status?tab=${redirectTab}`);
-        
+        showAlert(type === ORDER_TYPE.PURCHASE ? '🛒 모든 상품이 장바구니에 담겼습니다!' : '🚀 배송 신청이 완료되었습니다!', 'success');
+        setTimeout(() => router.push(`/mypage/status?tab=${type === ORDER_TYPE.PURCHASE ? ORDER_STATUS.CART : ORDER_STATUS.PAID}`), 1500);
       } else {
-        showAlert(`일부 상품을 저장하는 중 오류가 발생했습니다.`);
+        showAlert(`일부 상품 저장 중 오류가 발생했습니다.`, 'error');
       }
+
     } catch (error) {
-      showAlert("서버 통신 중 오류가 발생했습니다.");
+      console.error("Add to cart error:", error);
+      showAlert("서버 통신 중 오류가 발생했습니다.", 'error');
     }
   };
-
-  const totalJPY = products.reduce((sum, p) => sum + ((parseFloat(p.price) || 0) * (parseInt(p.quantity) || 0)), 0);
-  const totalKRW = Math.floor(totalJPY * exchangeRate);
 
   return (
     <>
@@ -201,28 +271,11 @@ export default function PurchaseFormContainer({ type }: Props) {
         .premium-btn { padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; border: none; }
         .btn-dark { background: #1f2937; color: #fff; }
         .btn-primary { background: #6366f1; color: #fff; width: 100%; max-width: 300px; }
-        
-        /* ✨ 개선된 서비스 박스 스타일 */
-        .service-box { 
-          border: 1px solid #e5e7eb; 
-          padding: 14px; 
-          border-radius: 10px; 
-          cursor: pointer; 
-          display: flex; 
-          align-items: center; 
-          gap: 12px; 
-          transition: all 0.2s ease; 
-          background-color: #fff;
-        }
+        .service-box { border: 1px solid #e5e7eb; padding: 14px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: all 0.2s ease; background-color: #fff; }
         .service-box:hover { border-color: #a5b4fc; background-color: #f8fafc; }
         .service-box.active { border-color: #6366f1; background-color: #eef2ff; }
-
-        .custom-checkbox {
-          width: 20px; height: 20px; border: 2px solid #d1d5db; border-radius: 5px;
-          display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s ease;
-        }
+        .custom-checkbox { width: 20px; height: 20px; border: 2px solid #d1d5db; border-radius: 5px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s ease; }
         .service-box.active .custom-checkbox { background-color: #6366f1; border-color: #6366f1; }
-
         @media (max-width: 768px) {
           .premium-container { padding: 15px 10px !important; }
           .product-card-inner { flex-direction: column !important; gap: 20px !important; padding: 20px !important; }
@@ -233,7 +286,6 @@ export default function PurchaseFormContainer({ type }: Props) {
           .total-divider { display: none; }
           .final-summary { width: 100% !important; }
         }
-
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
 
@@ -292,11 +344,27 @@ export default function PurchaseFormContainer({ type }: Props) {
                     {product.isAutoFetching && <span style={{ fontSize: '11px', color: '#6366f1', fontWeight: '700' }}>정보 수집 중...</span>}
                   </div>
 
-                  <Label required>가격(¥)</Label>
+                  <Label required>상품 가격(¥)</Label>
                   <input type="text" placeholder="0" className="premium-input" value={product.price} onChange={(e) => updateProduct(index, 'price', e.target.value.replace(/[^0-9.]/g, ''))} />
 
                   <Label required>수량</Label>
                   <input type="text" className="premium-input" value={product.quantity} onChange={(e) => updateProduct(index, 'quantity', e.target.value.replace(/[^0-9]/g, ''))} />
+
+                  {/* 🌟 구매대행(PURCHASE)일 때만 '일본내 배송료' 항목 노출 */}
+                  {type === ORDER_TYPE.PURCHASE && (
+                    <>
+                      <Label>일본내 배송료</Label>
+                      <div style={{ gridColumn: 'span 3' }}>
+                        <input 
+                          type="text" 
+                          placeholder="일본 현지 배송비 ( 필수 항목 아님 , 없으면 0) " 
+                          className="premium-input" 
+                          value={product.domesticShippingFee} 
+                          onChange={(e) => updateProduct(index, 'domesticShippingFee', e.target.value.replace(/[^0-9.]/g, ''))} 
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <Label>옵션</Label>
                   <div style={{ gridColumn: 'span 3' }}><input type="text" placeholder="색상, 사이즈 등" className="premium-input" value={product.option} onChange={(e) => updateProduct(index, 'option', e.target.value)} /></div>
@@ -305,10 +373,7 @@ export default function PurchaseFormContainer({ type }: Props) {
                   <div style={{ gridColumn: 'span 3' }}><input type="text" placeholder="포장 등 요청사항" className="premium-input" value={product.request} onChange={(e) => updateProduct(index, 'request', e.target.value)} /></div>
                 </div>
 
-                {/* ✨ 개선된 서비스 옵션 영역 */}
                 <div className="service-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  
-                  {/* 사진 검수 */}
                   <div 
                     className={`service-box ${product.photoService === 'apply' ? 'active' : ''}`} 
                     onClick={() => updateProduct(index, 'photoService', product.photoService === 'none' ? 'apply' : 'none')}
@@ -324,7 +389,6 @@ export default function PurchaseFormContainer({ type }: Props) {
                     </div>
                   </div>
 
-                  {/* 포장 보완 */}
                   <div 
                     className={`service-box ${product.packingService === 'apply' ? 'active' : ''}`} 
                     onClick={() => updateProduct(index, 'packingService', product.packingService === 'none' ? 'apply' : 'none')}
@@ -339,7 +403,6 @@ export default function PurchaseFormContainer({ type }: Props) {
                       <div style={{ fontSize: '11px', color: '#6b7280' }}>안전한 재포장</div>
                     </div>
                   </div>
-
                 </div>
               </div>
             </div>
@@ -350,30 +413,81 @@ export default function PurchaseFormContainer({ type }: Props) {
           <button className="premium-btn btn-dark" onClick={handleAddProductForm}>➕ 상품 추가</button>
         </div>
 
-        
-        {/* type이 "purchase"인 경우에만 전체 요약 카드를 렌더링합니다 */}
         {type === ORDER_TYPE.PURCHASE && (
-          <div className="premium-card total-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '30px', background: '#f8fafc' }}>
-            <div style={{ textAlign: 'center' }}>
+          <div className="premium-card total-card" style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between', // 🌟 요소들 사이에 동일한 간격 부여
+            padding: '30px', 
+            background: '#f8fafc',
+            flexWrap: 'wrap', // 모바일 대응용 줄바꿈 유지
+            gap: '15px'
+          }}>
+            {/* 1. 총 상품 금액 */}
+            <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
               <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>총 상품 금액</p>
-              <span style={{ fontSize: '24px', fontWeight: '800' }}>¥{totalJPY.toLocaleString()}</span>
+              <span style={{ fontSize: '18px', fontWeight: '800' }}>¥{totalProductPrice.toLocaleString()}</span>
             </div>
-            <div className="total-divider" style={{ fontSize: '20px', color: '#cbd5e1' }}>+</div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>예상 수수료</p>
-              <span style={{ fontSize: '24px', fontWeight: '800' }}>¥0</span>
+
+            <div style={{ fontSize: '18px', color: '#cbd5e1' }}>+</div>
+
+            {/* 2. 일본내 배송료 */}
+            <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
+              <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>일본내 배송료</p>
+              <span style={{ fontSize: '18px', fontWeight: '800' }}>¥{totalDomesticShipping.toLocaleString()}</span>
             </div>
-            <div className="total-divider" style={{ fontSize: '20px', color: '#cbd5e1' }}>=</div>
-            <div className="final-summary" style={{ textAlign: 'center', padding: '15px 30px', background: '#fff', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-              <p style={{ fontSize: '13px', color: '#4f46e5', fontWeight: '700', marginBottom: '5px' }}>총 {products.length}개 결제 예상</p>
-              <div style={{ fontSize: '28px', fontWeight: '900' }}>¥{totalJPY.toLocaleString()}</div>
-              <div style={{ fontSize: '14px', color: '#ef4444', fontWeight: '700', marginTop: '5px' }}>약 {totalKRW.toLocaleString()}원</div>
+
+            <div style={{ fontSize: '18px', color: '#cbd5e1' }}>+</div>
+
+            {/* 3. 송금 수수료 */}
+            <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
+              <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>송금 수수료</p>
+              <span style={{ fontSize: '18px', fontWeight: '800' }}>¥{totalTransferFee.toLocaleString()}</span>
+            </div>
+
+            <div style={{ fontSize: '18px', color: '#cbd5e1' }}>+</div>
+
+            {/* 4. 대행 수수료 */}
+            <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
+              <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>대행 수수료</p>
+              <span style={{ fontSize: '18px', fontWeight: '800' }}>¥{totalAgencyFee.toLocaleString()}</span>
+            </div>
+
+            <div style={{ fontSize: '18px', color: '#cbd5e1' }}>=</div>
+
+            {/* 🌟 5. 최종 결과 박스 (정렬 보정) */}
+            <div className="final-summary" style={{ 
+              textAlign: 'center', 
+              padding: '20px 30px', 
+              background: '#fff', 
+              borderRadius: '16px', 
+              boxShadow: '0 10px 25px rgba(0,0,0,0.08)',
+              minWidth: '200px',
+              border: '2px solid #6366f1', // 포인트 컬러 추가로 강조
+              // 🌟 핵심: 줄바꿈 시에도 오른쪽 정렬을 유지하거나 항목이 많을 때 가운데 오도록 설정
+              marginLeft: 'auto' 
+            }}>
+              <p style={{ fontSize: '13px', color: '#4f46e5', fontWeight: '800', marginBottom: '5px' }}>
+                총 {products.length}개 결제 예상
+              </p>
+              <div style={{ fontSize: '32px', fontWeight: '900', color: '#111827' }}>
+                ¥{totalJPY.toLocaleString()}
+              </div>
+              <div style={{ fontSize: '15px', color: '#ef4444', fontWeight: '800', marginTop: '5px' }}>
+                약 {totalKRW.toLocaleString()}원
+              </div>
             </div>
           </div>
         )}
 
         <div className="bottom-btn-wrap" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '30px' }}>
-          <button className="premium-btn btn-primary" onClick={handleAddToCart} style={type === ORDER_TYPE.PURCHASE ? { backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' } : {}}>🛍️ {type === ORDER_TYPE.PURCHASE ? "장바구니 담기" : "배송대행 신청"}</button>
+          <button 
+            className="premium-btn btn-primary" 
+            onClick={handleAddToCart} 
+            style={type === ORDER_TYPE.PURCHASE ? { backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' } : {}}
+          >
+            🛍️ {type === ORDER_TYPE.PURCHASE ? "장바구니 담기" : "배송대행 신청"}
+          </button>
         </div>
       </div>
     </>

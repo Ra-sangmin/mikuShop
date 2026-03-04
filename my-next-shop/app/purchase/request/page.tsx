@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
-import GuideLayout from '../../components/GuideLayout';
-import PurchaseFormContainer from '../../components/PurchaseFormContainer';
+import GuideLayout from '@/app/components/GuideLayout';
+import PurchaseFormContainer from '@/app/components/PurchaseFormContainer';
 
 import { ORDER_TYPE, OrderType } from '@/src/types/order';
 

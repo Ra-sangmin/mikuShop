@@ -2,12 +2,22 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminSidebar from '@/app/components/AdminSidebar';
+// 🌟 글로벌 상수 및 라벨 임포트
+import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
 
-const statusOptions = ['장바구니', '구매실패', '상품 결제 완료', '입고대기', '입고완료', '배송 준비중', '배송비 요청', '배송비 결제 완료', '국제배송'];
+// 🌟 Enum 키를 기반으로 옵션 생성
+const statusOptions = Object.keys(ORDER_STATUS).filter(key => key !== 'ALL') as OrderStatus[];
 
+// 🌟 가중치 로직도 Enum 키 기준으로 변경
 const statusWeight: Record<string, number> = {
-  '장바구니': 1, '구매실패': 99, '상품 결제 완료': 2, '입고대기': 3, '입고완료': 4,
-  '배송 준비중': 5, '배송비 요청': 6, '배송비 결제 완료': 7, '국제배송': 8
+  [ORDER_STATUS.CART]: 1,
+  [ORDER_STATUS.FAILED]: 99,
+  [ORDER_STATUS.PAID]: 2,
+  [ORDER_STATUS.ARRIVED]: 4,
+  [ORDER_STATUS.PREPARING]: 5,
+  [ORDER_STATUS.PAYMENT_REQ]: 6,
+  [ORDER_STATUS.PAYMENT_DONE]: 7,
+  [ORDER_STATUS.SHIPPING]: 8
 };
 
 export default function OrderManagement() {
@@ -33,6 +43,17 @@ export default function OrderManagement() {
     manage: 150
   });
 
+  const [orders, setOrders] = useState<any[]>([]);
+  const [originalOrders, setOriginalOrders] = useState<any[]>([]); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [changedOrderIds, setChangedOrderIds] = useState<Set<string>>(new Set());
+  const [isSaving, setIsSaving] = useState(false);
+  // 🌟 Debug 패널 표시 상태
+  const [showDebug, setShowDebug] = useState(false);
+
+  // 🌟 엑셀 방식 리사이징: 오직 조절하려는 컬럼의 상태만 저장
+  const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+
   // 로컬 스토리지에서 너비 불러오기
   useEffect(() => {
     const isEnabled = localStorage.getItem('admin_persist_column_widths') !== 'false';
@@ -55,13 +76,10 @@ export default function OrderManagement() {
     }
   };
 
-  // 🌟 엑셀 방식 리사이징: 오직 조절하려는 컬럼의 상태만 저장
-  const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
-
   // 현재 화면에 보이는 컬럼들의 순서를 배열로 반환
   const getVisibleColumns = () => {
     const cols = ['date', 'user', 'address']; // address 추가
-    if (statusFilter === '입고완료') cols.push('packing');
+    if (statusFilter === ORDER_STATUS.ARRIVED) cols.push('packing');
     cols.push('product', 'request', 'price', 'status', 'manage');
     return cols;
   };
@@ -119,16 +137,6 @@ export default function OrderManagement() {
     document.body.style.userSelect = 'auto';
   };
 
-  const [orders, setOrders] = useState<any[]>([]);
-  const [originalOrders, setOriginalOrders] = useState<any[]>([]); 
-  const [isLoading, setIsLoading] = useState(true);
-  
-  const [changedOrderIds, setChangedOrderIds] = useState<Set<string>>(new Set());
-  const [isSaving, setIsSaving] = useState(false);
-
-  // 🌟 Debug 패널 표시 상태
-  const [showDebug, setShowDebug] = useState(false);
-
   useEffect(() => {
     const storedName = localStorage.getItem('admin_name');
     if (!localStorage.getItem('admin_id')) {
@@ -147,10 +155,7 @@ export default function OrderManagement() {
             id: dbOrder.orderId, 
             date: new Date(dbOrder.registeredAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
             user: dbOrder.user?.name || '알 수 없음',
-            // 🌟 수취인 주소 정보 매칭 로직을 남겨두고, addressId도 보관
-            address: dbOrder.addressId 
-              ? (dbOrder.user?.addresses?.find((a: any) => a.id === dbOrder.addressId) || null)
-              : null,
+            address: dbOrder.addressId ? (dbOrder.user?.addresses?.find((a: any) => a.id === dbOrder.addressId) || null) : null,
             addressId: dbOrder.addressId, 
             recipient: dbOrder.recipient || '',
             source: '기본구매처',
@@ -166,7 +171,6 @@ export default function OrderManagement() {
             serviceRequest: dbOrder.serviceRequest || '-',
             bundleId: dbOrder.bundleId || ''
           }));
-
           setOrders(tempOrders);
           setOriginalOrders(tempOrders);
 
@@ -214,7 +218,8 @@ export default function OrderManagement() {
     const currentOrder = orders.find(o => o.id === orderId);
     if (!currentOrder) return;
 
-    if (newStatus === '배송비 요청' && currentOrder.bundleId) {
+    // 🌟 '배송비 요청' -> ORDER_STATUS.PAYMENT_REQ
+    if (newStatus === ORDER_STATUS.PAYMENT_REQ && currentOrder.bundleId) {
       const bundleItems = orders.filter(o => o.bundleId === currentOrder.bundleId);
       const originalAmount = bundleItems.reduce((sum, o) => sum + (o.secondPaymentAmount || 0), 0);
       
@@ -243,7 +248,8 @@ export default function OrderManagement() {
       return;
     }
 
-    if (newStatus === '배송 준비중' && currentOrder.bundleId) {
+    // 🌟 '배송 준비중' -> ORDER_STATUS.PREPARING
+    if (newStatus === ORDER_STATUS.PREPARING && currentOrder.bundleId) {
       const bundleItems = orders.filter(o => o.bundleId === currentOrder.bundleId);
       
       setOrders(orders.map(order => {
@@ -265,8 +271,8 @@ export default function OrderManagement() {
       return;
     }
 
-    if (newStatus === '배송비 요청') {
-      if (currentOrder.status === '배송 준비중') {
+    if (newStatus === ORDER_STATUS.PAYMENT_REQ) {
+      if (currentOrder.status === ORDER_STATUS.PREPARING) {
         const amount = prompt("2차 결제 금액(₩)을 입력해주세요:", currentOrder.secondPaymentAmount.toString());
         if (amount === null) return;
 
@@ -284,7 +290,7 @@ export default function OrderManagement() {
       }
     }
 
-    if (newStatus === '국제배송') {
+    if (newStatus === ORDER_STATUS.SHIPPING) {
       const trackingNo = prompt("송장번호를 입력해주세요:", currentOrder.trackingNo || '');
       if (trackingNo === null) return;
 
@@ -430,17 +436,17 @@ export default function OrderManagement() {
     setSortConfig({ key, direction });
   };
 
+  // 🌟 상태별 색상 로직 수정 (Enum 키 기준)
   const getStatusColor = (status: string) => {
     switch(status) {
-      case '장바구니': return { bg: '#f8fafc', text: '#64748b', border: '#cbd5e1' };
-      case '구매실패': return { bg: '#fef2f2', text: '#ef4444', border: '#fca5a5' };
-      case '상품 결제 완료': return { bg: '#eff6ff', text: '#3b82f6', border: '#93c5fd' };
-      case '입고대기': return { bg: '#fffbeb', text: '#f59e0b', border: '#fcd34d' };
-      case '입고완료': return { bg: '#f0fdf4', text: '#22c55e', border: '#86efac' };
-      case '배송 준비중': return { bg: '#f5f3ff', text: '#8b5cf6', border: '#c4b5fd' };
-      case '배송비 요청': return { bg: '#fff7ed', text: '#ea580c', border: '#fdba74' };
-      case '배송비 결제 완료': return { bg: '#f0fdfa', text: '#0d9488', border: '#5eead4' };
-      case '국제배송': return { bg: '#eef2ff', text: '#4f46e5', border: '#a5b4fc' };
+      case ORDER_STATUS.CART: return { bg: '#f8fafc', text: '#64748b', border: '#cbd5e1' };
+      case ORDER_STATUS.FAILED: return { bg: '#fef2f2', text: '#ef4444', border: '#fca5a5' };
+      case ORDER_STATUS.PAID: return { bg: '#eff6ff', text: '#3b82f6', border: '#93c5fd' };
+      case ORDER_STATUS.ARRIVED: return { bg: '#f0fdf4', text: '#22c55e', border: '#86efac' };
+      case ORDER_STATUS.PREPARING: return { bg: '#f5f3ff', text: '#8b5cf6', border: '#c4b5fd' };
+      case ORDER_STATUS.PAYMENT_REQ: return { bg: '#fff7ed', text: '#ea580c', border: '#fdba74' };
+      case ORDER_STATUS.PAYMENT_DONE: return { bg: '#f0fdfa', text: '#0d9488', border: '#5eead4' };
+      case ORDER_STATUS.SHIPPING: return { bg: '#eef2ff', text: '#4f46e5', border: '#a5b4fc' };
       default: return { bg: '#f8fafc', text: '#64748b', border: '#cbd5e1' };
     }
   };
@@ -449,12 +455,12 @@ export default function OrderManagement() {
     let result = [...orders];
 
     if (statusFilter === '전체') {
-      const excludeStatuses = ['장바구니', '구매실패', '국제배송', '국내통관중', '국내배송중', '배송완료'];
+      const excludeStatuses = [ORDER_STATUS.CART, ORDER_STATUS.FAILED, ORDER_STATUS.SHIPPING,'국내통관중', '국내배송중', '배송완료'];
       result = result.filter(order => 
         !excludeStatuses.includes(order.status) || changedOrderIds.has(order.id)
       );
-    } else if (statusFilter === '국제배송') {
-      const shippingStatuses = ['국제배송', '국내통관중', '국내배송중', '배송완료'];
+    } else if (statusFilter === ORDER_STATUS.SHIPPING) {
+      const shippingStatuses = [ORDER_STATUS.SHIPPING, '국내통관중', '국내배송중', '배송완료'];
       result = result.filter(order => 
         shippingStatuses.includes(order.status) || changedOrderIds.has(order.id)
       );
@@ -559,8 +565,11 @@ export default function OrderManagement() {
                       style={{ padding: '10px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', backgroundColor: '#f8fafc', color: '#334155' }}
                     >
                       <option value="전체">전체 상태 ( 장바구니, 구매실패, 국제배송 제외 )</option>
-                      {statusOptions.map(status => (
-                        <option key={status} value={status}>{status}</option>
+                      {/* 상단 상태 필터 부분 */}
+                      {statusOptions.map(key => (
+                        <option key={key} value={key}>
+                          {ORDER_STATUS_LABEL[key]}  {/* 🌟 'CART' -> '장바구니'로 출력 */}
+                        </option>
                       ))}
                     </select>
                     <input 
@@ -579,7 +588,7 @@ export default function OrderManagement() {
               <colgroup>
                 <col style={{ width: columnWidths.date }} />
                 <col style={{ width: columnWidths.user }} />
-                {statusFilter === '입고완료' && <col style={{ width: columnWidths.packing }} />}
+                {statusFilter === ORDER_STATUS.ARRIVED && <col style={{ width: columnWidths.packing }} />}
                 <col style={{ width: columnWidths.product }} />
                 <col style={{ width: columnWidths.request }} />
                 <col style={{ width: columnWidths.price }} />
@@ -619,7 +628,7 @@ export default function OrderManagement() {
                     <div onMouseDown={(e) => onMouseDown('address', 'right', e)} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} onMouseOver={(e) => e.currentTarget.style.borderRight = '3px solid #3b82f6'} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
                   </th>
                   
-                  {statusFilter === '입고완료' && (
+                  {statusFilter === ORDER_STATUS.ARRIVED && (
                     <th style={{ padding: '16px 12px', textAlign: 'center', position: 'relative', borderRight: '1px solid #e2e8f0' }}>
                       <div onMouseDown={(e) => onMouseDown('packing', 'left', e)} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10 }} onMouseOver={(e) => e.currentTarget.style.borderLeft = '3px solid #3b82f6'} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
                       포장
@@ -675,7 +684,7 @@ export default function OrderManagement() {
                 {renderedOrders.map((order) => {
                   const colors = getStatusColor(order.status);
                   const isChanged = changedOrderIds.has(order.id);
-                  const originalStatus = originalOrders.find(o => o.id === order.id)?.status;
+                  const originalStatus = originalOrders.find(o => o.id === order.id)?.status as OrderStatus;
 
                   return (
                     <tr key={order.id} style={{ 
@@ -714,7 +723,7 @@ export default function OrderManagement() {
                           </div>
                         )}
                       </td>
-                      {statusFilter === '입고완료' && (
+                      {statusFilter === ORDER_STATUS.ARRIVED && (
                         <td style={{ padding: '16px 12px', textAlign: 'center', borderRight: '1px solid #f1f5f9' }}>
                           <button
                             onClick={async () => {
@@ -779,7 +788,7 @@ export default function OrderManagement() {
                         {(isChanged && originalStatus !== order.status) && (
                           <div style={{ fontSize: '11px', color: '#ef4444', marginBottom: '6px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                             <span style={{ color: '#94a3b8', textDecoration: 'line-through' }}>
-                              {originalStatus}
+                              {ORDER_STATUS_LABEL[originalStatus]}
                             </span>
                             <span>➔</span>
                           </div>
@@ -804,12 +813,12 @@ export default function OrderManagement() {
                         >
                           {statusOptions.map(status => (
                             <option key={status} value={status} style={{ backgroundColor: '#fff', color: '#0f172a' }}>
-                              {status}
+                              {ORDER_STATUS_LABEL[status]}
                             </option>
                           ))}
                         </select>
 
-                        {order.status === '배송비 요청' && (
+                        {order.status === ORDER_STATUS.PAYMENT_REQ && (
                           <div style={{ marginTop: '10px' }}>
                             <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px', fontWeight: '600' }}>2차 결제금액(₩)</div>
                             <input 

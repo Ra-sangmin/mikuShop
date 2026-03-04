@@ -5,10 +5,33 @@ import prisma from '@/lib/prisma';
 export async function GET() {
   try {
     const orders = await prisma.order.findMany({
-      include: {
+      // 🌟 모든 필요한 필드를 명시적으로 지정하여 누락을 방지합니다.
+      select: {
+        id: true,
+        userId: true,
+        type: true,
+        bundleId: true,
+        orderId: true,
+        productId: true,
+        trackingNo: true,
+        productImageUrl: true,
+        productPrice: true,
+        productName: true,
+        productUrl: true,
+        productOption: true,
+        productRequest: true,
+        registeredAt: true,
+        receivedAt: true,
+        shippedAt: true,
+        serviceRequest: true,
+        status: true,
+        deliveryStatus: true,
+        purchaseFee: true,
+        domesticShippingFee: true, 
+        addressId: true,
+        secondPaymentAmount: true,
         user: {
           include: {
-            // @ts-ignore
             addresses: true 
           }
         },
@@ -16,7 +39,7 @@ export async function GET() {
       orderBy: {
         registeredAt: 'desc', 
       }
-    }); 
+    });
 
     return NextResponse.json({ success: true, orders });
   } catch (error: any) {

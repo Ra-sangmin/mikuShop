@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 // 아까 만든 데이터 파일을 불러옵니다. 경로가 다르면 수정해주세요.
-import { DELIVERY_FEE_DATA } from '../lib/shippingData'; 
-import { useExchangeRate } from '../context/ExchangeRateContext';
+import { DELIVERY_FEE_DATA } from '@/lib/shippingData'; 
+import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 
 export default function DeliveryInfoPage() {
   const router = useRouter();

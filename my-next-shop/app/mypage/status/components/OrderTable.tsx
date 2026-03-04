@@ -1,6 +1,8 @@
 "use client";
 import React, { useState, useEffect, useMemo } from 'react';
-import { useMikuAlert } from '../../../context/MikuAlertContext';
+import { useMikuAlert } from '@/app/context/MikuAlertContext';
+// 🌟 주문 상태 상수 및 라벨 임포트
+import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
 
 export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress , onIndividualPacking }: any) {
   const [expandedRows, setExpandedRows] = useState<string[]>([]);
@@ -15,7 +17,13 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
 
   const handleSortClick = () => setStatusSort(prev => prev === 'asc' ? 'desc' : 'asc');
 
-  const showBundleAndRecipientTabs = ['배송 준비중', '배송비 요청', '배송비 결제 완료', '국제배송'];
+  // 🌟 비교 로직을 Enum 키로 변경
+  const showBundleAndRecipientTabs = [
+    ORDER_STATUS.PREPARING, 
+    ORDER_STATUS.PAYMENT_REQ, 
+    ORDER_STATUS.PAYMENT_DONE, 
+    ORDER_STATUS.SHIPPING
+  ];
 
   const displayItems = useMemo(() => {
     if (!showBundleAndRecipientTabs.includes(activeTab)) return items;
@@ -55,9 +63,9 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
   const renderOrderDetail = (item: any) => {
     const subItems = item.isBundleGroup ? item.originalItems : [item];
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', borderTop: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', borderTop: '1px solid #e2e8f0',width: '100%', backgroundColor: '#f8fafc' }}>
         {subItems.map((sub: any, idx: number) => (
-          <div key={sub.orderId} style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '24px', borderBottom: (idx !== subItems.length - 1) ? '1px dashed #cbd5e1' : 'none' }}>
+          <div key={sub.orderId} style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '24px',width: '100%', borderBottom: (idx !== subItems.length - 1) ? '1px dashed #cbd5e1' : 'none' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
               <div style={{ width: '80px', height: '80px', flexShrink: 0, border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {sub.productImageUrl ? <img src={sub.productImageUrl} alt="prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ fontSize: '24px', opacity: 0.2 }}>📦</div>}
@@ -72,7 +80,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                 </div>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '20px', width: '100%'}}>
               <div><span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px' }}>주문번호</span><div style={{ fontWeight: '700', fontSize: '13px', color: '#1e293b' }}>{sub.orderId}</div></div>
               <div><span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px' }}>금액</span><div style={{ fontWeight: '700', fontSize: '14px', color: '#ef4444' }}>¥ {sub.productPrice?.toLocaleString()}</div></div>
               <div><span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px' }}>옵션</span><div style={{ fontWeight: '700', fontSize: '13px', color: '#1e293b' }}>{sub.option || sub.productOption || '-'}</div></div>
@@ -106,11 +114,21 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     setExpandedRows(prev => prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]);
   };
 
-  const STATUS_ORDER = ['장바구니', '구매실패', '상품 결제 완료', '입고완료', '배송 준비중', '배송비 요청', '배송비 결제 완료', '국제배송'];
+  // 🌟 정렬 순서 가중치를 Enum 키 순서로 변경
+  const STATUS_ORDER = [
+    ORDER_STATUS.CART, 
+    ORDER_STATUS.FAILED, 
+    ORDER_STATUS.PAID, 
+    ORDER_STATUS.ARRIVED, 
+    ORDER_STATUS.PREPARING, 
+    ORDER_STATUS.PAYMENT_REQ, 
+    ORDER_STATUS.PAYMENT_DONE, 
+    ORDER_STATUS.SHIPPING
+  ];
 
   const sortedItems = useMemo(() => {
     const baseItems = displayItems;
-    if (activeTab !== '전체내역') return baseItems;
+    if (activeTab !== 'ALL') return baseItems;
     return [...baseItems].sort((a: any, b: any) => {
       const indexA = STATUS_ORDER.indexOf(a.status);
       const indexB = STATUS_ORDER.indexOf(b.status);
@@ -120,10 +138,25 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
 
   const getColSpanCount = () => {
     let count = 3; 
-    if (activeTab === '전체내역') count += 1; 
-    if (['장바구니', '입고완료', '배송비 요청'].includes(activeTab)) count += 1; 
-    if (activeTab === '입고완료') count += 1; // 🌟 개별 포장 버튼 컬럼 추가됨
+
+    //전체내역 탭에서 '진행상태' 컬럼이 있는 경우
+    if (activeTab === 'ALL') count += 1;
+
+    //체크박스 컬럼이 있는 경우 
+    if ([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ].includes(activeTab)) count += 1; 
+
+    //입고완료 탭에서 '개별포장' 컬럼이 있는 경우
+    if (activeTab === ORDER_STATUS.ARRIVED) count += 1; 
+
+    //수취인 정보 컬럼이 있는 경우
     if (showBundleAndRecipientTabs.includes(activeTab)) count += 1;
+
+    //국제배송 탭에서 '운송장 번호' 컬럼이 있는 경우
+    if (activeTab === ORDER_STATUS.SHIPPING) count += 1;
+
+    // 배송비(₩): 배송비 요청 탭에서 상품 금액 오른쪽에 추가됨 (+1)
+    if (activeTab === ORDER_STATUS.PAYMENT_REQ) count += 1;
+
     return count;
   };
 
@@ -149,12 +182,20 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         <table className="custom-table">
           <thead>
             <tr>
-              {['장바구니', '입고완료', '배송비 요청'].includes(activeTab) && <th className="th-cell col-chk"><input type="checkbox" readOnly checked={items.length > 0 && selectedItems.length === items.length} /></th>}
-              {activeTab === '전체내역' && <th className="th-cell col-status" onClick={handleSortClick} style={{cursor:'pointer'}}>진행상태 {statusSort === 'asc' ? '▲' : '▼'}</th>}
+              {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ].includes(activeTab) && <th className="th-cell col-chk"><input type="checkbox" readOnly checked={items.length > 0 && selectedItems.length === items.length} /></th>}
+              {activeTab === 'ALL' && <th className="th-cell col-status" onClick={handleSortClick} style={{cursor:'pointer'}}>진행상태 {statusSort === 'asc' ? '▲' : '▼'}</th>}
               <th className="th-cell">상품명</th>
+              {/* 🌟 1. 국제 배송 탭일 때 운송장 번호 헤더 추가 */}
+              {activeTab === ORDER_STATUS.SHIPPING && (
+                <th className="th-cell" style={{ width: '180px', color: '#2563eb' }}>운송장 번호</th>
+              )}
               {showBundleAndRecipientTabs.includes(activeTab) && <th className="th-cell col-recipient">수취인</th>}
               <th className="th-cell col-price">상품 금액</th>
-              {activeTab === '입고완료' && <th className="th-cell col-action">액션</th>}
+              {/* 🌟 2. 배송비 요청 탭일 때 배송비 컬럼 추가 */}
+              {activeTab === ORDER_STATUS.PAYMENT_REQ && (
+                <th className="th-cell" style={{ width: '120px', color: '#ea580c' }}>배송비 (₩)</th>
+              )}
+              {activeTab === ORDER_STATUS.ARRIVED && <th className="th-cell col-action">액션</th>}
               <th className="th-cell col-btn">상세보기</th>
             </tr>
           </thead>
@@ -168,18 +209,41 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
               return (
                 <React.Fragment key={item.orderId}>
                   <tr>
-                    {['장바구니', '입고완료', '배송비 요청'].includes(activeTab) && (
+                    {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ].includes(activeTab) && (
                       <td className="td-cell" onClick={() => toggleItem(item.orderId)}>
                         <input type="checkbox" readOnly checked={selectedItems.includes(item.isBundleGroup ? item.originalItems[0].orderId : item.orderId)} />
                       </td>
                     )}
-                    {activeTab === '전체내역' && <td className="td-cell"><span className="status-badge" style={{backgroundColor: '#3b82f6', color: '#fff'}}>{item.status}</span></td>}
+                    {activeTab === 'ALL' && <td className="td-cell"><span className="status-badge" style={{backgroundColor: '#3b82f6', color: '#fff'}}>{item.status}</span></td>}
                     <td className="td-cell" style={{ textAlign: 'left' }}>
                       <div style={{ paddingLeft: '10px' }}>
                         <div className="prod-name" style={{ color: item.isBundleGroup ? '#f97316' : '#1e293b' }}>{item.productName}</div>
                         {item.isBundleGroup && <div style={{fontSize:'11px', color:'#94a3b8', marginTop:'4px'}}>합배송 총 {item.originalItems.length}건</div>}
                       </div>
                     </td>
+
+                    {/* 🌟 2. 국제 배송 탭일 때 운송장 번호 데이터 셀 추가 */}
+                    {activeTab === ORDER_STATUS.SHIPPING && (
+                      <td className="td-cell">
+                        {item.trackingNo ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                            <span style={{ fontWeight: '800', color: '#2563eb', fontSize: '14px' }}>
+                              {item.trackingNo}
+                            </span>
+                            {/* 클릭 시 배송 조회 페이지로 연결하는 버튼 (예시: 우체국 택배) */}
+                            <button 
+                              onClick={() => window.open(`https://service.epost.go.kr/trace.RetrieveDomRcvCondition.comm?displayHeader=N&sid1=${item.trackingNumber}`, '_blank')}
+                              style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer', backgroundColor: '#f8fafc' }}
+                            >
+                              배송조회 🔍
+                            </button>
+                          </div>
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontSize: '13px' }}>발급 대기 중</span>
+                        )}
+                      </td>
+                    )}
+                    
                     {showBundleAndRecipientTabs.includes(activeTab) && (
                       <td className="td-cell">
                         <span className="recipient-name" onClick={() => handleShowAddressAlert(matchedAddress)}>👤 {recipientName}</span>
@@ -187,8 +251,15 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                     )}
                     <td className="td-cell" style={{ fontWeight: '900', color: '#ef4444' }}>¥ {item.productPrice?.toLocaleString()}</td>
                     
+                    {/* 🌟 3. 배송비 데이터 출력 (secondPaymentAmount 사용) */}
+                    {activeTab === ORDER_STATUS.PAYMENT_REQ && (
+                      <td className="td-cell" style={{ fontWeight: '900', color: '#ea580c', backgroundColor: '#fff7ed' }}>
+                        ₩ {(item.secondPaymentAmount || 0).toLocaleString()}
+                      </td>
+                    )}
+                    
                     {/* 🌟 입고완료 탭 전용 개별 포장 버튼 */}
-                    {activeTab === '입고완료' && (
+                    {activeTab === ORDER_STATUS.ARRIVED && (
                       <td className="td-cell">
                         {!item.isBundleGroup && (
                           <button className="pack-btn" onClick={() => onIndividualPacking(item)}>개별 포장</button>
@@ -204,8 +275,17 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                   </tr>
                   {isExpanded && (
                     <tr>
-                      <td colSpan={getColSpanCount()} style={{ padding: '0' }}>{renderOrderDetail(item)}</td>
-                    </tr>
+                    {/* 🌟 colSpan을 탭 상황에 맞춰 동적으로 가져오고 패딩을 0으로 설정 */}
+                    <td colSpan={getColSpanCount()} style={{ padding: '0', border: 'none' }}>
+                      <div style={{ 
+                        width: '100%', 
+                        backgroundColor: '#f8fafc', // 전체 회색 배경 적용
+                        borderBottom: '1px solid #e2e8f0' 
+                      }}>
+                        {renderOrderDetail(item)}
+                      </div>
+                    </td>
+                  </tr>
                   )}
                 </React.Fragment>
               );

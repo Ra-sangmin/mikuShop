@@ -2,6 +2,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import GuideLayout from '../components/GuideLayout'; 
+// 🌟 글로벌 상수 및 라벨 임포트
+import { ORDER_STATUS, ORDER_STATUS_LABEL } from '@/src/types/order';
 
 export default function MyPage() {
   const [userName, setUserName] = useState('고객');
@@ -38,16 +40,62 @@ export default function MyPage() {
     money: userMoney
   };
 
+  // 🌟 Enum 키를 사용하여 구매 상황 카운트 로직 수정
   const purchaseStatus = useMemo(() => [
-    { label: '전체내역', count: userOrders.length, desc: '모든내역을 확인합니다.', href: '/mypage/status?tab=전체내역' },
-    { label: '장바구니', count: userOrders.filter((i: any) => i.status === '장바구니').length, desc: '구매신청 장바구니 목록', href: '/mypage/status?tab=장바구니' },
-    { label: '구매실패', count: userOrders.filter((i: any) => i.status === '구매실패').length, desc: '상품 결제 완료 구매불가 목록', href: '/mypage/status?tab=구매실패' },
-    { label: '상품 결제 완료', count: userOrders.filter((i: any) => i.status === '상품 결제 완료').length, desc: '1차결제완료 목록(구매진행)', href: '/mypage/status?tab=상품 결제 완료' },
-    { label: '입고완료', count: userOrders.filter((i: any) => i.status === '입고완료').length, desc: '현지창고 도착, 합포장신청', href: '/mypage/status?tab=입고완료' },
-    { label: '배송 준비중', count: userOrders.filter((i: any) => i.status === '배송 준비중').length, desc: '사루와창고 포장진행중', href: '/mypage/status?tab=배송 준비중' },
-    { label: '배송비 요청', count: userOrders.filter((i: any) => i.status === '배송비 요청').length, desc: '합포장완료 2차결제견적', href: '/mypage/status?tab=배송비 요청' },
-    { label: '배송비 결제 완료', count: userOrders.filter((i: any) => i.status === '배송비 결제 완료').length, desc: '출하준비중', href: '/mypage/status?tab=배송비 결제 완료' },
-    { label: '국제배송', count: userOrders.filter((i: any) => i.status === '국제배송').length, desc: '국제배송추적 및 도착', href: '/mypage/status?tab=국제배송' },
+    { 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.ALL], 
+      count: userOrders.length, 
+      desc: '모든내역을 확인합니다.', 
+      href: `/mypage/status?tab=${ORDER_STATUS.ALL}`  // 🌟 탭 이동 시에도 영문 키 사용
+    },
+    { 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.CART], 
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.CART).length, 
+      desc: '구매신청 장바구니 목록', 
+      href: `/mypage/status?tab=${ORDER_STATUS.CART}` 
+    },
+    { 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.FAILED], 
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.FAILED).length, 
+      desc: '상품 결제 완료 구매불가 목록', 
+      href: `/mypage/status?tab=${ORDER_STATUS.FAILED}` 
+    },
+    { 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.PAID], 
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.PAID).length, 
+      desc: '1차결제완료 목록(구매진행)', 
+      href: `/mypage/status?tab=${ORDER_STATUS.PAID}` 
+    },
+    { 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.ARRIVED], 
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.ARRIVED).length, 
+      desc: '현지창고 도착, 합포장신청', 
+      href: `/mypage/status?tab=${ORDER_STATUS.ARRIVED}` 
+    },
+    { 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.PREPARING], 
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.PREPARING).length, 
+      desc: '사루와창고 포장진행중', 
+      href: `/mypage/status?tab=${ORDER_STATUS.PREPARING}` 
+    },
+    { 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.PAYMENT_REQ], 
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.PAYMENT_REQ).length, 
+      desc: '합포장완료 2차결제견적', 
+      href: `/mypage/status?tab=${ORDER_STATUS.PAYMENT_REQ}` 
+    },
+    { 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.PAYMENT_DONE], 
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.PAYMENT_DONE).length, 
+      desc: '출하준비중', 
+      href: `/mypage/status?tab=${ORDER_STATUS.PAYMENT_DONE}` 
+    },
+    { 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.SHIPPING], 
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.SHIPPING).length, 
+      desc: '국제배송추적 및 도착', 
+      href: `/mypage/status?tab=${ORDER_STATUS.SHIPPING}` 
+    },
   ], [userOrders]);
 
   return (

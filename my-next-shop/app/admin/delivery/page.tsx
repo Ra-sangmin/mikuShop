@@ -2,8 +2,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminSidebar from '@/app/components/AdminSidebar';
+// 🌟 글로벌 상수 및 라벨 임포트
+import { DELIVERY_STATUS, DELIVERY_STATUS_LABEL, DeliveryStatus, ORDER_STATUS } from '@/src/types/order';
 
-const deliveryStatusOptions = ['배송전', '국내통관중', '국내배송중', '배송완료'];
+// 🌟 Enum 키를 기반으로 옵션 생성
+const deliveryStatusOptions = Object.keys(DELIVERY_STATUS) as DeliveryStatus[];
 
 export default function DeliveryManagement() {
   const router = useRouter();
@@ -140,7 +143,7 @@ export default function DeliveryManagement() {
             : null,
           recipient: dbOrder.recipient || '',
           product: dbOrder.productName,
-          status: dbOrder.deliveryStatus || '배송전', // status 대신 deliveryStatus 사용
+          status: dbOrder.deliveryStatus || DELIVERY_STATUS.PREPARING, // status 대신 deliveryStatus 사용
           trackingNo: dbOrder.trackingNo || '-',
         }));
         setOrders(formattedOrders);
@@ -217,10 +220,10 @@ export default function DeliveryManagement() {
 
   const getStatusColor = (status: string) => {
     switch(status) {
-      case '배송전': return { bg: '#eef2ff', text: '#4f46e5', border: '#a5b4fc' };
-      case '국내통관중': return { bg: '#fffbeb', text: '#d97706', border: '#fcd34d' };
-      case '국내배송중': return { bg: '#fdf4ff', text: '#9333ea', border: '#f5d0fe' };
-      case '배송완료': return { bg: '#f0fdf4', text: '#16a34a', border: '#86efac' };
+      case DELIVERY_STATUS.PREPARING: return { bg: '#eef2ff', text: '#4f46e5', border: '#a5b4fc' };
+      case DELIVERY_STATUS.CUSTOMS: return { bg: '#fffbeb', text: '#d97706', border: '#fcd34d' };
+      case DELIVERY_STATUS.LOCAL_DELIVERY: return { bg: '#fdf4ff', text: '#9333ea', border: '#f5d0fe' };
+      case DELIVERY_STATUS.COMPLETED: return { bg: '#f0fdf4', text: '#16a34a', border: '#86efac' };
       default: return { bg: '#f8fafc', text: '#64748b', border: '#cbd5e1' };
     }
   };
@@ -228,7 +231,7 @@ export default function DeliveryManagement() {
   const getRenderedOrders = () => {
     let result = orders.filter(order => deliveryStatusOptions.includes(order.status));
     if (statusFilter === '전체') {
-      result = result.filter(order => order.status !== '배송완료' || changedOrderIds.has(order.id));
+      result = result.filter(order => order.status !== DELIVERY_STATUS.COMPLETED || changedOrderIds.has(order.id));
     } else {
       result = result.filter(order => order.status === statusFilter || changedOrderIds.has(order.id));
     }

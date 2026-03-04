@@ -272,7 +272,7 @@ export default function HomePage() {
             <Link href="/main_shop/rakuten" className="site-card-link"><SiteCard logoSrc="/images/rakuten_logo.png" name="라쿠텐" desc="일본 대표 종합 쇼핑몰" /></Link>
             <Link href="/main_shop/yahoo_shopping" className="site-card-link"><SiteCard logoSrc="/images/yahoo_shopping_logo.png" name="야후 쇼핑" desc="다양한 혜택의 야후 쇼핑" /></Link>
             <Link href="/main_shop/amazon" className="site-card-link"><SiteCard logoSrc="/images/amazon_logo.png" name="아마존" desc="빠른 배송의 아마존 재팬" /></Link>
-            <Link href="/main_shop/merukari" className="site-card-link"><SiteCard logoSrc="/images/merukari_logo.png" name="메루카리" desc="일본 최대 중고거래 사이트" /></Link>
+            <Link href="/main_shop/mercari" className="site-card-link"><SiteCard logoSrc="/images/merukari_logo.png" name="메루카리" desc="일본 최대 중고거래 사이트" /></Link>
             <Link href="/main_shop/yahoo_auction" className="site-card-link"><SiteCard logoSrc="/images/yahoo_auction_logo.png" name="야후 옥션" desc="실시간 일본 옥션 입찰" /></Link>
         </div>
       </section>

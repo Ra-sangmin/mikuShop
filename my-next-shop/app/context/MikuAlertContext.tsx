@@ -5,29 +5,46 @@ type AlertType = 'success' | 'error' | 'warning';
 
 interface MikuAlertContextType {
   showAlert: (message: string, type?: AlertType) => void;
+  // 🌟 Confirm 기능 추가
+  showConfirm: (message: string) => Promise<boolean>;
 }
 
 const MikuAlertContext = createContext<MikuAlertContextType | undefined>(undefined);
 
 export function MikuAlertProvider({ children }: { children: ReactNode }) {
-  const [alert, setAlert] = useState<{ message: string, type: AlertType } | null>(null);
+  const [alert, setAlert] = useState<{ message: string, type: AlertType, isConfirm?: boolean } | null>(null);
+  // 🌟 Promise 해결을 위한 resolve 보관
+  const [confirmResolve, setConfirmResolve] = useState<((value: boolean) => void) | null>(null);
 
   const showAlert = useCallback((message: string, type: AlertType = 'warning') => {
     setAlert({ message, type });
   }, []);
 
-  const closeAlert = useCallback(() => {
-    setAlert(null);
+  // 🌟 Confirm 호출 함수
+  const showConfirm = useCallback((message: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setAlert({ message, type: 'warning', isConfirm: true });
+      setConfirmResolve(() => resolve);
+    });
   }, []);
 
+  const closeAlert = useCallback((result: boolean = false) => {
+    if (confirmResolve) {
+      confirmResolve(result);
+      setConfirmResolve(null);
+    }
+    setAlert(null);
+  }, [confirmResolve]);
+
   return (
-    <MikuAlertContext.Provider value={{ showAlert }}>
+    <MikuAlertContext.Provider value={{ showAlert, showConfirm }}>
       {children}
       {alert && (
         <MikuAlertComponent 
           message={alert.message} 
           type={alert.type} 
-          onClose={closeAlert} 
+          isConfirm={alert.isConfirm}
+          onClose={(res: boolean) => closeAlert(res)} 
         />
       )}
     </MikuAlertContext.Provider>
@@ -42,13 +59,21 @@ export function useMikuAlert() {
   return context;
 }
 
-function MikuAlertComponent({ message, type, onClose }: { message: string, type: AlertType, onClose: () => void }) {
-  // 정보 확인을 위해 자동 닫기 시간을 5초로 조금 늘리거나, 
-  // 수취인 정보일 경우 사용자가 직접 닫게 하려면 아래 Effect를 수정할 수 있습니다.
+// 🌟 Component Props 인터페이스 정의
+interface MikuAlertComponentProps {
+  message: string;
+  type: AlertType;
+  isConfirm?: boolean;
+  onClose: (result: boolean) => void;
+}
+
+function MikuAlertComponent({ message, type, isConfirm, onClose }: MikuAlertComponentProps) {
+  // Confirm 모드일 때는 자동 닫기를 비활성화해야 합니다.
   React.useEffect(() => {
-    const timer = setTimeout(onClose, 5000); // 3초 -> 5초로 연장
+    if (isConfirm) return;
+    const timer = setTimeout(() => onClose(false), 5000);
     return () => clearTimeout(timer);
-  }, [onClose]);
+  }, [onClose, isConfirm]);
 
   const colors = {
     success: { bg: '#f0fdf4', border: '#22c55e', text: '#15803d', icon: '✅' },
@@ -56,87 +81,84 @@ function MikuAlertComponent({ message, type, onClose }: { message: string, type:
     warning: { bg: '#fffbeb', border: '#f59e0b', text: '#b45309', icon: '⚠️' }
   };
 
-  const style = colors[type];
+  const style = colors[type as AlertType];
 
   return (
     <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(15, 23, 42, 0.4)',
-      backdropFilter: 'blur(4px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 10000,
-      pointerEvents: 'auto'
+      position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+      backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 99999, pointerEvents: 'auto',
     }}>
       <div style={{
-        backgroundColor: style.bg,
-        border: `2px solid ${style.border}`,
-        color: style.text,
-        padding: '30px 40px',
-        borderRadius: '24px',
-        boxShadow: '0 20px 50px rgba(0,0,0,0.15)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '16px',
-        fontWeight: 'bold',
-        fontSize: '17px',
-        minWidth: '350px',
-        maxWidth: '90%',
-        animation: 'mikuAlertPopIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+        backgroundColor: style.bg, border: `2px solid ${style.border}`,
+        color: style.text, padding: '40px', borderRadius: '32px',
+        boxShadow: '0 25px 60px -12px rgba(0, 0, 0, 0.4)', display: 'flex',
+        flexDirection: 'column', alignItems: 'center', gap: '24px',
+        minWidth: '380px', maxWidth: '500px', width: '90%',
+        animation: 'mikuAlertPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        boxSizing: 'border-box'
       }}>
-        <style jsx global>{`
-          @keyframes mikuAlertPopIn {
-            0% { transform: scale(0.8); opacity: 0; }
-            100% { transform: scale(1); opacity: 1; }
-          }
-        `}</style>
+        <span style={{ fontSize: '50px' }}>{style.icon}</span>
         
-        <span style={{ fontSize: '40px' }}>{style.icon}</span>
-        
-        {/* 🌟 수정된 메시지 영역 */}
         <div style={{ 
-          lineHeight: '1.7', 
-          whiteSpace: 'pre-wrap',  // 👈 핵심: \n 문자를 실제 줄바꿈으로 렌더링
-          wordBreak: 'break-word', // 👈 단어 단위로 줄바꿈
-          textAlign: message.includes('\n') ? 'left' : 'center', // 👈 여러 줄일 경우 왼쪽 정렬로 가독성 확보
-          width: '100%',
-          padding: '0 10px'
+          lineHeight: '1.6', whiteSpace: 'pre-wrap', textAlign: 'center', 
+          fontSize: '18px', fontWeight: '700', wordBreak: 'keep-all' 
         }}>
           {message}
         </div>
 
-        <button 
-          onClick={onClose} 
-          style={{ 
-            marginTop: '10px',
-            padding: '12px 40px',
-            backgroundColor: style.border,
-            color: '#fff',
-            border: 'none',
-            borderRadius: '100px',
-            cursor: 'pointer',
-            fontSize: '15px',
-            fontWeight: '900',
-            transition: 'all 0.2s',
-            boxShadow: `0 4px 10px ${style.border}44`
-          }}
-          onMouseEnter={e => { 
-            e.currentTarget.style.transform = 'translateY(-2px)'; 
-            e.currentTarget.style.boxShadow = `0 6px 15px ${style.border}66`; 
-          }}
-          onMouseLeave={e => { 
-            e.currentTarget.style.transform = 'translateY(0)'; 
-            e.currentTarget.style.boxShadow = `0 4px 10px ${style.border}44`; 
-          }}
-        >
-          확인
-        </button>
+        {/* 🌟 버튼 컨테이너: Flex 방향 유지하며 순서만 변경 */}
+        <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'center' }}>
+          
+          {/* 1. 확인 버튼 (왼쪽) */}
+          <button 
+            onClick={() => onClose(true)} 
+            style={{ 
+              flex: 1,
+              maxWidth: isConfirm ? '140px' : '200px',
+              padding: '14px',
+              backgroundColor: style.border,
+              color: '#fff',
+              border: 'none',
+              borderRadius: '16px',
+              cursor: 'pointer',
+              fontWeight: '900',
+              fontSize: '16px',
+              boxShadow: `0 8px 20px ${style.border}44`,
+              transition: 'transform 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            확인
+          </button>
+
+          {/* 2. 취소 버튼 (오른쪽 - Confirm 모드일 때만 표시) */}
+          {isConfirm && (
+            <button 
+              onClick={() => onClose(false)} 
+              style={{ 
+                flex: 1,
+                maxWidth: '140px',
+                padding: '14px',
+                backgroundColor: '#e2e8f0',
+                color: '#475569',
+                border: 'none',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                fontWeight: '900',
+                fontSize: '16px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#cbd5e1'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
+            >
+              취소
+            </button>
+          )}
+
+        </div>
       </div>
     </div>
   );

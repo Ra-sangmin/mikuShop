@@ -8,15 +8,16 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { 
       userId, 
-      type,
       productName, // 클라이언트에서 넘어온 상품명
       productPrice, 
+      domesticShippingFee,
       productImageUrl, 
       productUrl, 
       productOption,
       serviceRequest,
       productRequest,
-      status = "장바구니"
+      status = "CART",
+      type,
     } = body;
 
     let finalTitle = productName;
@@ -39,15 +40,16 @@ export async function POST(req: Request) {
       data: {
         userId: parseInt(userId),
         orderId: orderId,
-        type: type,
+        type: type || "PURCHASE",
         productName: finalTitle,
         productPrice: Math.round(productPrice),
+        domesticShippingFee: Number(domesticShippingFee) || 0,
         productImageUrl: productImageUrl || "",
         productUrl: productUrl,
         productOption: productOption || "",
         serviceRequest: serviceRequest || "",
         productRequest: productRequest || "",
-        status: status
+        status: status === "장바구니" ? "CART" : (status || "CART"),
       }
     });
 
