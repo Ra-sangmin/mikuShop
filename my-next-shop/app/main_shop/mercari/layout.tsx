@@ -6,10 +6,10 @@ export const metadata = {
   description: '일본 직구 및 외주 서비스',
 };
 
-export default function MerukariLayout({ children }: { children: React.ReactNode }) {
+export default function MercariLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      {/* 1. 구글 번역 실행 스크립트 (dangerouslySetInnerHTML 사용) */}
+      {/* 1. 구글 번역 실행 스크립트 (dangerouslySetInnerHTML 사용)
       <Script id="google-translate-init" strategy="afterInteractive">
         {`
           function googleTranslateElementInit() {
@@ -19,14 +19,16 @@ export default function MerukariLayout({ children }: { children: React.ReactNode
             }, 'google_translate_element');
           }
         `}
-      </Script>
-      {/* 2. 구글 번역 외부 라이브러리 로드 */}
+      </Script> */}
+      
+      {/* 2. 구글 번역 외부 라이브러리 로드 
       <Script 
         src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" 
         strategy="afterInteractive" 
       />
+      */}
 
-      <div id="merukariCategories" className="category-box" style={{ flex: 1 }}>
+      <div id="rakutenCategories" className="category-box" style={{ flex: 1 }}>
         <div className="page-title-container">
           <h2>메루카리</h2>
         </div>

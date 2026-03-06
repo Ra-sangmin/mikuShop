@@ -15,9 +15,136 @@ const CATEGORY_MAP: { [key: string]: string } = {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const parentId = searchParams.get('parentId') || null;
+  const parentIdParam = searchParams.get('parentId');
+  const parentId = Number(parentIdParam) || 0;
 
   try {
+
+    const parentRecord = await prisma.mercariCategory.findUnique({ where: { genreId: parentId } });
+    if (parentRecord?.isLeaf) {
+      return NextResponse.json({ success: true, data: [], isLeaf: true });
+    }
+
+    const parentLevel = parentRecord?.genreLevel ?? 0;
+
+    // 1. DB 확인 (updatedAt 기준 최신순 정렬)
+    const existing = await prisma.mercariCategory.findMany({ 
+      where: { parentId: Number(parentId) }, // 앞선 에러 방지를 위해 숫자 변환 포함
+      orderBy: {
+        updatedAt: 'asc' // 최신 데이터가 배열의 0번째로 오도록 정렬
+      }
+    });
+
+    // 2. 데이터가 있고 7일 이내면 즉시 반환
+    if (existing.length > 0) {
+      const lastUpdate = new Date(existing[0].updatedAt).getTime();
+      const isFresh = (new Date().getTime() - lastUpdate) / (1000 * 60 * 60 * 24) < 7;
+
+      if (isFresh) {
+        console.log(`[캐시 반환] ID: ${parentId}`);
+        return NextResponse.json({ 
+          success: true, 
+          data: existing, 
+          isLeaf: false,
+          fromCache: true // 💡 이 데이터를 추가하여 프론트엔드에 알립니다.
+        });
+      }
+
+    }
+
+    const targetUrl = parentId 
+        ? `https://jp.mercari.com/categories?category_id=${parentId}`
+        : 'https://jp.mercari.com/categories';
+
+    const browser = await puppeteer.launch({ 
+        headless: true, // "new" 에러 방지
+        args: ['--no-sandbox'] 
+      });
+      const page = await browser.newPage();
+      await page.goto(targetUrl, { waitUntil: 'networkidle2' });
+      
+      // 💡 수정된 부분: 특정 영역(main 또는 특정 리스트) 내의 링크만 타겟팅
+      const html = await page.content();
+      const $ = cheerio.load(html);
+      const scrapedData: any[] = [];
+
+      // 메루카리 카테고리 페이지의 실제 리스트 영역을 더 정확히 짚어야 함
+      // 보통 하위 카테고리는 특정 컨테이너 안에 모여 있습니다.
+      $('main a[href*="category_id="]').each((_, el) => {
+        const href = $(el).attr('href') || '';
+        const textName = $(el).text().trim();
+        const genreIdParam = href.match(/category_id=([0-9]+)/)?.[1];
+        const genreId = genreIdParam ? Number(genreIdParam) : 0;
+
+        // 💡 내 부모가 아니면서, 텍스트가 비어있지 않은 것만 필터링
+        if (genreId && textName && genreId !== parentId) {
+          // 브레드크럼(상위 경로)에 포함된 ID인지 체크하여 제외하는 로직이 필요할 수 있음
+          scrapedData.push({ genreId, genreName: CATEGORY_MAP[genreId] || textName, parentId });
+        }
+      });
+
+      await browser.close();
+
+      // 💡 로그 강화: 데이터가 몇 개나 잡히는지 확인
+      console.log(`[디버그] Scraped Data 개수: ${scrapedData.length} (ID: ${parentId})`);
+      if (scrapedData.length > 0) {
+        console.log(`[디버그] 첫 번째 데이터 샘플:`, scrapedData[0]);
+      }
+
+      // 2. 진짜로 데이터가 0개일 때만 isLeaf로 마킹
+      if (scrapedData.length === 0 && parentId) {
+        console.log(`[마지막 단계 감지] ID: ${parentId} 를 isLeaf=true로 설정합니다.`);
+        
+        await prisma.$executeRaw`
+          UPDATE MercariCategory 
+          SET isLeaf = true 
+          WHERE genreId = ${Number(parentId)}
+        `;
+        
+        return NextResponse.json({ success: true, data: [], isLeaf: true });
+      }
+
+      const currentLevel = parentLevel + 1;
+
+      // 5. 자식이 있다면 저장 (중복 방지 upsert)
+      for (const cat of scrapedData) {
+
+        // 1. 숫자로 확실하게 변환하여 변수에 담습니다.
+        const targetId = Number(cat.genreId || cat.id);
+
+        console.log(`[저장 시작] ID: ${targetId} : ${cat.genreName}`);
+
+        await prisma.mercariCategory.upsert({
+          where: { genreId: targetId },
+
+          // 2. 이미 데이터가 있다면 이름과 레벨, 갱신 시간을 업데이트합니다.
+          update: {
+            genreName: cat.genreName,
+            genreLevel: currentLevel,
+            parentId: Number(parentId || 0),
+            isLeaf: cat.isLeaf || false,
+            updatedAt: new Date()
+          },
+          // 3. 데이터가 없다면 새로 생성합니다.
+          create: {
+            genreId: targetId,
+            genreName: cat.genreName,
+            genreLevel: currentLevel,
+            parentId: Number(parentId || 0),
+            isLeaf: cat.isLeaf || false
+          }
+        });
+      }
+
+ /* 
+  try {
+
+    const isRoot = currentId === '0';
+
+    const cachedCategory = await prisma.mercariCategory.findUnique({
+      where: { id: isRoot ? 'ROOT' : currentId }, // 루트는 'ROOT'라는 가상 ID 사용 권장
+      select: { updatedAt: true }
+    });
 
     // 1. DB 선제 확인 (이미 isLeaf라면 즉시 반환)
     if (parentId) {
@@ -41,9 +168,6 @@ export async function GET(req: NextRequest) {
     const targetUrl = parentId 
       ? `https://jp.mercari.com/categories?category_id=${parentId}`
       : 'https://jp.mercari.com/categories';
-
-
-
 
 
     const browser = await puppeteer.launch({ 
@@ -74,8 +198,6 @@ export async function GET(req: NextRequest) {
 
     await browser.close();
 
-
-
     // 💡 로그 강화: 데이터가 몇 개나 잡히는지 확인
     console.log(`[디버그] Scraped Data 개수: ${scrapedData.length} (ID: ${parentId})`);
     if (scrapedData.length > 0) {
@@ -96,6 +218,9 @@ export async function GET(req: NextRequest) {
 
     // 5. 자식이 있다면 저장 (중복 방지 upsert)
     for (const cat of scrapedData) {
+
+      console.log(`[저장 시작] ID: ${cat.id} : ${cat.name}`);
+
       await prisma.mercariCategory.upsert({
         where: { id: cat.id },
         update: { name: cat.name, updatedAt: new Date() },
@@ -104,7 +229,10 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data: scrapedData, isLeaf: false });
+    */
+   return NextResponse.json({ success: true, data: scrapedData, isLeaf: false });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }
+  
 }

@@ -4,7 +4,7 @@ import { useMikuAlert } from '@/app/context/MikuAlertContext';
 // 🌟 주문 상태 상수 및 라벨 임포트
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
 
-export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress , onIndividualPacking }: any) {
+export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress , onIndividualPacking , onDelete }: any) {
   const [expandedRows, setExpandedRows] = useState<string[]>([]);
   const [statusSort, setStatusSort] = useState<'asc' | 'desc'>('asc');
   const { showAlert } = useMikuAlert();
@@ -157,6 +157,9 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     // 배송비(₩): 배송비 요청 탭에서 상품 금액 오른쪽에 추가됨 (+1)
     if (activeTab === ORDER_STATUS.PAYMENT_REQ) count += 1;
 
+    // 장바구니 탭일때 : 삭제 버튼이 있는경우
+    if (activeTab === ORDER_STATUS.CART) count += 1;
+
     return count;
   };
 
@@ -177,6 +180,21 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           .pack-btn { padding: 6px 12px; border-radius: 6px; border: none; background-color: #10b981; color: #fff; font-weight: 800; font-size: 11px; cursor: pointer; }
           .pack-btn:hover { background-color: #059669; }
           .recipient-name { font-size: 12px; font-weight: 800; color: #475569; background-color: #f8fafc; padding: 4px 8px; border-radius: 6px; border: 1px solid #e2e8f0; cursor: pointer; }
+          .delete-btn {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #fee2e2;
+            background-color: #fff;
+            color: #ef4444;
+            font-weight: 800;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+          .delete-btn:hover {
+            background-color: #fef2f2;
+            border-color: #fca5a5;
+          }
         `}</style>
 
         <table className="custom-table">
@@ -195,7 +213,9 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
               {activeTab === ORDER_STATUS.PAYMENT_REQ && (
                 <th className="th-cell" style={{ width: '120px', color: '#ea580c' }}>배송비 (₩)</th>
               )}
+              {activeTab === ORDER_STATUS.CART && <th className="th-cell col-action">삭제</th>}
               {activeTab === ORDER_STATUS.ARRIVED && <th className="th-cell col-action">액션</th>}
+              
               <th className="th-cell col-btn">상세보기</th>
             </tr>
           </thead>
@@ -258,6 +278,29 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                       </td>
                     )}
                     
+                    {/* 🚀 액션 셀: 탭에 따라 버튼 분기 */}
+                    {(activeTab === ORDER_STATUS.ARRIVED || activeTab === ORDER_STATUS.CART) && (
+                      <td className="td-cell">
+                        {activeTab === ORDER_STATUS.ARRIVED && !item.isBundleGroup && (
+                          <button className="pack-btn" onClick={() => onIndividualPacking(item)}>개별 포장</button>
+                        )}
+                        
+                        {/* 🗑️ 장바구니 탭 전용 삭제 버튼 추가 */}
+                        {activeTab === ORDER_STATUS.CART && (
+                          <button 
+                            className="delete-btn" 
+                            onClick={(e) => {
+                              e.stopPropagation(); // 행 클릭 이벤트 전파 방지
+                              onDelete(item.orderId); // DB 삭제 함수 호출
+                            }}
+                          >
+                            상품 삭제
+                          </button>
+                        )}
+
+                      </td>
+                    )}
+
                     {/* 🌟 입고완료 탭 전용 개별 포장 버튼 */}
                     {activeTab === ORDER_STATUS.ARRIVED && (
                       <td className="td-cell">

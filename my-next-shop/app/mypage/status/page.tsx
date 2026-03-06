@@ -35,6 +35,30 @@ function MyPurchaseStatusContent() {
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const exchangeRate = 9.05;
 
+  // 🚀 1. 삭제 핸들러 함수 추가
+  const handleDeleteOrder = async (orderId: string) => {
+    const isConfirmed = await showConfirm("정말 이 상품을 장바구니에서 삭제하시겠습니까? 🗑️");
+    
+    if (isConfirmed) {
+      try {
+        // API 경로는 프로젝트 설정에 따라 /api/admin/orders 혹은 /api/orders일 수 있습니다.
+        const res = await fetch(`/api/admin/orders?id=${orderId}`, {
+          method: 'DELETE',
+        });
+
+        if (res.ok) {
+          showAlert('상품이 삭제되었습니다.', 'success');
+          fetchOrders(); // 목록 새로고침
+        } else {
+          showAlert('삭제 처리에 실패했습니다.', 'error');
+        }
+      } catch (error) {
+        console.error('삭제 오류:', error);
+        showAlert('서버 통신 중 오류가 발생했습니다.', 'error');
+      }
+    }
+  };
+
   // 🌟 개별 포장 처리 함수
   const handleIndividualPacking = async (item: any) => {
     if (!selectedAddress) {
@@ -338,8 +362,18 @@ function MyPurchaseStatusContent() {
         <div className="tab-group">{tabs.slice(5).map(renderTabItem)}</div>
       </div>
 
-      <OrderTable items={items} orders={orders} activeTab={activeTab} selectedItems={selectedItems} setSelectedItems={setSelectedItems} fetchOrders={fetchOrders} selectedAddress={selectedAddress} onIndividualPacking={handleIndividualPacking}/>
-
+      <OrderTable 
+        items={items} 
+        orders={orders} 
+        activeTab={activeTab} 
+        selectedItems={selectedItems} 
+        setSelectedItems={setSelectedItems} 
+        fetchOrders={fetchOrders} 
+        selectedAddress={selectedAddress} 
+        onIndividualPacking={handleIndividualPacking}
+        onDelete={handleDeleteOrder} // ✨ 추가됨
+      />
+      
       {/* 입고완료: 합포장 버튼 & 주소 폼 */}
       {activeTab === ORDER_STATUS.ARRIVED && (
         <>

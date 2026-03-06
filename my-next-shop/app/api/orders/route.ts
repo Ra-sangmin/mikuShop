@@ -69,24 +69,3 @@ export async function POST(req: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const orderId = searchParams.get('orderId');
-
-    if (!orderId) {
-      return NextResponse.json({ error: '주문 ID가 필요합니다.' }, { status: 400 });
-    }
-
-    await prisma.order.delete({
-      where: {
-        orderId: orderId
-      }
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error("❌ Delete Order Error:", error);
-    return NextResponse.json({ error: '주문 삭제에 실패했습니다.' }, { status: 500 });
-  }
-}

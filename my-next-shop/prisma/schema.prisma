@@ -159,16 +159,13 @@ model FeeConfiguration {
 }
 
 model MercariCategory {
-  id        String   @id              // 메루카리 고유 ID
-  name      String                    // 카테고리 이름
-  level     Int      @default(1)      // 1:대분류, 2:중분류, 3:소분류...
-  parentId  String?                   // 부모 카테고리 ID
-  isLeaf    Boolean  @default(false)  // 💡 최하위 카테고리 여부 저장 (기본값 false)
-  updatedAt DateTime @updatedAt       // 데이터 갱신일 (자동)
+  id          Int      @id @default(autoincrement())  // 메루카리 고유 ID
+  genreId     Int      @unique                        // 메루카리 카테고리 ID
+  genreName   String                                  // 카테고리 이름
+  genreLevel  Int?     @default(1)                    // 1:대분류, 2:중분류, 3:소분류...
+  parentId    Int                                     // 부모 카테고리 ID
+  isLeaf      Boolean  @default(false)                // 💡 최하위 카테고리 여부 저장 (기본값 false)
+  updatedAt   DateTime @updatedAt                     // 데이터 갱신일 (자동)
 
-  // 자기 참조 관계: 부모-자식 연결
-  parent    MercariCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children  MercariCategory[] @relation("CategoryHierarchy")
-
-  @@index([parentId])
+  @@map("MercariCategory")
 }

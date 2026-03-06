@@ -124,3 +124,27 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'DB 업데이트 실패' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    
+    // 💡 URL에서 'id'라는 이름의 파라미터를 가져옵니다.
+    const orderId = searchParams.get('id'); 
+
+    if (!orderId) {
+      return NextResponse.json({ error: '주문 ID(id)가 필요합니다.' }, { status: 400 });
+    }
+
+    await prisma.order.delete({
+      where: {
+        orderId: orderId // Prisma 스키마의 필드명이 orderId인 것은 그대로 유지
+      }
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("❌ Delete Order Error:", error);
+    return NextResponse.json({ error: '주문 삭제에 실패했습니다.' }, { status: 500 });
+  }
+}

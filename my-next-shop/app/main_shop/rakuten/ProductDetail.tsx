@@ -95,23 +95,7 @@ const ProductDetail = ({ item, exchangeRate, onCartUpdate, showWishlistButton = 
       const data = await response.json();
 
       if (data.success) {
-        // 기존 로컬스토리지 처리 (호환성을 위해 유지)
-        const cartItem = {
-          itemId: item.itemCode || item.itemId,
-          itemName: title,
-          shopName: item.shopName,
-          imageUrl: mainImage,
-          priceYen: priceYen,
-          totalPriceWon: totalPrice,
-          quantity: quantity,
-          optionMemo: optionMemo,
-          shippingMethod: SHIPPING_METHODS[selectedShipping].name,
-          addedAt: new Date().toISOString()
-        };
 
-        const existingCart = JSON.parse(localStorage.getItem('rakutenCart') || '[]');
-        localStorage.setItem('rakutenCart', JSON.stringify([...existingCart, cartItem]));
-        
         if (onCartUpdate) onCartUpdate(); 
         if (confirm("🛒 장바구니에 성공적으로 담겼습니다! (DB 저장 완료)\n장바구니로 이동하시겠습니까?")) {
           router.push('/mypage/status?tab=장바구니');

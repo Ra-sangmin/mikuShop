@@ -15,3 +15,34 @@ npm run dev
 npm run start:debug 
 ngrok http 3000
 
+DB의 내용을 한글 번역 진행
+
+1. DB 에서 데이터 추출
+ - SELECT id,genreId, genreName FROM MercariCategory where id < 2000;
+
+2. 결과창 상단의 Export 버튼을 눌러 csv 로 추출
+
+3. 파파고 문서 번역 접속 OR 제미나이로 번역 ( 500개씩 끊어서 번역 추천 )
+
+4 임시 테이블 생성  
+
+	DROP TABLE IF EXISTS TempTranslation;
+   	CREATE TABLE TempTranslation (
+		id INT,
+     		genreId INT,
+	    	genreNameKo VARCHAR(255)
+	);
+  
+     이미 생성되어있다면 , truncate TempTranslation 
+
+5 생성한 테이블 마우스 오른쪽 클릭해서 Import 시작
+
+6 테이블 업데이트
+
+-- 원본 테이블 업데이트
+UPDATE MercariCategory m
+JOIN TempTranslation t ON m.id = t.id
+SET m.genreName = t.genreNameKo;
+
+-- 확인
+SELECT * FROM MercariCategory LIMIT 10;
