@@ -426,7 +426,7 @@ export default function PurchaseFormContainer({ type }: Props) {
             {/* 1. 총 상품 금액 */}
             <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
               <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>총 상품 금액</p>
-              <span style={{ fontSize: '18px', fontWeight: '800' }}>¥{totalProductPrice.toLocaleString()}</span>
+              <span style={{ fontSize: '18px', fontWeight: '800' }}><span translate="no">¥{totalProductPrice.toLocaleString()}</span></span>
             </div>
 
             <div style={{ fontSize: '18px', color: '#cbd5e1' }}>+</div>
@@ -434,7 +434,7 @@ export default function PurchaseFormContainer({ type }: Props) {
             {/* 2. 일본내 배송료 */}
             <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
               <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>일본내 배송료</p>
-              <span style={{ fontSize: '18px', fontWeight: '800' }}>¥{totalDomesticShipping.toLocaleString()}</span>
+              <span style={{ fontSize: '18px', fontWeight: '800' }}><span translate="no">¥{totalDomesticShipping.toLocaleString()}</span></span>
             </div>
 
             <div style={{ fontSize: '18px', color: '#cbd5e1' }}>+</div>
@@ -442,7 +442,7 @@ export default function PurchaseFormContainer({ type }: Props) {
             {/* 3. 송금 수수료 */}
             <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
               <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>송금 수수료</p>
-              <span style={{ fontSize: '18px', fontWeight: '800' }}>¥{totalTransferFee.toLocaleString()}</span>
+              <span style={{ fontSize: '18px', fontWeight: '800' }}><span translate="no">¥{totalTransferFee.toLocaleString()}</span></span>
             </div>
 
             <div style={{ fontSize: '18px', color: '#cbd5e1' }}>+</div>
@@ -450,7 +450,7 @@ export default function PurchaseFormContainer({ type }: Props) {
             {/* 4. 대행 수수료 */}
             <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
               <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>대행 수수료</p>
-              <span style={{ fontSize: '18px', fontWeight: '800' }}>¥{totalAgencyFee.toLocaleString()}</span>
+              <span style={{ fontSize: '18px', fontWeight: '800' }}><span translate="no">¥{totalAgencyFee.toLocaleString()}</span></span>
             </div>
 
             <div style={{ fontSize: '18px', color: '#cbd5e1' }}>=</div>
@@ -468,13 +468,13 @@ export default function PurchaseFormContainer({ type }: Props) {
               marginLeft: 'auto' 
             }}>
               <p style={{ fontSize: '13px', color: '#4f46e5', fontWeight: '800', marginBottom: '5px' }}>
-                총 {products.length}개 결제 예상
+                총 <span translate="no">{products.length}</span>개 결제 예상
               </p>
               <div style={{ fontSize: '32px', fontWeight: '900', color: '#111827' }}>
-                ¥{totalJPY.toLocaleString()}
+                <span translate="no">¥{totalJPY.toLocaleString()}</span>
               </div>
               <div style={{ fontSize: '15px', color: '#ef4444', fontWeight: '800', marginTop: '5px' }}>
-                약 {totalKRW.toLocaleString()}원
+                약 <span translate="no">{totalKRW.toLocaleString()}</span>원
               </div>
             </div>
           </div>
