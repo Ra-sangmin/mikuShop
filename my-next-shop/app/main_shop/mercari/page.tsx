@@ -1,18 +1,16 @@
 "use client";
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
-import MercariCategoryGrid, { MercariSidebar, FilterState } from "./MercariCategoryGrid";
-import MercariProductDetail, { DetailedProduct } from "./mercariProductDetail";
-import MercariProductCard from "./mercariProductCard";
-import { checkMercariCooldown } from "./mercariApi";
-import { lastCallTimestamp } from "./mercariApi";
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { GlobalSidebar, GlobalFilterState } from "@/app/main_shop/components/GlobalSidebar";
+import GlobalCategoryGrid from "@/app/main_shop/components/GlobalCategoryGrid";
+import GlobalProductDetail, { GlobalProduct } from "@/app/main_shop/components/GlobalProductDetail";
+import GlobalProductCard, { GlobalItem } from "@/app/main_shop/components/GlobalProductCard";
+import { checkMercariCooldown, lastCallTimestamp } from "./mercariApi";
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
 
-// 💡 [개발자 설정] 상단 헤더 활성화 여부
 const SHOW_HEADER = false; 
 
-// 인터페이스 정의
 interface MercariCategory {
   genreId: number; 
   genreName: string; 
@@ -39,7 +37,72 @@ interface SidebarProps {
 }
 
 let globalItemsCache: { [key: string]: any[] } = {};
-let globalProductDetailCache: { [key: string]: DetailedProduct } = {};
+let globalProductDetailCache: { [key: string]: GlobalProduct } = {};
+
+// --- ✨ [외부 분리] 스타일 생성 함수 ---
+const getStyles = (isMobile: boolean) => ({
+  pageWrapper: {
+    width: '100%', display: 'flex', justifyContent: 'center',
+    backgroundColor: '#f8f9fa', minHeight: '100vh', fontFamily: 'sans-serif'
+  },
+  container: {
+    width: '100%', maxWidth: '2000px',
+    padding: isMobile ? '8px 12px 16px 12px' : '8px 24px 24px 24px',
+    display: 'flex', flexDirection: 'column' as const,
+    gap: isMobile ? '8px' : '12px' 
+  },
+  header: {
+    display: 'flex',
+    flexDirection: isMobile ? 'column' as const : 'row' as const,
+    justifyContent: isMobile ? 'center' : 'space-between',
+    alignItems: isMobile ? 'flex-start' : 'center',
+    gap: isMobile ? '12px' : '0',
+    marginBottom: '8px', 
+    padding: '16px 20px',
+    backgroundColor: 'white', borderRadius: '24px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f3f4f6'
+  },
+  mainLayout: {
+    display: 'flex',
+    flexDirection: isMobile ? 'column' as const : 'row' as const,
+    gap: isMobile ? '16px' : '20px', 
+    alignItems: 'flex-start'
+  },
+  sidebarWrapper: {
+    width: isMobile ? '100%' : '430px',
+    flexShrink: 0,
+    position: isMobile ? 'static' as const : 'sticky' as const,
+    top: isMobile ? 'auto' : '120px', 
+    height: isMobile ? 'auto' : 'fit-content',
+    maxHeight: isMobile ? 'none' : 'calc(100vh - 120px)', 
+    overflowY: isMobile ? 'visible' as const : 'auto' as const, 
+    alignSelf: 'start',
+    zIndex: 10
+  },
+  contentArea: {
+    flex: 1, minWidth: 0, width: '100%'
+  },
+  breadcrumb: {
+    display: 'flex', alignItems: 'center', gap: '4px',
+    marginBottom: isMobile ? '16px' : '24px',
+    fontSize: '13px', color: '#9ca3af',
+    overflowX: 'auto' as const, whiteSpace: 'nowrap' as const,
+    paddingBottom: '4px'
+  },
+  categoryCard: {
+    backgroundColor: 'white', border: '1px solid #e5e7eb',
+    borderRadius: '24px', padding: isMobile ? '20px' : '32px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+  },
+  crawlButton: (isRunning: boolean) => ({
+    paddingLeft: '32px', paddingRight: '32px', paddingTop: '10px', paddingBottom: '10px',
+    borderRadius: '16px', fontWeight: 'bold' as const, fontSize: '14px',
+    color: 'white', border: 'none', cursor: 'pointer', transition: 'all 0.2s',
+    backgroundColor: isRunning ? '#9ca3af' : '#ff007f',
+    boxShadow: isRunning ? 'none' : '0 10px 15px -3px rgba(255, 0, 127, 0.2)',
+    width: isMobile ? '100%' : 'auto'
+  })
+});
 
 // --- [보조 컴포넌트 1] 로딩 스켈레톤 ---
 const ProductSkeleton = () => (
@@ -92,34 +155,6 @@ const MikuLoadingOverlay = ({ message }: { message: string }) => (
   </div>
 );
 
-// --- [보조 컴포넌트 3] 미쿠 에러 안내창 ---
-const MikuErrorOverlay = ({ message, onClose }: { message: string, onClose: () => void }) => (
-  <div style={{
-    position: 'fixed', inset: 0, backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    backdropFilter: 'blur(8px)', zIndex: 999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
-  }}>
-    <div style={{
-      backgroundColor: 'white', padding: '32px', borderRadius: '24px',
-      boxShadow: '0 10px 30px rgba(255, 0, 127, 0.15)', border: '2px solid #fce7f3',
-      textAlign: 'center', maxWidth: '400px', width: '90%', animation: 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-    }}>
-      <style>{`@keyframes popIn { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }`}</style>
-      <div style={{
-        width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#fff1f2',
-        color: '#ff007f', fontSize: '32px', fontWeight: '900', display: 'flex',
-        alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'
-      }}>!</div>
-      <h3 style={{ color: '#1f2937', fontSize: '20px', fontWeight: '900', margin: '0 0 12px 0' }}>앗, 통신에 문제가 생겼어요</h3>
-      <p style={{ color: '#6b7280', fontSize: '15px', lineHeight: '1.6', margin: '0 0 24px 0', wordBreak: 'keep-all' }}>{message}</p>
-      <button onClick={onClose} style={{
-        backgroundColor: '#ff007f', color: 'white', border: 'none', borderRadius: '12px',
-        padding: '14px 32px', fontSize: '15px', fontWeight: 'bold', cursor: 'pointer',
-        boxShadow: '0 4px 10px rgba(255, 0, 127, 0.3)', transition: 'transform 0.1s'
-      }}>확인</button>
-    </div>
-  </div>
-);
-
 export default function MercariCategoryPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -141,7 +176,7 @@ export default function MercariCategoryPage() {
   const [isItemLoading, setIsItemLoading] = useState(false);
 
   const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const [productDetail, setProductDetail] = useState<DetailedProduct | null>(null);
+  const [productDetail, setProductDetail] = useState<GlobalProduct | null>(null);
   
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { showAlert, showConfirm } = useMikuAlert(); 
@@ -150,14 +185,22 @@ export default function MercariCategoryPage() {
   // 🚀 모바일 대응을 위한 상태 추가
   const [isMobile, setIsMobile] = useState(false);
 
+  const styles = useMemo(() => getStyles(isMobile), [isMobile]);
+
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
     handleResize(); // 초기화
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const mappedDisplayItems = useMemo((): GlobalItem[] => {
+    return displayItems.map(item => ({
+      ...item,
+      platform: 'mercari', 
+      status: item.status as 'on_sale' | 'sold_out'
+    }));
+  }, [displayItems]);
 
   const isCallAllowed = () => {
     const status = checkMercariCooldown();
@@ -253,73 +296,9 @@ export default function MercariCategoryPage() {
     }
   }, [items]);
 
-  // 🚀 isMobile 상태를 반영하기 위해 styles를 객체에서 컴포넌트 내부로 이동
-  const styles = {
-    pageWrapper: {
-      width: '100%', display: 'flex', justifyContent: 'center',
-      backgroundColor: '#f8f9fa', minHeight: '100vh', fontFamily: 'sans-serif'
-    },
-    container: {
-      width: '100%', maxWidth: '2000px',
-      padding: isMobile ? '8px 12px 16px 12px' : '8px 24px 24px 24px', // 모바일 패딩 축소
-      display: 'flex', flexDirection: 'column' as const,
-      gap: isMobile ? '8px' : '12px' 
-    },
-    header: {
-      display: 'flex',
-      flexDirection: isMobile ? 'column' as const : 'row' as const, // 모바일 세로 정렬
-      justifyContent: isMobile ? 'center' : 'space-between',
-      alignItems: isMobile ? 'flex-start' : 'center',
-      gap: isMobile ? '12px' : '0',
-      marginBottom: '8px', 
-      padding: '16px 20px',
-      backgroundColor: 'white', borderRadius: '24px',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f3f4f6'
-    },
-    mainLayout: {
-      display: 'flex',
-      flexDirection: isMobile ? 'column' as const : 'row' as const, // 🚀 모바일에서 사이드바와 콘텐츠 세로 배치
-      gap: isMobile ? '16px' : '20px', 
-      alignItems: 'flex-start'
-    },
-    sidebarWrapper: {
-      width: isMobile ? '100%' : '430px', // 🚀 모바일에서는 전체 폭 사용
-      flexShrink: 0,
-      position: isMobile ? 'static' as const : 'sticky' as const, // 🚀 모바일은 고정 해제 (본문 가림 방지)
-      top: isMobile ? 'auto' : '120px', 
-      height: isMobile ? 'auto' : 'fit-content',
-      maxHeight: isMobile ? 'none' : 'calc(100vh - 120px)', 
-      overflowY: isMobile ? 'visible' as const : 'auto' as const, 
-      alignSelf: 'start',
-      zIndex: 10
-    },
-    contentArea: {
-      flex: 1, minWidth: 0, width: '100%' // 모바일에서 화면 밖으로 밀리지 않도록 width 추가
-    },
-    breadcrumb: {
-      display: 'flex', alignItems: 'center', gap: '4px',
-      marginBottom: isMobile ? '16px' : '24px', // 모바일 여백 축소
-      fontSize: '13px', color: '#9ca3af',
-      overflowX: 'auto' as const, whiteSpace: 'nowrap' as const,
-      paddingBottom: '4px' // 스크롤바 영역 확보
-    },
-    categoryCard: {
-      backgroundColor: 'white', border: '1px solid #e5e7eb',
-      borderRadius: '24px', padding: isMobile ? '20px' : '32px', // 모바일 패딩 축소
-      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-    },
-    crawlButton: (isRunning: boolean) => ({
-      px: '32px', py: '10px', borderRadius: '16px', fontWeight: 'bold', fontSize: '14px',
-      color: 'white', border: 'none', cursor: 'pointer', transition: 'all 0.2s',
-      backgroundColor: isRunning ? '#9ca3af' : '#ff007f',
-      boxShadow: isRunning ? 'none' : '0 10px 15px -3px rgba(255, 0, 127, 0.2)',
-      width: isMobile ? '100%' : 'auto' // 모바일 전체 버튼
-    })
-  };
-
   const addLog = (msg: string) => setLog(prev => [msg, ...prev].slice(0, 10));
 
-  const loadItems = async (catId: number, filters?: FilterState) => {
+  const loadItems = async (catId: number, filters?: GlobalFilterState) => {
       const targetId = Number(catId);
       const params = buildMercariParams(targetId, filters);
       const queryString = params.toString();
@@ -396,7 +375,7 @@ export default function MercariCategoryPage() {
     }
   };
 
-  const buildMercariParams = (catId: number, filters?: FilterState): URLSearchParams => {
+  const buildMercariParams = (catId: number, filters?: GlobalFilterState): URLSearchParams => {
     const params = new URLSearchParams({});
     if (catId !== 0) params.append("category_id", catId.toString());
     if (!filters) return params;
@@ -447,34 +426,28 @@ export default function MercariCategoryPage() {
 
   const loadProductDetail = async (itemId: string) => {
     if (globalProductDetailCache[itemId]) {
-      console.log(`⚡ [Cache Hit] ${itemId} 아이템을 캐시에서 불러옵니다.`);
-      setProductDetail(globalProductDetailCache[itemId]); 
-      MoveScrollTop();
+      setProductDetail({ ...globalProductDetailCache[itemId], platform: 'mercari' } as GlobalProduct); 
+      setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
       return; 
     }
-    
     if (!isCallAllowed()) return;
 
     setIsDetailLoading(true);
     setProductDetail(null); 
-    addLog(`🔎 [상세조회] productDetail 요청 (ID: ${itemId})`);
 
     try {
       const res = await fetch(`/api/mercari/productDetail?itemId=${itemId}`);
       const result = await res.json();
-
       if (result.success) {
-        setProductDetail(result.data); 
-        addLog(`✨ 상품 정보 로드 성공: ${itemId}`);
+        const mappedData: GlobalProduct = { ...result.data, platform: 'mercari' };
+        setProductDetail(mappedData);
         globalProductDetailCache[itemId] = result.data;
-        MoveScrollTop();
+        setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
       } else {
         throw new Error(result.error);
       }
     } catch (err: any) {
-      console.error("Detail Load Fail:", err.message);
-      addLog(`❌ 로드 실패: ${err.message}`);
-      showAlert('상품 로딩에 실패하였습니다. \n잠시후 다시 시도해주세요');
+      showAlert('상품 로딩에 실패하였습니다.');
     } finally {
       setIsDetailLoading(false);
     }
@@ -559,7 +532,7 @@ export default function MercariCategoryPage() {
   };
 
   return (
-    <div style={styles.pageWrapper} translate="no">
+    <div style={styles.pageWrapper} translate="yes">
       <div style={styles.container}>
         
         <div id="loading-portal">
@@ -567,39 +540,21 @@ export default function MercariCategoryPage() {
           {isDetailLoading && <MikuLoadingOverlay message="상품 상세 정보를 분석 중입니다" />}
         </div>
 
-        {SHOW_HEADER && (
-          <header style={styles.header}>
-            <h1 style={{ fontSize: '24px', fontWeight: 900, color: '#1f2937', letterSpacing: '-0.05em', margin: 0 }}>
-              Miku <span style={{ color: '#ff007f' }}>Mercari</span>
-            </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexDirection: isMobile ? 'column' : 'row', width: isMobile ? '100%' : 'auto' }}>
-              <button 
-                onClick={isAutoRunning ? stopAutoCrawl : startAutoCrawl}
-                style={styles.crawlButton(isAutoRunning)}
-              >
-                {isAutoRunning ? "🤖 자동 수집 중" : "🚀 카테고리 수집 시작"}
-              </button>
-              <div style={{ fontSize: '11px', fontFamily: 'monospace', color: '#9ca3af', alignSelf: isMobile ? 'flex-start' : 'auto' }}>
-                {log[0] || "Ready"}
-              </div>
-            </div>
-          </header>
-        )}
-
         <div style={styles.mainLayout}>
-          
           <aside style={styles.sidebarWrapper}>
-            <MercariSidebar 
+            <GlobalSidebar 
+              platform="mercari"
               currentPath={path} 
               levelOptions={levelOptions} 
               onNavigate={handleSidebarNavigate} 
-              onSearch={(filters: FilterState) => {
+              onSearch={(filters: GlobalFilterState) => {
                 loadItems(Number(currentCatId), filters); 
               }}
             />
           </aside>
 
           <main style={styles.contentArea}>
+            {/* 1. 경로 안내 (Breadcrumb) */}
             <nav style={styles.breadcrumb}>
               <span style={{ cursor: 'pointer' }} onClick={() => handleBreadcrumbClick(0, -1)}>HOME</span>
               {path.map((p, index) => (
@@ -610,12 +565,30 @@ export default function MercariCategoryPage() {
               ))}
             </nav>
 
+            {/* 2. 상품 상세 정보 (팝업처럼 상단에 표시) */}
             <div style={{ display: productDetail ? 'block' : 'none', marginBottom: '40px' }}>
-              {productDetail && <MercariProductDetail product={productDetail} onClose={() => setProductDetail(null)} />}
+              {productDetail && (
+                <GlobalProductDetail product={productDetail} onClose={() => setProductDetail(null)} />
+              )}
             </div>
 
-            <div style={{ position: 'relative', minHeight: '600px' }}>
-              <div style={{ display: (isItemLoading || displayItems.length > 0) ? 'block' : 'none' }}>
+            {/* 3. 카테고리 선택 영역 (항상 표시되도록 변경) */}
+            <div className="notranslate" translate="no" style={{ ...styles.categoryCard, marginBottom: '40px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#9ca3af', marginBottom: '24px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                카테고리를 선택하세요
+              </h3>
+              <GlobalCategoryGrid 
+                categories={categories}
+                isLeaf={isLeaf}
+                isLoading={isLoading}
+                platform = 'mercari'
+                onMove={handleMove}
+              />
+            </div>
+
+            {/* 4. 상품 목록 영역 (로딩 중이거나 아이템이 있을 때만 아래에 나타남) */}
+            {(isItemLoading || displayItems.length > 0) && (
+              <div style={{ position: 'relative', minHeight: '400px', animation: 'fadeIn 0.5s ease-in-out' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px', borderBottom: '1px solid #f3f4f6', paddingBottom: '16px' }}>
                   <h2 style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: 900, color: '#1f2937', margin: 0 }}>
                     추천 <span style={{ color: '#ff007f' }}>아이템</span>
@@ -628,37 +601,28 @@ export default function MercariCategoryPage() {
                       }
                       setItems([]); 
                       setDisplayItems([]);
-                    }} style={{ fontSize: '12px', color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer' }}>목록 닫기</button>
+                    }} style={{ fontSize: '12px', color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer' }}>
+                      결과 닫기
+                    </button>
                   )}
                 </div>
 
-                {/* 🚀 모바일 그리드 템플릿 최적화 */}
-                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(auto-fill, minmax(140px, 1fr))' : 'repeat(auto-fill, minmax(250px, 1fr))', gap: isMobile ? '12px' : '24px' }}>
-                  {isItemLoading ? (
-                    [...Array(8)].map((_, i) => <ProductSkeleton key={`skel-${i}`} />)
-                  ) : (
-                    displayItems.map((item) => (
-                      item && (
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: isMobile ? 'repeat(auto-fill, minmax(140px, 1fr))' : 'repeat(auto-fill, minmax(250px, 1fr))', 
+                  gap: isMobile ? '12px' : '24px' 
+                }}>
+                  {isItemLoading 
+                    ? [...Array(8)].map((_, i) => <ProductSkeleton key={`skel-${i}`} />) 
+                    : mappedDisplayItems.map(item => item && (
                         <div key={`prod-${item.id}`}>
-                          <MercariProductCard item={item} onClick={loadProductDetail} />
+                          <GlobalProductCard item={item} onClick={loadProductDetail} />
                         </div>
-                      )
-                    ))
-                  )}
+                      ))
+                  }
                 </div>
               </div>
-              <div style={{ display: !(isItemLoading || displayItems.length > 0) ? 'block' : 'none' }}>
-                <div style={styles.categoryCard}>
-                  <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#9ca3af', marginBottom: '24px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>카테고리를 선택하세요</h3>
-                  <MercariCategoryGrid 
-                    categories={categories}
-                    isLeaf={isLeaf}
-                    isLoading={isLoading}
-                    onMove={handleMove}
-                  />
-                </div>
-              </div>
-            </div>
+            )}
           </main>
         </div>
       </div>
