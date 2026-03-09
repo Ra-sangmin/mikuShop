@@ -1,15 +1,28 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { useState, useEffect, useMemo } from 'react';
 
-interface Props {
+interface GlobalPaginationProps {
   currentPage: number;
   pageCount: number;
+  /**
+   * 페이지 이동 시 별도의 로직(예: API 재호출)이 필요한 경우 사용합니다.
+   * 전달하지 않으면 현재 URL의 쿼리 파라미터를 자동으로 업데이트합니다.
+   */
+  onPageChange?: (page: number) => void;
+  /** 쿼리 파라미터 키 이름 (기본값: 'page') */
+  paramName?: string;
 }
 
-export default function Pagination({ currentPage, pageCount }: Props) {
+export default function GlobalPagination({ 
+  currentPage, 
+  pageCount, 
+  onPageChange, 
+  paramName = 'page' 
+}: GlobalPaginationProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [inputPage, setInputPage] = useState(currentPage);
 
@@ -18,23 +31,35 @@ export default function Pagination({ currentPage, pageCount }: Props) {
   }, [currentPage]);
 
   const handlePageChange = (page: number) => {
-    let targetPage = Math.max(1, Math.min(page, pageCount));
+    const targetPage = Math.max(1, Math.min(page, pageCount));
+    
+    if (onPageChange) {
+      onPageChange(targetPage);
+      return;
+    }
+
+    // 현재 경로(pathname)를 유지하면서 쿼리 파라미터만 스마트하게 교체
     const params = new URLSearchParams(searchParams.toString());
-    params.set('page', targetPage.toString());
-    router.push(`/main_shop/rakuten?${params.toString()}`);
+    params.set(paramName, targetPage.toString());
+    router.push(`${pathname}?${params.toString()}`);
   };
 
-  // 페이지 그룹 계산 (5개씩 노출)
-  let startPage = Math.max(1, currentPage - 2);
-  let endPage = Math.min(pageCount, startPage + 4);
-  if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+  // 5개 단위 페이지 그룹 계산
+  const pages = useMemo(() => {
+    let startPage = Math.max(1, currentPage - 2);
+    let endPage = Math.min(pageCount, startPage + 4);
+    
+    if (endPage - startPage < 4) {
+      startPage = Math.max(1, endPage - 4);
+    }
 
-  const pages = [];
-  for (let i = startPage; i <= endPage; i++) {
-    pages.push(i);
-  }
+    const result = [];
+    for (let i = startPage; i <= endPage; i++) {
+      result.push(i);
+    }
+    return result;
+  }, [currentPage, pageCount]);
 
-  // 공통 버튼 스타일 (더 크게 조정)
   const navButtonStyle = (disabled: boolean): React.CSSProperties => ({
     minWidth: '52px',
     height: '52px',
@@ -46,11 +71,13 @@ export default function Pagination({ currentPage, pageCount }: Props) {
     border: 'none',
     backgroundColor: 'transparent',
     color: disabled ? '#e5e7eb' : '#4b5563',
-    fontSize: '15px', // 텍스트 버튼용
+    fontSize: '15px',
     fontWeight: '600',
     cursor: disabled ? 'default' : 'pointer',
     transition: 'all 0.2s ease',
   });
+
+  if (pageCount <= 0) return null;
 
   return (
     <div style={{
@@ -61,9 +88,9 @@ export default function Pagination({ currentPage, pageCount }: Props) {
       marginTop: '60px',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Pretendard", sans-serif'
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '30px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '30px', flexWrap: 'wrap', justifyContent: 'center' }}>
         
-        {/* 네비게이션 컨테이너 */}
+        {/* 네비게이션 버튼 그룹 */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -75,25 +102,14 @@ export default function Pagination({ currentPage, pageCount }: Props) {
           border: '1px solid #f0f0f0'
         }}>
           
-          {/* 1. 처음으로 */}
-          <button
-            onClick={() => handlePageChange(1)}
-            disabled={currentPage === 1}
-            style={navButtonStyle(currentPage === 1)}
-          >
+          <button onClick={() => handlePageChange(1)} disabled={currentPage === 1} style={navButtonStyle(currentPage === 1)}>
             처음
           </button>
 
-          {/* 2. 이전 그룹 (-5) */}
-          <button
-            onClick={() => handlePageChange(currentPage - 5)}
-            disabled={currentPage <= 5}
-            style={{ ...navButtonStyle(currentPage <= 5), fontSize: '20px' }}
-          >
+          <button onClick={() => handlePageChange(currentPage - 5)} disabled={currentPage <= 5} style={{ ...navButtonStyle(currentPage <= 5), fontSize: '20px' }}>
             &lsaquo;
           </button>
 
-          {/* 3. 숫자 페이지 */}
           <div style={{ display: 'flex', gap: '6px', margin: '0 10px' }}>
             {pages.map((p) => (
               <button
@@ -118,26 +134,16 @@ export default function Pagination({ currentPage, pageCount }: Props) {
             ))}
           </div>
 
-          {/* 4. 다음 그룹 (+5) */}
-          <button
-            onClick={() => handlePageChange(currentPage + 5)}
-            disabled={currentPage > pageCount - 5}
-            style={{ ...navButtonStyle(currentPage > pageCount - 5), fontSize: '20px' }}
-          >
+          <button onClick={() => handlePageChange(currentPage + 5)} disabled={currentPage > pageCount - 5} style={{ ...navButtonStyle(currentPage > pageCount - 5), fontSize: '20px' }}>
             &rsaquo;
           </button>
 
-          {/* 5. 끝으로 */}
-          <button
-            onClick={() => handlePageChange(pageCount)}
-            disabled={currentPage === pageCount}
-            style={navButtonStyle(currentPage === pageCount)}
-          >
+          <button onClick={() => handlePageChange(pageCount)} disabled={currentPage === pageCount} style={navButtonStyle(currentPage === pageCount)}>
             끝
           </button>
         </div>
 
-        {/* 페이지 입력 이동 섹션 */}
+        {/* 직접 페이지 입력 이동 */}
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 

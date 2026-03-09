@@ -29,7 +29,7 @@ interface GlobalCategoryGridProps {
   isLoading: boolean;
   /** 현재 활성화된 플랫폼 (mercari, rakuten, amazon, yahoo) */
   platform: ShoppingPlatform; 
-  onMove: (id: number, name: string) => void;
+  onMove: (id: number, name: string, levelIndex : number) => void;
   isMobile?: boolean;
 }
 
@@ -52,6 +52,14 @@ export default function GlobalCategoryGrid({
   const isMobile = useIsMobile(); 
   const theme = PLATFORM_THEMES[platform] || PLATFORM_THEMES.default;
 
+  // 🚀 [추가] 더보기 상태 관리
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // 🚀 [추가] 모바일일 경우 초기 8개만 노출, PC는 전체 노출
+  const initialCount = isMobile ? 8 : categories.length;
+  const visibleCategories = isExpanded ? categories : categories.slice(0, initialCount);
+  const hasMore = categories.length > initialCount;
+
   const styles = {
     loadingWrapper: { height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
     spinner: { 
@@ -69,8 +77,32 @@ export default function GlobalCategoryGrid({
       animation: 'fadeIn 0.5s ease-in-out' 
     },
     messageText: { textAlign: 'center' as const, padding: '40px 0', color: '#9ca3af', fontSize: '14px', fontStyle: 'italic' as const },
-    emptyText: { textAlign: 'center' as const, padding: '40px 0', color: '#d1d5db', fontSize: '14px' }
+    emptyText: { textAlign: 'center' as const, padding: '40px 0', color: '#d1d5db', fontSize: '14px' },
+
+    // 🚀 [추가] 더보기 버튼 스타일
+    expandButton: {
+      width: '100%',
+      marginTop: '16px',
+      padding: '12px',
+      borderRadius: '12px',
+      border: `1px solid ${theme.color}20`,
+      backgroundColor: theme.bg,
+      color: theme.color,
+      fontSize: '14px',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '4px',
+      transition: 'all 0.2s'
+    }
   };
+
+  // 카테고리 이동 시 상태 초기화 (페이지 이동 후 다시 접힌 상태로 시작)
+  useEffect(() => {
+    setIsExpanded(false);
+  }, [categories]);
 
   if (isLoading) return (
     <div style={styles.loadingWrapper}>
@@ -85,17 +117,34 @@ export default function GlobalCategoryGrid({
       
       {/* 카테고리 리스트 표시 */}
       {!isLeaf && categories.length > 0 && (
-        <div style={styles.gridContainer}>
-          {categories.map((cat) => (
-            <GlobalCategoryItem 
-              key={cat.genreId} 
-              name={cat.genreName} 
-              onClick={() => onMove(cat.genreId, cat.genreName)} 
-              isMobile={isMobile}
-              theme={theme} // 테마 전달
-            />
-          ))}
-        </div>
+       <>
+          <div style={styles.gridContainer}>
+            {/* 🚀 visibleCategories를 사용하여 렌더링 */}
+            {visibleCategories.map((cat) => (
+              <GlobalCategoryItem 
+                key={cat.genreId} 
+                name={cat.genreName} 
+                onClick={() => onMove(cat.genreId, cat.genreName , cat.genreLevel)} 
+                isMobile={isMobile}
+                theme={theme}
+              />
+            ))}
+          </div>
+
+          {/* 🚀 [추가] 더보기 / 접기 버튼 */}
+          {hasMore && (
+            <button 
+              style={styles.expandButton} 
+              onClick={() => setIsExpanded(!isExpanded)}
+            >
+              {isExpanded ? (
+                <>접기 <span style={{fontSize: '10px'}}>▲</span></>
+              ) : (
+                <>카테고리 더보기 (+{categories.length - initialCount}) <span style={{fontSize: '10px'}}>▼</span></>
+              )}
+            </button>
+          )}
+        </>
       )}
 
       {/* 안내 메시지 */}

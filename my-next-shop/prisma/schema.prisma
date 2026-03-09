@@ -117,6 +117,7 @@ model Order {
   // 4. 상품 상세 정보
   productImageUrl     String?        @db.Text @map("product_image_url")             // 상품 이미지 URL (긴 문자열 허용)
   productPrice        Int            @map("product_price")                          // 상품 가격 (현지 통화 기준)
+  productCount        Int?           @default(1)                                    // 구매처 전달 요청사항
   productName         String         @map("product_name")                           // 상품 명칭
   productUrl          String?        @db.Text @map("product_url")                   // 상품 구매 원본 링크
   productOption       String?        @map("product_option")                         // 선택한 옵션 (사이즈, 색상 등)
@@ -168,4 +169,16 @@ model MercariCategory {
   updatedAt   DateTime @updatedAt                     // 데이터 갱신일 (자동)
 
   @@map("MercariCategory")
+}
+
+model RakutenCategory {
+  id          Int      @id @default(autoincrement())  // 메루카리 고유 ID
+  genreId     Int      @unique                        // 메루카리 카테고리 ID
+  genreName   String                                  // 카테고리 이름
+  genreLevel  Int?     @default(1)                    // 1:대분류, 2:중분류, 3:소분류...
+  parentId    Int                                     // 부모 카테고리 ID
+  isLeaf      Boolean  @default(false)                // 💡 최하위 카테고리 여부 저장 (기본값 false)
+  updatedAt   DateTime @updatedAt                     // 데이터 갱신일 (자동)
+
+  @@map("RakutenCategory")
 }

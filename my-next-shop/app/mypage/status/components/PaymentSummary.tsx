@@ -64,6 +64,10 @@ export default function PaymentSummary({
         sum + (Number(item.domesticShippingFee) || 0), 0
       );
 
+      const totalProduct = selectedItems.reduce((sum: number, item: any) => 
+        sum + (Number(item.productPrice * item.productCount) || 0), 0
+      );
+
       // DB 설정값 기반 수수료 계산
       const transferTotal = itemCount * feeSettings.TRANSFER;
       const agencyTotal = itemCount * feeSettings.AGENCY;

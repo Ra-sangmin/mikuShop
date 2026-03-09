@@ -10,16 +10,22 @@ const MIN_INTERVAL = 500;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function rakutenBaseAPIOn(
-  cacheKey: string,
+  //cacheKey: string,
   tailUrl: string,
   genreId: string,
-  page: number = 1,
+  page: string = '1',
   sort: string = 'standard',
+  keyword?: string | null,
+  NGKeyword?: string | null,
+  minPrice?: string | null,
+  maxPrice?: string | null,
+
   retries: number = 3,
+
 ): Promise<any> {
-  if (rakutenCache.has(cacheKey)) {
-    return rakutenCache.get(cacheKey).data;
-  }
+  // if (rakutenCache.has(cacheKey)) {
+  //   return rakutenCache.get(cacheKey).data;
+  // }
 
   const now = Date.now();
   const timeSinceLastRequest = now - lastRequestTime;
@@ -35,11 +41,26 @@ export async function rakutenBaseAPIOn(
   API_URL.searchParams.append('applicationId', applicationId);
   API_URL.searchParams.append('accessKey', accessKey);
   API_URL.searchParams.append('affiliateId', affiliateId);
+  API_URL.searchParams.append('genreId', genreId.toString());
   API_URL.searchParams.append('sort', sort);
-  API_URL.searchParams.append('genreId', genreId);
   API_URL.searchParams.append('page', page.toString());
-  API_URL.searchParams.append('hits', '30');
 
+  if(keyword){
+      API_URL.searchParams.append('keyword', keyword);
+  }
+
+  if(NGKeyword){
+      API_URL.searchParams.append('NGKeyword', NGKeyword);
+  }
+
+  if(minPrice){
+      API_URL.searchParams.append('minPrice', minPrice.toString());
+  }
+
+  if(maxPrice){
+      API_URL.searchParams.append('maxPrice', maxPrice.toString());
+  }
+  
   let attempt = 0;
   while (attempt < retries) {
     try {
@@ -60,7 +81,8 @@ export async function rakutenBaseAPIOn(
       }
 
       const data = await response.json();
-      rakutenCache.set(cacheKey, { data });
+      //rakutenCache.set(cacheKey, { data });
+
       return data;
     } catch (error) {
       lastRequestTime = Date.now();

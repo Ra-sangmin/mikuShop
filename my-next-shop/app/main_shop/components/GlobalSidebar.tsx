@@ -60,9 +60,10 @@ export interface GlobalFilterState {
 interface GlobalSidebarProps {
   platform: ShoppingPlatform;
   currentPath: { id: number, name: string }[];
-  levelOptions: { [key: number]: GlobalCategory[] };
   onNavigate: (id: number, name: string, index: number) => void;
   onSearch: (filters: GlobalFilterState) => void;
+  // ✨ 정렬 옵션을 부모로부터 받을 수 있도록 추가
+  sortOptions?: { id: string, label: string }[];
 }
 
 // --- 플랫폼별 테마 컬러 설정 ---
@@ -74,7 +75,7 @@ const PLATFORM_THEMES: Record<ShoppingPlatform, { color: string; bg: string; lig
   default: { color: '#6366f1', bg: '#f5f3ff', light: '#f9fafb' }
 };
 
-export function GlobalSidebar({ platform = 'mercari', currentPath = [], levelOptions, onNavigate, onSearch }: GlobalSidebarProps) {
+export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: GlobalSidebarProps) {
     
     const isMobile = useIsMobile(); 
   
@@ -91,8 +92,8 @@ export function GlobalSidebar({ platform = 'mercari', currentPath = [], levelOpt
     const categoryAreaRef = useRef<HTMLDivElement>(null);
   
     const [openSections, setOpenSections] = useState<{ [key: string]: boolean }>({
-      '정렬': true, '키워드': true, '카테고리': true, '출품자': false,
-      '가격대': false, '물품의 상태': false, '배송료 부담': false,
+      '정렬': true, '키워드': true,'가격대': true,
+      '출품자': false, '물품의 상태': false, '배송료 부담': false,
       '색상': false, '판매 상황': false,
     });
     
@@ -104,7 +105,9 @@ export function GlobalSidebar({ platform = 'mercari', currentPath = [], levelOpt
     const colorContainerRef = useRef<HTMLDivElement>(null);
   
     const [filters, setFilters] = useState<GlobalFilterState>({
-      sortOrder: '기본순', keyword: '', excludeKeyword: '', brand: '',
+      // ✨ 부모에서 넘어온 옵션이 있으면 첫 번째 옵션의 id를, 없으면 '기본순'을 초기값으로 설정
+      sortOrder: sortOptions && sortOptions.length > 0 ? sortOptions[0].id : '기본순', 
+      keyword: '', excludeKeyword: '', brand: '',
       size: '모두', sellerType: '모두', minPrice: '', maxPrice: '',
       condition: '모두', shippingPayer: '모두', hasDiscount: '모두',
       listingType: '모두', colors: ['모두'], shippingOption: '모두', status: '모두'
@@ -190,6 +193,25 @@ export function GlobalSidebar({ platform = 'mercari', currentPath = [], levelOpt
     const onDragEnd = (e: React.MouseEvent) => {
       e.stopPropagation(); setIsDragging(false);
     };
+
+    // ✨ 드롭다운용 렌더링을 위해 라벨(label) 추출 배열과 현재 선택된 라벨 찾기
+    const currentSortLabels = sortOptions ? sortOptions.map(opt => opt.label) : ['기본순', '가격 낮은 순', '가격 높은 순', '최신순'];
+    
+    // 현재 filters.sortOrder(id값)에 해당하는 label 찾기 (화면에 보여주기 위함)
+    const currentSortDisplayValue = sortOptions 
+      ? sortOptions.find(opt => opt.id === filters.sortOrder)?.label || sortOptions[0].label 
+      : filters.sortOrder;
+
+    // 드롭다운 항목 선택 시 처리 핸들러
+    const handleSortSelect = (selectedLabel: string) => {
+      if (sortOptions) {
+        // 선택된 라벨을 통해 원래의 id 값을 찾아서 업데이트
+        const targetId = sortOptions.find(opt => opt.label === selectedLabel)?.id;
+        if (targetId) handleChange('sortOrder', targetId);
+      } else {
+        handleChange('sortOrder', selectedLabel);
+      }
+    };
   
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -243,15 +265,16 @@ export function GlobalSidebar({ platform = 'mercari', currentPath = [], levelOpt
 
       {/* 🚀 사이드바 본체 (왼쪽 스와이프로 닫기 로직 적용) */}
       <aside 
+        
         onTouchStart={isMobile ? handleTouchStart : undefined}
         onTouchMove={isMobile ? handleTouchMove : undefined}
         onTouchEnd={isMobile ? handleTouchEndClose : undefined}
         style={isMobile ? {
           position: 'fixed', top: 0, left: 0, bottom: 0, width: '85vw', maxWidth: '360px', zIndex: 9999,
           transform: isDrawerOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-          display: 'flex', flexDirection: 'column'
+          display: 'flex', flexDirection: 'column', backgroundColor: 'white'
         } : {
-          width: '390px', display: 'flex', flexDirection: 'column', gap: '16px', fontFamily: 'sans-serif' 
+          width: '390px', display: 'flex', flexDirection: 'column', gap: '16px'
         }}
       >
         <div style={{ 
@@ -260,15 +283,20 @@ export function GlobalSidebar({ platform = 'mercari', currentPath = [], levelOpt
           boxShadow: isMobile ? '10px 0 30px rgba(0,0,0,0.2)' : '0 25px 50px -12px rgba(0, 0, 0, 0.1)', 
           overflow: 'hidden', height: isMobile ? '100%' : 'auto', display: 'flex', flexDirection: 'column'
         }}>
-          <div style={{ padding: isMobile ? '20px' : '24px', borderBottom: '1px solid #f9fafb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-            <h2 style={{ color: '#111827', fontWeight: 900, fontSize: isMobile ? '18px' : '20px', margin: 0 }}>상세검색</h2>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <span style={{ backgroundColor: '#ff0038', color: 'white', padding: '3px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 900 }}>ADVANCED</span>
-              {/* 모바일 닫기 버튼 */}
-              {isMobile && (
-                <button onClick={() => setIsDrawerOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', color: '#9ca3af', cursor: 'pointer', padding: '0 4px' }}>✕</button>
-              )}
+
+          {/* 🚀 상단 헤더 영역: 제목 및 닫기 버튼 */}
+          <div style={{ 
+            padding: isMobile ? '20px' : '24px', 
+            borderBottom: '1px solid #f9fafb', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            flexShrink: 0 
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 style={{ color: '#111827', fontWeight: 900, fontSize: isMobile ? '18px' : '20px', margin: 0 }}>상세검색</h2>
             </div>
+
           </div>
 
           <div 
@@ -286,50 +314,19 @@ export function GlobalSidebar({ platform = 'mercari', currentPath = [], levelOpt
             }}
           >
             <Section title="정렬" isOpen={openSections['정렬']} onToggle={() => toggleSection('정렬')} isMobile={isMobile}>
-              <SimpleDropdown label="검색 결과 정렬" options={['기본순', '가격 낮은 순', '가격 높은 순', '최신순']} value={filters.sortOrder} onSelect={(v: string) => handleChange('sortOrder', v)} placeholder="정렬 방식을 선택하세요" isMobile={isMobile} />
+              <SimpleDropdown 
+                label="검색 결과 정렬" 
+                options={currentSortLabels} // 추출한 라벨 배열 전달
+                value={currentSortDisplayValue} // 현재 선택된 라벨 표시
+                onSelect={handleSortSelect} // 선택 핸들러 연결
+                placeholder="정렬 방식을 선택하세요" 
+                isMobile={isMobile} 
+              />
             </Section>
             
             <Section title="키워드" isOpen={openSections['키워드']} onToggle={() => toggleSection('키워드')} isMobile={isMobile}>
               <CustomInput label="검색어" value={filters.keyword} onChange={(v: string) => handleChange('keyword', v)} placeholder="검색어 입력..." isMobile={isMobile} />
               <CustomInput label="제외할 단어" value={filters.excludeKeyword} onChange={(v: string) => handleChange('excludeKeyword', v)} placeholder="제외할 단어 입력..." isMobile={isMobile} />
-            </Section>
-
-            <Section title="카테고리" isOpen={openSections['카테고리']} onToggle={() => toggleSection('카테고리')} isMobile={isMobile}>
-              <div ref={categoryAreaRef} style={{ display: 'flex', flexDirection: 'column' }}>
-                {Array.from({ length: 5 }).map((_, i) => {
-                  const level = i + 1;
-                  const options = levelOptions[level] || [];
-                  if (level > 1 && options.length === 0) return null;
-                  const optionsWithNone = level > 1 ? [{ genreId: -1, genreName: '선택안함', genreLevel: level }, ...options] : options;
-
-                  return (
-                    <div key={`level-${level}`} style={{ position: 'relative', zIndex: 100 - i }}>
-                      <CategoryDropdown
-                        label={level === 1 ? "대분류" : `${level}단계 분류`}
-                        placeholder={level === 1 ? "대분류 선택" : "하위 분류 선택"}
-                        options={optionsWithNone}
-                        value={currentPath[i]?.id.toString() || ""}
-                        isOpen={openDropdownLevel === level}
-                        onToggle={() => setOpenDropdownLevel(openDropdownLevel === level ? null : level)}
-                        onSelect={(id: number, name: string) => {
-                          setOpenDropdownLevel(null);
-                          if (id === -1) {
-                            const parent = currentPath[i - 1];
-                            onNavigate(parent?.id || 0, parent?.name || "HOME", i - 1);
-                          } else {
-                            onNavigate(id, name, i);
-                          }
-                        }}
-                        isMobile={isMobile}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </Section>
-
-            <Section title="출품자" isOpen={openSections['출품자']} onToggle={() => toggleSection('출품자')} isMobile={isMobile}>
-              <CapsuleGroup options={['모두', '개인', '메루카리샵']} current={filters.sellerType} onChange={(v: string) => handleChange('sellerType', v)} isMobile={isMobile} />
             </Section>
 
             <Section title="가격대" isOpen={openSections['가격대']} onToggle={() => toggleSection('가격대')} isMobile={isMobile}>
@@ -340,63 +337,70 @@ export function GlobalSidebar({ platform = 'mercari', currentPath = [], levelOpt
               </div>
             </Section>
 
-            <Section title="물품의 상태" isOpen={openSections['물품의 상태']} onToggle={() => toggleSection('물품의 상태')} isMobile={isMobile}>
-              <SimpleDropdown label="상태 선택" options={['모두', '신품, 미사용', '미사용에 가까움', '눈에 띄는 흠집 없음', '다소 흠집 있음', '전반적으로 나쁨']} value={filters.condition} onSelect={(v: string) => handleChange('condition', v)} placeholder="물품 상태를 선택하세요" isMobile={isMobile} />
-            </Section>
+            {platform !== 'rakuten' && (
+              <>
+                <Section title="출품자" isOpen={openSections['출품자']} onToggle={() => toggleSection('출품자')} isMobile={isMobile}>
+                  <CapsuleGroup options={['모두', '개인', '메루카리샵']} current={filters.sellerType} onChange={(v: string) => handleChange('sellerType', v)} isMobile={isMobile} />
+                </Section>
 
-            <Section title="배송료 부담" isOpen={openSections['배송료 부담']} onToggle={() => toggleSection('배송료 부담')} isMobile={isMobile}>
-              <CapsuleGroup options={['모두', '배송비 포함', '배송비 제외']} current={filters.shippingPayer} onChange={(v: string) => handleChange('shippingPayer', v)} isMobile={isMobile} />
-            </Section>
+                <Section title="물품의 상태" isOpen={openSections['물품의 상태']} onToggle={() => toggleSection('물품의 상태')} isMobile={isMobile}>
+                  <SimpleDropdown label="상태 선택" options={['모두', '신품, 미사용', '미사용에 가까움', '눈에 띄는 흠집 없음', '다소 흠집 있음', '전반적으로 나쁨']} value={filters.condition} onSelect={(v: string) => handleChange('condition', v)} placeholder="물품 상태를 선택하세요" isMobile={isMobile} />
+                </Section>
 
-            <Section title="할인 옵션" isOpen={openSections['할인 옵션']} onToggle={() => toggleSection('할인 옵션')} isMobile={isMobile}>
-              <CapsuleGroup options={['모두', '할인 대상 상품']} current={filters.hasDiscount} onChange={(v: string) => handleChange('hasDiscount', v)} isMobile={isMobile} />
-            </Section>
+                <Section title="배송료 부담" isOpen={openSections['배송료 부담']} onToggle={() => toggleSection('배송료 부담')} isMobile={isMobile}>
+                  <CapsuleGroup options={['모두', '배송비 포함', '배송비 제외']} current={filters.shippingPayer} onChange={(v: string) => handleChange('shippingPayer', v)} isMobile={isMobile} />
+                </Section>
 
-            <Section title="출품 형태" isOpen={openSections['출품 형태']} onToggle={() => toggleSection('출품 형태')} isMobile={isMobile}>
-              <CapsuleGroup options={['모두', '경매']} current={filters.listingType} onChange={(v: string) => handleChange('listingType', v)} isMobile={isMobile} />
-            </Section>
+                <Section title="할인 옵션" isOpen={openSections['할인 옵션']} onToggle={() => toggleSection('할인 옵션')} isMobile={isMobile}>
+                  <CapsuleGroup options={['모두', '할인 대상 상품']} current={filters.hasDiscount} onChange={(v: string) => handleChange('hasDiscount', v)} isMobile={isMobile} />
+                </Section>
 
-            <Section title="색상" isOpen={openSections['색상']} onToggle={() => toggleSection('색상')} isMobile={isMobile}>
-              <div ref={colorContainerRef} style={{ position: 'relative' }}>
-                <div
-                  onClick={() => setIsColorOpen(!isColorOpen)}
-                  style={{
-                    width: '100%', padding: isMobile ? '10px 14px' : '12px 16px', backgroundColor: '#f9fafb', borderRadius: '16px', fontSize: isMobile ? '12px' : '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', border: isColorOpen ? '1px solid #ff0038' : '1px solid transparent', boxSizing: 'border-box'
-                  }}
-                >
-                  <div style={{ width: isMobile ? '16px' : '18px', height: isMobile ? '16px' : '18px', borderRadius: '50%', border: '1px solid #efefef', backgroundColor: COLOR_OPTIONS.find(c => c.name === (filters.colors[0] || '모두'))?.code || 'white' }} />
-                  <span style={{ flex: 1, fontWeight: 600 }}>{filters.colors[0] || '모두'}</span>
-                  <span style={{ color: '#d1d5db', fontSize: '10px' }}>{isColorOpen ? '▲' : '▼'}</span>
-                </div>
+                <Section title="출품 형태" isOpen={openSections['출품 형태']} onToggle={() => toggleSection('출품 형태')} isMobile={isMobile}>
+                  <CapsuleGroup options={['모두', '경매']} current={filters.listingType} onChange={(v: string) => handleChange('listingType', v)} isMobile={isMobile} />
+                </Section>
 
-                {isColorOpen && (
-                  <div 
-                    ref={colorListRef}
-                    onMouseDown={onDragStart} onMouseMove={onDragMove} onMouseUp={onDragEnd} onMouseLeave={onDragEnd}
-                    style={{ position: 'absolute', top: '55px', left: 0, width: '100%', backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '20px', boxShadow: '0 15px 35px rgba(0,0,0,0.2)', zIndex: 1000, maxHeight: '280px', overflowY: 'auto', padding: '12px 0', cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
-                  >
-                    {COLOR_OPTIONS.map((c) => (
-                      <div
-                        key={c.name}
-                        onClick={() => { if (!isDragging) { handleChange('colors', [c.name]); setIsColorOpen(false); } }}
-                        style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: isMobile ? '10px 16px' : '12px 20px', cursor: 'pointer' }}
+                <Section title="색상" isOpen={openSections['색상']} onToggle={() => toggleSection('색상')} isMobile={isMobile}>
+                  <div ref={colorContainerRef} style={{ position: 'relative' }}>
+                    <div
+                      onClick={() => setIsColorOpen(!isColorOpen)}
+                      style={{
+                        width: '100%', padding: isMobile ? '10px 14px' : '12px 16px', backgroundColor: '#f9fafb', borderRadius: '16px', fontSize: isMobile ? '12px' : '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', border: isColorOpen ? '1px solid #ff0038' : '1px solid transparent', boxSizing: 'border-box'
+                      }}
+                    >
+                      <div style={{ width: isMobile ? '16px' : '18px', height: isMobile ? '16px' : '18px', borderRadius: '50%', border: '1px solid #efefef', backgroundColor: COLOR_OPTIONS.find(c => c.name === (filters.colors[0] || '모두'))?.code || 'white' }} />
+                      <span style={{ flex: 1, fontWeight: 600 }}>{filters.colors[0] || '모두'}</span>
+                      <span style={{ color: '#d1d5db', fontSize: '10px' }}>{isColorOpen ? '▲' : '▼'}</span>
+                    </div>
+
+                    {isColorOpen && (
+                      <div 
+                        ref={colorListRef}
+                        onMouseDown={onDragStart} onMouseMove={onDragMove} onMouseUp={onDragEnd} onMouseLeave={onDragEnd}
+                        style={{ position: 'absolute', top: '55px', left: 0, width: '100%', backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '20px', boxShadow: '0 15px 35px rgba(0,0,0,0.2)', zIndex: 1000, maxHeight: '280px', overflowY: 'auto', padding: '12px 0', cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
                       >
-                        <div style={{ width: isMobile ? '20px' : '24px', height: isMobile ? '20px' : '24px', borderRadius: '50%', border: c.border ? '1px solid #eee' : 'none', backgroundColor: c.code }} />
-                        <span style={{ fontSize: isMobile ? '13px' : '14px', color: filters.colors[0] === c.name ? '#ff0038' : '#333', fontWeight: filters.colors[0] === c.name ? '900' : '500' }}>{c.name}</span>
+                        {COLOR_OPTIONS.map((c) => (
+                          <div
+                            key={c.name}
+                            onClick={() => { if (!isDragging) { handleChange('colors', [c.name]); setIsColorOpen(false); } }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: isMobile ? '10px 16px' : '12px 20px', cursor: 'pointer' }}
+                          >
+                            <div style={{ width: isMobile ? '20px' : '24px', height: isMobile ? '20px' : '24px', borderRadius: '50%', border: c.border ? '1px solid #eee' : 'none', backgroundColor: c.code }} />
+                            <span style={{ fontSize: isMobile ? '13px' : '14px', color: filters.colors[0] === c.name ? '#ff0038' : '#333', fontWeight: filters.colors[0] === c.name ? '900' : '500' }}>{c.name}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </div>
-            </Section>
+                </Section>
 
-            <Section title="배송 옵션" isOpen={openSections['배송 옵션']} onToggle={() => toggleSection('배송 옵션')} isMobile={isMobile}>
-              <CapsuleGroup options={['모두', '익명 배송', '수취 옵션', '옵션 없음']} current={filters.shippingOption} onChange={(v: string) => handleChange('shippingOption', v)} isMobile={isMobile} />
-            </Section>
+                <Section title="배송 옵션" isOpen={openSections['배송 옵션']} onToggle={() => toggleSection('배송 옵션')} isMobile={isMobile}>
+                  <CapsuleGroup options={['모두', '익명 배송', '수취 옵션', '옵션 없음']} current={filters.shippingOption} onChange={(v: string) => handleChange('shippingOption', v)} isMobile={isMobile} />
+                </Section>
 
-            <Section title="판매 상황" isOpen={openSections['판매 상황']} onToggle={() => toggleSection('판매 상황')} isMobile={isMobile}>
-               <CapsuleGroup options={['모두', '판매중', '품절']} current={filters.status} onChange={(v: string) => handleChange('status', v)} isMobile={isMobile} />
-            </Section>
+                <Section title="판매 상황" isOpen={openSections['판매 상황']} onToggle={() => toggleSection('판매 상황')} isMobile={isMobile}>
+                  <CapsuleGroup options={['모두', '판매중', '품절']} current={filters.status} onChange={(v: string) => handleChange('status', v)} isMobile={isMobile} />
+                </Section>
+            </>)}
           </div>
 
           <div style={{ padding: isMobile ? '16px' : '24px', borderTop: '1px solid #f9fafb', flexShrink: 0, backgroundColor: 'white' }}>
@@ -411,6 +415,44 @@ export function GlobalSidebar({ platform = 'mercari', currentPath = [], levelOpt
             </button>
           </div>
         </div>
+
+        {/* 🚀 [핵심 수정] 사이드바 우측에 붙어있는 닫기 버튼 */}
+        {isMobile && (
+          <div
+            onClick={() => setIsDrawerOpen(false)}
+            style={{
+              position: 'absolute',
+              left: '100%', // 사이드바 바로 오른쪽에 위치
+              top: '80px',
+              zIndex: 10000,
+              cursor: 'pointer',
+              display: isDrawerOpen ? 'flex' : 'none', // 열렸을 때만 표시
+            }}
+          >
+            <div style={{
+              padding: '16px 12px',
+              backgroundColor: '#111827', // 닫기 버튼은 시인성을 위해 어두운 색 권장
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderTopRightRadius: '16px',
+              borderBottomRightRadius: '16px',
+              boxShadow: '4px 0 12px rgba(0,0,0,0.15)',
+            }}>
+              <span style={{ 
+                fontSize: '13px', 
+                fontWeight: '900', 
+                writingMode: 'vertical-rl', 
+                textOrientation: 'upright', 
+                letterSpacing: '2px' 
+              }}>
+                닫기 ✕
+              </span>
+            </div>
+          </div>
+        )}
+        
       </aside>
     </>
   );

@@ -11,6 +11,7 @@ export interface GlobalProduct {
   platform: 'mercari' | 'rakuten' | 'amazon' | 'yahoo';
   name: string;
   price: number;
+  count?: 1;
   description: string;
   images: string[];
   thumbnail: string;
@@ -97,13 +98,16 @@ export default function GlobalProductDetail({ product, onClose }: GlobalProductD
     }
   }, []);
 
-  const { totalPriceJpy, totalPriceKrw } = useMemo(() => {
-    const jpySum = product.price + (fees.TRANSFER || 0) + (fees.AGENCY || 0);
-    return {
-      totalPriceJpy: jpySum,
-      totalPriceKrw: Math.floor(jpySum * exchangeRate)
-    };
-  }, [product.price, fees, exchangeRate]);
+  // ✨ 수량(quantity)을 반영하여 최종 합계 계산
+const { totalPriceJpy, totalPriceKrw } = useMemo(() => {
+  // (상품 단가 * 수량) + 송금 수수료 + 대행 수수료
+  const jpySum = (product.price * quantity) + (fees.TRANSFER || 0) + (fees.AGENCY || 0);
+  
+  return {
+    totalPriceJpy: jpySum,
+    totalPriceKrw: Math.floor(jpySum * exchangeRate)
+  };
+}, [product.price, quantity, fees, exchangeRate]); // 👈 여기에 quantity를 추가해야 수량 변경 시 재계산됩니다.
 
   const handleAddToCart = async () => {
     const userId = localStorage.getItem('id');
@@ -121,11 +125,11 @@ export default function GlobalProductDetail({ product, onClose }: GlobalProductD
           platform: product.platform,
           productName: product.name,
           productPrice: product.price,
+          productCount: product.platform === 'rakuten' ? quantity : 1,
           productImageUrl: product.thumbnail,
           productUrl: product.url,
           productOption: optionMemo,
           status: "장바구니",
-          quantity: product.platform === 'rakuten' ? quantity : 1,
         }),
       });
 
@@ -259,17 +263,38 @@ export default function GlobalProductDetail({ product, onClose }: GlobalProductD
         </div>
 
         <div style={styles.infoWrapper}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ backgroundColor: `${theme.main}15`, color: theme.main, fontSize: '11px', fontWeight: 'bold', padding: '4px 12px', borderRadius: '999px' }}>
-              {product.condition}
-            </span>
-          </div>
+          {/* product.condition이 있을 때만 렌더링 */}
+          {product.condition && (
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ 
+                backgroundColor: `${theme.main}15`, 
+                color: theme.main, 
+                fontSize: '11px', 
+                fontWeight: 'bold', 
+                padding: '4px 12px', 
+                borderRadius: '999px' 
+              }}>
+                {product.condition}
+              </span>
+            </div>
+          )}
           
           <h2 style={{ fontSize: isMobile ? '20px' : '26px', fontWeight: 800, marginBottom: '16px', color: '#111827', lineHeight: 1.4 }} translate="yes" lang="ja">{product.name}</h2>
           
           <div style={{ marginBottom: isMobile ? '20px' : '30px' }}>
-            <span className="notranslate" translate="no" style={styles.priceTag}>¥{product.price.toLocaleString()}</span>
-            <span style={{ color: '#9ca3af', marginLeft: '10px', fontSize: isMobile ? '14px' : '16px' }}>약 {(product.price * exchangeRate).toLocaleString()}원</span>
+            {/* 1. 엔화 가격 (이미 잘 변하고 있다면 이 설정을 따르고 있을 것입니다) */}
+            <span className="notranslate" translate="no" style={styles.priceTag}>
+              ¥{(product.price * quantity).toLocaleString()}
+            </span>
+            
+            {/* 2. 원화 가격 (여기에 반드시 notranslate를 추가하세요) */}
+            <span 
+              className="notranslate" 
+              translate="no" 
+              style={{ color: '#9ca3af', marginLeft: '10px', fontSize: isMobile ? '14px' : '16px' }}
+            >
+              약 {(product.price * quantity * exchangeRate).toLocaleString()}원
+            </span>
           </div>
 
           {/* 2. 플랫폼별 조건부 정보 표시 */}
@@ -299,7 +324,7 @@ export default function GlobalProductDetail({ product, onClose }: GlobalProductD
            
               <div style={styles.rakutenTable}>
               <div style={styles.tableRow}>
-                <div style={styles.tableLabel}>상점명</div>
+                <div translate="yes" style={styles.tableLabel}>상점명</div>
                 <div style={styles.tableValue}><span style={{ fontWeight: 600 }}>{product.shopName || 'Rakuten Fashion'}</span>
                   <button 
                       style={styles.smallBtn}
@@ -316,8 +341,8 @@ export default function GlobalProductDetail({ product, onClose }: GlobalProductD
                 </div>
               </div>
               <div style={styles.tableRow}>
-                <div style={styles.tableLabel}>가격</div>
-                <div style={styles.tableValue}><span style={{ fontWeight: 800, color: theme.main, fontSize: '20px' }}>¥{product.price.toLocaleString()}</span></div>
+                <div style={styles.tableLabel}>단가</div>
+                <div style={styles.tableValue}><span style={{ fontWeight: 800, fontSize: '20px' }}>¥{product.price.toLocaleString()}</span></div>
               </div>
               <div style={styles.tableRow}>
                 <div style={styles.tableLabel}>수량</div>
@@ -341,7 +366,7 @@ export default function GlobalProductDetail({ product, onClose }: GlobalProductD
                 {product.platform === 'rakuten' ? (
                   <>
                     해당 상품은 <span style={{ fontWeight: '800', color: '#111827' }}>{product.shopName || 'Rakuten'}</span> 상점에서 판매되는<br/>
-                    <span style={{ fontWeight: '800', color: theme.main }}>{displayedName}</span> 입니다.<br/>
+                    <span translate="yes" style={{ fontWeight: '800', color: theme.main }}>{displayedName}</span> 입니다.<br/>
                   </>
                 ) : (
                   /* 메루카리 등 타 플랫폼 기본 요약 */
@@ -420,6 +445,27 @@ export default function GlobalProductDetail({ product, onClose }: GlobalProductD
 
         <div style={styles.descBox}>
           <h4 style={styles.descTitle}>상품 상세 설명</h4>
+
+          <div style={styles.cautionBox}>
+          {/* 🚨 경고 아이콘과 제목 */}
+          <div style={styles.cautionTitle}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            주의사항
+          </div>
+          
+          <div className="notranslate" style={styles.cautionMainText}>
+            번역은 서비스로 제공해드리는 기능으로 <span style={{ color: '#e11d48', textDecoration: 'underline' }}>오번역으로 인한 피해는 책임지지 않으니</span> 주의하시기 바랍니다.
+          </div>
+          
+          <div className="notranslate" style={styles.cautionSubText}>
+            (미개봉, 미사용 등 의미가 완전히 달라져버리는 오번역이 발생할 수 있습니다.)
+          </div>
+        </div>
+
           <p style={styles.descText} lang="ja">{product.description}</p>
         </div>
         
@@ -453,11 +499,50 @@ const getDetailStyles = (isMobile: boolean, theme: any): Record<string, React.CS
   aiBox: { padding: '20px', backgroundColor: theme.light, borderRadius: '20px', border: `1.5px dashed ${theme.main}`, marginBottom: '20px' },
   aiHeader: { display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', marginBottom: '6px', fontSize: '14px', color: theme.main },
   buyBtn: { backgroundColor: theme.main, color: 'white', fontWeight: 900, padding: '18px', borderRadius: '24px', border: 'none', cursor: 'pointer', fontSize: isMobile ? '16px' : '20px', boxShadow: `0 8px 20px ${theme.main}44` },
-  CloseBtn: { position: 'absolute', top: isMobile ? '12px' : '24px', right: isMobile ? '12px' : '24px', zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', backgroundColor: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)', borderRadius: '50%', border: 'none', cursor: 'pointer' },
+  CloseBtn: { position: 'absolute', top: isMobile ? '12px' : '12px', right: isMobile ? '12px' : '24px', zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', backgroundColor: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)', borderRadius: '50%', border: 'none', cursor: 'pointer' },
   bottomSection: { marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '30px' },
   calcBox: { padding: isMobile ? '24px' : '40px', backgroundColor: theme.light, borderRadius: '32px', border: `1px dashed ${theme.main}` },
   descBox: { padding: '30px', backgroundColor: '#f9fafb', borderRadius: '24px', border: '1px solid #f3f4f6' },
   descTitle: { margin: '0 0 16px 0', fontSize: '20px', fontWeight: 'bold' },
   descText: { lineHeight: '1.8', whiteSpace: 'pre-wrap', color: '#4b5563', fontSize: '15px' },
   smallBtn: {  padding: '4px 10px', fontSize: '12px', border: '1px solid #ddd', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#666', transition: 'all 0.2s', marginLeft: '4px', display: 'inline-flex', alignItems: 'center'},
+
+  // 🚨 주의사항 박스 스타일 추가
+  cautionBox: {
+    backgroundColor: '#fff5f5', // 아주 연한 붉은색 배경으로 구획 구분
+    border: '2px solid #e11d48',
+    padding: isMobile ? '24px 16px' : '30px 24px',
+    marginBottom: '30px',
+    borderRadius: '16px',
+    textAlign: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    boxShadow: '0 4px 15px rgba(225, 29, 72, 0.12)', // 붉은색 계열의 은은한 그림자
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  cautionTitle: {
+    color: '#e11d48',
+    fontWeight: '900',
+    fontSize: isMobile ? '18px' : '20px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px', // 아이콘과 텍스트 사이 간격
+  },
+  cautionMainText: {
+    fontSize: isMobile ? '15px' : '16px',
+    color: '#1f2937',
+    fontWeight: '600',
+    lineHeight: '1.6',
+    wordBreak: 'keep-all',
+  },
+  cautionSubText: {
+    fontSize: isMobile ? '13px' : '14px',
+    color: '#4b5563',
+    lineHeight: '1.4',
+    marginTop: '4px',
+  }
+
 });

@@ -10,6 +10,7 @@ export async function POST(req: Request) {
       userId, 
       productName, // 클라이언트에서 넘어온 상품명
       productPrice, 
+      productCount, 
       domesticShippingFee,
       productImageUrl, 
       productUrl, 
@@ -43,6 +44,7 @@ export async function POST(req: Request) {
         type: type || "PURCHASE",
         productName: finalTitle,
         productPrice: Math.round(productPrice),
+        productCount:Number(productCount) || 0,
         domesticShippingFee: Number(domesticShippingFee) || 0,
         productImageUrl: productImageUrl || "",
         productUrl: productUrl,

@@ -175,9 +175,9 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
           {item.name || 'No Title'}
         </h3>
         
-        <div style={styles.priceRow}>
-          <span style={styles.price}>
-            <span style={styles.currency}>¥</span>
+        <div className="notranslate" translate="no"  style={styles.priceRow}>
+          <span className="notranslate" translate="no" style={styles.price}>
+            <span className="notranslate" translate="no" style={styles.currency}>¥</span>
             {item.price ? item.price.toLocaleString() : '0'}
           </span>
           

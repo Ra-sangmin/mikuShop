@@ -1,42 +1,33 @@
-// app/api/rakuten/items/route.ts
 import { NextResponse } from 'next/server';
-import { rakutenBaseAPIOn } from '@/lib/rakuten'; // 경로가 다르면 수정해주세요
+import { rakutenBaseAPIOn } from '@/lib/rakuten';
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    
-    // URL에서 파라미터 추출 (Next.js 방식)
-    const genreId = searchParams.get('genreId');
-    const sort = searchParams.get('sort');
-    const pageParam = searchParams.get('page');
 
-    // 기본값 세팅 (기존 로직 동일)
-    const setGenreId = genreId || '0';
-    const setSort = sort || '0';
-    const setPage = pageParam ? Number(pageParam) : 0;
+      const { searchParams } = new URL(request.url);
+      
+      // 1. URL 파라미터 상태 추출
+      const genreId = searchParams.get('genreId') || '0';
+      const page = searchParams.get('page') || '1';
+      const sort = searchParams.get('sort') || 'standard';
+      
+      const keyword = searchParams.get('keyword') || undefined;      //검색어
+      const NGKeyword = searchParams.get('NGKeyword') || undefined;  //제외할 단어
+      const minPrice = searchParams.get('minPrice') || undefined;    //최소 가격
+      const maxPrice = searchParams.get('maxPrice')|| undefined;    //최대 가격
 
-    const cacheKey = `rakuten_ItemAPI_${setGenreId}_${setPage}_${setSort}`;
-    const tailUrl = "ichibams/api/IchibaItem/Search/20220601";
+      const tailUrl = "ichibams/api/IchibaItem/Search/20220601";
 
-    // lib 폴더로 빼둔 공통 서비스 함수 호출
-    const itemData = await rakutenBaseAPIOn(
-      cacheKey,
-      tailUrl,
-      setGenreId,
-      setPage,
-      setSort
-    );
+      const itemData = await rakutenBaseAPIOn(tailUrl, genreId, page, sort,keyword,NGKeyword,minPrice,maxPrice);
 
-    // 결과 반환
-    return NextResponse.json({
-      items: itemData?.Items || [], 
-      page: itemData?.page || setPage, 
-      pageCount: itemData?.pageCount || 0, 
-    });
+      return NextResponse.json({
+        items: itemData?.Items || [], 
+        page: itemData?.page || page, 
+        pageCount: itemData?.pageCount || 0, 
+      });
 
   } catch (error) {
-    console.error('Rakuten Item API Error:', error);
+    console.error('❌ [DEBUG ERROR] Rakuten Item API Error:', error);
     return NextResponse.json(
       { error: '상품 정보를 불러오는데 실패했습니다.' }, 
       { status: 500 }

@@ -187,7 +187,7 @@ function MyPurchaseStatusContent() {
 
   return selectedOrders.reduce((acc, item) => {
     // 3. 안전한 숫자 변환 (123원 등 데이터 파싱)
-    const productP = Number(item.productPrice) || 0;
+    const productP = Number(item.productPrice * item.productCount) || 0;
     const domesticS = Number(item.domesticShippingFee) || 0; // 🌟 핵심: 로그의 123이 여기서 처리됨
     const transferF = Number(item.transferFee) || 0;
     const agencyF = Number(item.purchaseFee) || 0;
