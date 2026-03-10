@@ -13,7 +13,7 @@ import { GlobalItem } from "@/app/main_shop/components/GlobalProductCard";
 import { checkMercariCooldown, lastCallTimestamp } from "./mercariApi";
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
 
-const SHOW_HEADER = true; 
+const SHOW_HEADER = false; 
 
 interface MercariCategory {
   genreId: number; 
@@ -322,7 +322,62 @@ export default function MercariCategoryPage() {
   };
 
   // 자동 수집 매크로 (생략/유지)
-  const startAutoCrawl = async () => { /* ... 기존 로직 ... */ };
+  const startAutoCrawl = async () => {
+    if (isAutoRunning) return;
+    setIsAutoRunning(true);
+    isAutoRunningRef.current = true; 
+    addLog("🚀 자동 수집 매크로를 시작합니다...");
+
+    while (isAutoRunningRef.current) {
+      try {
+        const targetRes = await fetch('/api/mercari/auto-crawl');
+        if (!isAutoRunningRef.current) break;
+        const { nextId, nextName } = await targetRes.json();
+
+        if (!nextId) {
+          addLog("✅ 모든 카테고리 수집이 완료되었습니다!");
+          break;
+        }
+
+        addLog(`🔎 [탐색 중] ${nextName} (${nextId})`);
+        const crawlRes = await fetch(`/api/mercari/categories?parentId=${nextId}`);
+        const crawlResult = await crawlRes.json();
+
+        if (!isAutoRunningRef.current) break;
+
+        if (crawlResult.success) {
+          addLog(`📦 ${nextName} 완료! (${crawlResult.data?.length || 0}개)`);
+
+          if (!crawlResult.fromCache) {
+            // const requiredInterval = 1000; 
+            // const now = Date.now();
+            // const elapsedTime = now - lastCallTimestamp;
+
+            // if (elapsedTime < requiredInterval) {
+            //   let waitTime = requiredInterval - elapsedTime;
+            //   addLog(`⏳ IP 차단 방지 대기 중...`);
+            //   while (waitTime > 0) {
+            //     if (!isAutoRunningRef.current) break; 
+            //     const step = Math.min(waitTime, 500);
+            //     await new Promise(res => setTimeout(res, step));
+            //     waitTime -= step;
+            //   }
+            // }
+          } else {
+            addLog("⚡ 캐시 데이터: 대기 없이 다음 단계로 이동");
+          }
+        }
+        if (!isAutoRunningRef.current) break;
+      } catch (err) {
+        addLog(`❌ 오류 발생: ${err}`);
+        break;
+      }
+    }
+    setIsAutoRunning(false);
+    isAutoRunningRef.current = false;
+    addLog("🛑 자동 수집이 중단되었습니다.");
+  };
+
   const stopAutoCrawl = () => { isAutoRunningRef.current = false; setIsAutoRunning(false); };
 
   return (

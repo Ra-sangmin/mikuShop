@@ -66,11 +66,28 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     setSelectedItems((prev: string[]) => prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]);
   };
 
+  // 🌟 [복구됨] 알려주신 세부 조건식을 그대로 적용한 ColSpan 계산기!
   const getColSpanCount = () => {
-    let count = 4;
-    if (activeTab === 'ALL') count += 1;
+    let count = 3; // 기본 공통 노출 항목: 상품명(1) + 상품금액(1) + 상세보기(1)
+    
+    // 전체내역 탭에서 '상태' 컬럼이 있는 경우
+    if (activeTab === 'ALL') count += 1; 
+
+    // 체크박스 컬럼이 있는 경우 
+    if ([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ].includes(activeTab)) count += 1; 
+
+    // 수취인 정보 컬럼이 있는 경우
     if (showBundleAndRecipientTabs.includes(activeTab)) count += 1;
+
+    // 국제배송 탭에서 '운송장 번호' 컬럼이 있는 경우
+    if (activeTab === ORDER_STATUS.SHIPPING) count += 1;
+
+    // 배송비 요청 탭에서 상품 금액 오른쪽에 배송비 컬럼 추가
+    if (activeTab === ORDER_STATUS.PAYMENT_REQ) count += 1;
+
+    // 장바구니 탭(삭제) 또는 입고완료 탭(개별포장) 버튼이 있는 경우
     if (activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.ARRIVED) count += 1;
+
     return count;
   };
 
@@ -100,7 +117,9 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
               <div key={item.orderId} style={styles.mobileCard}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <input type="checkbox" checked={selectedItems.includes(itemId)} onChange={() => toggleItem(itemId)} />
+                      {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ].includes(activeTab) && (
+                        <input type="checkbox" checked={selectedItems.includes(itemId)} onChange={() => toggleItem(itemId)} />
+                      )}
                       <span style={styles.badge('#3b82f6')}>{item.status}</span>
                    </div>
                    <span style={{ fontWeight: '900', color: '#ef4444' }}>¥ {((item.productPrice || 0) * qty).toLocaleString()}</span>
@@ -133,13 +152,21 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                 {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ].includes(activeTab) && (
                   <th className="th-cell col-chk"><input type="checkbox" onChange={handleToggleAll} checked={sortedItems.length > 0 && selectedItems.length === sortedItems.length} /></th>
                 )}
+                
                 {activeTab === 'ALL' && <th className="th-cell col-status">상태</th>}
                 <th className="th-cell col-name">상품명</th>
+                
                 {showBundleAndRecipientTabs.includes(activeTab) && <th className="th-cell col-recipient">수취인</th>}
                 <th className="th-cell col-price">상품 금액</th>
+                
+                {/* 🌟 [복구됨] 배송비, 운송장 번호 전용 헤더 추가 */}
+                {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell">배송비(₩)</th>}
+                {activeTab === ORDER_STATUS.SHIPPING && <th className="th-cell">운송장 번호</th>}
+
                 {(activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.ARRIVED) && (
                   <th className="th-cell col-action">{activeTab === ORDER_STATUS.CART ? '삭제' : '개별 포장'}</th>
                 )}
+                
                 <th className="th-cell col-btn">상세보기</th>
               </tr>
             </thead>
@@ -154,9 +181,14 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                 return (
                   <React.Fragment key={item.orderId}>
                     <tr>
-                      <td className="td-cell col-chk"><input type="checkbox" checked={selectedItems.includes(itemId)} onChange={() => toggleItem(itemId)} /></td>
+                      {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ].includes(activeTab) && (
+                        <td className="td-cell col-chk"><input type="checkbox" checked={selectedItems.includes(itemId)} onChange={() => toggleItem(itemId)} /></td>
+                      )}
+                      
                       {activeTab === 'ALL' && <td className="td-cell"><span style={styles.badge('#3b82f6')}>{item.status}</span></td>}
+                      
                       <td className="td-cell col-name"><div className="prod-name" title={item.productName}>{item.productName}</div></td>
+                      
                       {showBundleAndRecipientTabs.includes(activeTab) && <td className="td-cell">👤 {item.address?.recipientName || '미지정'}</td>}
                       
                       <td className="td-cell col-price">
@@ -168,6 +200,20 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                         )}
                       </td>
 
+                      {/* 🌟 [복구됨] 배송비, 운송장 번호 전용 데이터 셀 추가 */}
+                      {activeTab === ORDER_STATUS.PAYMENT_REQ && (
+                        <td className="td-cell">
+                          <div style={{ fontWeight: '900', color: '#2563eb', fontSize: '14px' }}>
+                            {item.secondPaymentAmount ? `₩ ${item.secondPaymentAmount.toLocaleString()}` : '계산중'}
+                          </div>
+                        </td>
+                      )}
+                      {activeTab === ORDER_STATUS.SHIPPING && (
+                        <td className="td-cell" style={{ fontWeight: '700', fontSize: '13px', color: '#475569' }}>
+                          {item.trackingNo || '준비중'}
+                        </td>
+                      )}
+
                       {(activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.ARRIVED) && (
                         <td className="td-cell col-action">
                           {activeTab === ORDER_STATUS.CART ? 
@@ -176,12 +222,15 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                           }
                         </td>
                       )}
+                      
                       <td className="td-cell col-btn">
                         <button style={{ padding: '6px 12px', border: '1px solid #cbd5e1', background: '#fff', borderRadius: '6px', cursor: 'pointer' }} onClick={() => setExpandedRows(prev => prev.includes(item.orderId) ? prev.filter(id => id !== item.orderId) : [...prev, item.orderId])}>
                           {isExpanded ? '접기 ▲' : '보기 ▼'}
                         </button>
                       </td>
                     </tr>
+                    
+                    {/* 확장 패널 영역 */}
                     {isExpanded && <tr><td colSpan={getColSpanCount()} style={{ padding: 0 }}>{renderOrderDetail(item)}</td></tr>}
                   </React.Fragment>
                 );

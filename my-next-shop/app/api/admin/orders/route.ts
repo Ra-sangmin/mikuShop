@@ -5,7 +5,6 @@ import prisma from '@/lib/prisma';
 export async function GET() {
   try {
     const orders = await prisma.order.findMany({
-      // 🌟 모든 필요한 필드를 명시적으로 지정하여 누락을 방지합니다.
       select: {
         id: true,
         userId: true,
@@ -48,88 +47,98 @@ export async function GET() {
   }
 }
 
-// 🌟 2. PUT: 변경된 주문 상태를 DB에 저장합니다.
+// 🌟 2. PUT: 변경된 주문 상태 저장 및 💸 머니 결제/이용내역 기록
 export async function PUT(request: Request) {
   try {
-    const { updates, type, userId, deductAmount } = await request.json(); 
+    const body = await request.json();
+    // 프론트에서 보낸 paymentTitle(이용내역 제목)도 함께 받습니다.
+    const { updates, type, userId, deductAmount, paymentTitle } = body; 
 
-    const operations: any[] = [];
+    // ✅ 인터랙티브 트랜잭션 시작 (순차적 실행 및 롤백 보장)
+    await prisma.$transaction(async (tx) => {
+      
+      // 💰 [머니 결제 로직] 사이버머니 차감 및 로그 생성
+      if (userId && deductAmount && deductAmount > 0) {
+        const uid = parseInt(userId);
+        const amount = Number(deductAmount);
 
-    // 사이버머니 차감이 필요한 경우 처리
-    if (userId && deductAmount && deductAmount > 0) {
-      operations.push(prisma.user.update({
-        where: { id: parseInt(userId) },
-        data: {
-          cyberMoney: {
-            decrement: deductAmount
+        // 1. 유저 정보 조회 및 잔액 검증
+        const user = await tx.user.findUnique({ where: { id: uid } });
+        if (!user || user.cyberMoney < amount) {
+          throw new Error('보유한 미쿠짱머니가 부족합니다.');
+        }
+
+        // 2. 머니 차감 실행
+        const updatedUser = await tx.user.update({
+          where: { id: uid },
+          data: {
+            cyberMoney: {
+              decrement: amount
+            }
+          }
+        });
+
+        // 3. ✨ [핵심] 이용 내역(MoneyLog) 생성
+        // 차감 후의 잔액(updatedUser.cyberMoney)을 기록합니다.
+        await tx.moneyLog.create({
+          data: {
+            userId: uid,
+            type: 'USE', // 이용내역 페이지 필터용
+            content: paymentTitle || '주문/배송비 결제', 
+            amount: -Math.abs(amount), // 차감액은 마이너스 표시
+            balanceAfter: updatedUser.cyberMoney // 차감 후 잔액
+          }
+        });
+      }
+
+      // 📦 [주문 업데이트 로직] 상태 및 부가 정보 변경
+      for (const order of updates) {
+        const updateData: any = {};
+        
+        if (type === 'delivery') {
+          updateData.deliveryStatus = order.status;
+        } else {
+          updateData.status = order.status;
+          
+          if (order.status === '입고완료') {
+            updateData.receivedAt = new Date();
+          }
+          if (order.status === '국제배송') {
+            updateData.shippedAt = new Date();
           }
         }
-      }));
-    }
 
-    const orderUpdates = updates.map((order: any) => {
-      const updateData: any = {};
-      
-      if (type === 'delivery') {
-        updateData.deliveryStatus = order.status;
-      } else {
-        updateData.status = order.status;
-        
-        if (order.status === '입고완료') {
-          updateData.receivedAt = new Date();
+        if (order.secondPaymentAmount !== undefined) {
+          updateData.secondPaymentAmount = order.secondPaymentAmount;
         }
-        
-        if (order.status === '국제배송') {
-          updateData.shippedAt = new Date();
+        if (order.bundleId !== undefined) {
+          updateData.bundleId = order.bundleId;
         }
+        if (order.trackingNo !== undefined) {
+          updateData.trackingNo = order.trackingNo;
+        }
+        if (order.address_id !== undefined) {
+          updateData.addressId = order.address_id ? parseInt(order.address_id) : null;
+        }
+
+        await tx.order.update({
+          where: { orderId: order.id },
+          data: updateData
+        });
       }
-
-      if (order.secondPaymentAmount !== undefined) {
-        updateData.secondPaymentAmount = order.secondPaymentAmount;
-      }
-
-      if (order.bundleId !== undefined) {
-        updateData.bundleId = order.bundleId;
-      }
-
-      if (order.trackingNo !== undefined) {
-        updateData.trackingNo = order.trackingNo;
-      }
-
-      // ❌ 삭제된 부분: DB에 recipient 컬럼이 없으므로 업데이트 항목에서 제외
-      // if (order.recipient !== undefined) {
-      //   updateData.recipient = order.recipient;
-      // }
-
-      // 🌟 [핵심 수정 부분] 프론트엔드에서 보낸 'address_id'를 읽어오도록 수정
-      if (order.address_id !== undefined) {
-        // 주의: Prisma 스키마 모델에 정의된 필드명이 addressId 라면 아래처럼 사용하시고, 
-        // 만약 스키마에도 address_id 로 되어있다면 updateData.address_id 로 변경해 주세요.
-        updateData.addressId = order.address_id ? parseInt(order.address_id) : null;
-      }
-
-      return prisma.order.update({
-        where: { orderId: order.id },
-        data: updateData
-      });
     });
 
-    operations.push(...orderUpdates);
-
-    await prisma.$transaction(operations);
-
-    return NextResponse.json({ success: true, message: '성공적으로 저장되었습니다.' });
+    return NextResponse.json({ success: true, message: '성공적으로 처리되었습니다.' });
   } catch (error: any) {
-    console.error("저장 에러:", error);
-    return NextResponse.json({ error: 'DB 업데이트 실패' }, { status: 500 });
+    console.error("저장/결제 에러:", error);
+    return NextResponse.json({ error: error.message || '업데이트 실패' }, { status: 500 });
   }
 }
 
+// 🌟 3. DELETE: 주문 삭제
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    
-    // 💡 URL에서 'id'라는 이름의 파라미터를 가져옵니다.
     const orderId = searchParams.get('id'); 
 
     if (!orderId) {
@@ -138,7 +147,7 @@ export async function DELETE(request: Request) {
 
     await prisma.order.delete({
       where: {
-        orderId: orderId // Prisma 스키마의 필드명이 orderId인 것은 그대로 유지
+        orderId: orderId 
       }
     });
 

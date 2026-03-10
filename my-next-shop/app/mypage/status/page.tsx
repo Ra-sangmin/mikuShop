@@ -41,8 +41,8 @@ function MyPurchaseStatusContent() {
     
     if (isConfirmed) {
       try {
-        // API 경로는 프로젝트 설정에 따라 /api/admin/orders 혹은 /api/orders일 수 있습니다.
-        const res = await fetch(`/api/admin/orders?id=${orderId}`, {
+        // API 경로는 프로젝트 설정에 따라 /api/orders 혹은 /api/orders일 수 있습니다.
+        const res = await fetch(`/api/orders?id=${orderId}`, {
           method: 'DELETE',
         });
 
@@ -80,7 +80,7 @@ function MyPurchaseStatusContent() {
       }];
 
       try {
-        const res = await fetch('/api/admin/orders', {
+        const res = await fetch('/api/orders', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ updates })
@@ -264,7 +264,7 @@ function MyPurchaseStatusContent() {
       try {
         const storedId = localStorage.getItem('user_id');
         const isPayment = newStatus === ORDER_STATUS.PAID || newStatus === ORDER_STATUS.PAYMENT_DONE;
-        const res = await fetch('/api/admin/orders', {
+        const res = await fetch('/api/orders', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ updates, userId: isPayment ? storedId : null, deductAmount: isPayment ? totalPriceWon : 0 })

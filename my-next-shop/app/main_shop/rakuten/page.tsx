@@ -82,6 +82,9 @@ export default function RakutenPage() {
 
   // 🚀 [로직 2] 네비게이션 함수
   const updateNavigation = (id: number, name: string, levelIndex: number) => {
+
+    setSelectedProduct(null);
+
     if (!id || id === 0) { 
       setPath([]); 
       router.push('/main_shop/rakuten'); 
@@ -107,7 +110,6 @@ export default function RakutenPage() {
 
         const catRes = await fetch(`/api/rakuten/categories?genreId=${genreId}`);
         const catData = await catRes.json();
-
 
         if (catData.success) {
 
@@ -177,6 +179,10 @@ export default function RakutenPage() {
       // 이벤트 핸들러 전달
       onNavigate={updateNavigation}
       onSearch={(f: GlobalFilterState) => {
+
+        // ✨ 조건 검색 시 상세창 닫기
+        setSelectedProduct(null);
+
         const params = new URLSearchParams();
         params.append('genreId', genreId);
         params.append('sort', f.sortOrder); 

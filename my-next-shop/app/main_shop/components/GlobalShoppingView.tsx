@@ -124,7 +124,7 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
             <nav style={styles.breadcrumb}>
               <span onClick={() => props.onNavigate(0, "HOME", 0)} style={{ cursor: 'pointer' }}>HOME</span>
               {props.path.map((p, i) => (
-                <span key={p.id} onClick={() => props.onNavigate(p.id, p.name, i + 1)} style={{ cursor: 'pointer' }}> / {p.name}</span>
+                <span key={p.id} onClick={() => props.onNavigate(p.id, p.name, i)} style={{ cursor: 'pointer' }}> / {p.name}</span>
               ))}
             </nav>
 
@@ -137,7 +137,7 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
 
             {/* 카테고리 그리드 */}
             <div style={styles.card}>
-              <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#9ca3af', marginBottom: '20px' }}>CATEGORY</h3>
+              <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#9ca3af', marginBottom: '20px' }}>카테고리</h3>
               <GlobalCategoryGrid 
                 categories={props.categories} 
                 isLoading={props.isLoading} 

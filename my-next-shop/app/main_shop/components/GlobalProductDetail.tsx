@@ -98,16 +98,27 @@ export default function GlobalProductDetail({ product, onClose }: GlobalProductD
     }
   }, []);
 
-  // ✨ 수량(quantity)을 반영하여 최종 합계 계산
-const { totalPriceJpy, totalPriceKrw } = useMemo(() => {
-  // (상품 단가 * 수량) + 송금 수수료 + 대행 수수료
-  const jpySum = (product.price * quantity) + (fees.TRANSFER || 0) + (fees.AGENCY || 0);
+  useEffect(() => {
+    setCurrentImg(product.thumbnail); // 이미지 초기화
+    setQuantity(1);                   // 수량 초기화
+    setOptionMemo("");                // 옵션 메모 초기화
+    
+    // 썸네일 스크롤 위치도 초기화
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = 0; 
+    }
+  }, [product.id, product.thumbnail]);
   
-  return {
-    totalPriceJpy: jpySum,
-    totalPriceKrw: Math.floor(jpySum * exchangeRate)
-  };
-}, [product.price, quantity, fees, exchangeRate]); // 👈 여기에 quantity를 추가해야 수량 변경 시 재계산됩니다.
+  // ✨ 수량(quantity)을 반영하여 최종 합계 계산
+  const { totalPriceJpy, totalPriceKrw } = useMemo(() => {
+    // (상품 단가 * 수량) + 송금 수수료 + 대행 수수료
+    const jpySum = (product.price * quantity) + (fees.TRANSFER || 0) + (fees.AGENCY || 0);
+    
+    return {
+      totalPriceJpy: jpySum,
+      totalPriceKrw: Math.floor(jpySum * exchangeRate)
+    };
+  }, [product.price, quantity, fees, exchangeRate]); // 👈 여기에 quantity를 추가해야 수량 변경 시 재계산됩니다.
 
   const handleAddToCart = async () => {
     const userId = localStorage.getItem('id');

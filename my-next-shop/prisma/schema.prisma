@@ -49,6 +49,11 @@ model User {
   orders              Order[]
   addresses           Address[]
 
+  moneyRequests MoneyRequest[]
+
+  // 🆕 머니 로그와의 1:N 관계 추가
+  moneyLogs MoneyLog[]
+
   @@map("users")
 }
 
@@ -181,4 +186,67 @@ model RakutenCategory {
   updatedAt   DateTime @updatedAt                     // 데이터 갱신일 (자동)
 
   @@map("RakutenCategory")
+}
+
+// 2. 머니 로그 타입 Enum 추가
+enum MoneyLogType {
+  CHARGE  // 충전
+  USE     // 사용
+  REFUND  // 환불
+}
+
+// 3. 🆕 머니 로그 모델 추가
+model MoneyLog {
+  id            Int           @id @default(autoincrement())
+  userId        Int           @map("user_id")
+  user          User          @relation(fields: [userId], references: [id])
+  
+  // 구분: 충전, 사용, 환불
+  type          MoneyLogType
+  
+  // 상세 내용: "무통장 입금 충전", "주문 결제(주문번호: ...)" 등
+  content       String        @db.Text
+  
+  // 금액: 발생한 금액 (예: 50000 또는 -35000)
+  amount        Int
+  
+  // 잔액: 거래 직후의 최종 잔액 (이미지의 마지막 컬럼용)
+  balanceAfter  Int           @map("balance_after")
+  
+  // 일시: 거래 발생 시간
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  @@map("money_logs")
+  @@index([userId]) // 사용자별 내역 조회를 위한 인덱스
+}
+
+enum RequestType {
+  CHARGE
+  REFUND
+}
+
+enum RequestStatus {
+  PENDING   // 대기
+  APPROVED  // 승인됨
+  REJECTED  // 반려됨
+}
+
+model MoneyRequest {
+  id            Int           @id @default(autoincrement())
+  userId        Int
+  type          RequestType   // CHARGE, REFUND
+  status        RequestStatus @default(PENDING)
+  amount        Int
+  
+  // 🏦 환불 관련 상세 정보 (환불일 때만 입력됨)
+  bankName      String?       // 은행명
+  accountNumber String?       // 계좌번호
+  accountHolder String?       // 예금주
+  
+  content       String?       // 추가 메모 (충전 시 입금자명 등)
+  adminNote     String?       // 반려 사유 등
+  createdAt     DateTime      @default(now())
+  processedAt   DateTime?
+
+  user          User          @relation(fields: [userId], references: [id])
 }
