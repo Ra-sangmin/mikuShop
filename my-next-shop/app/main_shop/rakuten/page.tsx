@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react'; // Suspense 추가
 import { useSearchParams, useRouter } from 'next/navigation';
 
 // --- 📦 공용 글로벌 컴포넌트 ---
@@ -13,7 +13,8 @@ import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 
 const SHOW_HEADER = false; 
 
-export default function RakutenPage() {
+// 1. 실제 로직을 담당하는 Content 컴포넌트
+function RakutenContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { exchangeRate } = useExchangeRate();
@@ -22,7 +23,6 @@ export default function RakutenPage() {
   const genreId = searchParams.get('genreId') || '0';
   const sort = searchParams.get('sort') || 'standard';
   const page = searchParams.get('page') || '1';
-  // ✨ 새로 추가할 파라미터 (검색어, 제외어, 가격)
   const keyword = searchParams.get('keyword') || '';
   const NGKeyword = searchParams.get('NGKeyword') || '';
   const minPrice = searchParams.get('minPrice') || '';
@@ -49,7 +49,6 @@ export default function RakutenPage() {
     { id: '-updateTimestamp', label: '최신등록순' },
     { id: '-reviewCount', label: '조회수많은순' },
     { id: '-itemPrice', label: '가격높은순' },
-    //{ id: '%2BitemPrice', label: '가격낮은순' },
     { id: '+itemPrice', label: '가격낮은순' },
   ];
 
@@ -82,9 +81,7 @@ export default function RakutenPage() {
 
   // 🚀 [로직 2] 네비게이션 함수
   const updateNavigation = (id: number, name: string, levelIndex: number) => {
-
     setSelectedProduct(null);
-
     if (!id || id === 0) { 
       setPath([]); 
       router.push('/main_shop/rakuten'); 
@@ -100,26 +97,19 @@ export default function RakutenPage() {
 
   // 🚀 [로직 3] 데이터 페칭 (카테고리 & 아이템)
   useEffect(() => {
-
-    console.log("\n🔥 [DEBUG A] useEffect 실행됨! (파라미터 변경 감지)");
-    console.log("👉 현재 상태:", { genreId, sort, page, keyword, minPrice });
-
     async function fetchData() {
       setLoading(true);
       try {
-
         const catRes = await fetch(`/api/rakuten/categories?genreId=${genreId}`);
         const catData = await catRes.json();
 
         if (catData.success) {
-
             const apiParams = new URLSearchParams({
               genreId: genreId,
               sort: sort,
               page: page
             });
 
-          // 🚨 2. 조건이 있으면 보따리에 쏙쏙 담습니다.
           if (keyword) apiParams.append('keyword', keyword);
           if (NGKeyword) apiParams.append('NGKeyword', NGKeyword);
           if (minPrice) apiParams.append('minPrice', minPrice);
@@ -131,10 +121,7 @@ export default function RakutenPage() {
           }
           
           if (genreId !== '0') {
-            // 만들어둔 apiParams를 문자열로 변환(.toString())해서 보내면, 조건이 있을 때만 알아서 파라미터가 착착 붙어서 날아감!
             const itemRes = await fetch(`/api/rakuten/items?${apiParams.toString()}`);
-            //const itemRes = await fetch(`/api/rakuten/items?genreId=${genreId}&sort=${sort}&page=${page}`);
-            //const itemRes = await fetch(`/api/rakuten/items?genreId=${genreId}&sort=${encodeURIComponent(sort)}&page=${page}`);
             const itemData = await itemRes.json();
             setItems(itemData.items || []);
             setPageInfo({ page: itemData.page, pageCount: itemData.pageCount });
@@ -149,15 +136,12 @@ export default function RakutenPage() {
     fetchData();
   }, [genreId, sort, page, keyword, NGKeyword, minPrice, maxPrice]);
 
-  // 자동 수집 로직 (기존 유지)
-  const addLog = (msg: string) => setLog(prev => [msg, ...prev].slice(0, 10));
-  const startAutoCrawl = async () => { /* ... 기존과 동일 ... */ };
   const stopAutoCrawl = () => { isAutoRunningRef.current = false; setIsAutoRunning(false); };
+  const startAutoCrawl = async () => { /* 자동 수집 로직은 기존과 동일 */ };
 
   return (
     <GlobalShoppingView 
       platform="rakuten"
-      // 데이터 전달
       path={path}
       categories={categories.map((c: any) => ({ 
         genreId: c.genreId, 
@@ -167,22 +151,13 @@ export default function RakutenPage() {
       items={items.map(mapToGlobal)}
       pageInfo={pageInfo}
       selectedProduct={selectedProduct}
-      
-      // ✨ 사이드바로 넘길 정렬 옵션 전달
       sortOptions={rakutenSortOptions}
-
-      // 상태 전달
       isLoading={loading}
       isItemLoading={loading && genreId !== '0'}
       isLeaf={categories.length === 0}
-      
-      // 이벤트 핸들러 전달
       onNavigate={updateNavigation}
       onSearch={(f: GlobalFilterState) => {
-
-        // ✨ 조건 검색 시 상세창 닫기
         setSelectedProduct(null);
-
         const params = new URLSearchParams();
         params.append('genreId', genreId);
         params.append('sort', f.sortOrder); 
@@ -191,34 +166,40 @@ export default function RakutenPage() {
         if (f.keyword && f.keyword.trim() !== '') {
           params.append('keyword', f.keyword.trim());
         }
-        
-        // 🚨 라쿠텐 전용: excludeKeyword를 NGKeyword로 변환해서 넘기기
         if (f.excludeKeyword && f.excludeKeyword.trim() !== '') {
           params.append('NGKeyword', f.excludeKeyword.trim());
         }
-        
         if (f.minPrice && f.minPrice.trim() !== '') {
           params.append('minPrice', f.minPrice.trim());
         }
         if (f.maxPrice && f.maxPrice.trim() !== '') {
           params.append('maxPrice', f.maxPrice.trim());
         }
-
-        console.log("3. 주소창으로 보낼 쿼리스트링:", params.toString());
-
         router.push(`/main_shop/rakuten?${params.toString()}`);
       }}
       onCardClick={(item) => {
-        setSelectedProduct(item); // 이미 items가 mapToGlobal된 상태임
+        setSelectedProduct(item);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }}
       onCloseDetail={() => setSelectedProduct(null)}
-      
-      // 크롤러 관련
       showCrawlHeader={SHOW_HEADER}
       isAutoRunning={isAutoRunning}
       onCrawlToggle={isAutoRunning ? stopAutoCrawl : startAutoCrawl}
       crawlLog={log[0]}
     />
+  );
+}
+
+// 2. 최종 Export할 페이지 컴포넌트 (Suspense 적용)
+export default function RakutenPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <i className="fa fa-spinner fa-spin fa-2x" style={{ color: '#bf0000' }}></i>
+        <p style={{ marginTop: '15px', color: '#666' }}>라쿠텐 정보를 불러오는 중입니다...</p>
+      </div>
+    }>
+      <RakutenContent />
+    </Suspense>
   );
 }

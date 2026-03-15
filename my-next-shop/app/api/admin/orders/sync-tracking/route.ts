@@ -6,7 +6,7 @@ export async function POST() {
     // 1. 배송이 진행 중이고, 운송장 번호가 있는 주문들만 DB에서 찾습니다.
     const activeOrders = await prisma.order.findMany({
       where: {
-        status: { in: ['국제배송'] },
+        status: { in: ['SHIPPING'] },
         NOT: {
           OR: [
             { trackingNo: null },
@@ -34,12 +34,12 @@ export async function POST() {
 
       // 지금은 API가 없으니, 테스트를 위해 상태를 강제로 한 단계씩 올리는 가짜(Mock) 로직을 넣습니다.
       // 🌟 deliveryStatus 필드를 업데이트하도록 변경
-      let currentDeliveryStatus = order.deliveryStatus || '배송전';
+      let currentDeliveryStatus = order.deliveryStatus || 'PREPARING';
       let mockNewStatus = currentDeliveryStatus;
       
-      if (currentDeliveryStatus === '배송전') mockNewStatus = '국내통관중';
-      else if (currentDeliveryStatus === '국내통관중') mockNewStatus = '국내배송중';
-      else if (currentDeliveryStatus === '국내배송중') mockNewStatus = '배송완료';
+      if (currentDeliveryStatus === 'PREPARING') mockNewStatus = 'CUSTOMS';
+      else if (currentDeliveryStatus === 'CUSTOMS') mockNewStatus = 'LOCAL_DELIVERY';
+      else if (currentDeliveryStatus === 'LOCAL_DELIVERY') mockNewStatus = 'COMPLETED';
 
       // 상태가 변했다면 DB를 업데이트합니다.
       if (mockNewStatus !== currentDeliveryStatus) {

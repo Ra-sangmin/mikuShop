@@ -191,7 +191,7 @@ export default function MoneyHistoryPage() {
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', overflowX: 'auto', paddingBottom: '4px' }}>
           {['all', '1week', '1month', 'custom'].map(p => (
             <button key={p} onClick={() => setPeriod(p)} style={{ 
-              padding: '10px 20px', borderRadius: '24px', fontSize: '13px', fontWeight: '800', border: 'none', cursor: 'pointer', 
+              padding: '10px 20px', borderRadius: '24px', fontSize: '13px', fontWeight: '800',cursor: 'pointer', 
               backgroundColor: period === p ? '#0f172a' : '#f8fafc', color: period === p ? '#fff' : '#64748b', 
               border: period === p ? '1px solid #0f172a' : '1px solid #e2e8f0' 
             }}>

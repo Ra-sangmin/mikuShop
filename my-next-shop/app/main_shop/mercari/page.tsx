@@ -1,7 +1,7 @@
 "use client";
 
+import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react'; // Suspense 추가
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useState, useEffect, useRef, useMemo } from 'react';
 
 // --- 📦 공용 글로벌 컴포넌트 ---
 import GlobalShoppingView from "@/app/main_shop/components/GlobalShoppingView";
@@ -36,7 +36,8 @@ interface MercariItem {
 let globalItemsCache: { [key: string]: any[] } = {};
 let globalProductDetailCache: { [key: string]: GlobalProduct } = {};
 
-export default function MercariCategoryPage() {
+// 1. 실제 로직을 담당하는 Content 컴포넌트
+function MercariCategoryContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentCatId = searchParams.get('cat') || '';
@@ -166,7 +167,6 @@ export default function MercariCategoryPage() {
       const queryString = params.toString();
 
       if (globalItemsCache[queryString]) {
-        console.log(`⚡ [Cache Hit] 캐시 데이터를 불러옵니다.`);
         setItems([...globalItemsCache[queryString]]);
         return;
       }
@@ -321,7 +321,7 @@ export default function MercariCategoryPage() {
     router.push(`/main_shop/mercari?cat=${id}`);
   };
 
-  // 자동 수집 매크로 (생략/유지)
+  // 자동 수집 매크로
   const startAutoCrawl = async () => {
     if (isAutoRunning) return;
     setIsAutoRunning(true);
@@ -347,25 +347,6 @@ export default function MercariCategoryPage() {
 
         if (crawlResult.success) {
           addLog(`📦 ${nextName} 완료! (${crawlResult.data?.length || 0}개)`);
-
-          if (!crawlResult.fromCache) {
-            // const requiredInterval = 1000; 
-            // const now = Date.now();
-            // const elapsedTime = now - lastCallTimestamp;
-
-            // if (elapsedTime < requiredInterval) {
-            //   let waitTime = requiredInterval - elapsedTime;
-            //   addLog(`⏳ IP 차단 방지 대기 중...`);
-            //   while (waitTime > 0) {
-            //     if (!isAutoRunningRef.current) break; 
-            //     const step = Math.min(waitTime, 500);
-            //     await new Promise(res => setTimeout(res, step));
-            //     waitTime -= step;
-            //   }
-            // }
-          } else {
-            addLog("⚡ 캐시 데이터: 대기 없이 다음 단계로 이동");
-          }
         }
         if (!isAutoRunningRef.current) break;
       } catch (err) {
@@ -383,30 +364,37 @@ export default function MercariCategoryPage() {
   return (
     <GlobalShoppingView 
       platform="mercari"
-      // 데이터 전달
       path={path}
       categories={categories}
-      items={mappedDisplayItems} // 스트리밍으로 순차적으로 쌓이는 아이템들 전달
+      items={mappedDisplayItems}
       pageInfo={pageInfo}
       selectedProduct={productDetail}
-      
-      // 상태 전달
       isLoading={isLoading}
       isItemLoading={isItemLoading}
-      isDetailLoading={isDetailLoading} // 상세 로딩 스피너 작동을 위해 추가
+      isDetailLoading={isDetailLoading}
       isLeaf={isLeaf}
-      
-      // 이벤트 핸들러 전달
       onNavigate={handleMove}
       onSearch={(filters: GlobalFilterState) => loadItems(Number(currentCatId), filters)}
-      onCardClick={loadProductDetail} // 클릭 시 API 호출 -> 상세정보 캐싱 -> 렌더링
+      onCardClick={loadProductDetail}
       onCloseDetail={() => setProductDetail(null)}
-      
-      // 크롤러 관련
       showCrawlHeader={SHOW_HEADER}
       isAutoRunning={isAutoRunning}
       onCrawlToggle={isAutoRunning ? stopAutoCrawl : startAutoCrawl}
       crawlLog={log[0]}
     />
+  );
+}
+
+// 2. 최종 Export할 페이지 컴포넌트 (Suspense 적용)
+export default function MercariCategoryPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <i className="fa fa-spinner fa-spin fa-2x" style={{ color: '#ff0021' }}></i>
+        <p style={{ marginTop: '15px', color: '#666' }}>메르카리 정보를 불러오는 중입니다...</p>
+      </div>
+    }>
+      <MercariCategoryContent />
+    </Suspense>
   );
 }

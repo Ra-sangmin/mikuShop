@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import ProductCard from '../rakuten/ProductCard';
 import ProductDetail from '../rakuten/ProductDetail';
@@ -8,7 +9,8 @@ import Pagination from '../rakuten/Pagination';
 import Link from 'next/link';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 
-export default function YahooShoppingPage() {
+// 1. 실제 로직을 담당하는 Content 컴포넌트
+function YahooShoppingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -29,13 +31,11 @@ export default function YahooShoppingPage() {
   // ★ 브라우저 뒤로가기 제어
   useEffect(() => {
     if (selectedItem) {
-      // 상세보기가 열릴 때 히스토리에 가짜 상태 추가
       window.history.pushState({ isDetail: true }, "");
     }
 
     const handlePopState = (event: PopStateEvent) => {
       if (selectedItem) {
-        // 뒤로가기 발생 시 상세보기를 닫고 히스토리 이동을 막음
         setSelectedItem(null);
         window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
       }
@@ -45,28 +45,21 @@ export default function YahooShoppingPage() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [selectedItem]);
 
-  // ★ 2. ProductDetail의 위치를 기억할 ref 생성
   const detailRef = useRef<HTMLDivElement>(null);
-
-  // 글로벌 환율 정보 가져오기
   const { exchangeRate } = useExchangeRate();
   const [cartCount, setCartCount] = useState<number>(0);
   const [wishlistCount, setWishlistCount] = useState<number>(0);
 
-  // API 주소를 동적으로 생성하는 함수
   const getDynamicApiUrl = (path: string, queryParams: string) => {
     const hostName = window.location.hostname; 
     const protocol = window.location.protocol;
     
-    // ngrok 도메인인 경우 포트 없이 요청 (타임아웃 방지)
     if (hostName.includes('ngrok-free.dev')) {
         return `${protocol}//${hostName}/rakuten/${path}?${queryParams}`;
     }
-
     return `${protocol}//${hostName}:4000/rakuten/${path}?${queryParams}`;
   };
 
-  // ★ 장바구니 개수를 다시 계산하는 함수 (자식 컴포넌트에게도 전달됨)
   const updateCounts = () => {
     const savedCart = JSON.parse(localStorage.getItem('rakutenCart') || '[]');
     setCartCount(savedCart.length);
@@ -74,12 +67,10 @@ export default function YahooShoppingPage() {
     setWishlistCount(savedWishlist.length);
   };
 
-  // 처음 로드될 때 개수 세팅
   useEffect(() => {
-    updateCounts(); // 화면 열릴 때 뱃지 세팅
+    updateCounts();
   }, []);
 
-  // 카테고리 데이터 로드
   useEffect(() => {
       const domain = window.location.hostname;
       document.cookie = `googtrans=/ja/ko; path=/;`;
@@ -98,11 +89,9 @@ export default function YahooShoppingPage() {
           setParentsGenre(data.parents || []); 
           setChildrenGenre(data.children || []); 
       }
-
       fetchCategories();
   }, [genreId]);
 
-  // 상품 데이터 로드
   useEffect(() => {
     async function loadItems() {
       if (genreId === '0') {
@@ -129,8 +118,6 @@ export default function YahooShoppingPage() {
 
   return (
     <div className="category-box">
-      
-
       <div className="page-title-container" role="alert">
         <nav className="breadcrumb-bar">
           <a href="/" style={{ fontSize: '20px' }}><i className="fa fa-home" style={{ marginRight: '8px' }}></i> 홈 </a>
@@ -178,7 +165,6 @@ export default function YahooShoppingPage() {
         </nav>
       </div>
 
-      {/* 카테고리 박스 영역 */}
       <div className="category-box" style={{ width: '100%', marginBottom: '20px' }}>
         {categories.length === 0 ? (
           <p style={{ fontSize: '16px', color: '#888', padding: '20px' }}>하위 카테고리가 없습니다.</p> 
@@ -265,16 +251,12 @@ export default function YahooShoppingPage() {
                   X
                 </button>
               </div>
-              
-
-              {/* ★ ProductDetail에 onCartUpdate 프롭스로 갱신 함수 전달 */}
               <ProductDetail 
                 key={selectedItem.itemId} 
                 item={selectedItem} 
                 exchangeRate={exchangeRate} 
                 onCartUpdate={updateCounts}
               />
-
             </div>
           )}
           </div>
@@ -291,28 +273,20 @@ export default function YahooShoppingPage() {
                   onWishlistUpdate={updateCounts}
                   onItemClick={() => {
                       setSelectedItem(item);
-
-                      // 1. 위로 띄울 여백(오프셋)을 설정합니다. (음수로 설정하면 위로 올라갑니다)
                       const yOffset = -60; 
-                      
-                      // 2. 요소의 현재 화면상 위치 + 현재 스크롤 위치 + 오프셋(-20) 계산
                       if (detailRef.current) {
                         const elementPosition = detailRef.current.getBoundingClientRect().top;
                         const offsetPosition = elementPosition + window.scrollY + yOffset;
-                
-                        // 3. 계산된 정확한 좌표로 부드럽게 스크롤합니다!
                         window.scrollTo({
                           top: offsetPosition,
                           behavior: 'smooth'
                         });
                       }
-                      //window.scrollTo({ top: 570, left: 0, behavior: 'smooth' });
                   }}
                 />
               ))}
             </div>
           </div>
-
           <Pagination currentPage={pageInfo.page} pageCount={pageInfo.pageCount} />
         </>
       ) : (
@@ -327,5 +301,18 @@ export default function YahooShoppingPage() {
         )
       )}
     </div>
+  );
+}
+
+// 2. 최종 Export할 페이지 컴포넌트 (Suspense 적용)
+export default function YahooShoppingPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <i className="fa fa-spinner fa-spin fa-2x" style={{ color: '#337ab7' }}></i>
+      </div>
+    }>
+      <YahooShoppingContent />
+    </Suspense>
   );
 }
