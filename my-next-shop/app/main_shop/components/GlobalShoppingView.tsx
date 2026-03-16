@@ -31,7 +31,7 @@ const MikuLoadingOverlay = ({ message }: { message: string }) => (
       <div style={{
         position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: '#ff007f', fontWeight: 900, fontSize: '20px', textShadow: '0 0 8px rgba(255, 0, 127, 0.3)'
-      }}>M</div>
+      }}>MIKU</div>
     </div>
     
     <div style={{ marginTop: '32px', textAlign: 'center' }}>
@@ -64,6 +64,7 @@ interface GlobalShoppingViewProps {
   onSearch: (filters: GlobalFilterState) => void;
   onCardClick: (item: any) => void;
   onCloseDetail: () => void;
+  onPageChange: (newPage: number) => void;
   // 크롤러 관련 (선택 사항)
   showCrawlHeader?: boolean;
   isAutoRunning?: boolean;
@@ -86,8 +87,8 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
 
   return (
     <div style={styles.pageWrapper}>
-      {/* 로딩 포털 */}
-      {(props.isItemLoading || props.isDetailLoading) && (
+      {/* 🚀 [수정 1] 전체 화면 로딩은 '아이템이 아예 없을 때'만 나오게 변경 */}
+      {(props.isItemLoading && props.items.length === 0 || props.isDetailLoading) && (
         <MikuLoadingOverlay message={props.isItemLoading ? "상품을 불러오는 중입니다" : "상세 정보를 분석 중입니다"} />
       )}
 
@@ -147,17 +148,61 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
               />
             </div>
 
-            {/* 상품 리스트 */}
+            {/* 상품 리스트 섹션 */}
             {props.items.length > 0 && (
-              <div style={{ marginTop: '40px' }}>
+              <div style={{ marginTop: '40px', display: 'flex', flexDirection: 'column' }}>
+                
+                {/* 🚀 1. 상단 페이지네이션 (선택 사항: 상품이 많을 때 위에서도 이동 가능하게) */}
+                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <GlobalPagination 
+                    currentPage={props.pageInfo.page} 
+                    pageCount={props.pageInfo.pageCount || 1} 
+                    // 🚀 부모에게서 받은 함수를 여기서 연결합니다!
+                    onPageChange={props.onPageChange} 
+                  />
+                </div>
+
+                {/* 2. 상품 그리드 */}
                 <div style={styles.itemGrid}>
                   {props.items.map((item, idx) => (
                     <GlobalProductCard key={idx} item={item} onClick={() => props.onCardClick(item)} />
                   ))}
                 </div>
-                <GlobalPagination currentPage={props.pageInfo.page} pageCount={props.pageInfo.pageCount} />
+
+                {/* 🚀 3. 페이지네이션을 로딩 바 '위'로 올림 */}
+                {/* 수집 중이라도 페이지 이동은 가능해야 하므로 로딩 바보다 먼저 보여줍니다. */}
+                <div style={{ marginTop: '30px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+                  <GlobalPagination 
+                    currentPage={props.pageInfo.page} 
+                    pageCount={props.pageInfo.pageCount || 1} 
+                    // 🚀 여기도 마찬가지로 연결!
+                    onPageChange={props.onPageChange} 
+                  />
+                </div>
+
+                {/* 4. 하단 로딩 바 (최하단에 배치) */}
+                {props.isItemLoading && (
+                  <div style={styles.bottomLoader}>
+                    <div style={styles.spinnerIcon}>
+                      <i className="fa fa-spinner fa-spin fa-2x"></i>
+                    </div>
+                    <p style={styles.loaderText} className="notranslate">
+                      미쿠짱이 열심히 다음 상품을 가져오고 있어요... ( 
+                      
+                      {/* 🚀 숫자를 한 번 더 span으로 감싸고 클래스를 줍니다. */}
+                      <span className="notranslate" style={{ fontWeight: 900, color: '#ff007f' }}>
+                        {props.items.length}
+                      </span> 
+                      
+                      개 수집됨 )
+                    </p>
+                  </div>
+                )}
+                
               </div>
             )}
+
+
           </main>
         </div>
       </div>
@@ -176,5 +221,29 @@ const getCommonStyles = (isMobile: boolean, platform: string) => ({
   breadcrumb: { display: 'flex', gap: '4px', marginBottom: '20px', fontSize: '13px', color: '#9ca3af' },
   card: { backgroundColor: 'white', borderRadius: '24px', padding: isMobile ? '20px' : '32px', border: '1px solid #e5e7eb' },
   itemGrid: { display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(250px, 1fr))', gap: '20px' },
-  crawlBtn: (isRunning: boolean) => ({ padding: '10px 20px', borderRadius: '12px', border: 'none', backgroundColor: isRunning ? '#9ca3af' : '#ff007f', color: 'white', fontWeight: 'bold' as const, cursor: 'pointer' })
+  crawlBtn: (isRunning: boolean) => ({ padding: '10px 20px', borderRadius: '12px', border: 'none', backgroundColor: isRunning ? '#9ca3af' : '#ff007f', color: 'white', fontWeight: 'bold' as const, cursor: 'pointer' }),
+  // 🚀 [추가] 하단 로딩 바 스타일
+  bottomLoader: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '40px 0',
+    marginTop: '20px',
+    backgroundColor: 'white',
+    borderRadius: '24px',
+    border: '1px dashed #ff007f', // 핑크색 점선으로 강조
+    width: '100%'
+  },
+  spinnerIcon: {
+    color: '#ff007f',
+    marginBottom: '12px',
+    animation: 'spin 1s linear infinite'
+  },
+  loaderText: {
+    fontSize: '15px',
+    fontWeight: 'bold' as const,
+    color: '#1f2937',
+    margin: 0
+  },
 });

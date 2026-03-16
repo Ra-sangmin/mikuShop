@@ -38,6 +38,7 @@ let globalProductDetailCache: { [key: string]: GlobalProduct } = {};
 
 // 1. 실제 로직을 담당하는 Content 컴포넌트
 function MercariCategoryContent() {
+  
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentCatId = searchParams.get('cat') || '';
@@ -65,7 +66,11 @@ function MercariCategoryContent() {
   
   const { showAlert } = useMikuAlert(); 
   const abortControllerRef = useRef<AbortController | null>(null);
-  const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 0 });
+  // page.tsx 상단 state 부분
+  const [pageInfo, setPageInfo] = useState({ 
+    page: 1, 
+    pageCount: 100 // 🚀 1에서 15(혹은 그 이상)로 변경하세요!
+  });
 
   // 🚀 [로직 1] 메루카리 아이템을 Global 규격으로 매핑
   const mappedDisplayItems = useMemo((): GlobalItem[] => {
@@ -87,6 +92,7 @@ function MercariCategoryContent() {
     return true; 
   };
 
+  /*
   // 🚀 [로직 2] 아이템 순차 렌더링 효과 (스트리밍 대응)
   useEffect(() => {
     if (items && items.length > 0) {
@@ -107,7 +113,7 @@ function MercariCategoryContent() {
       setDisplayItems([]);
     }
   }, [items]);
-
+*/
   const addLog = (msg: string) => setLog(prev => [msg, ...prev].slice(0, 10));
 
   // 🚀 [로직 3] 메루카리 파라미터 빌더
@@ -160,75 +166,93 @@ function MercariCategoryContent() {
     return params;
   };
 
-  // 🚀 [로직 4] 아이템 로드 (스트리밍 방식)
   const loadItems = async (catId: number, filters?: GlobalFilterState) => {
-      const targetId = Number(catId);
-      const params = buildMercariParams(targetId, filters);
-      const queryString = params.toString();
+    // 1. 이전 요청 중단
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      console.log("🛑 이전 수집 작업을 중단했습니다.");
+    }
 
-      if (globalItemsCache[queryString]) {
-        setItems([...globalItemsCache[queryString]]);
-        return;
-      }
+    // 2. 새 요청을 위한 리모컨 생성
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+    // 🚀 [수정] 모든 바구니를 확실히 비우고 시작합니다.
+    setItems([]); 
+    setDisplayItems([]); 
+    setProductDetail(null);
+    setIsItemLoading(true);
 
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
+    const targetId = Number(catId);
+    const params = buildMercariParams(targetId, filters);
+    const queryString = params.toString();
 
-      if (!isCallAllowed()) return;
+    // 캐시 확인 로직
+    if (globalItemsCache[queryString]) {
+      setItems([...globalItemsCache[queryString]]);
+      setDisplayItems([...globalItemsCache[queryString]]);
+      setIsItemLoading(false); // 🚀 캐시일 땐 바로 로딩 종료
+      return;
+    }
 
-      let accumulatedData: MercariItem[] = [];
+    if (!isCallAllowed()) {
+      setIsItemLoading(false); // 🚀 쿨다운일 때도 로딩 종료
+      return;
+    }
 
-      setProductDetail(null);
-      setDisplayItems([]); 
-      setIsItemLoading(true);
+    try {
+      const res = await fetch(`/api/mercari/search?${queryString}`, { 
+        signal: controller.signal // 리모컨 연결
+      });
       
-      try {
-      const res = await fetch(`/api/mercari/search?${queryString}`, { signal: controller.signal });
       if (!res.body) throw new Error("ReadableStream not supported");
 
       const reader = res.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      
-      setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
-      setPageInfo({ page: 1, pageCount: 100 });
+      const decoder = new TextDecoder();
+      let buffer = "";
 
       while (true) {
-        if (controller.signal.aborted) break;
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunkStr = decoder.decode(value, { stream: true });
-        const jsonStrings = chunkStr.trim().split('\n');
+        buffer += decoder.decode(value, { stream: true });
         
-        for (const jsonStr of jsonStrings) {
-          if (!jsonStr || controller.signal.aborted) continue;
+        // 🚀 [설계 포인트 2] 줄바꿈(\n)을 기준으로 데이터 덩어리를 나눕니다.
+        const lines = buffer.split('\n');
+        
+        // 마지막 줄은 불완전할 수 있으니 buffer에 다시 담아둡니다.
+        buffer = lines.pop() || ""; 
+
+        // 나뉜 데이터 덩어리(line)를 순서대로 처리합니다.
+        for (const line of lines) {
+          if (!line.trim()) continue; // 공백 패딩은 무시
           try {
-            const result = JSON.parse(jsonStr);
-            if (result.success && result.data.length > 0) {
-              accumulatedData = [...accumulatedData, ...result.data];
-              setDisplayItems(prev => [...prev, ...result.data]);
-              setIsItemLoading(false);
+            const result = JSON.parse(line);
+            
+            // 🚀 데이터 덩어리가 도착할 때마다 setDisplayItems를 호출합니다!
+            // 여기서 items와 displayItems를 같이 업데이트해서 숫자가 올라가게 합니다.
+            if (result.success && result.data) {
+              setItems(prev => [...prev, ...result.data]); // 숫자 카운트용
+              setDisplayItems(prev => [...prev, ...result.data]); // 상품 리스트용
             }
-          } catch (e) { /* 방어 */ }
+          } catch (e) {
+            console.error("JSON 파싱 에러:", e);
+          }
         }
+      }   
+    } catch (err: any) {
+      // 🚀 [수정] 중단 에러(AbortError)인 경우 로딩을 끄지 않고 그냥 나갑니다.
+      if (err.name === 'AbortError') {
+        console.log("🤫 이전 요청은 조용히 사라집니다...");
+        return; 
       }
-
-      if (!controller.signal.aborted && accumulatedData.length > 0) {
-        globalItemsCache[queryString] = accumulatedData;
-      }
-
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        console.log("📥 요청이 취소되었습니다.");
-      } else {
-        showAlert("상품 로딩 중 오류가 발생했습니다.");
-      }
+      console.error("❌ 실제 통신 에러:", err);
     } finally {
-      if (abortControllerRef.current === controller) setIsItemLoading(false);
+      // 🚀 [수정 핵심] '내 요청'이 여전히 '최신 요청'일 때만 로딩을 끕니다.
+      if (abortControllerRef.current === controller) {
+        setIsItemLoading(false);
+        console.log("🏁 최신 수집 작업 완료!");
+      }
     }
   };
 
@@ -381,6 +405,11 @@ function MercariCategoryContent() {
       isAutoRunning={isAutoRunning}
       onCrawlToggle={isAutoRunning ? stopAutoCrawl : startAutoCrawl}
       crawlLog={log[0]}
+      onPageChange={(newPage) => { // 👈 빠져있던 페이지 변경 로직 추가!
+      setPageInfo(prev => ({ ...prev, page: newPage }));
+      loadItems(Number(currentCatId), { ...filters, page: newPage });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }}
     />
   );
 }

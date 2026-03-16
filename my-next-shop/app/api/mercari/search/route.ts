@@ -1,398 +1,256 @@
+export const dynamic = 'force-dynamic';
+
 import { NextResponse, NextRequest } from 'next/server';
-import puppeteer, { Browser } from 'puppeteer';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
-let sharedBrowser: Browser | null = null;
+// 🚀 [설계도] 아이템 형식 정의
+interface MercariItem {
+  id: string;
+  name: string;
+  thumbnail: string;
+  price: number;
+  status: 'on_sale' | 'sold_out';
+  url: string;
+}
 
-// 🚀 [추가] 한국어 필터 값을 메루카리 전용 ID/파라미터로 변환하는 매퍼
-const MAPPERS = {
-  sort: (val: string) => {
-    switch (val) {
-      case '가격 낮은 순': return { sort: 'price', order: 'asc' };
-      case '가격 높은 순': return { sort: 'price', order: 'desc' };
-      case '최신순': return { sort: 'created_at', order: 'desc' };
-      default: return { sort: 'score', order: 'desc' }; // 기본순
-    }
-  },
-  condition: (val: string) => {
-    const map: { [key: string]: string } = {
-      '신품, 미사용': '1',
-      '미사용에 가까움': '2',
-      '눈에 띄는 흠집 없음': '3',
-      '다소 흠집 있음': '4',
-      '전반적으로 나쁨': '6'
-    };
-    return map[val] || '';
-  },
-  shippingPayer: (val: string) => (val === '배송비 포함' ? '2' : val === '배송비 제외' ? '1' : ''),
-  status: (val: string) => (val === '판매중' ? 'on_sale' : val === '품절' ? 'sold_out' : ''),
-  item_types: (val: string) => (val === '개인' ? 'mercari' : val === '메루카리샾' ? 'beyond' : '')
-};
+if (!puppeteer.plugins || puppeteer.plugins.length === 0) {
+  puppeteer.use(StealthPlugin());
+}
+
+let sharedBrowser: any = null;
+
+function generateMercariTargetUrl(searchParams: URLSearchParams): string {
+  const params = new URLSearchParams();
+  const categoryId = searchParams.get('category_id') ?? '';
+  const keyword = searchParams.get('keyword');
+  const sort = searchParams.get('sort') ?? 'created_at:desc';
+  const status = searchParams.get('status') ?? 'on_sale';
+  const page = searchParams.get('page');
+
+  if (categoryId && categoryId !== '0') params.set('category_id', categoryId);
+  if (keyword) params.set('keyword', keyword);
+  if (page && page !== '1') params.set('p', (parseInt(page) - 1).toString()); 
+  params.set('sort', sort);
+  params.set('status', status);
+
+  ['price_min', 'price_max', 'exclude_keyword'].forEach(key => {
+    const val = searchParams.get(key);
+    if (val) params.set(key, val);
+  });
+
+  return `https://jp.mercari.com/search?${params.toString()}`;
+}
 
 export async function GET(req: NextRequest) {
+  const { signal } = req;
   const { searchParams } = new URL(req.url);
-  const categoryId = searchParams.get('category_id') ?? ''
+  const categoryId = searchParams.get('category_id');
 
-  //try {
-
-    // 1. 🚀 메루카리 타겟 URL 동적 생성
-    const targetUrl = new URL('https://jp.mercari.com/search');
-
-    // 필터 데이터 추출 및 매핑
-    const keyword = searchParams.get('keyword');
-    const exclude = searchParams.get('exclude_keyword');
-    const minPrice = searchParams.get('price_min');
-    const maxPrice = searchParams.get('price_max');
-    const sortVal = searchParams.get('sort');
-    const conditionVal = searchParams.get('item_condition_id');
-    const shippingVal = searchParams.get('shipping_payer_id');
-    const statusVal = searchParams.get('status');
-    const item_types = searchParams.get('item_types');
-    const listingType = searchParams.get('listingType');
-    const hasDiscount = searchParams.get('hasDiscount');
-    const shipping_method = searchParams.get('shipping_method');
-    const color_id = searchParams.get('color_id');
-
-
-    // 파라미터 조립
-    //if (keyword) targetUrl.searchParams.append('keyword', keyword);
-    //if (exclude) targetUrl.searchParams.append('exclude_keyword', exclude);
-    //if (minPrice) targetUrl.searchParams.append('price_min', minPrice);
-    //if (maxPrice) targetUrl.searchParams.append('price_max', maxPrice);
-    
-    // 정렬 매핑 적용
-    if (sortVal) {
-      const { sort, order } = MAPPERS.sort(sortVal);
-      targetUrl.searchParams.append('sort', sort);
-      targetUrl.searchParams.append('order', order);
-    }
-
-    // 상태 및 배송료 매핑 적용
-    // if (conditionVal && conditionVal !== '모두') {
-    //   targetUrl.searchParams.append('item_condition_id', MAPPERS.condition(conditionVal));
-    // }
-    // if (shippingVal && shippingVal !== '모두') {
-    //   targetUrl.searchParams.append('shipping_payer_id', MAPPERS.shippingPayer(shippingVal));
-    // }
-    if (statusVal && statusVal !== '모두') {
-      targetUrl.searchParams.append('status', MAPPERS.status(statusVal));
-    }
-
-    let targetUrl2 = `https://jp.mercari.com/search?`;
-
-    //카테고리ID
-    if (categoryId) {
-      targetUrl2 += `category_id=${categoryId}`;
-      //targetUrl.searchParams.append('category_id', categoryId);
-    }
-
-    //정렬
-    if (sortVal) {
-      targetUrl2 += `&sort=${sortVal}`;
-      //targetUrl.searchParams.append('sort', sortVal);
-    }
-
-    //검색어
-    if (keyword) {
-      targetUrl2 += `&keyword=${keyword}`;
-      //targetUrl.searchParams.append('keyword', keyword);
-    }
-
-    //제외할 단어
-    if (exclude) {
-      targetUrl2 += `&exclude_keyword=${exclude}`;
-      //targetUrl.searchParams.append('keyword', keyword);
-    }
-
-    //출품자
-    if (item_types) {
-      targetUrl2 += `&item_types=${item_types}`;
-      //targetUrl.searchParams.append('item_types', item_types);
-    }
-
-    //최소 가격
-    if (minPrice) {
-      targetUrl2 += `&price_min=${minPrice}`;
-      //targetUrl.searchParams.append('item_types', item_types);
-    }
-
-    //최대 가격
-    if (maxPrice) {
-      targetUrl2 += `&price_max=${maxPrice}`;
-      //targetUrl.searchParams.append('item_types', item_types);
-    }
-
-    //물품의 상태
-    if (conditionVal) {
-      targetUrl2 += `&item_condition_id=${conditionVal}`;
-      //targetUrl.searchParams.append('item_types', item_types);
-    }
-
-    //배송료 부담
-    if (shippingVal) {
-      targetUrl2 += `&shipping_payer_id=${shippingVal}`;
-      //targetUrl.searchParams.append('item_types', item_types);
-    }
-
-    //할인 옵션
-    if (hasDiscount) {
-      targetUrl2 += `&47295d80-5839-4237-bbfc-deb44b4e7999=${hasDiscount}`;
-      //targetUrl.searchParams.append('item_types', item_types);
-    }
-
-    //출품 형태
-    if (listingType) {
-      targetUrl2 += `&d664efe3-ae5a-4824-b729-e789bf93aba9=${listingType}`;
-      //targetUrl.searchParams.append('item_types', item_types);
-    }
-
-    //색상
-    if (color_id) {
-      targetUrl2 += `&color_id=${color_id}`;
-      //targetUrl.searchParams.append('item_types', item_types);
-    }
-
-    //배송 옵션
-    if (shipping_method) {
-      targetUrl2 += `&shipping_method=${shipping_method}`;
-      //targetUrl.searchParams.append('status', statusVal);
-      //targetUrl.searchParams.append('item_types', item_types);
-    }
-
-    //판매상황
-    if (statusVal) {
-      targetUrl2 += `&status=${statusVal}`;
-      //targetUrl.searchParams.append('status', statusVal);
-      //targetUrl.searchParams.append('item_types', item_types);
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    const stream = new ReadableStream<Uint8Array>({
-      // 💡 controller 타입을 any로 두어 Node/Web 타입 충돌을 완벽히 우회합니다.
-      async start(controller: any) {
-        try {
-          if (!sharedBrowser || !sharedBrowser.connected) {
-            sharedBrowser = await puppeteer.launch({ 
-              headless: true, 
-              args: ['--no-sandbox', '--disable-setuid-sandbox'] 
-            });
-          }
-          const page = await sharedBrowser.newPage();
-          
-          await page.setRequestInterception(true);
-          page.on('request', (r) => r.resourceType() === 'image' ? r.abort() : r.continue());
-
-          await page.goto(targetUrl2, { waitUntil: 'domcontentloaded', timeout: 30000 });
-
-          let sentItems = new Set<string>(); // 💡 제네릭 명시
-          let attempt = 0;
-          let emptyAttempts = 0;
-
-          // 스크롤을 내리며 최대 5번 조각 데이터를 쏴줍니다.
-          while (attempt < 20) {
-            await page.evaluate(() => window.scrollBy(0, 1000));
-            await new Promise(r => setTimeout(r, 1200));
-
-            const currentItems = await page.evaluate(() => {
-              const cells = document.querySelectorAll('li[data-testid="item-cell"], div[data-testid="item-cell"]');
-              return Array.from(cells).map(el => {
-
-                const link = el.querySelector('a')?.getAttribute('href') || '';
-                const id = link.split('/').pop() || '';
-                const name = 
-                    el.querySelector('img')?.getAttribute('alt') || // 1. 이미지의 alt 태그 (가장 확실함)
-                    el.querySelector('a')?.getAttribute('aria-label') || // 2. 링크의 접근성 라벨
-                    el.querySelector('[data-testid="thumbnail-item-name"]')?.textContent?.trim() || // 3. 기존 이름 태그
-                    el.querySelector('[class*="itemName"]')?.textContent?.trim() || // 4. 클래스명에 itemName이 들어간 곳
-                    '상품명 없음'; // 정 못 찾으면 기본값
-                const priceEl = el.querySelector('[class*="number"]') || el.querySelector('span[class*="price"]');
-                const priceText = priceEl?.textContent?.trim() || '0';
-                const thumbnail = el.querySelector('img')?.src || '';
-                
-                const isSoldOut = 
-                  el.querySelector('[data-testid="thumbnail-sticker-sold"]') !== null || // 1. 전용 품절 스티커 태그 존재 여부
-                  el.innerHTML.includes('売り切れ') ||                                  // 2. 일본어 품절 텍스트 포함 여부
-                  el.innerHTML.includes('SOLD');                                       // 3. 영문 품절 텍스트 포함 여부
-
-                return {
-                  id, name, thumbnail,
-                  price: parseInt(priceText.replace(/[^0-9]/g, ''), 10),
-                  status: isSoldOut ? 'sold_out' : 'on_sale', // 💡 더 정확해진 품절 판정
-                  url: `https://jp.mercari.com${link}`
-                };
-              });
-            });
-
-            // 새로운 상품만 필터링
-            const newItems = currentItems.filter(item => 
-              item.id && item.price > 0 && !sentItems.has(item.id)
-            );
-
-            if (newItems.length > 0) {
-              // ✨ 새로운 상품 발견! 카운트 초기화 및 전송
-              emptyAttempts = 0;
-
-              newItems.forEach(item => sentItems.add(item.id));
-              
-              // 🚀 인코더를 사용해 청크 전송
-              const chunk = JSON.stringify({ success: true, data: newItems }) + '\n';
-              controller.enqueue(new TextEncoder().encode(chunk));
-            }
-            else
-            {
-                // ⚠️ 새로운 상품이 없음
-                emptyAttempts++;
-                
-                // 💡 3번 연속(약 3.6초) 새로운 상품이 발견되지 않으면 바닥이라고 판단하고 중단
-                if (emptyAttempts >= 3) {
-                  console.log(`🏁 [Crawling End] 더 이상 새로운 상품이 없어 수집을 중단합니다. (Total: ${sentItems.size}개)`);
-                  break; 
-                }
-            }
-            
-            attempt++;
-          }
-
-          await page.close();
-          controller.close(); 
-
-        } catch (err: any) {
-          const errorChunk = JSON.stringify({ success: false, error: err.message }) + '\n';
-          controller.enqueue(new TextEncoder().encode(errorChunk));
-          controller.close();
-        }
+  if (categoryId === '0') {
+    return new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(JSON.stringify({ success: true, data: [] }) + '\n'));
+        controller.close();
       }
-    });
-
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'application/x-ndjson',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-}
-  
-
-
-
-    /*
-    
-
-    //const targetUrl2 = `https://jp.mercari.com/search?category_id=3088&sort=price&order=asc`;
-
-    console.log(`🌐 [Crawling Target] ${sortVal}  ${targetUrl2.toString()}  `);
-
-    const readableUrl = decodeURIComponent(targetUrl.toString());
-    //return NextResponse.json({ success: false, error: readableUrl.toString() }, { status: 500 });
-
-    if (!sharedBrowser || !sharedBrowser.connected) {
-      sharedBrowser = await puppeteer.launch({ 
-        headless: true, 
-        args: [
-          '--no-sandbox', 
-          '--disable-setuid-sandbox',
-          '--disable-blink-features=AutomationControlled', // 🚀 [핵심 1] 자동화 도구임을 숨깁니다.
-          '--window-size=1920,1080'
-        ] 
-      });
-    }
-
-    const page = await sharedBrowser.newPage();
-    
-    // 🚀 [핵심 2] 사람이 쓰는 브라우저처럼 위장 (Stealth 설정)
-    await page.setViewport({ width: 1920, height: 1080 });
-    await page.evaluateOnNewDocument(() => {
-      // @ts-ignore
-      Object.defineProperty(navigator, 'webdriver', { get: () => false }); // webdriver 신호 제거
-    });
-
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-
-
-    //const categoryId = searchParams.get('category_id');
-    //targetUrl.searchParams.append('category_id', categoryId);
-
-    //const targetUrl = `https://jp.mercari.com/search?category_id=${categoryId}`;
-    
-    // 🚀 [핵심 3] 리소스 차단 해제 (성공할 때까지는 이미지를 포함한 모든 자원을 로드합니다.)
-    // 속도 최적화는 데이터가 나온 이후에 다시 잡아도 늦지 않습니다.
-    
-    await page.goto(targetUrl2.toString(), { 
-      waitUntil: 'networkidle2', // 🚀 모든 스크립트가 실행될 때까지 충분히 기다림
-      timeout: 45000 
-    });
-
-    // 🚀 [핵심 4] 사람이 보는 것처럼 페이지 하단으로 살짝 스크롤 (Lazy Loading 깨우기)
-    await page.evaluate(() => {
-      window.scrollBy(0, 800);
-    });
-    
-    // 데이터 렌더링을 위해 3초간 확실히 대기
-    await new Promise(res => setTimeout(res, 2500));
-
-    // 데이터 추출
-    const items = await page.evaluate(() => {
-      // 💡 여러 가지 셀렉터 패턴을 모두 시도합니다.
-      const cells = document.querySelectorAll('li[data-testid="item-cell"], div[data-testid="item-cell"]');
-      
-      return Array.from(cells).map(el => {
-        const link = el.querySelector('a')?.getAttribute('href') || '';
-        const id = link.split('/').pop() || '';
-        const name = el.querySelector('span[data-testid="thumbnail-item-name"]')?.textContent?.trim() || 
-                     el.querySelector('img')?.getAttribute('alt') || '';
-        
-        const priceEl = el.querySelector('[class*="number"]') || el.querySelector('span[class*="price"]');
-        const priceText = priceEl?.textContent?.trim() || '0';
-        
-        const imgEl = el.querySelector('img');
-        const thumbnail = imgEl?.src || imgEl?.getAttribute('data-src') || '';
-        
-        return {
-          id,
-          name,
-          price: parseInt(priceText.replace(/[^0-9]/g, ''), 10),
-          thumbnail,
-          status: el.innerHTML.includes('SOLD') ? 'sold_out' : 'on_sale',
-          url: `https://jp.mercari.com${link}`
-        };
-      });
-    });
-
-    await page.close(); 
-    
-    // 유효한 데이터만 필터링
-    const validItems = items.filter(item => item.id && (item.name || item.price > 0));
-
-    // 💡 데이터가 0개라면 서버 콘솔에 원인을 출력합니다.
-    if (validItems.length === 0) {
-      console.error("❌ 데이터 추출 실패: 아이템 셀을 찾을 수 없습니다.");
-    }
-    
-    return NextResponse.json({ success: true, count: validItems.length, data: validItems , targetUrl: targetUrl.toString() });
-
-  } catch (error: any) {
-    console.error("DEBUG ERROR:", error.message);
-    sharedBrowser = null;
-    return NextResponse.json({ success: false, error: "서버가 데이터를 차단했습니다." }, { status: 500 });
+    }), { headers: { 'Content-Type': 'application/x-ndjson' } });
   }
 
+  const targetUrl = generateMercariTargetUrl(searchParams);
+  console.log(`\n🏎️ [TURBO MODE] 크롤링 시작: ${targetUrl}`);
 
-    
-}*/
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller: any) {
+      const encoder = new TextEncoder();
+      let apiDataCaptured = false;
+      let sentItems = new Set<string>();
+      let isStreamClosed = false; // 🚀 스트림 상태 추적 변수 (에러 방지 핵심)
+      let page: any = null;
+
+      // 🔌 [중단 로직] 클라이언트가 연결을 끊으면 즉시 자원 해제
+      const abortHandler = async () => {
+        console.log("🔌 [SIGNAL] 클라이언트 연결 끊김 -> 자원 해제");
+        isStreamClosed = true;
+        try {
+          if (page) await page.close().catch(() => {});
+        } catch (e) {}
+      };
+      signal.addEventListener('abort', abortHandler);
+
+      try {
+        if (!sharedBrowser || !sharedBrowser.connected) {
+          sharedBrowser = await puppeteer.launch({ 
+            headless: true, 
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] 
+          });
+        }
+        
+        page = await sharedBrowser.newPage();
+        await page.setViewport({ width: 1280, height: 3000 });
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+
+        await page.setRequestInterception(true);
+        page.on('request', (r: any) => ['image', 'font', 'media'].includes(r.resourceType()) ? r.abort() : r.continue());
+
+        // ⚡ [최적화 3] API 낚시
+        page.on('response', async (response: any) => {
+          if (isStreamClosed || signal.aborted) return;
+          const url = response.url();
+          if (url.includes('api/v1/search') || url.includes('search_index')) {
+            try {
+              const json = await response.json();
+              const rawItems = json.items || [];
+              if (rawItems.length > 0 && !apiDataCaptured) {
+                apiDataCaptured = true;
+                const items: MercariItem[] = rawItems.map((item: any) => ({
+                  id: item.id, name: item.name, thumbnail: item.thumbnails[0] || '',
+                  price: parseInt(item.price, 10),
+                  status: (item.status === 'on_sale' || item.status === 'trading') ? 'on_sale' : 'sold_out',
+                  url: `https://jp.mercari.com/item/${item.id}`
+                }));
+                const newItems = items.filter((item: MercariItem) => !sentItems.has(item.id));
+                if (newItems.length > 0 && !isStreamClosed) {
+                  newItems.forEach((item: any) => sentItems.add(item.id));
+                  controller.enqueue(encoder.encode(JSON.stringify({ success: true, data: newItems }) + '\n'));
+                  controller.enqueue(encoder.encode(' '.repeat(2048) + '\n')); 
+                  console.log(`✅ [API 낚시 성공] ${newItems.length}개 전송`);
+                }
+              }
+            } catch (e) {}
+          }
+        });
+
+        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+
+        // ⚡ [최적화 4] 병렬 감시
+        let isDomReady = false;
+        for (let i = 0; i < 25; i++) {
+          if (apiDataCaptured || isStreamClosed || signal.aborted) break;
+          const count = await page.evaluate(() => document.querySelectorAll('[data-testid="item-cell"]').length).catch(() => 0);
+          if (count >= 10) { isDomReady = true; break; }
+          await new Promise(r => setTimeout(r, 100));
+        }
+
+        // ⚡ [최적화 5] 선발대 즉시 추출
+        if (!apiDataCaptured && isDomReady && !isStreamClosed) {
+          const initialItems = await page.evaluate(() => {
+            const cells = Array.from(document.querySelectorAll('[data-testid="item-cell"]'));
+            return cells.slice(0, 15).map(el => {
+              const link = el.querySelector('a')?.getAttribute('href') || '';
+              const imgEl = el.querySelector('img');
+              return {
+                id: link.split('/').pop() || '',
+                name: imgEl?.getAttribute('alt') || '상품명 없음',
+                thumbnail: imgEl?.src || '',
+                price: parseInt(el.querySelector('[class*="number"]')?.textContent?.replace(/[^0-9]/g, '') || '0', 10),
+                status: el.innerHTML.includes('売り切れ') ? 'sold_out' : 'on_sale',
+                url: `https://jp.mercari.com${link}`
+              };
+            });
+          }).catch(() => []);
+
+          const newItems = initialItems.filter((item: any) => item.id && item.price > 0 && !sentItems.has(item.id));
+          if (newItems.length > 0 && !isStreamClosed) {
+            newItems.forEach((item: any) => sentItems.add(item.id));
+            controller.enqueue(encoder.encode(JSON.stringify({ success: true, data: newItems }) + '\n'));
+            console.log(`✅ [선발대 성공] ${newItems.length}개 즉시 전송`);
+          }
+        }
+
+        // ⚡ [최적화 6] 본대 순차 수집 (130개 목표 / 2회 조기종료 모드)
+        let attempt = 0;
+        let consecutiveEmpty = 0;
+        const targetTotal = 130;
+
+        while (attempt < 35 && sentItems.size < targetTotal) { 
+          if (signal.aborted || isStreamClosed) break;
+          attempt++;
+          
+          await page.evaluate(() => {
+            window.scrollBy(0, 2500);
+            setTimeout(() => window.scrollBy(0, -300), 500); 
+          }).catch(() => {});
+
+          const waitTime = sentItems.size > 80 ? 4000 : 3000; 
+          await new Promise(r => setTimeout(r, waitTime)); 
+
+          await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const moreBtn = buttons.find(b => b.textContent?.includes('さらに表示') || b.textContent?.includes('Show more'));
+            if (moreBtn) (moreBtn as any).click();
+          }).catch(() => {});
+
+          if (isStreamClosed || signal.aborted) break;
+
+          const domItems = await page.evaluate(() => {
+            const cells = Array.from(document.querySelectorAll('[data-testid="item-cell"]'));
+            return cells.slice(-150).map(el => {
+              const link = el.querySelector('a')?.getAttribute('href') || '';
+              const imgEl = el.querySelector('img');
+              return {
+                id: link.split('/').pop() || '',
+                name: imgEl?.getAttribute('alt') || '상품명 없음',
+                thumbnail: imgEl?.src || '',
+                price: parseInt(el.querySelector('[class*="number"]')?.textContent?.replace(/[^0-9]/g, '') || '0', 10),
+                status: el.innerHTML.includes('売り切れ') ? 'sold_out' : 'on_sale',
+                url: `https://jp.mercari.com${link}`
+              };
+            });
+          }).catch(() => []);
+
+          const newItems = domItems.filter((item: any) => item.id && item.price > 0 && !sentItems.has(item.id));
+
+          if (newItems.length > 0) {
+            consecutiveEmpty = 0; 
+            newItems.forEach((item: any) => sentItems.add(item.id));
+            
+            // 🚀 [설계 포인트 1] 데이터를 15개씩 쪼개는 바구니를 만듭니다.
+            const chunkSize = 15; 
+            for (let i = 0; i < newItems.length; i += chunkSize) {
+              const dataChunk = newItems.slice(i, i + chunkSize);
+              
+              // 쪼개진 데이터 덩어리를 JSON으로 만들고 줄바꿈(\n)을 붙여 보냅니다.
+              const chunkString = JSON.stringify({ success: true, data: dataChunk }) + '\n';
+              controller.enqueue(encoder.encode(chunkString));
+              
+              // 💡 패딩을 데이터 덩어리마다 붙여서 즉시 렌더링을 독촉합니다.
+              controller.enqueue(encoder.encode(' '.repeat(1024) + '\n')); 
+              
+              // 🚀 아주 짧은 대기 시간을 줘서 브라우저가 숫자를 올릴 틈을 줍니다.
+              await new Promise(r => setTimeout(r, 10)); 
+            }
+          } else {
+            consecutiveEmpty++;
+            console.log(`⚠️ 새로운 상품 없음 (${consecutiveEmpty}/2)`);
+            if (consecutiveEmpty >= 2) {
+              console.log("🏁 [조기 종료] 새로운 데이터가 없어 수집을 마무리합니다.");
+              break; 
+            }
+          }
+        }
+
+      } catch (err: any) {
+        console.error(`❌ [ERROR] ${err.message}`);
+      } finally {
+        signal.removeEventListener('abort', abortHandler);
+        if (!isStreamClosed) {
+          isStreamClosed = true;
+          try {
+            if (page) await page.close().catch(() => {});
+            controller.close();
+          } catch (e) {}
+        }
+      }
+    }
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+      'Content-Encoding': 'none',
+    },
+  });
+}
