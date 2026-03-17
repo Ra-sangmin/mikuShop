@@ -6,41 +6,70 @@ import GlobalCategoryGrid from "./GlobalCategoryGrid";
 import GlobalProductDetail, { GlobalProduct } from "./GlobalProductDetail";
 import GlobalProductCard from "./GlobalProductCard";
 import GlobalPagination from './GlobalPagination';
+import GlobalSimplePagination from './GlobalSimplePagination';
 
-// --- [보조 컴포넌트] 로딩 오버레이 & 스켈레톤 ---
+// --- [보조 컴포넌트] 로딩 오버레이 ---
 const MikuLoadingOverlay = ({ message }: { message: string }) => (
   <div style={{
     position: 'fixed', inset: 0, backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    backdropFilter: 'blur(8px)', zIndex: 100, display: 'flex', flexDirection: 'column',
+    backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center'
   }}>
-    {/* 🚨 멈춰있던 원인 해결: CSS 애니메이션 키프레임 부활! */}
     <style>
       {`
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 10px rgba(255, 0, 127, 0.2); } 50% { box-shadow: 0 0 25px rgba(255, 0, 127, 0.6); } }
+        /* 글로우 효과도 1.5배 더 풍성하게 수정 */
+        @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 15px rgba(255, 0, 127, 0.2); } 50% { box-shadow: 0 0 45px rgba(255, 0, 127, 0.4); } }
         @keyframes shimmerText { 0% { background-position: -100% 0; } 100% { background-position: 100% 0; } }
       `}
     </style>
     
-    <div style={{ position: 'relative' }}>
+    {/* 🚀 전체 크기 1.5배 확대 (154px -> 230px) */}
+    <div style={{ position: 'relative', width: '230px', height: '230px' }}>
+      
+      {/* 1. 핑크색 테두리 (두께 9px로 강화) */}
       <div style={{
-        height: '96px', width: '96px', border: '4px solid #fce7f3', borderTopColor: '#ff007f', borderRadius: '50%', 
-        animation: 'spin 1s linear infinite, pulseGlow 2s ease-in-out infinite'
+        position: 'absolute', inset: 0,
+        border: '9px solid #fce7f3', borderTopColor: '#ff007f', borderRadius: '50%', 
+        animation: 'spin 1s linear infinite, pulseGlow 2s ease-in-out infinite',
+        boxSizing: 'border-box',
+        zIndex: 2
       }} />
+      
+      {/* 2. 꽉 찬 미쿠짱 GIF 영역 (230px에 맞춰 확대) */}
       <div style={{
-        position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: '#ff007f', fontWeight: 900, fontSize: '20px', textShadow: '0 0 8px rgba(255, 0, 127, 0.3)'
-      }}>MIKU</div>
+        position: 'absolute', 
+        inset: '9px', // 테두리 두께만큼 안쪽으로 여백
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        overflow: 'hidden',
+        borderRadius: '50%',
+        zIndex: 1
+      }}>
+        <img 
+          src="/miku-run.gif" 
+          alt="열심히 달리는 미쿠짱" 
+          style={{ 
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover', // 원 안을 꽉 채우기
+            transform: 'scale(1.05)' 
+          }} 
+        />
+      </div>
+
     </div>
     
-    <div style={{ marginTop: '32px', textAlign: 'center' }}>
+    {/* 🚀 하단 텍스트 영역도 1.5배 수준으로 확대 */}
+    <div style={{ marginTop: '76px', textAlign: 'center' }}>
       <p style={{ 
-        fontWeight: 'bold', fontSize: '18px', background: 'linear-gradient(90deg, #1f2937 0%, #ff007f 50%, #1f2937 100%)',
+        fontWeight: 'bold', fontSize: '28px', // 19px -> 28px
+        background: 'linear-gradient(90deg, #1f2937 0%, #ff007f 50%, #1f2937 100%)',
         backgroundSize: '200% auto', color: 'transparent', WebkitBackgroundClip: 'text', animation: 'shimmerText 2.5s linear infinite',
-        margin: 0
+        margin: 0, letterSpacing: '-1px'
       }}>{message}</p>
-      <p style={{ color: '#9ca3af', fontSize: '14px', marginTop: '8px' }}>잠시후 로딩됩니다...</p>
+      <p style={{ color: '#9ca3af', fontSize: '20px', marginTop: '15px' }}>잠시후 로딩됩니다...</p> {/* 13px -> 20px */}
     </div>
   </div>
 );
@@ -154,12 +183,20 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
                 
                 {/* 🚀 1. 상단 페이지네이션 (선택 사항: 상품이 많을 때 위에서도 이동 가능하게) */}
                 <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-                  <GlobalPagination 
-                    currentPage={props.pageInfo.page} 
-                    pageCount={props.pageInfo.pageCount || 1} 
-                    // 🚀 부모에게서 받은 함수를 여기서 연결합니다!
-                    onPageChange={props.onPageChange} 
-                  />
+                  {props.platform === 'mercari' ? (
+                    // 🌸 메루카리 전용: 이전/다음 버튼 모드
+                    <GlobalSimplePagination 
+                      currentPage={props.pageInfo.page} 
+                      onPageChange={props.onPageChange} 
+                    />
+                  ) : (
+                    // 📦 기타 플랫폼: 기존 숫자 페이지네이션
+                    <GlobalPagination 
+                      currentPage={props.pageInfo.page} 
+                      pageCount={props.pageInfo.pageCount || 1} 
+                      onPageChange={props.onPageChange} 
+                    />
+                  )}
                 </div>
 
                 {/* 2. 상품 그리드 */}
@@ -169,15 +206,26 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
                   ))}
                 </div>
 
-                {/* 🚀 3. 페이지네이션을 로딩 바 '위'로 올림 */}
-                {/* 수집 중이라도 페이지 이동은 가능해야 하므로 로딩 바보다 먼저 보여줍니다. */}
-                <div style={{ marginTop: '30px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
-                  <GlobalPagination 
-                    currentPage={props.pageInfo.page} 
-                    pageCount={props.pageInfo.pageCount || 1} 
-                    // 🚀 여기도 마찬가지로 연결!
-                    onPageChange={props.onPageChange} 
-                  />
+                <div style={{ 
+                  marginTop: '40px', 
+                  borderTop: '1px solid #eee', 
+                  paddingTop: '30px',
+                  display: 'flex',           // 1. flex 레이아웃 적용
+                  justifyContent: 'center',   // 2. 가로 방향 중앙 정렬
+                  width: '100%'              // 3. 전체 너비 확보
+                }}>
+                  {props.platform === 'mercari' ? (
+                    <GlobalSimplePagination 
+                      currentPage={props.pageInfo.page} 
+                      onPageChange={props.onPageChange} 
+                    />
+                  ) : (
+                    <GlobalPagination 
+                      currentPage={props.pageInfo.page} 
+                      pageCount={props.pageInfo.pageCount || 1} 
+                      onPageChange={props.onPageChange} 
+                    />
+                  )}
                 </div>
 
                 {/* 4. 하단 로딩 바 (최하단에 배치) */}

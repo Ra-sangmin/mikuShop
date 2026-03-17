@@ -55,6 +55,7 @@ export interface GlobalFilterState {
   colors: string[];
   shippingOption: string;
   status: string;
+  page?: number;
 }
 
 interface GlobalSidebarProps {
@@ -82,6 +83,26 @@ export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: G
     // 🚀 모바일 드로어(Drawer) 상태 관리
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   
+    // 🚀 [핵심] 사이드바 내부에서 관리하는 필터 상태 (Source of Truth)
+    const [filters, setFilters] = useState<GlobalFilterState>({
+      sortOrder: sortOptions && sortOptions.length > 0 ? sortOptions[0].id : '기본순', 
+      keyword: '',
+      excludeKeyword: '',
+      brand: '',
+      size: '모두',
+      sellerType: '모두',
+      minPrice: '',
+      maxPrice: '',
+      condition: '모두',
+      shippingPayer: '모두',
+      hasDiscount: '모두',
+      listingType: '모두',
+      colors: ['모두'],
+      shippingOption: '모두',
+      status: '모두', // 기본값을 '판매중'으로 설정하여 사용자 편의성 증대
+      page: 1,
+    });
+    
     // 🚀 스와이프 터치 좌표 추적
     const touchStartX = useRef(0);
     const touchStartY = useRef(0);
@@ -103,15 +124,6 @@ export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: G
   
     const [isColorOpen, setIsColorOpen] = useState(false);
     const colorContainerRef = useRef<HTMLDivElement>(null);
-  
-    const [filters, setFilters] = useState<GlobalFilterState>({
-      // ✨ 부모에서 넘어온 옵션이 있으면 첫 번째 옵션의 id를, 없으면 '기본순'을 초기값으로 설정
-      sortOrder: sortOptions && sortOptions.length > 0 ? sortOptions[0].id : '기본순', 
-      keyword: '', excludeKeyword: '', brand: '',
-      size: '모두', sellerType: '모두', minPrice: '', maxPrice: '',
-      condition: '모두', shippingPayer: '모두', hasDiscount: '모두',
-      listingType: '모두', colors: ['모두'], shippingOption: '모두', status: '모두'
-    });
   
     const sidebarRef = useRef<HTMLDivElement>(null);
     const [isSidebarDragging, setIsSidebarDragging] = useState(false);
@@ -406,6 +418,7 @@ export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: G
           <div style={{ padding: isMobile ? '16px' : '24px', borderTop: '1px solid #f9fafb', flexShrink: 0, backgroundColor: 'white' }}>
             <button 
               onClick={() => {
+                // 🚀 [중요] 부모에게 현재 필터 상태를 전송!
                 onSearch(filters);
                 if(isMobile) setIsDrawerOpen(false); 
               }}

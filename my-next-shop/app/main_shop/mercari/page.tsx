@@ -39,6 +39,9 @@ let globalProductDetailCache: { [key: string]: GlobalProduct } = {};
 // 1. 실제 로직을 담당하는 Content 컴포넌트
 function MercariCategoryContent() {
   
+  // 1. 부모에서도 필터를 기억할 상태를 만듭니다.
+  const [currentFilters, setCurrentFilters] = useState<GlobalFilterState>({});
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentCatId = searchParams.get('cat') || '';
@@ -122,15 +125,32 @@ function MercariCategoryContent() {
     if (catId !== 0) params.append("category_id", catId.toString());
     if (!filters) return params;
 
-    const getSort = (val: string) => {
-      switch (val) {
-        case '가격 낮은 순': return 'price&order=asc';
-        case '가격 높은 순': return 'price&order=desc';
-        case '최신순':       return 'created_time&order=desc';
-        default: return '';
+
+    // 🚀 2. 페이지 토큰 (page_token)
+    // 사용자가 발견한 규칙 v1:4 (5페이지)에 따라 (page - 1)을 넣어줍니다.
+    // 1페이지일 때는 토큰을 보내지 않는 것이 기본입니다.
+    if (filters?.page && filters.page > 1) {
+      const tokenValue = `v1:${filters.page - 1}`;
+      params.append("page_token", tokenValue);
+    }
+    
+    if (filters.sortOrder !== '기본순') {
+      switch (filters.sortOrder) {
+        case '가격 낮은 순':
+          params.append("sort", "price");
+          params.append("order", "asc");
+          break;
+        case '가격 높은 순':
+          params.append("sort", "price");
+          params.append("order", "desc");
+          break;
+        case '최신순':
+          params.append("sort", "created_time");
+          params.append("order", "desc");
+          break;
       }
-    };
-    if (filters.sortOrder !== '기본순') params.append("sort", getSort(filters.sortOrder));
+    }
+
     if (filters.keyword) params.append("keyword", filters.keyword);
     if (filters.excludeKeyword) params.append("exclude_keyword", filters.excludeKeyword);
 
@@ -161,7 +181,16 @@ function MercariCategoryContent() {
       return map[val] || '';
     };
     if (filters.shippingOption !== '모두') params.append("shipping_method", getShippingOption(filters.shippingOption));
-    if (filters.status !== '모두') params.append("status", filters.status === '판매중' ? 'on_sale' : 'sold_out');
+    if (filters.status !== '모두')
+    {
+      /*
+        if (filters.status === '판매 중') {
+          params.append("status", "on_sale");
+        } else if (filters.status === '품절') {
+          params.append("status", "sold_out");
+        }  */
+    }
+    
 
     return params;
   };
@@ -319,22 +348,37 @@ function MercariCategoryContent() {
     loadData();
   }, [currentCatId]);
 
-  // 🚀 [로직 7] 네비게이션 제어
   const handleMove = (id: number, name: string, level?: number) => {
-    loadItems(id);
-    if (!id) {
+    // 🚀 [수정] 아이템 수집 로직(loadItems)을 여기서 제거합니다!
+    //loadItems(id); // <--- 이 줄을 삭제하거나 주석 처리하세요.
+
+    // 🚀 [추가] 이동할 때 이전 카테고리의 상품들이 남아있지 않게 싹 비워줍니다.
+    setItems([]); 
+    setDisplayItems([]);
+    setPageInfo(prev => ({ ...prev, page: 1 })); // 페이지도 1로 초기화
+
+    // 🏠 [핵심 수정] 홈 버튼(id가 0이거나 이름이 HOME)을 눌렀을 때
+    if (!id || id === 0 || name === 'HOME') {
       setPath([]);
       router.push('/main_shop/mercari');
+      // 🚀 여기서 loadItems를 호출하지 않고 바로 종료(return)합니다!
+      console.log("🏠 홈으로 이동합니다. 아이템 수집을 하지 않습니다.");
       return;
     }
 
+    // 브레드크럼 클릭 시 경로 계산 (기존 로직 유지)
     setPath(prev => {
-      if (level) return [...prev.slice(0, level - 1), { id, name }];
+      if (level !== undefined) return [...prev.slice(0, level), { id, name }];
       const existsIndex = prev.findIndex(p => p.id === id);
       if (existsIndex !== -1) return prev.slice(0, existsIndex + 1);
       return [...prev, { id, name }];
     });
+
     router.push(`/main_shop/mercari?cat=${id}`);
+
+    // 🚀 홈이 아닐 때만 아이템 수집을 즉시 시작합니다!
+    // activeFilters는 부모가 들고 있는 현재 필터 상태입니다.
+    loadItems(id, currentFilters);
   };
 
   const handleSidebarNavigate = (id: number, name: string, levelIndex: number) => {
@@ -398,18 +442,26 @@ function MercariCategoryContent() {
       isDetailLoading={isDetailLoading}
       isLeaf={isLeaf}
       onNavigate={handleMove}
-      onSearch={(filters: GlobalFilterState) => loadItems(Number(currentCatId), filters)}
+      //onSearch={(filters: GlobalFilterState) => loadItems(Number(currentCatId), filters)}
+      onSearch={(filters: GlobalFilterState) => {
+        setCurrentFilters(filters); // 🚀 사이드바에서 받은 필터를 부모가 저장!
+        loadItems(Number(currentCatId), filters);
+      }}
       onCardClick={loadProductDetail}
       onCloseDetail={() => setProductDetail(null)}
       showCrawlHeader={SHOW_HEADER}
       isAutoRunning={isAutoRunning}
       onCrawlToggle={isAutoRunning ? stopAutoCrawl : startAutoCrawl}
       crawlLog={log[0]}
-      onPageChange={(newPage) => { // 👈 빠져있던 페이지 변경 로직 추가!
-      setPageInfo(prev => ({ ...prev, page: newPage }));
-      loadItems(Number(currentCatId), { ...filters, page: newPage });
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }}
+
+      onPageChange={(newPage) => {
+        const updatedPageInfo = { ...pageInfo, page: newPage };
+        setPageInfo(updatedPageInfo);
+        
+        // 🚀 이제 filters 대신 부모가 기억하고 있는 currentFilters를 사용하세요!
+        loadItems(Number(currentCatId), { ...currentFilters, page: newPage });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }}
     />
   );
 }

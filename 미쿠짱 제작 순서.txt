@@ -46,3 +46,8 @@ SET m.genreName = t.genreNameKo;
 
 -- 확인
 SELECT * FROM MercariCategory LIMIT 10;
+
+
+
+
+pm2 start npm --name "miku-app" -- start
