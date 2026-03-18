@@ -6,9 +6,6 @@ const nextConfig: any = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
 
   /* Puppeteer 충돌 방지를 위한 외부 패키지 설정 */
   serverExternalPackages: [

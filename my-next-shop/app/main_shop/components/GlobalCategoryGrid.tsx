@@ -116,7 +116,7 @@ export default function GlobalCategoryGrid({
       <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
       
       {/* 카테고리 리스트 표시 */}
-      {!isLeaf && categories.length > 0 && (
+      {!isLoading && !isLeaf && categories.length > 0 && (
        <>
           <div style={styles.gridContainer}>
             {/* 🚀 visibleCategories를 사용하여 렌더링 */}
@@ -147,12 +147,13 @@ export default function GlobalCategoryGrid({
         </>
       )}
 
-      {/* 안내 메시지 */}
-      {isLeaf && categories.length === 0 && (
+      {/* 2. 최하위 판정 (로딩 중이 아닐 때) */}
+      {!isLoading && isLeaf && categories.length === 0 && (
         <div style={styles.messageText}>최하위 카테고리입니다. 왼쪽 상세 검색의 [검색하기] 버튼을 눌러주세요.</div>
       )}
       
-      {!isLeaf && categories.length === 0 && (
+      {/* 3. 데이터 없음 판정 (로딩 중이 아닐 때 + 잎새 노드도 아닐 때) */}
+      {!isLoading && !isLeaf && categories.length === 0 && (
         <div style={styles.emptyText}>데이터가 없습니다.</div>
       )}
     </div>
@@ -178,6 +179,8 @@ function GlobalCategoryItem({
       onClick={onClick} 
       onMouseEnter={() => setIsHovered(true)} 
       onMouseLeave={() => setIsHovered(false)} 
+      translate="no" 
+      className="notranslate"
       style={{ 
         fontSize: isMobile ? '13px' : '14px', 
         color: (isHovered && !isMobile) ? theme.color : '#4b5563', // 플랫폼 컬러 적용

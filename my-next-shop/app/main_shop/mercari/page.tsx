@@ -319,32 +319,54 @@ function MercariCategoryContent() {
   // 🚀 [로직 6] 카테고리 로드 및 초기 데이터 세팅
   useEffect(() => {
     const loadData = async () => {
+      // 1. 시작하자마자 상태 초기화 (이전 기억 삭제)
       setIsLoading(true);
+      setIsLeaf(false);
+      setCategories([]); 
+
       try {
-        const res = await fetch(`/api/mercari/categories${currentCatId ? `?parentId=${currentCatId}` : ''}`);
+        const apiUrl = `/api/mercari/categories${currentCatId ? `?parentId=${currentCatId}` : ''}`;
+        console.log(`📡 요청 시작: ${apiUrl}`);
+
+        const res = await fetch(apiUrl);
         const result = await res.json();
 
-        if (result.success) {
-          setCategories(result.data);
-          setIsLeaf(result.isLeaf || false);
+        // 🚀 [디버그 로그] 서버가 실제로 보내준 날것의 데이터를 확인합니다.
+        console.log("📦 서버 응답 전체:", result);
 
-          if (result.data && result.data.length > 0) {
-            const fetchedLevel = result.data[0].genreLevel;
-            setLevelOptions(prev => ({ ...prev, [fetchedLevel]: result.data }));
-          } else if (!currentCatId || currentCatId === '0') {
-            setLevelOptions({});
+        if (result.success) {
+          const serverData = result.data || [];
+          const serverIsLeaf = !!result.isLeaf;
+
+          // 2. 데이터 유무에 따른 정밀 판정
+          if (serverData.length > 0) {
+            console.log(`✅ 데이터를 ${serverData.length}개 찾았습니다. (isLeaf: ${serverIsLeaf})`);
+            setCategories(serverData);
+            setIsLeaf(serverIsLeaf); // 서버가 준 대로 설정
+          } else {
+            console.log("❌ 데이터가 0개입니다. 최하위로 판정합니다.");
+            setCategories([]);
+            setIsLeaf(true); 
           }
-          
+
+          // 경로 업데이트
           if (result.parents) {
             const serverPath = result.parents.map((p: any) => ({
               id: p.parent.genreId, name: p.parent.genreName
             }));
             setPath(serverPath);
           }
+        } else {
+          console.error("❌ 서버 응답 실패:", result.error);
+          setIsLeaf(true); // 에러 시 안전하게 최하위로 표시
         }
-      } catch (err) { /* 에러 처리 */ }
-      finally { setIsLoading(false); }
+      } catch (err) {
+        console.error("❌ 통신 중 진짜 에러 발생:", err);
+      } finally {
+        setIsLoading(false);
+      }
     };
+
     loadData();
   }, [currentCatId]);
 
@@ -352,17 +374,15 @@ function MercariCategoryContent() {
     // 🚀 [수정] 아이템 수집 로직(loadItems)을 여기서 제거합니다!
     //loadItems(id); // <--- 이 줄을 삭제하거나 주석 처리하세요.
 
-    // 🚀 [추가] 이동할 때 이전 카테고리의 상품들이 남아있지 않게 싹 비워줍니다.
+    setIsLeaf(false);
+
     setItems([]); 
     setDisplayItems([]);
     setPageInfo(prev => ({ ...prev, page: 1 })); // 페이지도 1로 초기화
 
-    // 🏠 [핵심 수정] 홈 버튼(id가 0이거나 이름이 HOME)을 눌렀을 때
     if (!id || id === 0 || name === 'HOME') {
       setPath([]);
       router.push('/main_shop/mercari');
-      // 🚀 여기서 loadItems를 호출하지 않고 바로 종료(return)합니다!
-      console.log("🏠 홈으로 이동합니다. 아이템 수집을 하지 않습니다.");
       return;
     }
 

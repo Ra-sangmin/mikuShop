@@ -472,9 +472,6 @@ export default function GlobalProductDetail({ product, onClose }: GlobalProductD
             번역은 서비스로 제공해드리는 기능으로 <span style={{ color: '#e11d48', textDecoration: 'underline' }}>오번역으로 인한 피해는 책임지지 않으니</span> 주의하시기 바랍니다.
           </div>
           
-          <div className="notranslate" style={styles.cautionSubText}>
-            (미개봉, 미사용 등 의미가 완전히 달라져버리는 오번역이 발생할 수 있습니다.)
-          </div>
         </div>
 
           <p style={styles.descText} lang="ja">{product.description}</p>

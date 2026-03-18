@@ -1,4 +1,3 @@
-// src/app/layout.tsx
 "use client";
 import { usePathname } from 'next/navigation';
 import './globals.css';
@@ -13,7 +12,7 @@ import { feeManager } from "@/src/models/FeeManager";
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAdminPage = pathname?.startsWith('/admin');
-  const isShopPage = pathname?.startsWith('/main_shop'); // 🚀 쇼핑 페이지 여부 확인
+  const isShopPage = pathname?.startsWith('/main_shop'); 
   const prevPathname = useRef(pathname);
 
   useEffect(() => {
@@ -37,8 +36,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   }, [pathname]);
 
   return (
-    // 🚀 [핵심 수정 1] 쇼핑 페이지일 때는 lang="ja"로 설정하여 브라우저 번역 기능을 유도합니다.
-    // 🚀 [핵심 수정 2] suppressHydrationWarning을 추가하여 구글 번역기로 인한 DOM 변경 에러를 방지합니다.
     <html 
       lang={isShopPage ? "ja" : "ko"} 
       translate={!isShopPage ? "no" : "yes"}
@@ -49,6 +46,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
         /> 
+        {/* 🌟 배달의민족 주아체 로드 */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
       </head>
       <body 
         suppressHydrationWarning
@@ -58,7 +59,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           minHeight: '100vh',
           margin: '0',
           position: 'relative',
-          top: '0'
+          top: '0',
+          /* 🌟 [추가] 사이트 전체 기본 폰트를 나눔스퀘어라운드로 설정 */
+          fontFamily: '"NanumSquareRound", sans-serif',
         }}
       >
         <Providers>

@@ -3,445 +3,181 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
+import { 
+  ClipboardText, 
+  ChatCircleDots,
+  ShoppingCartSimple,
+  MapPin,
+  AirplaneTilt,
+  Wallet,
+  Coins,
+  Money,
+  Crown,
+  Info,
+  Scales,
+  BookOpen,
+  PaperPlaneTilt,
+  Question,
+  Headset,
+  SignOut,
+  User,
+  FilePlus,
+  Receipt
+} from "@phosphor-icons/react";
 
 export default function Header() {
   const { data: session, status } = useSession();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // 🌟 모바일 사이드바 상태
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const pathname = usePathname();
 
-  // 🌟 NextAuth 세션 정보를 기존 localStorage 기반 로그인 시스템과 동기화
   useEffect(() => {
     const syncAuth = async () => {
       if (status === "authenticated" && session?.user) {
         const dbUserId = (session.user as any).id;
         if (dbUserId) {
           localStorage.setItem('user_id', dbUserId.toString());
-          localStorage.setItem('email', session.user.email || '');
-          localStorage.setItem('name', session.user.name || '');
           setIsLoggedIn(true);
-
-          // 🌟 기본 배송지 등록 여부 체크 후 미등록 시 리다이렉트
-          try {
-            const res = await fetch(`/api/users?id=${dbUserId}`);
-            const data = await res.json();
-            if (data.success && !data.user.defaultAddressId) {
-              // 현재 페이지가 이미 프로필 페이지가 아닐 때만 이동
-              if (window.location.pathname !== '/mypage/profile') {
-                window.location.href = '/mypage/profile?newAddress=true';
-              }
-            }
-          } catch (error) {
-            console.error("기본 배송지 체크 실패:", error);
-          }
         }
       } else if (status === "unauthenticated") {
-        // NextAuth 세션이 없고 localStorage에도 정보가 없다면 로그아웃 상태
-        const userId = localStorage.getItem('user_id');
-        if (userId) {
-          setIsLoggedIn(true);
-        } else {
-          setIsLoggedIn(false);
-        }
+        setIsLoggedIn(!!localStorage.getItem('user_id'));
       }
     };
-
     syncAuth();
   }, [session, status]);
 
   const handleLogout = async () => {
     if (window.confirm("로그아웃 하시겠습니까?")) {
-      // 1. NextAuth 로그아웃 (소셜 로그인인 경우)
-      if (status === "authenticated") {
-        await signOut({ redirect: false });
-      }
-
-      // 2. 로컬 스토리지 정보 삭제
-      localStorage.removeItem('id');
-      localStorage.removeItem('name');
-      localStorage.removeItem('email');
-      localStorage.removeItem('user_id');
-
+      if (status === "authenticated") await signOut({ redirect: false });
+      localStorage.clear();
       setIsLoggedIn(false);
-      setIsSidebarOpen(false); // 로그아웃 시 사이드바 닫기
-      alert('로그아웃 되었습니다.');
       window.location.href = '/';
     }
   };
 
-  // 🌟 페이지 이동 시 사이드바 자동 닫기
-  useEffect(() => {
-    setIsSidebarOpen(false);
-  }, [pathname]);
+  useEffect(() => setIsSidebarOpen(false), [pathname]);
 
-  // 🌟 사이드바 열렸을 때 배경 스크롤 방지
-  useEffect(() => {
-    if (isSidebarOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => { document.body.style.overflow = 'unset'; };
-  }, [isSidebarOpen]);
-
-  // 🌟 모바일 사이드바를 위한 메뉴 데이터 구조화
   const menuData = [
-    {
-      label: "구매대행",
-      items: [
-        { label: '전체내역', href: '/mypage/status?tab=전체내역' },
-        { label: '견적문의', href: '/purchase/quote' },
-        { label: '구매대행 신청', href: '/purchase/request' },
-      ]
-    },
-    {
-      label: "배송대행",
-      items: [
-        { label: '전체내역', href: '/mypage/status?tab=전체내역' },
-        { label: '일본 배송주소 확인', href: '/delivery/address' },
-        { label: '배송신청', href: '/delivery/request' },
-      ]
-    },
-    {
-      label: "미쿠짱머니",
-      items: [
-        { label: '충전하기', href: '/mypage/money/charge' },
-        { label: '이용내역', href: '/mypage/money/history' },
-        { label: '환불신청', href: '/mypage/money/refund' },
-      ]
-    },
-    {
-      label: "수수료/배송비",
-      items: [
-        { label: '회원 등급 및 혜택', href: '/guide/membership' },
-        { label: '수수료 안내', href: '/guide/fee-guide' },
-        { label: '국제 배송 요금표', href: '/guide/shipping-fee' },
-        { label: '예상 관부과세 안내', href: '/guide/customs' },
-      ]
-    },
-    {
-      label: "이용가이드",
-      items: [
-        { label: '구매대행 신청방법', href: '/guide/purchase-method' },
-        { label: '배송대행 신청방법', href: '/guide/delivery-method' },
-        { label: '자주하는 질문', href: '/guide/faq' },
-      ]
-    },
-    {
-      label: "고객문의",
-      items: [
-        { label: '카카오톡 문의', href: '/contact' },
-      ]
-    }
+    { label: "구매대행", items: [{ label: '전체내역', href: '/mypage/status?tab=전체내역' }, { label: '견적문의', href: '/purchase/quote' }, { label: '구매대행 신청', href: '/purchase/request' }] },
+    { label: "배송대행", items: [{ label: '전체내역', href: '/mypage/status?tab=전체내역' }, { label: '일본 배송주소 확인', href: '/delivery/address' }, { label: '배송신청', href: '/delivery/request' }] },
+    { label: "미쿠짱머니", items: [{ label: '충전하기', href: '/mypage/money/charge' }, { label: '이용내역', href: '/mypage/money/history' }, { label: '환불신청', href: '/mypage/money/refund' }] },
+    { label: "수수료/배송비", items: [{ label: '회원 등급 및 혜택', href: '/guide/membership' }, { label: '수수료 안내', href: '/guide/fee-guide' }, { label: '국제 배송 요금표', href: '/guide/shipping-fee' }] },
+    { label: "이용가이드", items: [{ label: '구매대행 방법', href: '/guide/purchase-method' }, { label: '배송대행 방법', href: '/guide/delivery-method' }, { label: '자주하는 질문', href: '/guide/faq' }] },
+    { label: "고객문의", items: [{ label: '카카오톡 문의', href: '/contact' }] }
   ];
 
   return (
     <>
-      <style jsx>{`
-        .header-wrapper {
-          width: 100%;
-          background-color: #fff;
-          border-bottom: 1px solid #eee;
-          position: sticky;
-          top: 0;
-          z-index: 100;
-        }
-
-        .header-container {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 10px 20px;
-          max-width: 1350px;
-          margin: 0 auto;
-        }
-
-        .desktop-nav {
-          display: flex;
-          gap: 30px;
-          list-style: none;
-          margin: 0;
-          padding: 0;
-          align-items: center;
-        }
-
-        .mobile-menu-btn {
-          display: none;
-          background: none;
-          border: none;
-          font-size: 28px;
-          color: #333;
-          cursor: pointer;
-        }
-
-        /* 🌟 사이드바 CSS */
-        .sidebar {
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 280px;
-          height: 100vh;
-          background-color: #fff;
-          z-index: 1000;
-          padding: 20px;
-          box-shadow: 2px 0 15px rgba(0,0,0,0.1);
-          transform: translateX(-100%);
-          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          display: flex;
-          flex-direction: column;
-          overflow-y: auto;
-        }
-        .sidebar.open {
-          transform: translateX(0);
-        }
-
-        /* 아코디언 메뉴 스타일 */
-        .sidebar-section-title {
-          font-size: 16px;
-          font-weight: 900;
-          color: #111;
-          padding: 15px 0 10px 0;
-          border-bottom: 2px solid #f1f5f9;
-          margin-top: 10px;
-        }
-        .sidebar-link {
-          display: block;
-          font-size: 14px;
-          color: #4b5563;
-          padding: 10px 10px;
-          text-decoration: none;
-          transition: background-color 0.2s;
-          border-radius: 8px;
-        }
-        .sidebar-link:hover {
-          background-color: #f8fafc;
-          color: #ff4b2b;
-          font-weight: bold;
-        }
-
-        .overlay {
-          position: fixed;
-          top: 0; left: 0; width: 100vw; height: 100vh;
-          background-color: rgba(0,0,0,0.5);
-          z-index: 999;
-          opacity: 0;
-          visibility: hidden;
-          transition: all 0.3s ease;
-        }
-        .overlay.open {
-          opacity: 1;
-          visibility: visible;
-        }
-
-        /* -------------------------------------------
-           📱 모바일 레이아웃 조정 (768px 이하 스마트폰) 
-           ------------------------------------------- */
-        @media (max-width: 768px) {
-          .desktop-nav {
-            display: none; /* 모바일에서는 PC 메뉴 숨김 */
-          }
-          .mobile-menu-btn {
-            display: block; /* 모바일에서는 햄버거 버튼 보임 */
-          }
-        }
-      `}</style>
-
-      {/* 1. 상단 헤더 (PC / Mobile 공통) */}
+      <HeaderStyles />
       <header className="header-wrapper">
         <div className="header-container">
-          {/* 로고 영역 (왼쪽) */}
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-            <img src="/images/logo.png" alt="Miku Shop" style={{ height: '50px', width: 'auto', display: 'block', objectFit: 'contain' }} />
+          {/* 🌟 수정: 배지 스타일을 없애고 헤더에 자연스럽게 녹아드는 로고 컨테이너 */}
+          <Link href="/" style={{ textDecoration: 'none' }}>
+            <div style={styles.logoContainer}>
+              <img src="/images/logo.png" alt="Miku Logo" style={styles.logoImgRefined} />
+              <div style={styles.textStack}>
+                <div style={styles.mainTitle}>미쿠짱</div>
+                <div style={styles.subTitle}>구매대행 14년 노하우로 믿을수 있는</div>
+              </div>
+            </div>
           </Link>
 
-          {/* PC용 내비게이션 (가운데~오른쪽) */}
           <nav className="desktop-nav">
             {menuData.map((menu, idx) => (
-              <NavItem key={idx} label={menu.label} activeColor="#ff4b2b" items={menu.items} />
+              <NavItem key={idx} label={menu.label} items={menu.items} />
             ))}
-
-            {/* 로그인 상태에 따른 PC 우측 메뉴 */}
             {!isLoggedIn ? (
-              <li style={{ padding: '15px 0' }}>
-                <Link href="/login" style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', textDecoration: 'none', whiteSpace: 'nowrap', transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = '#ff4b2b'} onMouseLeave={(e) => e.currentTarget.style.color = '#333'}>
-                  로그인
-                </Link>
-              </li>
+              <Link href="/login" style={{ 
+                fontSize: '20px', 
+                fontWeight: '700', 
+                color: '#555', 
+                textDecoration: 'none',
+                letterSpacing: '-0.5px'
+              }}>
+                로그인
+              </Link>
             ) : (
-              <NavItem 
-                label="마이페이지" 
-                activeColor="#ff4b2b"
-                items={[
-                    { label: '내 정보', href: '/mypage' },
-                    { label: '구매대행 상황', href: '/mypage/status?tab=전체내역' },
-                    { label: '나의 배송지 정보 수정', href: '/mypage/profile' },
-                    { label: '관심목록', href: '/wishlist' },
-                    { label: '로그아웃', onClick: handleLogout },
-                ]} 
-              />
+              <NavItem label="마이페이지" items={[ { label: '내 정보', href: '/mypage' }, { label: '전체내역', href: '/mypage/status' }, { label: '로그아웃', onClick: handleLogout } ]} />
             )}
           </nav>
-
-          {/* 모바일 햄버거 버튼 (오른쪽) */}
-          <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(true)}>
-            ☰
-          </button>
+          <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(true)}>☰</button>
         </div>
       </header>
 
-      {/* 2. 모바일 사이드바 영역 */}
       <div className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
-        {/* 상단 닫기 및 로고 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' }}>
-          <img src="/images/logo.png" alt="로고" style={{ height: '35px' }} />
-          <button onClick={() => setIsSidebarOpen(false)} style={{ background: 'none', border: 'none', fontSize: '24px', color: '#999', cursor: 'pointer' }}>✕</button>
-        </div>
-
-        {/* 로그인/회원가입 (사이드바 상단 배치) */}
-        <div style={{ display: 'flex', gap: '10px', margin: '20px 0' }}>
-          {!isLoggedIn ? (
-            <>
-              <Link href="/login" style={{ flex: 1, textAlign: 'center', padding: '12px', backgroundColor: '#f1f5f9', borderRadius: '8px', color: '#333', textDecoration: 'none', fontWeight: 'bold', fontSize: '14px' }}>로그인</Link>
-              <Link href="/register" style={{ flex: 1, textAlign: 'center', padding: '12px', backgroundColor: '#ff4b2b', borderRadius: '8px', color: '#fff', textDecoration: 'none', fontWeight: 'bold', fontSize: '14px' }}>회원가입</Link>
-            </>
-          ) : (
-            <>
-              <Link href="/mypage" style={{ flex: 1, textAlign: 'center', padding: '12px', backgroundColor: '#f1f5f9', borderRadius: '8px', color: '#333', textDecoration: 'none', fontWeight: 'bold', fontSize: '14px' }}>마이페이지</Link>
-              <button onClick={handleLogout} style={{ flex: 1, textAlign: 'center', padding: '12px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#64748b', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}>로그아웃</button>
-            </>
-          )}
-        </div>
-
-        {/* 모바일 메뉴 리스트 (아코디언 형태 느낌으로 전개) */}
-        <div style={{ flex: 1 }}>
-          {menuData.map((section, idx) => (
-            <div key={idx} style={{ marginBottom: '15px' }}>
-              <div className="sidebar-section-title">{section.label}</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginTop: '5px' }}>
-                {section.items.map((item, itemIdx) => (
-                  <Link key={itemIdx} href={item.href} className="sidebar-link">
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <img src="/images/logo.png" alt="Logo" style={{ height: '30px' }} />
+          <button onClick={() => setIsSidebarOpen(false)} style={{ fontSize: '24px', background: 'none', border: 'none' }}>✕</button>
         </div>
       </div>
-
-      {/* 3. 어두운 배경 오버레이 */}
       <div className={`overlay ${isSidebarOpen ? 'open' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
     </>
   );
 }
 
-// 🌟 기존 PC용 호버 메뉴 컴포넌트 완벽 보존
-function NavItem({ label, items, activeColor }: { label: string, items?: { label: string, href?: string, onClick?: () => void }[], activeColor?: string }) {
+function NavItem({ label, items }: { label: string, items?: any[] }) {
   const [isHovered, setIsHovered] = useState(false);
 
-  const renderLink = (item: { label: string, href?: string, onClick?: () => void }, index: number) => {
-    const content = (
-      <div 
-        style={{ 
-          display: 'flex', 
-          alignItems: 'center',
-          gap: '12px',
-          padding: '10px 15px', 
-          fontSize: '15px', 
-          color: '#4b5563', 
-          textDecoration: 'none',
-          borderRadius: '8px',
-          transition: 'all 0.2s'
-        }}
-        onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#f8f9fa';
-            e.currentTarget.style.color = '#ff4b2b';
-            e.currentTarget.style.transform = 'translateX(5px)';
-        }}
-        onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#4b5563';
-            e.currentTarget.style.transform = 'translateX(0)';
-        }}
-        onClick={item.onClick}
-      >
-        <div style={{ 
-            width: '32px', height: '32px', borderRadius: '8px', 
-            backgroundColor: '#fff5f5', display: 'flex', alignItems: 'center', 
-            justifyContent: 'center', fontSize: '16px' 
-        }}>
-            {index === 0 && '📋'}
-            {index === 1 && '✈️'}
-            {index === 2 && '⚙️'}
-            {index === 3 && '🛒'}
-            {index === 4 && '🚪'}
-        </div>
-        <span style={{ fontWeight: '500', whiteSpace: 'nowrap' }}>{item.label}</span>
-      </div>
-    );
+  const getIconByLabel = (itemLabel: string) => {
+    // 🌟 톤 다운된 코랄 핑크 색상 적용
+    const iconProps = { size: 20, weight: "duotone" as const, color: "#d27377" };
 
-    if (item.href) {
-      return <Link href={item.href} style={{ textDecoration: 'none' }}>{content}</Link>;
+    if (itemLabel === '로그아웃') return <SignOut {...iconProps} />; // ph:sign-out-duotone
+
+    switch (itemLabel) {
+      case '전체내역': return <ClipboardText {...iconProps} />; // ph:clipboard-text-duotone
+      case '견적문의': return <ChatCircleDots {...iconProps} />; // ph:chat-circle-dots-duotone
+      case '구매대행 신청': return <ShoppingCartSimple {...iconProps} />; // ph:shopping-cart-simple-duotone
+      case '일본 배송주소 확인': return <MapPin {...iconProps} />; // ph:map-pin-duotone
+      case '배송신청': return <AirplaneTilt {...iconProps} />; // ph:airplane-tilt-duotone
+      case '충전하기': return <Wallet {...iconProps} />; // ph:wallet-duotone
+      case '이용내역': return <Coins {...iconProps} />; // ph:coins-duotone
+      case '환불신청': return <Money {...iconProps} />; // ph:money-duotone
+      case '회원 등급 및 혜택': return <Crown {...iconProps} />; // ph:crown-duotone
+      case '수수료 안내': return <Info {...iconProps} />; // ph:info-duotone
+      case '국제 배송 요금표': return <Scales {...iconProps} />; // ph:scales-duotone
+      case '구매대행 방법': return <BookOpen {...iconProps} />; // ph:book-open-duotone
+      case '배송대행 방법': return <PaperPlaneTilt {...iconProps} />; // ph:paper-plane-tilt-duotone
+      case '자주하는 질문': return <Question {...iconProps} />; // ph:question-duotone
+      case '카카오톡 문의': return <Headset {...iconProps} />; // ph:headset-duotone
+      case '내 정보': return <User {...iconProps} />; // ph:user-duotone
+      default:
+        if (itemLabel.includes('내역')) return <ClipboardText {...iconProps} />; // ph:clipboard-text-duotone
+        if (itemLabel.includes('신청')) return <FilePlus {...iconProps} />; // ph:file-plus-duotone
+        return <ShoppingCartSimple {...iconProps} />; // ph:shopping-cart-simple-duotone
     }
-    return content;
   };
 
   return (
-    <li 
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{ position: 'relative', cursor: 'pointer', padding: '15px 0' }}
-    >
-      <Link href="#" style={{ 
-        fontSize: '18px', 
-        fontWeight: 'bold', 
-        color: isHovered && activeColor ? activeColor : '#333', 
+    <li onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)} style={styles.navItemLi}>
+      {/* 🌟 폰트를 제거하여 기본 폰트로 복구, 크기도 적당하게 조정 */}
+      <div style={{ 
+        fontSize: '20px', // 고딕 계열에 맞는 깔끔한 크기
+        fontWeight: '700', // 메뉴는 약간 두꺼운 게 잘 보여
+        color: isHovered ? '#d27377' : '#555', 
         display: 'flex', 
         alignItems: 'center', 
-        gap: '6px', 
-        textDecoration: 'none',
-        whiteSpace: 'nowrap',
-        transition: 'color 0.2s'
+        gap: '5px', 
+        transition: '0.2s',
+        letterSpacing: '-0.5px' 
       }}>
-        {label}
-        <span style={{ fontSize: '10px', color: isHovered && activeColor ? activeColor : '#999', transition: 'color 0.2s' }}>▼</span>
-      </Link>
+        {label} 
+        <span style={{ fontSize: '10px', color: '#ccc', transform: isHovered ? 'rotate(180deg)' : 'none', transition: '0.3s' }}>▼</span>
+      </div>
 
-      {items && (
-        <ul style={{
-          position: 'absolute',
-          top: '100%',
-          left: '50%',
-          transform: `translateX(-50%) translateY(${isHovered ? '0' : '10px'})`,
-          backgroundColor: '#fff',
-          border: '1px solid #eee',
-          listStyle: 'none',
-          padding: '8px 0',
-          margin: '0',
-          minWidth: '220px',
-          boxShadow: '0 10px 25px rgba(0,0,0,0.08)',
-          zIndex: 1000,
-          borderRadius: '12px',
-          opacity: isHovered ? 1 : 0,
-          visibility: isHovered ? 'visible' : 'hidden',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          pointerEvents: isHovered ? 'auto' : 'none'
-        }}>
-          <div style={{
-            position: 'absolute',
-            top: '-6px',
-            left: '50%',
-            transform: 'translateX(-50%) rotate(45deg)',
-            width: '12px',
-            height: '12px',
-            backgroundColor: '#fff',
-            borderTop: '1px solid #eee',
-            borderLeft: '1px solid #eee'
-          }}></div>
-
-          {items.map((item, index) => (
+      {items && isHovered && (
+        <ul className="dropdown-ul" style={styles.dropdownUl}>
+          <div style={styles.dropdownPointer}></div>
+          {items.map((item: any, index: number) => (
             <li key={index} style={{ padding: '2px 8px' }}>
-              {renderLink(item, index)}
+              <Link href={item.href || '#'} style={{ textDecoration: 'none' }} onClick={item.onClick}>
+                <div className="dropdown-item-link">
+                  <div className="icon-box" style={styles.iconBox}>
+                    {getIconByLabel(item.label)}
+                  </div>
+                  <span style={styles.itemText}>{item.label}</span>
+                </div>
+              </Link>
             </li>
           ))}
         </ul>
@@ -449,3 +185,144 @@ function NavItem({ label, items, activeColor }: { label: string, items?: { label
     </li>
   );
 }
+
+// ==========================================
+// 1. 전역 스타일 함수 (CSS)
+// ==========================================
+function HeaderStyles() {
+  return (
+    <style jsx global>{`
+      .header-wrapper { 
+        width: 100%; 
+        /* 🌟 핵심: 헤더 전체 배경을 따뜻한 크림색으로 설정 */
+        background-color: #ffffff; 
+        border-bottom: 1px solid #ffffff; /* 부드러운 경계선 */
+        position: sticky; 
+        top: 0; 
+        z-index: 1000; 
+      }
+      .header-container { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; max-width: 1280px; margin: 0 auto; }
+      .desktop-nav { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; align-items: center; }
+
+      .dropdown-item-link { 
+        display: flex !important; flex-direction: row !important; align-items: center !important; 
+        gap: 12px; padding: 10px 16px; font-size: 15px; color: #4b5563; 
+        text-decoration: none !important; border-radius: 10px; transition: all 0.2s ease; cursor: pointer; width: 100%; box-sizing: border-box;
+      }
+      .dropdown-item-link:hover { background-color: #fdf5f5; color: #d27377; transform: translateX(5px); }
+
+      .dropdown-item-link:hover .icon-box {
+        transform: scale(1.1);
+        background: linear-gradient(135deg, #e3868a 0%, #d27377 100%) !important;
+      }
+      .dropdown-item-link:hover .icon-box svg {
+        filter: brightness(0) invert(1); 
+      }
+
+      .mobile-menu-btn { display: none; background: none; border: none; font-size: 28px; cursor: pointer; color: #555; }
+      .sidebar { position: fixed; top: 0; left: 0; width: 280px; height: 100vh; background-color: #fff; z-index: 1001; padding: 20px; transform: translateX(-100%); transition: transform 0.3s ease; display: flex; flex-direction: column; overflow-y: auto; }
+      .sidebar.open { transform: translateX(0); }
+      .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0,0,0,0.5); z-index: 1000; opacity: 0; visibility: hidden; transition: 0.3s; }
+      .overlay.open { opacity: 1; visibility: visible; }
+
+      @media (max-width: 1024px) {
+        .desktop-nav { display: none; }
+        .mobile-menu-btn { display: block; }
+      }
+    `}</style>
+  );
+}
+
+// ==========================================
+// 2. 인라인 스타일 객체 (자연스럽게 스며드는 로고)
+// ==========================================
+const styles: Record<string, React.CSSProperties> = {
+  // 🌟 변경: 배경과 그림자가 없는 투명한 컨테이너
+  logoContainer: {
+    display: 'flex', 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: '12px',
+    padding: '5px 0', 
+    transition: 'transform 0.2s ease',
+  },
+  logoImgRefined: {
+    height: '60px', 
+    width: 'auto', 
+    display: 'block', 
+    objectFit: 'contain',
+    /* 🌟 핵심: 이미지의 흰색 배경을 크림색 헤더와 합성하여 투명하게 만듦 */
+    mixBlendMode: 'multiply',
+  },
+  textStack: { 
+    display: 'flex', 
+    flexDirection: 'column', 
+    gap: '0px' 
+  },
+  mainTitle: {
+    /* 🌟 위치 잡기 꿀팁: 텍스트 그룹을 위로 20px 이동시켜서 전체 밸런스 조정 */
+    marginTop: '20px', 
+    
+    fontFamily: '"Jua", sans-serif', 
+    fontSize: '42px', 
+    fontWeight: 'normal', 
+    
+    /* 🌟 수정 1: 자간을 0px로 넓혀서 아웃라인이 더 깔끔하게 보이도록 함 */
+    letterSpacing: '5px', 
+    
+    /* 🌟 수정 2: 줄 간격을 1.1로 넉넉하게 주어 가독성 확보 */
+    lineHeight: '1.1', 
+    
+    transform: 'scaleX(1.1)', 
+    transformOrigin: 'left center',
+    display: 'inline-block',
+
+    /* 🌟 핵심 1: 텍스트 색상은 코랄 핑크로 유지 */
+    color: '#ce8c83', 
+    
+    /* 🌟 핵심 2: 깔끔한 2px 아웃라인 추가 (짙은 코랄 핑크 색상) */
+    textShadow: `
+      0.5px 0.5px 0 #ce8c83,
+      -0.5px -0.5px 0 #ce8c83,
+      0.5px -0.5px 0 #ce8c83,
+      -0.5px 0.5px 0 #ce8c83,
+      0.5px 0 0 #ce8c83,
+      -0.5px 0 0 #ce8c83,
+      0 0.5px 0 #ce8c83,
+      0 -0.5px 0 #ce8c83
+    `,
+  },
+  
+  subTitle: {
+    /* 서브 슬로건도 주아체로 통일하여 귀여운 느낌 극대화 */
+    fontFamily: '"Jua", sans-serif',
+    fontSize: '14px', /* 본문보다 가독성을 위해 살짝 키움 */
+    color: '#cc8f76', 
+    fontWeight: 'normal', 
+    letterSpacing: '-0.2px', 
+    whiteSpace: 'nowrap',
+    marginTop: '0px',
+  },
+  navItemLi: { position: 'relative', cursor: 'pointer', padding: '15px 0' },
+  dropdownUl: {
+    position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+    backgroundColor: '#fff', border: '1px solid #f0eada', listStyle: 'none', padding: '8px 0',
+    margin: '0', minWidth: '220px', boxShadow: '0 10px 25px rgba(0,0,0,0.06)',
+    zIndex: 1000, borderRadius: '12px'
+  },
+  dropdownPointer: { position: 'absolute', top: '-6px', left: '50%', transform: 'translateX(-50%) rotate(45deg)', width: '12px', height: '12px', backgroundColor: '#fff', borderTop: '1px solid #f0eada', borderLeft: '1px solid #f0eada' },
+  iconBox: { 
+    width: '36px', height: '36px', borderRadius: '11px', 
+    background: 'linear-gradient(135deg, #fdf5f5 0%, #f7e6e6 100%)', 
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    transition: 'all 0.3s ease'
+  },
+  itemText: { 
+    /* 🌟 주아체 삭제 -> 기본 고딕 폰트로 복구 */
+    fontWeight: '700', 
+    fontSize: '15px', 
+    color: '#4a4a4a', 
+    letterSpacing: '-0.3px',
+    // marginTop은 폰트마다 높이가 다르니 확인 후 조절해
+  }
+};
