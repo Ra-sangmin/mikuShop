@@ -100,25 +100,31 @@ function RakutenContent() {
     async function fetchData() {
       setLoading(true);
       try {
-        const catRes = await fetch(`/api/rakuten/categories?genreId=${genreId}`);
+
+        const apiUrl = `/api/rakuten/categories?genreId=${genreId}`;
+        console.log(`📡 요청 시작: ${apiUrl}`);
+
+        const catRes = await fetch(apiUrl);
         const catData = await catRes.json();
 
         if (catData.success) {
-            const apiParams = new URLSearchParams({
-              genreId: genreId,
-              sort: sort,
-              page: page
-            });
+
+          setCategories(catData.data || []);
+
+          if (catData.parents) {
+            setPath(catData.parents.map((p: any) => ({ id: p.genreId, name: p.genreName })));
+          }
+
+          const apiParams = new URLSearchParams({
+            genreId: genreId,
+            sort: sort,
+            page: page
+          });
 
           if (keyword) apiParams.append('keyword', keyword);
           if (NGKeyword) apiParams.append('NGKeyword', NGKeyword);
           if (minPrice) apiParams.append('minPrice', minPrice);
           if (maxPrice) apiParams.append('maxPrice', maxPrice);
-
-          setCategories(catData.data || []);
-          if (catData.parents) {
-            setPath(catData.parents.map((p: any) => ({ id: p.genreId, name: p.genreName })));
-          }
           
           if (genreId !== '0') {
             const itemRes = await fetch(`/api/rakuten/items?${apiParams.toString()}`);
