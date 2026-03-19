@@ -175,7 +175,7 @@ function RakutenContent() {
         genreName: c.genreName, 
         genreLevel: c.genreLevel 
       }))}
-      items={items}
+      items={items.map(mapToGlobal)}
       pageInfo={pageInfo}
       selectedProduct={selectedProduct}
       sortOptions={rakutenSortOptions}
