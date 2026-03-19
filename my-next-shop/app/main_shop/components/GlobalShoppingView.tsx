@@ -85,6 +85,8 @@ interface GlobalShoppingViewProps {
   // 상태
   isLoading: boolean;
   isItemLoading: boolean;
+  isStreaming?: boolean;
+  isBottomLoaderAllowed?: boolean;
   isDetailLoading?: boolean;
   // 🚨 추가된 필수 속성
   isLeaf: boolean;
@@ -227,26 +229,26 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
                     />
                   )}
                 </div>
-
-                {/* 4. 하단 로딩 바 (최하단에 배치) */}
-                {props.isItemLoading && (
-                  <div style={styles.bottomLoader}>
-                    <div style={styles.spinnerIcon}>
-                      <i className="fa fa-spinner fa-spin fa-2x"></i>
-                    </div>
-                    <p style={styles.loaderText} className="notranslate">
-                      미쿠짱이 열심히 다음 상품을 가져오고 있어요... ( 
-                      
-                      {/* 🚀 숫자를 한 번 더 span으로 감싸고 클래스를 줍니다. */}
-                      <span className="notranslate" style={{ fontWeight: 900, color: '#ff007f' }}>
-                        {props.items.length}
-                      </span> 
-                      
-                      개 수집됨 )
-                    </p>
-                  </div>
-                )}
                 
+              </div>
+            )}
+
+            {/* 4. 하단 로딩 바 (최하단에 배치) */}
+            {props.isStreaming && props.isBottomLoaderAllowed && (
+              <div style={styles.bottomLoader}>
+                <div style={styles.spinnerIcon}>
+                  <i className="fa fa-spinner fa-spin fa-2x"></i>
+                </div>
+                <p style={styles.loaderText} className="notranslate">
+                  미쿠짱이 열심히 다음 상품을 가져오고 있어요... ( 
+                  
+                  {/* 🚀 숫자를 한 번 더 span으로 감싸고 클래스를 줍니다. */}
+                  <span className="notranslate" style={{ fontWeight: 900, color: '#ff007f' }}>
+                    {props.items.length}
+                  </span> 
+                  
+                  개 수집됨 )
+                </p>
               </div>
             )}
 

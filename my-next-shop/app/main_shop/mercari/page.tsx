@@ -62,6 +62,8 @@ function MercariCategoryContent() {
   const [items, setItems] = useState<MercariItem[]>([]);
   const [displayItems, setDisplayItems] = useState<MercariItem[]>([]);
   const [isItemLoading, setIsItemLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isBottomLoaderAllowed, setIsBottomLoaderAllowed] = useState(false);
 
   // 상품 상세 상태
   const [isDetailLoading, setIsDetailLoading] = useState(false);
@@ -216,12 +218,22 @@ function MercariCategoryContent() {
     setItems([]); 
     setDisplayItems([]); 
     setProductDetail(null);
-    //setIsItemLoading(true);
+    setIsItemLoading(false);
+    setIsStreaming(false);
+    setIsBottomLoaderAllowed(false);
 
     // 🚀 [수정] 2초 후에만 로딩 상태를 true로 변경합니다.
     loadingTimerRef.current = setTimeout(() => {
       setIsItemLoading(true);
-      console.log("⏳ 2초가 지나 로딩바를 표시합니다.");
+      console.log("⏳ 1.5초가 지나 로딩바를 표시합니다.");
+
+      // 표시된 직후, 2.5초 타이머를 새로 하나 더 돌려서 무조건 끕니다.
+      loadingTimerRef.current = setTimeout(() => {
+        setIsItemLoading(false);
+        setIsBottomLoaderAllowed(true);
+        console.log("⏳ 표시 후 3.0초가 지나 로딩바를 강제로 숨깁니다.");
+      }, 3000);
+
     }, 2000);
 
     const targetId = Number(catId);
@@ -241,6 +253,8 @@ function MercariCategoryContent() {
       return;
     }
 
+    setIsStreaming(true);
+
     try {
       const res = await fetch(`/api/mercari/search?${queryString}`, { 
         signal: controller.signal // 리모컨 연결
@@ -259,6 +273,8 @@ function MercariCategoryContent() {
         if (loadingTimerRef.current) {
           clearTimeout(loadingTimerRef.current);
           loadingTimerRef.current = null;
+          setIsItemLoading(false);
+          setIsBottomLoaderAllowed(true);
         }
 
         buffer += decoder.decode(value, { stream: true });
@@ -295,8 +311,18 @@ function MercariCategoryContent() {
       console.error("❌ 실제 통신 에러:", err);
     } finally {
 
-      if (loadingTimerRef.current) {
-        clearTimeout(loadingTimerRef.current); // 작업 종료 시 타이머 취소
+      if (abortControllerRef.current === controller) {
+        
+        setIsStreaming(false);
+
+        // 👈 타이머 정리 로직을 이 안으로 옮깁니다!
+        if (loadingTimerRef.current) {
+          clearTimeout(loadingTimerRef.current); 
+          loadingTimerRef.current = null;
+        }
+
+        setIsItemLoading(false);
+        console.log("🏁 최신 수집 작업 완료!");
       }
 
       // 🚀 [수정 핵심] '내 요청'이 여전히 '최신 요청'일 때만 로딩을 끕니다.
@@ -481,6 +507,8 @@ function MercariCategoryContent() {
       selectedProduct={productDetail}
       isLoading={isLoading}
       isItemLoading={isItemLoading}
+      isStreaming={isStreaming}
+      isBottomLoaderAllowed={isBottomLoaderAllowed}
       isDetailLoading={isDetailLoading}
       isLeaf={isLeaf}
       onNavigate={handleMove}

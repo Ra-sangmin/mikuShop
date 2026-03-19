@@ -4,6 +4,9 @@ import { NextResponse, NextRequest } from 'next/server';
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 
+const MIN_WAIT_COUNT = 1; // 1개라도 보이면 0.1초도 안 기다리고 즉시 스크래핑 시작!
+const CHUNK_SIZE = 5;     // 단, 프론트엔드 화면에는 5개씩 예쁘게 묶어서 전송 (깜빡임 방지)
+
 // 🚀 [설계도] 아이템 형식 정의
 interface MercariItem {
   id: string;
@@ -24,6 +27,7 @@ export async function GET(req: NextRequest) {
   const { signal } = req;
   const { searchParams } = new URL(req.url);
   const categoryId = searchParams.get('category_id');
+  const startTime = performance.now();
 
   if (categoryId === '0') {
     return new Response(new ReadableStream({
@@ -38,7 +42,7 @@ export async function GET(req: NextRequest) {
   console.log(`\n🏎️ [TURBO MODE] 크롤링 시작: ${targetUrl}`);
 
   // 분리한 스트림 생성 함수 호출
-  const stream = createMercariStream(targetUrl, signal);
+  const stream = createMercariStream(targetUrl, signal , startTime);
 
   return new Response(stream, {
     headers: {
@@ -82,7 +86,7 @@ function generateMercariTargetUrl(searchParams: URLSearchParams): string {
   return `https://jp.mercari.com/search?${params.toString()}`;
 }
 
-export function createMercariStream(targetUrl: string, signal: AbortSignal) {
+export function createMercariStream(targetUrl: string, signal: AbortSignal , startTime: number) {
   const encoder = new TextEncoder();
 
   return new ReadableStream<Uint8Array>({
@@ -99,40 +103,48 @@ export function createMercariStream(targetUrl: string, signal: AbortSignal) {
       signal.addEventListener('abort', abortHandler);
 
       try {
-        // [1] 페이지 초기화
+        // [1] 페이지 초기화 및 API 리스너 부착
         page = await setupPage(signal);
-
-        // [2] API 리스너 부착
         attachApiListener({ page, signal, state, sentItems, controller, encoder });
 
-        // [3] 페이지 이동
-        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+        // 🚀 [복구 및 최적화] await는 반드시 있어야 브라우저가 멈추지 않고 일합니다.
+        // domcontentloaded로 설정하여 이미지 다운로드는 기다리지 않고 빠르게 통과합니다.
+        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
         
-        await Promise.race([
-          // 조건 1: 화면에 상품 셀이 나타날 때까지 기다림 (최대 7초)
-          page.waitForSelector('[data-testid="item-cell"]', { timeout: 7000 }),
-
-          // 조건 2: API 리스너가 이미 50개 이상 아이템을 확보했다면 즉시 통과!
-          new Promise(resolve => {
-            const checkInterval = setInterval(() => {
-              if (sentItems.size >= 50) { 
-                clearInterval(checkInterval);
-                console.log("⚡ API가 이미 50개를 잡았습니다! 대기를 종료하고 진행합니다.");
-                resolve(true);
-              }
-              // 스트림이 닫히면 인터벌도 종료
-              if (state.isStreamClosed) clearInterval(checkInterval);
-            }, 100);
-          })
-        ]).catch(() => {
-          console.log("⚠️ 로딩 대기 시간이 초과되었으나, 수집을 계속 시도합니다.");
+        // 🚀 [하이브리드 대기 로직 - 궁극의 최적화 버전]
+        // Node.js는 API만 감시하고, 브라우저는 DOM만 감시하게 역할을 완벽히 분리합니다.
+        const apiPromise = new Promise(resolve => {
+          const interval = setInterval(() => {
+            if (state.isStreamClosed) {
+              clearInterval(interval);
+              return resolve(false);
+            }
+            if (sentItems.size >= MIN_WAIT_COUNT) {
+              clearInterval(interval);
+              console.log("⚡ [승리 조건 1 달성] API가 먼저 데이터를 낚아챘습니다!");
+              return resolve(true);
+            }
+          }, 50); // 내장 메모리만 검사하므로 50ms 간격이어도 부하가 0입니다.
         });
 
-        // 🚀 [핵심 수정] 스크롤 하기 전에 "현재 보이는 상품"을 먼저 싹 긁습니다.
-        // 이 단계에서 1~12번 상품이 무조건 잡혀야 합니다.
-        const firstScreenItems = await extractItems(page, 15); 
+        const domPromise = page.waitForSelector('[data-testid="item-cell"]', { timeout: 5000 })
+          .then(() => {
+            console.log("⚡ [승리 조건 2 달성] 화면에 상품이 먼저 렌더링되었습니다!");
+            return true;
+          })
+          .catch(() => false); // 5초 타임아웃 시 에러 내지 않고 조용히 종료
+
+        // API 낚시와 DOM 렌더링 중 누가 더 빠른지 경주(Race)를 시킵니다.
+        // 누군가 이기는 순간 즉시 다음 코드로 넘어갑니다! (로그 도배 절대 불가)
+        await Promise.race([apiPromise, domPromise]);
+
+        // 🚀 대기가 끝나면 (누가 이겼든 상관없이) 화면에 있는 걸 싹 긁어 프론트로 보냅니다.
+        // 메루카리는 첫 페이지 데이터를 HTML에 구워놓기 때문에 이 작업이 꼭 필요합니다.
+        const firstScreenItems = await extractItems(page, 150); 
         const capturedFirstCount = await processAndSend(firstScreenItems, sentItems, controller, encoder);
-        console.log(`📡 [초기 수집] 1번부터 ${capturedFirstCount}개 확보 완료!`);
+        
+        const elapsedTime = ((performance.now() - startTime) / 1000).toFixed(2);
+        console.log(`📡 [초기 수집] ${capturedFirstCount}개 확보 완료! (소요시간: ${elapsedTime}초)`);
 
         // [5] 본대 무한 스크롤 루프
         let attempt = 0;
@@ -149,12 +161,12 @@ export function createMercariStream(targetUrl: string, signal: AbortSignal) {
               await page.evaluate((j : any) => window.scrollBy(0, 1200 + j), jitter).catch(() => {});
 
               // 🚀 2. 랜덤 대기 (로봇 패턴 파괴)
-              const delay = 2000 + Math.floor(Math.random() * 1500);
+              const delay = 1000 + Math.floor(Math.random() * 500);
               await new Promise(r => setTimeout(r, delay));
 
               // 🚀 3. 가끔 마우스 흔들기
               if (attempt % 5 === 0) {
-                await page.mouse.move(Math.random() * 500, Math.random() * 500);
+                await page.mouse.move(Math.random() * 100, Math.random() * 200);
               }
               
               const currentItems = await extractItems(page, 150);
@@ -162,7 +174,8 @@ export function createMercariStream(targetUrl: string, signal: AbortSignal) {
               
               if (addedCount > 0) {
                 consecutiveEmpty = 0;
-                console.log(`✨ [${attempt}회차] ${addedCount}개 추가 (총: ${sentItems.size}개)`);
+                const elapsedTime3 = ((performance.now() - startTime) / 1000).toFixed(2);
+                console.log(`✨ [${attempt}회차] ${addedCount}개 추가 (총: ${sentItems.size}개) (소요시간: ${elapsedTime3}초)`);
               } else {
                 // 🚀 [핵심 수정] 새로운 아이템이 없을 때, 종료 조건 정밀 검사
                 const isEndOfPage = await page.evaluate(() => {
@@ -250,7 +263,8 @@ async function processAndSend(
     const filtered = newRawItems.filter(item => item.id && item.price > 0 && !sentItems.has(item.id));
     if (filtered.length === 0) return 0;
 
-    const chunkSize = 15;
+    const chunkSize = CHUNK_SIZE;
+
     for (let i = 0; i < filtered.length; i += chunkSize) {
       const dataChunk = filtered.slice(i, i + chunkSize);
       dataChunk.forEach(item => sentItems.add(item.id));
@@ -267,9 +281,20 @@ async function processAndSend(
 async function setupPage(signal: AbortSignal) {
   if (!sharedBrowser || !sharedBrowser.connected) {
     sharedBrowser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
+    headless: true,
+    args: [
+      '--no-sandbox', 
+      '--disable-setuid-sandbox', 
+      '--disable-dev-shm-usage',
+      // 🌟 [핵심 최적화] 크롬 터보 옵션 추가
+      '--disable-accelerated-2d-canvas', // 캔버스 렌더링 끄기
+      '--disable-gpu',                   // GPU 하드웨어 가속 끄기 (서버에선 필요 없음)
+      '--disable-extensions',            // 확장 프로그램 완전 차단
+      '--blink-settings=imagesEnabled=false', // 블링크 엔진 단에서 이미지 로드 차단
+      '--disable-background-timer-throttling', // 백그라운드 탭 속도 제한 풀기
+      '--disable-renderer-backgrounding' // 렌더러 우선순위 낮추지 않음
+    ]
+  });
   }
   const page = await sharedBrowser.newPage();
   
@@ -278,7 +303,7 @@ async function setupPage(signal: AbortSignal) {
     throw new Error('Aborted');
   }
 
-  await page.setViewport({ width: 1280, height: 3000 });
+  await page.setViewport({ width: 1280, height: 1080 });
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
 
   // 이미지 등 불필요한 리소스 차단
@@ -293,11 +318,19 @@ async function setupPage(signal: AbortSignal) {
       url.includes('google-analytics') || 
       url.includes('facebook') || 
       url.includes('ad-delivery') ||
-      url.includes('log') // 로그 전송 스크립트 차단
+      url.includes('sentry.io') || // 에러 수집만 정확히 차단
+      url.includes('karte')        // 마케팅 툴
     ) {
-      req.abort();
+
+      // 이미 처리된 요청인지 확인 후 차단 (에러 방지용)
+      if (!req.isInterceptResolutionHandled()) {
+        req.abort();
+      }
+
     } else {
-      req.continue();
+      if (!req.isInterceptResolutionHandled()) {
+        req.continue();
+      }
     }
   });
 
