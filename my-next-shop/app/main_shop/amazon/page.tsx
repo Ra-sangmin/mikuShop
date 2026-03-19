@@ -2,10 +2,6 @@
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import ProductCard from '../rakuten/ProductCard';
-import ProductDetail from '../rakuten/ProductDetail';
-import SortBar from '../rakuten/SortBar';
-import Pagination from '../rakuten/Pagination';
 import Link from 'next/link';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 
@@ -215,11 +211,7 @@ function YahooShoppingContent() {
 
       {!loading && items.length > 0 ? (
         <>
-          <SortBar 
-              currentSort={sort}
-              setSelectedItem={setSelectedItem} 
-          />
-
+          
           <div ref={detailRef} style={{ scrollMarginTop: '20px' }}>
           {selectedItem && (
             <div className="detail-view-container" style={{ 
@@ -251,12 +243,7 @@ function YahooShoppingContent() {
                   X
                 </button>
               </div>
-              <ProductDetail 
-                key={selectedItem.itemId} 
-                item={selectedItem} 
-                exchangeRate={exchangeRate} 
-                onCartUpdate={updateCounts}
-              />
+              
             </div>
           )}
           </div>
@@ -265,29 +252,10 @@ function YahooShoppingContent() {
               display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
               gap: '15px', padding: '20px', backgroundColor: '#f9f9f9'
             }}>
-              {items.map((item: any) => (
-                <ProductCard 
-                  key={item.itemId} 
-                  item={item} 
-                  exchangeRate={exchangeRate} 
-                  onWishlistUpdate={updateCounts}
-                  onItemClick={() => {
-                      setSelectedItem(item);
-                      const yOffset = -60; 
-                      if (detailRef.current) {
-                        const elementPosition = detailRef.current.getBoundingClientRect().top;
-                        const offsetPosition = elementPosition + window.scrollY + yOffset;
-                        window.scrollTo({
-                          top: offsetPosition,
-                          behavior: 'smooth'
-                        });
-                      }
-                  }}
-                />
-              ))}
+              
             </div>
           </div>
-          <Pagination currentPage={pageInfo.page} pageCount={pageInfo.pageCount} />
+          
         </>
       ) : (
         loading && (

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import ProductDetail from '../main_shop/rakuten/ProductDetail';
+import GlobalProductDetail from '@/app/main_shop/components/GlobalProductDetail';
 import { useExchangeRate } from '../context/ExchangeRateContext';
 
 // 서브 컴포넌트: 상태 아이콘
@@ -225,13 +225,8 @@ export default function CartPage() {
               X
             </button>
           </div>
-          <ProductDetail 
-            item={selectedItem} 
-            exchangeRate={exchangeRate} 
-            onCartUpdate={() => {
-                const savedCart = JSON.parse(localStorage.getItem('rakutenCart') || '[]');
-                setCartItems(savedCart);
-            }}
+          <GlobalProductDetail 
+            product={selectedItem} 
           />
         </div>
       )}

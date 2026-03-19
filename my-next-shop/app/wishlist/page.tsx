@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import ProductDetail from '../main_shop/rakuten/ProductDetail';
+import GlobalProductDetail from '@/app/main_shop/components/GlobalProductDetail';
 import { useExchangeRate } from '../context/ExchangeRateContext';
 import GuideLayout from '../components/GuideLayout';
 
@@ -149,7 +149,7 @@ export default function WishlistPage() {
           {selectedItem && (
             <div className="anim-pop-in" style={{ position: 'relative', width: '100%', margin: '0 auto 40px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '24px', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', zIndex: 1000, overflow: 'hidden' }}>
               <button onClick={() => setSelectedItem(null)} style={{ position: 'absolute', top: '15px', right: '15px', width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#f8fafc', border: 'none', color: '#64748b', fontSize: '18px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }}>✕</button>
-              <ProductDetail item={selectedItem} exchangeRate={exchangeRate} onCartUpdate={updateCounts} showWishlistButton={false} />
+              <GlobalProductDetail product={selectedItem}/>
             </div>
           )}
         </div>

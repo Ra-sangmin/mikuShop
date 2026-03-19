@@ -95,6 +95,14 @@ function RakutenContent() {
     router.push(`/main_shop/rakuten?genreId=${id}&sort=${sort}&page=1`);
   };
 
+  const handlePageChange = (newPage: number) => {
+    setSelectedProduct(null);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('page', newPage.toString());
+    router.push(`/main_shop/rakuten?${params.toString()}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  
   // 🚀 [로직 3] 데이터 페칭 (카테고리 & 아이템)
   useEffect(() => {
     async function fetchData() {
@@ -167,7 +175,7 @@ function RakutenContent() {
         genreName: c.genreName, 
         genreLevel: c.genreLevel 
       }))}
-      items={items.map(mapToGlobal)}
+      items={items}
       pageInfo={pageInfo}
       selectedProduct={selectedProduct}
       sortOptions={rakutenSortOptions}
@@ -175,6 +183,7 @@ function RakutenContent() {
       isItemLoading={loading && genreId !== '0'}
       isLeaf={categories.length === 0}
       onNavigate={updateNavigation}
+      onPageChange={handlePageChange}
       onSearch={(f: GlobalFilterState) => {
         setSelectedProduct(null);
         const params = new URLSearchParams();
