@@ -20,6 +20,38 @@ if (!puppeteer.plugins || puppeteer.plugins.length === 0) {
 
 let sharedBrowser: any = null;
 
+export async function GET(req: NextRequest) {
+  const { signal } = req;
+  const { searchParams } = new URL(req.url);
+  const categoryId = searchParams.get('category_id');
+
+  if (categoryId === '0') {
+    return new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(JSON.stringify({ success: true, data: [] }) + '\n'));
+        controller.close();
+      }
+    }), { headers: { 'Content-Type': 'application/x-ndjson' } });
+  }
+
+  const targetUrl = generateMercariTargetUrl(searchParams);
+  console.log(`\n🏎️ [TURBO MODE] 크롤링 시작: ${targetUrl}`);
+
+  // 분리한 스트림 생성 함수 호출
+  const stream = createMercariStream(targetUrl, signal);
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+      'Content-Encoding': 'none',
+    },
+  });
+}
+
+
 function generateMercariTargetUrl(searchParams: URLSearchParams): string {
   const params = new URLSearchParams();
   const categoryId = searchParams.get('category_id') ?? '';
@@ -48,135 +80,6 @@ function generateMercariTargetUrl(searchParams: URLSearchParams): string {
   });
 
   return `https://jp.mercari.com/search?${params.toString()}`;
-}
-
-async function extractItems(page: any, limit: number = 150): Promise<MercariItem[]> {
-  return await page.evaluate((limit: number) => {
-    const cells = Array.from(document.querySelectorAll('[data-testid="item-cell"]'));
-    // slice(-limit) 이나 slice(0, limit) 대신 전체를 가져와서 
-    // processAndSend의 중복 제거 로직에 맡기는 게 가장 안전합니다.
-    return cells.map(el => {
-      const anchor = el.querySelector('a');
-      const link = anchor?.getAttribute('href') || '';
-      const imgEl = el.querySelector('img');
-      
-      // ID 추출 로직 강화 (경로에서 m으로 시작하는 ID를 정확히 추출)
-      const idMatch = link.match(/item\/(m\d+)/);
-      const id = idMatch ? idMatch[1] : link.split('/').pop() || '';
-
-      return {
-        id: id,
-        name: imgEl?.getAttribute('alt') || '상품명 없음',
-        thumbnail: imgEl?.src || '',
-        price: parseInt(el.querySelector('[class*="number"]')?.textContent?.replace(/[^0-9]/g, '') || '0', 10),
-        status: el.innerHTML.includes('売り切れ') ? 'sold_out' : 'on_sale',
-        url: `https://jp.mercari.com${link}`
-      };
-    }).filter(item => item.id); // ID가 없는 쓰레기 데이터는 미리 제외
-  }, limit).catch(() => []);
-}
-
-async function processAndSend(
-  newRawItems: MercariItem[],
-  sentItems: Set<string>,
-  controller: ReadableStreamDefaultController,
-  encoder: TextEncoder
-  ) {
-    const filtered = newRawItems.filter(item => item.id && item.price > 0 && !sentItems.has(item.id));
-    if (filtered.length === 0) return 0;
-
-    const chunkSize = 15;
-    for (let i = 0; i < filtered.length; i += chunkSize) {
-      const dataChunk = filtered.slice(i, i + chunkSize);
-      dataChunk.forEach(item => sentItems.add(item.id));
-
-      const chunkString = JSON.stringify({ success: true, data: dataChunk }) + '\n';
-      controller.enqueue(encoder.encode(chunkString));
-      controller.enqueue(encoder.encode(' '.repeat(1024) + '\n')); // 브라우저 렌더링 독촉
-      
-      await new Promise(r => setTimeout(r, 10)); // 렌더링 틈 주기
-    }
-    return filtered.length;
-}
-
-async function setupPage(signal: AbortSignal) {
-  if (!sharedBrowser || !sharedBrowser.connected) {
-    sharedBrowser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
-  }
-  const page = await sharedBrowser.newPage();
-  
-  if (signal.aborted) {
-    await page.close();
-    throw new Error('Aborted');
-  }
-
-  await page.setViewport({ width: 1280, height: 3000 });
-  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-
-  // 이미지 등 불필요한 리소스 차단
-  await page.setRequestInterception(true);
-  page.on('request', (req: any) => {
-    const resourceType = req.resourceType();
-    const url = req.url();
-
-    // 차단 목록 확장
-    if (
-      ['image', 'font', 'media', 'stylesheet'].includes(resourceType) || 
-      url.includes('google-analytics') || 
-      url.includes('facebook') || 
-      url.includes('ad-delivery') ||
-      url.includes('log') // 로그 전송 스크립트 차단
-    ) {
-      req.abort();
-    } else {
-      req.continue();
-    }
-  });
-
-  return page;
-}
-
-function attachApiListener(params: {
-  page: any,
-  signal: AbortSignal,
-  state: { apiDataCaptured: boolean, isStreamClosed: boolean },
-  sentItems: Set<string>,
-  controller: ReadableStreamDefaultController,
-  encoder: TextEncoder
-}) {
-  const { page, signal, state, sentItems, controller, encoder } = params;
-
-  page.on('response', async (response: any) => {
-    if (state.isStreamClosed || signal.aborted || state.apiDataCaptured) return;
-
-    const url = response.url();
-    if (url.includes('api/v1/search') || url.includes('search_index')) {
-      try {
-        const json = await response.json().catch(() => ({}));
-        const rawItems = json.items || [];
-
-        if (rawItems.length > 0) {
-          const mappedItems: MercariItem[] = rawItems.map((item: any) => ({
-            id: item.id,
-            name: item.name,
-            thumbnail: item.thumbnails?.[0] || '',
-            price: parseInt(item.price, 10),
-            status: (item.status === 'on_sale' || item.status === 'trading') ? 'on_sale' : 'sold_out',
-            url: `https://jp.mercari.com/item/${item.id}`
-          }));
-
-          const sentCount = await processAndSend(mappedItems, sentItems, controller, encoder);
-          if (sentCount > 0) {
-            state.apiDataCaptured = true;
-            console.log(`✅ [API 낚시 성공] ${sentCount}개 전송`);
-          }
-        }
-      } catch (e) {}
-    }
-  });
 }
 
 export function createMercariStream(targetUrl: string, signal: AbortSignal) {
@@ -312,33 +215,131 @@ export function createMercariStream(targetUrl: string, signal: AbortSignal) {
   });
 }
 
-export async function GET(req: NextRequest) {
-  const { signal } = req;
-  const { searchParams } = new URL(req.url);
-  const categoryId = searchParams.get('category_id');
+async function extractItems(page: any, limit: number = 150): Promise<MercariItem[]> {
+  return await page.evaluate((limit: number) => {
+    const cells = Array.from(document.querySelectorAll('[data-testid="item-cell"]'));
+    // slice(-limit) 이나 slice(0, limit) 대신 전체를 가져와서 
+    // processAndSend의 중복 제거 로직에 맡기는 게 가장 안전합니다.
+    return cells.map(el => {
+      const anchor = el.querySelector('a');
+      const link = anchor?.getAttribute('href') || '';
+      const imgEl = el.querySelector('img');
+      
+      // ID 추출 로직 강화 (경로에서 m으로 시작하는 ID를 정확히 추출)
+      const idMatch = link.match(/item\/(m\d+)/);
+      const id = idMatch ? idMatch[1] : link.split('/').pop() || '';
 
-  if (categoryId === '0') {
-    return new Response(new ReadableStream({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode(JSON.stringify({ success: true, data: [] }) + '\n'));
-        controller.close();
-      }
-    }), { headers: { 'Content-Type': 'application/x-ndjson' } });
+      return {
+        id: id,
+        name: imgEl?.getAttribute('alt') || '상품명 없음',
+        thumbnail: imgEl?.src || '',
+        price: parseInt(el.querySelector('[class*="number"]')?.textContent?.replace(/[^0-9]/g, '') || '0', 10),
+        status: el.innerHTML.includes('売り切れ') ? 'sold_out' : 'on_sale',
+        url: `https://jp.mercari.com${link}`
+      };
+    }).filter(item => item.id); // ID가 없는 쓰레기 데이터는 미리 제외
+  }, limit).catch(() => []);
+}
+
+async function processAndSend(
+  newRawItems: MercariItem[],
+  sentItems: Set<string>,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder
+  ) {
+    const filtered = newRawItems.filter(item => item.id && item.price > 0 && !sentItems.has(item.id));
+    if (filtered.length === 0) return 0;
+
+    const chunkSize = 15;
+    for (let i = 0; i < filtered.length; i += chunkSize) {
+      const dataChunk = filtered.slice(i, i + chunkSize);
+      dataChunk.forEach(item => sentItems.add(item.id));
+
+      const chunkString = JSON.stringify({ success: true, data: dataChunk }) + '\n';
+      controller.enqueue(encoder.encode(chunkString));
+      controller.enqueue(encoder.encode(' '.repeat(1024) + '\n')); // 브라우저 렌더링 독촉
+      
+      await new Promise(r => setTimeout(r, 10)); // 렌더링 틈 주기
+    }
+    return filtered.length;
+}
+
+async function setupPage(signal: AbortSignal) {
+  if (!sharedBrowser || !sharedBrowser.connected) {
+    sharedBrowser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+  }
+  const page = await sharedBrowser.newPage();
+  
+  if (signal.aborted) {
+    await page.close();
+    throw new Error('Aborted');
   }
 
-  const targetUrl = generateMercariTargetUrl(searchParams);
-  console.log(`\n🏎️ [TURBO MODE] 크롤링 시작: ${targetUrl}`);
+  await page.setViewport({ width: 1280, height: 3000 });
+  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
 
-  // 분리한 스트림 생성 함수 호출
-  const stream = createMercariStream(targetUrl, signal);
+  // 이미지 등 불필요한 리소스 차단
+  await page.setRequestInterception(true);
+  page.on('request', (req: any) => {
+    const resourceType = req.resourceType();
+    const url = req.url();
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'application/x-ndjson',
-      'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-      'Content-Encoding': 'none',
-    },
+    // 차단 목록 확장
+    if (
+      ['image', 'font', 'media', 'stylesheet'].includes(resourceType) || 
+      url.includes('google-analytics') || 
+      url.includes('facebook') || 
+      url.includes('ad-delivery') ||
+      url.includes('log') // 로그 전송 스크립트 차단
+    ) {
+      req.abort();
+    } else {
+      req.continue();
+    }
+  });
+
+  return page;
+}
+
+function attachApiListener(params: {
+  page: any,
+  signal: AbortSignal,
+  state: { apiDataCaptured: boolean, isStreamClosed: boolean },
+  sentItems: Set<string>,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder
+}) {
+  const { page, signal, state, sentItems, controller, encoder } = params;
+
+  page.on('response', async (response: any) => {
+    if (state.isStreamClosed || signal.aborted || state.apiDataCaptured) return;
+
+    const url = response.url();
+    if (url.includes('api/v1/search') || url.includes('search_index')) {
+      try {
+        const json = await response.json().catch(() => ({}));
+        const rawItems = json.items || [];
+
+        if (rawItems.length > 0) {
+          const mappedItems: MercariItem[] = rawItems.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            thumbnail: item.thumbnails?.[0] || '',
+            price: parseInt(item.price, 10),
+            status: (item.status === 'on_sale' || item.status === 'trading') ? 'on_sale' : 'sold_out',
+            url: `https://jp.mercari.com/item/${item.id}`
+          }));
+
+          const sentCount = await processAndSend(mappedItems, sentItems, controller, encoder);
+          if (sentCount > 0) {
+            state.apiDataCaptured = true;
+            console.log(`✅ [API 낚시 성공] ${sentCount}개 전송`);
+          }
+        }
+      } catch (e) {}
+    }
   });
 }

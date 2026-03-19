@@ -238,7 +238,7 @@ export default function HomePage() {
 
       {/* 4. Popular Sites */}
       <section className="anim-item delay-3" style={styles.popularSection}>
-        <h2 className="section-title">일본 전문 쇼핑몰</h2>
+        <h2 className="section-title">일본 인기 쇼핑몰</h2>
         
         <div className="align-container" style={{ position: 'relative' }}> 
           

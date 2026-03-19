@@ -75,6 +75,8 @@ function MercariCategoryContent() {
     pageCount: 100 // 🚀 1에서 15(혹은 그 이상)로 변경하세요!
   });
 
+  const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // 🚀 [로직 1] 메루카리 아이템을 Global 규격으로 매핑
   const mappedDisplayItems = useMemo((): GlobalItem[] => {
     return displayItems.map(item => ({
@@ -202,6 +204,10 @@ function MercariCategoryContent() {
       console.log("🛑 이전 수집 작업을 중단했습니다.");
     }
 
+    if (loadingTimerRef.current) {
+      clearTimeout(loadingTimerRef.current); // 실행 대기 중인 로딩 처리가 있다면 취소
+    }
+
     // 2. 새 요청을 위한 리모컨 생성
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -210,7 +216,13 @@ function MercariCategoryContent() {
     setItems([]); 
     setDisplayItems([]); 
     setProductDetail(null);
-    setIsItemLoading(true);
+    //setIsItemLoading(true);
+
+    // 🚀 [수정] 2초 후에만 로딩 상태를 true로 변경합니다.
+    loadingTimerRef.current = setTimeout(() => {
+      setIsItemLoading(true);
+      console.log("⏳ 2초가 지나 로딩바를 표시합니다.");
+    }, 2000);
 
     const targetId = Number(catId);
     const params = buildMercariParams(targetId, filters);
@@ -243,6 +255,11 @@ function MercariCategoryContent() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+
+        if (loadingTimerRef.current) {
+          clearTimeout(loadingTimerRef.current);
+          loadingTimerRef.current = null;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         
@@ -277,6 +294,11 @@ function MercariCategoryContent() {
       }
       console.error("❌ 실제 통신 에러:", err);
     } finally {
+
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current); // 작업 종료 시 타이머 취소
+      }
+
       // 🚀 [수정 핵심] '내 요청'이 여전히 '최신 요청'일 때만 로딩을 끕니다.
       if (abortControllerRef.current === controller) {
         setIsItemLoading(false);
