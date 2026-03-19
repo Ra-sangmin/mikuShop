@@ -519,10 +519,13 @@ function MercariCategoryContent() {
         // (getTranslatedKeyword 내부에서 언어 체크 후 필요할 때만 번역합니다)
         const translatedKeyword = await getTranslatedText(filters.keyword || "");
 
+        const translatedExcludeKeyword = await getTranslatedText(filters.excludeKeyword || "");
+
         // 2. 번역된 키워드로 필터 교체
         const updatedFilters = { 
           ...filters, 
-          keyword: translatedKeyword 
+          keyword: translatedKeyword,
+          excludeKeyword: translatedExcludeKeyword 
         };
 
         // 3. 부모 상태 업데이트

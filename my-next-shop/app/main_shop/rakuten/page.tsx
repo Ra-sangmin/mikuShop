@@ -10,7 +10,7 @@ import { GlobalFilterState } from "@/app/main_shop/components/GlobalSidebar";
 
 // --- 🛠️ 유틸리티 ---
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
-
+import { getTranslatedText } from '@/lib/search-utils';
 const SHOW_HEADER = false; 
 
 // 1. 실제 로직을 담당하는 Content 컴포넌트
@@ -115,14 +115,27 @@ function RakutenContent() {
             setPath(catData.parents.map((p: any) => ({ id: p.genreId, name: p.genreName })));
           }
 
+          let searchKeyword = keyword;
+          if (keyword) {
+            // 서버 액션을 호출하여 한국어를 일본어로 변환합니다.
+            searchKeyword = await getTranslatedText(keyword);
+            console.log(`🔍 번역된 키워드로 검색: ${keyword} -> ${searchKeyword}`);
+          }
+
+          let searchNGKeyword = NGKeyword;
+          if (NGKeyword) {
+            searchNGKeyword = await getTranslatedText(NGKeyword);
+            console.log(`🚫 제외 키워드 번역: ${NGKeyword} -> ${searchNGKeyword}`);
+          }
+
           const apiParams = new URLSearchParams({
             genreId: genreId,
             sort: sort,
             page: page
           });
 
-          if (keyword) apiParams.append('keyword', keyword);
-          if (NGKeyword) apiParams.append('NGKeyword', NGKeyword);
+          if (searchKeyword) apiParams.append('keyword', searchKeyword);
+          if (searchNGKeyword) apiParams.append('NGKeyword', searchNGKeyword);
           if (minPrice) apiParams.append('minPrice', minPrice);
           if (maxPrice) apiParams.append('maxPrice', maxPrice);
           
