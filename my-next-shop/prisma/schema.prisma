@@ -250,3 +250,13 @@ model MoneyRequest {
 
   user          User          @relation(fields: [userId], references: [id])
 }
+
+model Translation {
+  id        Int      @id @default(autoincrement())
+  jp        String   @unique // 일본어 원문 (중복 저장 방지 및 빠른 검색)
+  ko        String   // 번역된 한국어
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jp]) // 검색 성능을 위한 인덱스 추가
+}

@@ -12,6 +12,7 @@ import { GlobalItem } from "@/app/main_shop/components/GlobalProductCard";
 // --- 🛠️ 유틸리티 ---
 import { checkMercariCooldown, lastCallTimestamp } from "./mercariApi";
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
+import { getTranslatedText } from '@/lib/search-utils';
 
 const SHOW_HEADER = false; 
 
@@ -512,10 +513,25 @@ function MercariCategoryContent() {
       isDetailLoading={isDetailLoading}
       isLeaf={isLeaf}
       onNavigate={handleMove}
-      //onSearch={(filters: GlobalFilterState) => loadItems(Number(currentCatId), filters)}
-      onSearch={(filters: GlobalFilterState) => {
-        setCurrentFilters(filters); // 🚀 사이드바에서 받은 필터를 부모가 저장!
-        loadItems(Number(currentCatId), filters);
+      onSearch={async (filters: GlobalFilterState) => {
+
+        // 1. 🚀 한국어 -> 일본어 번역 실행 
+        // (getTranslatedKeyword 내부에서 언어 체크 후 필요할 때만 번역합니다)
+        const translatedKeyword = await getTranslatedText(filters.keyword || "");
+
+        // 2. 번역된 키워드로 필터 교체
+        const updatedFilters = { 
+          ...filters, 
+          keyword: translatedKeyword 
+        };
+
+        // 3. 부모 상태 업데이트
+        setCurrentFilters(updatedFilters); 
+
+        // 4. 데이터 로드 호출 
+        // (이 함수 안에서 미쿠짱 로딩 팝업과 스트리밍이 시작됩니다!)
+        loadItems(Number(currentCatId), updatedFilters);
+        
       }}
       onCardClick={loadProductDetail}
       onCloseDetail={() => setProductDetail(null)}
