@@ -9,6 +9,7 @@ const menuItems = [
   { name: '정산 관리', path: '/admin/settlement' },
   { name: '환불 정보', path: '/admin/refund' },
   { name: '고객 센터', path: '/admin/cs' },
+  { name: '개발자 전용', path: '/admin/developer' },
 ];
 
 export default function AdminSidebar() {

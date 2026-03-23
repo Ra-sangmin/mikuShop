@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import AdminSidebar from '@/app/components/AdminSidebar';
+import AdminSidebar from '@/app/admin/components/AdminSidebar';
 
 const shippingStatusOptions = ['국제배송', '국내통관중', '국내배송중', '배송완료'];
 

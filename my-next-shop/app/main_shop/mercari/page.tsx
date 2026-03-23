@@ -14,8 +14,6 @@ import { checkMercariCooldown, lastCallTimestamp } from "./mercariApi";
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
 import { getTranslatedText } from '@/lib/search-utils';
 
-const SHOW_HEADER = false; 
-
 interface MercariCategory {
   genreId: number; 
   genreName: string; 
@@ -34,51 +32,49 @@ interface MercariItem {
   url: string;
 }
 
+// ✨ 라쿠텐 전용 정렬 옵션 정의
+const MercariSortOptions = [
+  { id: '기본순', label: '기본순' },
+  { id: '가격 낮은 순', label: '가격 낮은 순' },
+  { id: '가격 높은 순', label: '가격 높은 순' },
+  { id: '최신순', label: '최신순' },
+];
+
 let globalItemsCache: { [key: string]: any[] } = {};
 let globalProductDetailCache: { [key: string]: GlobalProduct } = {};
 
 // 1. 실제 로직을 담당하는 Content 컴포넌트
 function MercariCategoryContent() {
-  
+
   // 1. 부모에서도 필터를 기억할 상태를 만듭니다.
   const [currentFilters, setCurrentFilters] = useState<GlobalFilterState>({});
 
   const router = useRouter();
   const searchParams = useSearchParams();
-  const currentCatId = searchParams.get('cat') || '';
+  const genreId = searchParams.get('cat') || '';
 
-  // 카테고리 상태
+  // 카테고리
   const [categories, setCategories] = useState<MercariCategory[]>([]);
   const [isLeaf, setIsLeaf] = useState(false); 
-  const [isLoading, setIsLoading] = useState(false);
   const [path, setPath] = useState<{id: number, name: string}[]>([]);
-  const [levelOptions, setLevelOptions] = useState<{[key: number]: MercariCategory[]}>({});
-  
-  // 크롤러 상태
-  const isAutoRunningRef = useRef(false); 
-  const [isAutoRunning, setIsAutoRunning] = useState(false);
-  const [log, setLog] = useState<string[]>([]);
 
-  // 아이템 상태
+  // 아이템 
   const [items, setItems] = useState<MercariItem[]>([]);
   const [displayItems, setDisplayItems] = useState<MercariItem[]>([]);
   const [isItemLoading, setIsItemLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isBottomLoaderAllowed, setIsBottomLoaderAllowed] = useState(false);
 
-  // 상품 상세 상태
+  // 상품 상세
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [productDetail, setProductDetail] = useState<GlobalProduct | null>(null);
   
-  const { showAlert } = useMikuAlert(); 
-  const abortControllerRef = useRef<AbortController | null>(null);
-  // page.tsx 상단 state 부분
-  const [pageInfo, setPageInfo] = useState({ 
-    page: 1, 
-    pageCount: 100 // 🚀 1에서 15(혹은 그 이상)로 변경하세요!
-  });
+  // page
+  const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 100 });
 
   const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const { showAlert } = useMikuAlert(); 
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // 🚀 [로직 1] 메루카리 아이템을 Global 규격으로 매핑
   const mappedDisplayItems = useMemo((): GlobalItem[] => {
@@ -93,43 +89,20 @@ function MercariCategoryContent() {
     const status = checkMercariCooldown();
     if (!status.canCall) {
       const msg = `⚠️ 과부하 방지를 위해 ${status.remainingTime}초 후에 다시 시도해 주세요!`;
-      addLog(msg);
       showAlert(msg);
       return false; 
     }
     return true; 
   };
 
-  /*
-  // 🚀 [로직 2] 아이템 순차 렌더링 효과 (스트리밍 대응)
-  useEffect(() => {
-    if (items && items.length > 0) {
-      setDisplayItems([]); 
-      let index = 0;
-      
-      const interval = setInterval(() => {
-        if (index < items.length) {
-          const nextItem = items[index];
-          if (nextItem) setDisplayItems(prev => [...prev, nextItem]);
-          index++;
-        } else {
-          clearInterval(interval);
-        }
-      }, 60);
-      return () => clearInterval(interval);
-    } else {
-      setDisplayItems([]);
-    }
-  }, [items]);
-*/
-  const addLog = (msg: string) => setLog(prev => [msg, ...prev].slice(0, 10));
-
   // 🚀 [로직 3] 메루카리 파라미터 빌더
-  const buildMercariParams = (catId: number, filters?: GlobalFilterState): URLSearchParams => {
-    const params = new URLSearchParams({});
-    if (catId !== 0) params.append("category_id", catId.toString());
-    if (!filters) return params;
+  const GetParams = (catId: number, filters?: GlobalFilterState): URLSearchParams => {
 
+    const params = new URLSearchParams({});
+
+    if (catId !== 0) params.append("category_id", catId.toString());
+    
+    if (!filters) return params;
 
     // 🚀 2. 페이지 토큰 (page_token)
     // 사용자가 발견한 규칙 v1:4 (5페이지)에 따라 (page - 1)을 넣어줍니다.
@@ -200,7 +173,7 @@ function MercariCategoryContent() {
     return params;
   };
 
-  const loadItems = async (catId: number, filters?: GlobalFilterState) => {
+  const loadItems = async (catId: any, filters?: GlobalFilterState) => {
     // 1. 이전 요청 중단
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -238,7 +211,7 @@ function MercariCategoryContent() {
     }, 2000);
 
     const targetId = Number(catId);
-    const params = buildMercariParams(targetId, filters);
+    const params = GetParams(targetId, filters);
     const queryString = params.toString();
 
     // 캐시 확인 로직
@@ -334,6 +307,41 @@ function MercariCategoryContent() {
     }
   };
 
+  const OnPageChange = (newPage: number) => {
+
+    const updatedPageInfo = { ...pageInfo, page: newPage };
+
+    setPageInfo(updatedPageInfo);
+    
+    // 🚀 이제 filters 대신 부모가 기억하고 있는 currentFilters를 사용하세요!
+    loadItems(genreId, { ...currentFilters, page: newPage });
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+  };
+
+  const OnSearch = async (filters: GlobalFilterState) => {
+        // 1. 🚀 한국어 -> 일본어 번역 실행 
+      // (getTranslatedKeyword 내부에서 언어 체크 후 필요할 때만 번역합니다)
+      const translatedKeyword = await getTranslatedText(filters.keyword || "");
+
+      const translatedExcludeKeyword = await getTranslatedText(filters.excludeKeyword || "");
+
+      // 2. 번역된 키워드로 필터 교체
+      const updatedFilters = { 
+        ...filters, 
+        keyword: translatedKeyword,
+        excludeKeyword: translatedExcludeKeyword 
+      };
+
+      // 3. 부모 상태 업데이트
+      setCurrentFilters(updatedFilters); 
+
+      // 4. 데이터 로드 호출 
+      // (이 함수 안에서 미쿠짱 로딩 팝업과 스트리밍이 시작됩니다!)
+      loadItems(genreId, updatedFilters);
+  };
+
   // 🚀 [로직 5] 상품 상세 정보 로드
   const loadProductDetail = async (item: GlobalItem) => {
     const itemId = item.id;
@@ -365,63 +373,7 @@ function MercariCategoryContent() {
     }
   };
 
-  // 🚀 [로직 6] 카테고리 로드 및 초기 데이터 세팅
-  useEffect(() => {
-    const loadData = async () => {
-      // 1. 시작하자마자 상태 초기화 (이전 기억 삭제)
-      setIsLoading(true);
-      setIsLeaf(false);
-      setCategories([]); 
-
-      try {
-        const apiUrl = `/api/mercari/categories${currentCatId ? `?parentId=${currentCatId}` : ''}`;
-        console.log(`📡 요청 시작: ${apiUrl}`);
-
-        const res = await fetch(apiUrl);
-        const result = await res.json();
-
-        // 🚀 [디버그 로그] 서버가 실제로 보내준 날것의 데이터를 확인합니다.
-        console.log("📦 서버 응답 전체:", result);
-
-        if (result.success) {
-          const serverData = result.data || [];
-          const serverIsLeaf = !!result.isLeaf;
-
-          // 2. 데이터 유무에 따른 정밀 판정
-          if (serverData.length > 0) {
-            console.log(`✅ 데이터를 ${serverData.length}개 찾았습니다. (isLeaf: ${serverIsLeaf})`);
-            setCategories(serverData);
-            setIsLeaf(serverIsLeaf); // 서버가 준 대로 설정
-          } else {
-            console.log("❌ 데이터가 0개입니다. 최하위로 판정합니다.");
-            setCategories([]);
-            setIsLeaf(true); 
-          }
-
-          // 경로 업데이트
-          if (result.parents) {
-            const serverPath = result.parents.map((p: any) => ({
-              id: p.parent.genreId, name: p.parent.genreName
-            }));
-            setPath(serverPath);
-          }
-        } else {
-          console.error("❌ 서버 응답 실패:", result.error);
-          setIsLeaf(true); // 에러 시 안전하게 최하위로 표시
-        }
-      } catch (err) {
-        console.error("❌ 통신 중 진짜 에러 발생:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-  }, [currentCatId]);
-
-  const handleMove = (id: number, name: string, level?: number) => {
-    // 🚀 [수정] 아이템 수집 로직(loadItems)을 여기서 제거합니다!
-    //loadItems(id); // <--- 이 줄을 삭제하거나 주석 처리하세요.
+  const updateNavigation = (id: number, name: string, level?: number) => {
 
     setIsLeaf(false);
 
@@ -450,53 +402,41 @@ function MercariCategoryContent() {
     loadItems(id, currentFilters);
   };
 
-  const handleSidebarNavigate = (id: number, name: string, levelIndex: number) => {
-    setPath(prev => {
-      const newPath = prev.slice(0, levelIndex);
-      return [...newPath, { id, name }];
-    });
-    router.push(`/main_shop/mercari?cat=${id}`);
-  };
+  // 🚀 [로직 6] 카테고리 로드 및 초기 데이터 세팅
+  useEffect(() => {
+    const fetchData = async () => {
+      // 1. 시작하자마자 상태 초기화 (이전 기억 삭제)
+      setIsLeaf(false);
+      setCategories([]); 
 
-  // 자동 수집 매크로
-  const startAutoCrawl = async () => {
-    if (isAutoRunning) return;
-    setIsAutoRunning(true);
-    isAutoRunningRef.current = true; 
-    addLog("🚀 자동 수집 매크로를 시작합니다...");
-
-    while (isAutoRunningRef.current) {
       try {
-        const targetRes = await fetch('/api/mercari/auto-crawl');
-        if (!isAutoRunningRef.current) break;
-        const { nextId, nextName } = await targetRes.json();
+        const apiUrl = `/api/mercari/categories${genreId ? `?parentId=${genreId}` : ''}`;
 
-        if (!nextId) {
-          addLog("✅ 모든 카테고리 수집이 완료되었습니다!");
-          break;
-        }
+        const res = await fetch(apiUrl);
+        const result = await res.json();
 
-        addLog(`🔎 [탐색 중] ${nextName} (${nextId})`);
-        const crawlRes = await fetch(`/api/mercari/categories?parentId=${nextId}`);
-        const crawlResult = await crawlRes.json();
+        if (result.success) {
 
-        if (!isAutoRunningRef.current) break;
+          const serverData = result.data || [];
+          const serverIsLeaf = !!result.isLeaf;
 
-        if (crawlResult.success) {
-          addLog(`📦 ${nextName} 완료! (${crawlResult.data?.length || 0}개)`);
-        }
-        if (!isAutoRunningRef.current) break;
+          setCategories(serverData);
+          setIsLeaf(serverIsLeaf);
+
+          // 경로 업데이트
+          if (result.parents) {
+            setPath(result.parents.map((p: any) => ({ id: p.parent.genreId, name: p.genreName })));
+          }
+          
+        } 
       } catch (err) {
-        addLog(`❌ 오류 발생: ${err}`);
-        break;
+        console.error("❌ 통신 중 진짜 에러 발생:", err);
+      } finally {
       }
-    }
-    setIsAutoRunning(false);
-    isAutoRunningRef.current = false;
-    addLog("🛑 자동 수집이 중단되었습니다.");
-  };
+    };
 
-  const stopAutoCrawl = () => { isAutoRunningRef.current = false; setIsAutoRunning(false); };
+    fetchData();
+  }, [genreId]);
 
   return (
     <GlobalShoppingView 
@@ -506,51 +446,18 @@ function MercariCategoryContent() {
       items={mappedDisplayItems}
       pageInfo={pageInfo}
       selectedProduct={productDetail}
-      isLoading={isLoading}
+      sortOptions={MercariSortOptions}
+      isLoading={false}
       isItemLoading={isItemLoading}
       isStreaming={isStreaming}
       isBottomLoaderAllowed={isBottomLoaderAllowed}
       isDetailLoading={isDetailLoading}
       isLeaf={isLeaf}
-      onNavigate={handleMove}
-      onSearch={async (filters: GlobalFilterState) => {
-
-        // 1. 🚀 한국어 -> 일본어 번역 실행 
-        // (getTranslatedKeyword 내부에서 언어 체크 후 필요할 때만 번역합니다)
-        const translatedKeyword = await getTranslatedText(filters.keyword || "");
-
-        const translatedExcludeKeyword = await getTranslatedText(filters.excludeKeyword || "");
-
-        // 2. 번역된 키워드로 필터 교체
-        const updatedFilters = { 
-          ...filters, 
-          keyword: translatedKeyword,
-          excludeKeyword: translatedExcludeKeyword 
-        };
-
-        // 3. 부모 상태 업데이트
-        setCurrentFilters(updatedFilters); 
-
-        // 4. 데이터 로드 호출 
-        // (이 함수 안에서 미쿠짱 로딩 팝업과 스트리밍이 시작됩니다!)
-        loadItems(Number(currentCatId), updatedFilters);
-        
-      }}
+      onNavigate={updateNavigation}
+      onSearch={OnSearch}
       onCardClick={loadProductDetail}
       onCloseDetail={() => setProductDetail(null)}
-      showCrawlHeader={SHOW_HEADER}
-      isAutoRunning={isAutoRunning}
-      onCrawlToggle={isAutoRunning ? stopAutoCrawl : startAutoCrawl}
-      crawlLog={log[0]}
-
-      onPageChange={(newPage) => {
-        const updatedPageInfo = { ...pageInfo, page: newPage };
-        setPageInfo(updatedPageInfo);
-        
-        // 🚀 이제 filters 대신 부모가 기억하고 있는 currentFilters를 사용하세요!
-        loadItems(Number(currentCatId), { ...currentFilters, page: newPage });
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }}
+      onPageChange={OnPageChange}
     />
   );
 }

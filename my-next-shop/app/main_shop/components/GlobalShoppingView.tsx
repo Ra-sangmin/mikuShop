@@ -75,7 +75,7 @@ const MikuLoadingOverlay = ({ message }: { message: string }) => (
 );
 
 interface GlobalShoppingViewProps {
-  platform: 'rakuten' | 'mercari' | 'amazon' | 'yahoo';
+  platform: 'rakuten' | 'mercari' | 'amazon' | 'yahoo_auction';
   // 데이터
   path: { id: number; name: string }[];
   categories: any[];
@@ -96,11 +96,6 @@ interface GlobalShoppingViewProps {
   onCardClick: (item: any) => void;
   onCloseDetail: () => void;
   onPageChange: (newPage: number) => void;
-  // 크롤러 관련 (선택 사항)
-  showCrawlHeader?: boolean;
-  isAutoRunning?: boolean;
-  onCrawlToggle?: () => void;
-  crawlLog?: string;
   sortOptions?: { id: string, label: string }[]; // 선택적 속성으로 추가
 }
 
@@ -124,26 +119,12 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
       )}
 
       <div style={styles.container}>
-        {/* 헤더 섹션 (수집 기능 등) */}
-        {props.showCrawlHeader && (
-          <header style={styles.header}>
-            <h1 style={{ fontSize: '24px', fontWeight: 900, color: '#1f2937', margin: 0 }}>
-              Miku <span style={{ color: '#ff007f' }}>{props.platform.toUpperCase()}</span>
-            </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <button onClick={props.onCrawlToggle} style={styles.crawlBtn(props.isAutoRunning || false)}>
-                {props.isAutoRunning ? "🤖 중지" : "🚀 수집 시작"}
-              </button>
-              <div style={{ fontSize: '12px', color: '#9ca3af' }}>{props.crawlLog || "Ready"}</div>
-            </div>
-          </header>
-        )}
 
         <div style={styles.mainLayout}>
           {/* 사이드바 */}
           <aside style={styles.sidebarWrapper}>
             <GlobalSidebar 
-              platform={props.platform} 
+              platform={props.platform as any} 
               currentPath={props.path} 
               onNavigate={props.onNavigate} 
               onSearch={props.onSearch} 
@@ -173,7 +154,7 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
               <GlobalCategoryGrid 
                 categories={props.categories} 
                 isLoading={props.isLoading} 
-                platform={props.platform} 
+                platform={props.platform as any} 
                 onMove={props.onNavigate}
                 isLeaf={props.isLeaf}
               />

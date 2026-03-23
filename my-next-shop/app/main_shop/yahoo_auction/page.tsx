@@ -1,289 +1,371 @@
 "use client";
 
-import React, { useState, useEffect, useRef, Suspense } from 'react'; // Suspense 추가
+import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 
-// 1. 실제 비즈니스 로직과 UI를 담당하는 Content 컴포넌트
-function YahooShoppingContent() {
+// --- 📦 공용 글로벌 컴포넌트 ---
+import GlobalShoppingView from "@/app/main_shop/components/GlobalShoppingView";
+import { GlobalFilterState } from "@/app/main_shop/components/GlobalSidebar";
+import { GlobalProduct } from "@/app/main_shop/components/GlobalProductDetail";
+import { GlobalItem } from "@/app/main_shop/components/GlobalProductCard";
+
+// --- 🛠️ 유틸리티 ---
+import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
+import { getTranslatedText } from '@/lib/search-utils';
+
+// 야후 옥션 전용 카테고리 인터페이스
+interface YahooAuctionCategory {
+  genreId: string; 
+  genreName: string; 
+  isLeaf: boolean;
+  genreLevel?: number;
+}
+
+interface YahooAuctionItem {
+  id: string;
+  name: string;
+  price: number;
+  thumbnail: string;
+  status: string;
+  url: string;
+  // 🌟 [추가] 야후 옥션 전용 필드 (입찰수, 남은 시간)
+  bidCount?: number;
+  timeLeft?: string;
+}
+
+// ✨ 야후 옥션 전용 정렬 옵션
+const YahooAuctionSortOptions = [
+  { id: 'end', label: '종료임박순' },
+  { id: 'cbids', label: '입찰수많은순' },
+  { id: 'bidorbuy', label: '즉시구매가격순' },
+  { id: 'a-price', label: '현재가격낮은순' },
+  { id: 'd-price', label: '현재가격높은순' },
+  { id: 'new', label: '신규등록순' },
+];
+
+let globalItemsCache: { [key: string]: any[] } = {};
+
+function YahooAuctionContent() {
+
+  const [currentFilters, setCurrentFilters] = useState<GlobalFilterState>({
+    sortOrder: 'end',      // 야후 옥션 기본 정렬값
+    keyword: '',
+    excludeKeyword: '',
+    brand: '',
+    size: '모두',
+    sellerType: '모두',
+    minPrice: '',
+    maxPrice: '',
+    condition: '모두',
+    shippingPayer: '모두',
+    hasDiscount: '모두',
+    listingType: '모두',
+    colors: ['모두'],
+    shippingOption: '모두',
+    status: '모두',
+    page: 1,
+  });
+
   const router = useRouter();
   const searchParams = useSearchParams();
+  const lastFetchedIdRef = useRef<number | null>(null);
 
-  // URL에서 상태 추출
+  // ✨ URL 파라미터를 genreId로 완벽 통일!
   const genreId = searchParams.get('genreId') || '0';
-  const sort = searchParams.get('sort') || 'standard';
+  const sort = searchParams.get('sort') || 'end';
   const page = searchParams.get('page') || '1';
-  
-  const [categories, setCategories] = useState([]); 
-  const [currentGenre, setCurrentGenre] = useState({ genreName: '' }); 
-  const [parentsGenre, setParentsGenre] = useState<any[]>([]); 
-  const [childrenGenre, setChildrenGenre] = useState([]); 
-  const [items, setItems] = useState([]);
-  const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 0, sort : 'standard' });
+  const keyword = searchParams.get('keyword') || '';
+
+  // 데이터 상태
+  const [categories, setCategories] = useState<YahooAuctionCategory[]>([]);
+  const [isLeaf, setIsLeaf] = useState(false);
+  const [path, setPath] = useState<{id: number, name: string}[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<any>(null);
 
-  // ★ 브라우저 뒤로가기 제어
-  useEffect(() => {
-    if (selectedItem) {
-      window.history.pushState({ isDetail: true }, "");
-    }
+  // 아이템
+  const [items, setItems] = useState<YahooAuctionItem[]>([]);
+  const [displayItems, setDisplayItems] = useState<YahooAuctionItem[]>([]);
+  const [isItemLoading, setIsItemLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isBottomLoaderAllowed, setIsBottomLoaderAllowed] = useState(false);
+  
+  // 상품 상세
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [productDetail, setProductDetail] = useState<GlobalProduct | null>(null);
 
-    const handlePopState = (event: PopStateEvent) => {
-      if (selectedItem) {
-        setSelectedItem(null);
-        window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-      }
-    };
+  // page
+  const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 100 });
 
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [selectedItem]);
+  const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const { showAlert } = useMikuAlert(); 
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const detailRef = useRef<HTMLDivElement>(null);
-  const { exchangeRate } = useExchangeRate();
-  const [cartCount, setCartCount] = useState<number>(0);
-  const [wishlistCount, setWishlistCount] = useState<number>(0);
-
-  const getDynamicApiUrl = (path: string, queryParams: string) => {
-    const hostName = window.location.hostname; 
-    const protocol = window.location.protocol;
+  const GetParams = (genreId: number, filters?: GlobalFilterState): URLSearchParams => {
     
-    if (hostName.includes('ngrok-free.dev')) {
-        return `${protocol}//${hostName}/rakuten/${path}?${queryParams}`;
-    }
-    return `${protocol}//${hostName}:4000/rakuten/${path}?${queryParams}`;
+    const params = new URLSearchParams({});
+
+    if (genreId !== 0) params.append("category_id", genreId.toString());
+
+    if (!filters) return params;
+
+    // TODO: 필터 적용 로직 주석 해제 필요 시 추가
+
+    return params;
   };
 
-  const updateCounts = () => {
-    const savedCart = JSON.parse(localStorage.getItem('rakutenCart') || '[]');
-    setCartCount(savedCart.length);
-    const savedWishlist = JSON.parse(localStorage.getItem('rakutenWishlist') || '[]');
-    setWishlistCount(savedWishlist.length);
-  };
-
-  useEffect(() => {
-    updateCounts();
-  }, []);
-
-  useEffect(() => {
-      const domain = window.location.hostname;
-      document.cookie = `googtrans=/ja/ko; path=/;`;
-      document.cookie = `googtrans=/ja/ko; domain=${domain}; path=/;`;
-
-      async function fetchCategories() {
-          setSelectedItem(null);
-          setItems([]); 
-
-          const apiUrl = getDynamicApiUrl('categories', `genreId=${genreId}`);
-          const res = await fetch(apiUrl); 
-          const data = await res.json();
-
-          setCategories(data.children || []); 
-          setCurrentGenre(data.current || { genreName: '' }); 
-          setParentsGenre(data.parents || []); 
-          setChildrenGenre(data.children || []); 
+  // 🚀 [수정] 야후 옥션 데이터를 Global 규격으로 완벽하게 변환!
+  const mappedDisplayItems = useMemo((): GlobalItem[] => {
+    return displayItems.map(item => ({
+      ...item,
+      platform: 'yahoo_auction', // 🚨 기존에 'mercari'로 되어있던 치명적 버그 수정!
+      status: item.status as 'on_sale' | 'sold_out',
+      bidCount: item.bidCount,   // ✨ 입찰수 연결
+      timeLeft: item.timeLeft,   // ✨ 남은 시간 연결
+    }));
+  }, [displayItems]);
+  
+  const loadItems = async (catId: any, filters?: GlobalFilterState) => {
+      // 1. 이전 요청 중단
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        console.log("🛑 이전 수집 작업을 중단했습니다.");
       }
-      fetchCategories();
-  }, [genreId]);
-
-  useEffect(() => {
-    async function loadItems() {
-      if (genreId === '0') {
-        setLoading(false);
+  
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current);
+      }
+  
+      // 2. 새 요청을 위한 리모컨 생성
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+  
+      // 모든 바구니 비우기
+      setItems([]); 
+      setDisplayItems([]); 
+      setProductDetail(null);
+      setIsItemLoading(false);
+      setIsStreaming(false);
+      setIsBottomLoaderAllowed(false);
+  
+      // 1.2초 후에 로딩바 표시
+      loadingTimerRef.current = setTimeout(() => {
+        setIsItemLoading(true);
+        console.log("⏳ 1.2초가 지나 로딩바를 표시합니다.");
+  
+        // 3초 후 강제 종료
+        loadingTimerRef.current = setTimeout(() => {
+          setIsItemLoading(false);
+          setIsBottomLoaderAllowed(true);
+          console.log("⏳ 표시 후 3.0초가 지나 로딩바를 강제로 숨깁니다.");
+        }, 3000);
+  
+      }, 1200);
+  
+      const targetId = Number(catId);
+      const params = GetParams(targetId, filters);
+      const queryString = params.toString();
+  
+      // 캐시 확인
+      if (globalItemsCache[queryString]) {
+        setItems([...globalItemsCache[queryString]]);
+        setDisplayItems([...globalItemsCache[queryString]]);
+        setIsItemLoading(false);
         return;
       }
-
-      setLoading(true);
+  
+      setIsStreaming(true);
+  
       try {
-        const apiUrl = getDynamicApiUrl('items', `genreId=${genreId}&sort=${sort}&page=${page}`);
-        const response = await fetch(apiUrl);
-        const data = await response.json();
+        const res = await fetch(`/api/yahoo_auction/search?${queryString}`, { 
+          signal: controller.signal 
+        });
+        
+        if (!res.body) throw new Error("ReadableStream not supported");
+  
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+  
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+  
+          if (loadingTimerRef.current) {
+            clearTimeout(loadingTimerRef.current);
+            loadingTimerRef.current = null;
+            setIsItemLoading(false);
+            setIsBottomLoaderAllowed(true);
+          }
+  
+          buffer += decoder.decode(value, { stream: true });
+          
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ""; 
+  
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const result = JSON.parse(line);
+              
+              if (result.success && result.data) {
+                setItems(prev => [...prev, ...result.data]); 
+                setDisplayItems(prev => [...prev, ...result.data]); 
+              }
+            } catch (e) {
+              console.error("JSON 파싱 에러:", e);
+            }
+          }
+        }   
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.log("🤫 이전 요청은 조용히 사라집니다...");
+          return; 
+        }
+        console.error("❌ 실제 통신 에러:", err);
+      } finally {
+  
+        if (abortControllerRef.current === controller) {
+          setIsStreaming(false);
+  
+          if (loadingTimerRef.current) {
+            clearTimeout(loadingTimerRef.current); 
+            loadingTimerRef.current = null;
+          }
+  
+          setIsItemLoading(false);
+          console.log("🏁 최신 수집 작업 완료!");
+        }
+      }
+    };
+  
+  useEffect(() => {
+    const fetchCategories = async () => {
+      setIsLeaf(false);
+      setCategories([]);
 
-        setItems(data.items || []);
-        setPageInfo({ page: data.page, pageCount: data.pageCount, sort : sort});
-      } catch (error) {
-        console.error("데이터 로드 실패:", error);
+      try {
+        const res = await fetch(`/api/yahoo_auction/categories?genre=${genreId}`);
+        const result = await res.json();
+
+        if (result.success) {
+          console.log("🛠️ [Debug] 야후 옥션 카테고리 로드 완료:", result.data);
+
+          const serverData = result.data || [];
+          const serverIsLeaf = !!result.isLeaf;
+
+          setCategories(serverData);
+          setIsLeaf(serverIsLeaf);
+
+          if (result.path) {
+            setPath(result.path.map((p: any) => ({ id: p.id, name: p.name })));
+          }
+
+          if (genreId !== '0') {
+            console.log(`📦 장르 변경 감지: ${genreId}번 카테고리 상품 로드 시작`);
+            await loadItems(genreId, currentFilters);
+          }
+        }
+      } catch (e) {
+        console.error("Yahoo Auction Category Load Error", e);
       } finally {
         setLoading(false);
       }
+    };
+
+    fetchCategories();
+  }, [genreId]); 
+
+  const updateNavigation = (id: number, name: string, levelIndex: number) => {
+    setIsLeaf(false);
+    setItems([]); 
+    setProductDetail(null);
+    setPageInfo(prev => ({ ...prev, page: 1 }));
+
+    if (!id || id === 0 ||  name === 'HOME') { 
+      setPath([]); 
+      router.push('/main_shop/yahoo_auction'); 
+      return; 
     }
-    if (genreId !== '0') loadItems();
-  }, [genreId, sort, page]);
+    
+    setPath(prev => {
+      const filtered = prev.slice(0, levelIndex);
+      return [...filtered, { id: id, name: name }];
+    });
+
+    router.push(`/main_shop/yahoo_auction?genreId=${id}`);
+  };
+
+  const OnSearch = async (filters: GlobalFilterState) => {
+      const translatedKeyword = await getTranslatedText(filters.keyword || "");
+      const translatedExcludeKeyword = await getTranslatedText(filters.excludeKeyword || "");
+
+      const updatedFilters = { 
+        ...filters, 
+        keyword: translatedKeyword,
+        excludeKeyword: translatedExcludeKeyword 
+      };
+
+      setCurrentFilters(updatedFilters); 
+      loadItems(Number(genreId), updatedFilters);
+  };
+
+  const loadProductDetail = async (item: GlobalItem) => {
+      const itemId = item.id;
+  
+      setIsDetailLoading(true);
+      setProductDetail(null); 
+  
+      try {
+        const res = await fetch(`/api/yahoo_auction/productDetail?itemId=${itemId}`);
+        const result = await res.json();
+        if (result.success) {
+          const mappedData: GlobalProduct = { ...result.data, platform: 'yahoo_auction' };
+          setProductDetail(mappedData);
+          setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
+        } else {
+          throw new Error(result.error);
+        }
+      } catch (err: any) {
+        showAlert('상품 로딩에 실패하였습니다.');
+      } finally {
+        setIsDetailLoading(false);
+      }
+    };
 
   return (
-    <div className="category-box">
-      <div className="page-title-container" role="alert">
-        <nav className="breadcrumb-bar">
-          <a href="/" style={{ fontSize: '20px' }}><i className="fa fa-home" style={{ marginRight: '8px' }}></i> 홈 </a>
-          {parentsGenre.map((parent, index) => {
-            const currentSort = searchParams.get('sort');
-            const params = new URLSearchParams();
-            params.set('genreId', parent.genreId);
-            if (currentSort) {
-              params.set('sort', currentSort);
-            }
-            params.set('page', '1'); 
-
-            return (
-              <span key={parent.genreId || index} style={{ fontSize: '13px', color: '#666' }}>
-                <span style={{ margin: '0 8px', color: '#ccc' }}>  `&gt;` </span>
-                <Link 
-                  href={`/rakuten?${params.toString()}`}
-                  style={{ 
-                    fontSize: '18px',
-                    textDecoration: 'none', 
-                    color: '#666',
-                    cursor: 'pointer' 
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
-                  onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
-                >
-                  {parent.genreName}
-                </Link>
-              </span>
-            );
-          })}
-
-          {currentGenre.genreName && (
-            <>
-              <span style={{ margin: '0 8px', color: '#ccc' }}> `&gt;` </span>
-              <span style={{ 
-                fontSize: '18px', 
-                fontWeight: 'bold', 
-                color: '#333' 
-              }}>
-                {currentGenre.genreName}
-              </span>
-            </>
-          )}
-        </nav>
-      </div>
-
-      <div className="category-box" style={{ width: '100%', marginBottom: '20px' }}>
-        {categories.length === 0 ? (
-          <p style={{ fontSize: '16px', color: '#888', padding: '20px' }}>하위 카테고리가 없습니다.</p> 
-        ) : (
-            <div 
-              className="category-flex-container" 
-              style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', 
-                  gap: '10px 20px', 
-                  width: '100%'
-              }}
-            >
-              {categories.map((cat: any) => {
-                  const params = new URLSearchParams();
-                  params.set('genreId', cat.genreId); 
-                  if (sort) params.set('sort', sort);
-
-                  return (
-                    <div key={cat.genreId} className="cat-item">
-                      <Link href={`/rakuten?${params.toString()}`}
-                          style={{
-                              fontSize: '16px',
-                              fontWeight: '500',         
-                              padding: '6px 12px',
-                              letterSpacing: '-0.3px',
-                              display: 'inline-block',
-                              border: 'none',            
-                              backgroundColor: 'transparent', 
-                              color: '#666',             
-                              textDecoration: 'none',
-                              textAlign: 'left',         
-                              whiteSpace: 'nowrap',
-                              transition: 'color 0.2s ease', 
-                              lineHeight: '1.2'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.color = '#337ab7'}
-                          onMouseLeave={(e) => e.currentTarget.style.color = '#333'}
-                      >
-                        {cat.genreName}
-                      </Link>
-                    </div>
-                  );
-              })}
-            </div>
-        )}
-      </div>
-
-      {!loading && items.length > 0 ? (
-        <>
-          
-
-          <div ref={detailRef} style={{ scrollMarginTop: '20px' }}>
-          {selectedItem && (
-            <div className="detail-view-container" style={{ 
-                position: 'relative',    
-                width: '100%',            
-                maxWidth: '1500px',      
-                margin: '20px auto',     
-                backgroundColor: '#fff',
-                border: '1px solid #ddd',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-                zIndex: 1000
-            }}>
-              <div style={{ textAlign: 'right' }}>
-                <button 
-                  onClick={() => {
-                    setSelectedItem(null);
-                      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-                  }}
-                  style={{ 
-                    position: 'absolute', top: '-15px', right: '-20px', width: '50px', height: '50px',
-                    borderRadius: '50%', backgroundColor: '#fff', border: '2px solid #333',
-                    fontSize: '25px', fontWeight: 'bold', cursor: 'pointer', display: 'flex',
-                    alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                    paddingTop: '4px', paddingLeft: '2px', zIndex: 1001
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#eee'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
-                >
-                  X
-                </button>
-              </div>
-              
-             
-            </div>
-          )}
-          </div>
-          <div className="item-box">
-            <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
-              gap: '15px', padding: '20px', backgroundColor: '#f9f9f9'
-            }}>
-              
-            </div>
-          </div>
-
-        </>
-      ) : (
-        loading && (
-          <div style={{
-            display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
-            padding: '100px 0', width: '100%', minHeight: '400px'  
-          }}>
-            <i className="fa fa-spinner fa-spin fa-3x" style={{ color: '#337ab7', marginBottom: '20px' }}></i>
-            <p style={{ fontSize: '16px', color: '#666' }}>상품 정보를 불러오는 중입니다...</p>
-          </div>
-        )
-      )}
-    </div>
+    <GlobalShoppingView
+      platform="yahoo_auction"
+      path={path}
+      categories={categories}
+      items={mappedDisplayItems} 
+      pageInfo={pageInfo}
+      selectedProduct={productDetail}
+      sortOptions={YahooAuctionSortOptions}
+      isLoading={loading}
+      isItemLoading={isItemLoading}
+      isStreaming={isStreaming}
+      isBottomLoaderAllowed={isBottomLoaderAllowed}
+      isDetailLoading={isDetailLoading}
+      isLeaf={isLeaf}
+      onNavigate={updateNavigation}
+      onSearch={OnSearch}
+      onCardClick={loadProductDetail}
+      onCloseDetail={() => setProductDetail(null)}
+      onPageChange={(p) => router.push(`/main_shop/yahoo_auction?genreId=${genreId}&page=${p}&keyword=${keyword}`)}
+    />
   );
 }
 
-// 2. 최종 Export할 페이지 컴포넌트 (Suspense 적용)
-export default function YahooShoppingPage() {
+export default function YahooAuctionPage() {
   return (
     <Suspense fallback={
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-        <i className="fa fa-spinner fa-spin fa-2x" style={{ color: '#ffcc00' }}></i>
-        <p style={{ marginTop: '15px', color: '#666' }}>야후 쇼핑 정보를 불러오는 중입니다...</p>
+        {/* ✨ 로딩 스피너 색상도 라쿠텐 레드(#bf0000)에서 야후 레드(#ff0033)로 맞춰주었습니다 */}
+        <i className="fa fa-spinner fa-spin fa-2x" style={{ color: '#ff0033' }}></i>
+        <p style={{ marginTop: '15px', color: '#666' }}>야후 옥션 카테고리를 불러오는 중입니다...</p>
       </div>
     }>
-      <YahooShoppingContent />
+      <YahooAuctionContent />
     </Suspense>
   );
 }

@@ -188,6 +188,19 @@ model RakutenCategory {
   @@map("RakutenCategory")
 }
 
+model YahooAuctionCategory {
+  id         Int      @id @default(autoincrement())
+  genreId    Int      @unique
+  listId     Int?     @default(0) 
+  genreName  String
+  genreLevel Int?     @default(1) 
+  parentId   Int
+  isLeaf     Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  @@map("YahooAuctionCategory")
+}
+
 // 2. 머니 로그 타입 Enum 추가
 enum MoneyLogType {
   CHARGE  // 충전

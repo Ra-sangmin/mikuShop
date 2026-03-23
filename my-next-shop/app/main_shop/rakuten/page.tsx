@@ -5,52 +5,53 @@ import { useSearchParams, useRouter } from 'next/navigation';
 
 // --- 📦 공용 글로벌 컴포넌트 ---
 import GlobalShoppingView from "@/app/main_shop/components/GlobalShoppingView";
-import { GlobalProduct } from "@/app/main_shop/components/GlobalProductDetail";
 import { GlobalFilterState } from "@/app/main_shop/components/GlobalSidebar";
+import { GlobalProduct } from "@/app/main_shop/components/GlobalProductDetail";
 
 // --- 🛠️ 유틸리티 ---
-import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 import { getTranslatedText } from '@/lib/search-utils';
-const SHOW_HEADER = false; 
+
+interface RakutenCategory {
+  genreId: number; 
+  genreName: string; 
+  genreLevel: number; 
+  parentId: number; 
+  isLeaf: boolean; 
+  updatedAt: string | Date; 
+}
+
+// ✨ 라쿠텐 전용 정렬 옵션 정의
+const RakutenSortOptions = [
+  { id: 'standard', label: '기본순' },
+  { id: '-updateTimestamp', label: '최신등록순' },
+  { id: '-reviewCount', label: '조회수많은순' },
+  { id: '-itemPrice', label: '가격높은순' },
+  { id: '+itemPrice', label: '가격낮은순' },
+];
 
 // 1. 실제 로직을 담당하는 Content 컴포넌트
 function RakutenContent() {
+
+  // 1. 부모에서도 필터를 기억할 상태를 만듭니다.
+  const [currentFilters, setCurrentFilters] = useState<GlobalFilterState>({});
+
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { exchangeRate } = useExchangeRate();
-
-  // URL 파라미터 상태
   const genreId = searchParams.get('genreId') || '0';
-  const sort = searchParams.get('sort') || 'standard';
-  const page = searchParams.get('page') || '1';
-  const keyword = searchParams.get('keyword') || '';
-  const NGKeyword = searchParams.get('NGKeyword') || '';
-  const minPrice = searchParams.get('minPrice') || '';
-  const maxPrice = searchParams.get('maxPrice') || '';
 
-  // 데이터 상태
-  const [categories, setCategories] = useState([]);
+  // 카테고리
+  const [categories, setCategories] = useState<RakutenCategory[]>([]);
+  const [isLeaf, setIsLeaf] = useState(false); 
   const [path, setPath] = useState<{id: number, name: string}[]>([]);
-  const [items, setItems] = useState([]);
-  const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 0 });
-  const [loading, setLoading] = useState(false);
-  
-  // 크롤러 상태
-  const isAutoRunningRef = useRef(false); 
-  const [isAutoRunning, setIsAutoRunning] = useState(false);
-  const [log, setLog] = useState<string[]>([]);
 
-  // UI 상태
-  const [selectedProduct, setSelectedProduct] = useState<GlobalProduct | null>(null);
+  // 아이템
+  const [items, setItems] = useState<GlobalProduct[]>([]);
 
-  // ✨ 라쿠텐 전용 정렬 옵션 정의
-  const rakutenSortOptions = [
-    { id: 'standard', label: '기본순' },
-    { id: '-updateTimestamp', label: '최신등록순' },
-    { id: '-reviewCount', label: '조회수많은순' },
-    { id: '-itemPrice', label: '가격높은순' },
-    { id: '+itemPrice', label: '가격낮은순' },
-  ];
+  // 상품 상세
+  const [productDetail, setProductDetail] = useState<GlobalProduct | null>(null);
+
+  // page
+  const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 100 });
 
   // 🚀 [로직 1] 라쿠텐 데이터를 Global 규격으로 변환
   const mapToGlobal = (item: any): GlobalProduct => {
@@ -79,10 +80,93 @@ function RakutenContent() {
     };
   };
 
-  // 🚀 [로직 2] 네비게이션 함수
+  const GetParams = (genreId: number, filters?: GlobalFilterState): URLSearchParams => {
+    
+    const params = new URLSearchParams({});
+
+    if (genreId !== 0) params.append("genreId", genreId.toString());
+
+    if (!filters) return params;
+
+    if (filters.page) params.append("page", filters.page.toString());
+    if (filters.sortOrder) params.append("sort", filters.sortOrder);
+    if (filters.keyword) params.append("keyword", filters.keyword);
+    if (filters.excludeKeyword) params.append("NGKeyword", filters.excludeKeyword);
+    if (filters.minPrice) params.append("minPrice", filters.minPrice);
+    if (filters.maxPrice) params.append("maxPrice", filters.maxPrice);
+
+    return params;
+  };
+
+  // 🚀 [로직 4] 아이템 로드 함수 (필터 포함)
+  const loadItems = async (catId: any, filters?: GlobalFilterState) => {
+
+    // 🚀 [수정] 모든 바구니를 확실히 비우고 시작합니다.
+    setItems([]); 
+    setProductDetail(null);
+
+    const targetId = Number(catId);
+    const params = GetParams(targetId, filters);
+    const queryString = params.toString();
+    
+    if (genreId !== '0') {
+      const itemRes = await fetch(`/api/rakuten/items?${queryString.toString()}`);
+      const itemData = await itemRes.json();
+
+      setPageInfo({ page: itemData.page, pageCount: itemData.pageCount });
+
+      const mappedItems = itemData.items.map(mapToGlobal);
+      setItems(mappedItems);
+    }
+
+  };
+
+  // 페이지 변경 핸들러
+  const OnPageChange = (newPage: number) => {
+    
+    const updatedPageInfo = { ...pageInfo, page: newPage };
+
+    setPageInfo(updatedPageInfo);
+
+    loadItems(genreId, { ...currentFilters, page: newPage });
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  
+  // 🚀 [로직 4] 검색 및 필터링 함수 (번역 포함)
+  const OnSearch = async (filters: GlobalFilterState) => {
+
+      const translatedKeyword = await getTranslatedText(filters.keyword || "");
+  
+      const translatedExcludeKeyword = await getTranslatedText(filters.excludeKeyword || "");
+
+        // 2. 번역된 키워드로 필터 교체
+      const updatedFilters = { 
+        ...filters, 
+        keyword: translatedKeyword,
+        excludeKeyword: translatedExcludeKeyword 
+      };
+
+      setCurrentFilters(updatedFilters); 
+      
+      loadItems(Number(genreId), updatedFilters);
+  };
+
+  // 🚀 [로직 5] 상품 상세 정보 로드
+  const loadProductDetail = async (item: any) => {
+    setProductDetail(item);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+    // 🚀 [로직 2] 네비게이션 함수
   const updateNavigation = (id: number, name: string, levelIndex: number) => {
-    setSelectedProduct(null);
-    if (!id || id === 0) { 
+    
+    setIsLeaf(false);
+    setItems([]); 
+    setProductDetail(null);
+    setPageInfo(prev => ({ ...prev, page: 1 }));
+
+    if (!id || id === 0 ||  name === 'HOME') { 
       setPath([]); 
       router.push('/main_shop/rakuten'); 
       return; 
@@ -92,128 +176,63 @@ function RakutenContent() {
       const filtered = prev.slice(0, levelIndex);
       return [...filtered, { id: id, name: name }];
     });
-    router.push(`/main_shop/rakuten?genreId=${id}&sort=${sort}&page=1`);
+    router.push(`/main_shop/rakuten?genreId=${id}`);
   };
 
-  const handlePageChange = (newPage: number) => {
-    setSelectedProduct(null);
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('page', newPage.toString());
-    router.push(`/main_shop/rakuten?${params.toString()}`);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-  
   // 🚀 [로직 3] 데이터 페칭 (카테고리 & 아이템)
   useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
+    const fetchData = async () => {
+      setIsLeaf(false);
+      setCategories([]); 
+
       try {
-
         const apiUrl = `/api/rakuten/categories?genreId=${genreId}`;
-        console.log(`📡 요청 시작: ${apiUrl}`);
 
-        const catRes = await fetch(apiUrl);
-        const catData = await catRes.json();
+        const res = await fetch(apiUrl);
+        const result = await res.json();
 
-        if (catData.success) {
+        if (result.success) {
 
-          setCategories(catData.data || []);
-
-          if (catData.parents) {
-            setPath(catData.parents.map((p: any) => ({ id: p.genreId, name: p.genreName })));
-          }
-
-          let searchKeyword = keyword;
-          if (keyword) {
-            // 서버 액션을 호출하여 한국어를 일본어로 변환합니다.
-            searchKeyword = await getTranslatedText(keyword);
-            console.log(`🔍 번역된 키워드로 검색: ${keyword} -> ${searchKeyword}`);
-          }
-
-          let searchNGKeyword = NGKeyword;
-          if (NGKeyword) {
-            searchNGKeyword = await getTranslatedText(NGKeyword);
-            console.log(`🚫 제외 키워드 번역: ${NGKeyword} -> ${searchNGKeyword}`);
-          }
-
-          const apiParams = new URLSearchParams({
-            genreId: genreId,
-            sort: sort,
-            page: page
-          });
-
-          if (searchKeyword) apiParams.append('keyword', searchKeyword);
-          if (searchNGKeyword) apiParams.append('NGKeyword', searchNGKeyword);
-          if (minPrice) apiParams.append('minPrice', minPrice);
-          if (maxPrice) apiParams.append('maxPrice', maxPrice);
+          const serverData = result.data || [];
+          const serverIsLeaf = !!result.isLeaf;
           
+          setCategories(serverData);
+          setIsLeaf(serverIsLeaf);
+
+          if (result.parents) {
+            setPath(result.parents.map((p: any) => ({ id: p.genreId, name: p.genreName })));
+          }
+
           if (genreId !== '0') {
-            const itemRes = await fetch(`/api/rakuten/items?${apiParams.toString()}`);
-            const itemData = await itemRes.json();
-            setItems(itemData.items || []);
-            setPageInfo({ page: itemData.page, pageCount: itemData.pageCount });
+            console.log(`📦 장르 변경 감지: ${genreId}번 카테고리 상품 로드 시작`);
+            await loadItems(genreId, currentFilters);
           }
         }
       } catch (e) { 
         console.error("Data Load Error", e); 
       } finally { 
-        setLoading(false); 
       }
     }
     fetchData();
-  }, [genreId, sort, page, keyword, NGKeyword, minPrice, maxPrice]);
-
-  const stopAutoCrawl = () => { isAutoRunningRef.current = false; setIsAutoRunning(false); };
-  const startAutoCrawl = async () => { /* 자동 수집 로직은 기존과 동일 */ };
+  }, [genreId]);
 
   return (
     <GlobalShoppingView 
       platform="rakuten"
       path={path}
-      categories={categories.map((c: any) => ({ 
-        genreId: c.genreId, 
-        genreName: c.genreName, 
-        genreLevel: c.genreLevel 
-      }))}
-      items={items.map(mapToGlobal)}
+      categories={categories}
+      items={items}
       pageInfo={pageInfo}
-      selectedProduct={selectedProduct}
-      sortOptions={rakutenSortOptions}
-      isLoading={loading}
-      isItemLoading={loading && genreId !== '0'}
-      isLeaf={categories.length === 0}
+      selectedProduct={productDetail}
+      sortOptions={RakutenSortOptions}
+      isLoading={false}
+      isItemLoading={false}
+      isLeaf={isLeaf}
       onNavigate={updateNavigation}
-      onPageChange={handlePageChange}
-      onSearch={(f: GlobalFilterState) => {
-        setSelectedProduct(null);
-        const params = new URLSearchParams();
-        params.append('genreId', genreId);
-        params.append('sort', f.sortOrder); 
-        params.append('page', '1');
-
-        if (f.keyword && f.keyword.trim() !== '') {
-          params.append('keyword', f.keyword.trim());
-        }
-        if (f.excludeKeyword && f.excludeKeyword.trim() !== '') {
-          params.append('NGKeyword', f.excludeKeyword.trim());
-        }
-        if (f.minPrice && f.minPrice.trim() !== '') {
-          params.append('minPrice', f.minPrice.trim());
-        }
-        if (f.maxPrice && f.maxPrice.trim() !== '') {
-          params.append('maxPrice', f.maxPrice.trim());
-        }
-        router.push(`/main_shop/rakuten?${params.toString()}`);
-      }}
-      onCardClick={(item) => {
-        setSelectedProduct(item);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }}
-      onCloseDetail={() => setSelectedProduct(null)}
-      showCrawlHeader={SHOW_HEADER}
-      isAutoRunning={isAutoRunning}
-      onCrawlToggle={isAutoRunning ? stopAutoCrawl : startAutoCrawl}
-      crawlLog={log[0]}
+      onSearch={OnSearch}
+      onCardClick={loadProductDetail}
+      onCloseDetail={() => setProductDetail(null)}
+      onPageChange={OnPageChange}
     />
   );
 }
