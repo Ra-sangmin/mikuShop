@@ -292,7 +292,7 @@ export default function HomePage() {
             </div>
             <div className="bottom-info-box" style={styles.infoBox}>
                 <div style={styles.infoHeaderWrap}><i className="fa fa-university" style={styles.infoIconBank}></i><span style={styles.infoTitle}>BANK INFO</span></div>
-                <div style={styles.bankWrap}><div style={styles.bankName}>🏦 KB 국민은행</div><div style={styles.bankAccount}>1234-56-7890</div><div style={styles.bankOwner}>예금주: 홍길동(미쿠짱)</div></div>
+                <div style={styles.bankWrap}><div style={styles.bankName}>🏦 신한은행</div><div style={styles.bankAccount}>110-629-593784</div><div style={styles.bankOwner}>예금주: 미쿠짱</div></div>
                 <div style={styles.bankFooterWrap}><div style={styles.bankFooterText}>입금 확인은 실시간으로 처리됩니다.</div></div>
             </div>
         </div>
