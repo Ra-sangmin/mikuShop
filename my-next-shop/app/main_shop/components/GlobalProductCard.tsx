@@ -53,7 +53,6 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
     }
 
     const tl = item.timeLeft;
-    // 1시간 이상 남은 경우 초침 작동 안 함
     if (tl.includes('日') || tl.includes('時間') || tl.includes('일') || tl.includes('시간')) {
       setLocalSeconds(null);
     } else {
@@ -90,10 +89,10 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
     return () => clearInterval(timer);
   }, [localSeconds !== null]);
 
-  // 🌟 [추가] 시간에 따른 5단계 상태 정의
+  // 시간에 따른 5단계 상태 정의
   const timeStatus = useMemo(() => {
     if (item.status === 'sold_out' || localSeconds === 0 || item.timeLeft === '종료' || item.timeLeft === '終了') {
-      return 'ENDED'; // 종료
+      return 'ENDED'; 
     }
     if (localSeconds !== null) {
       if (localSeconds < 15 * 60) return 'URGENT'; // 14분 59초 ~ 1초
@@ -105,22 +104,54 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
     return 'ENDED';
   }, [localSeconds, item.timeLeft, item.status]);
 
-  // 🌟 [추가] 5단계 상태에 따른 컬러 팔레트 (배경, 글씨, 테두리, 라이브 점멸)
+  // 🌟 [핵심 변경] 1시간 미만일 때 텍스트 색상을 무조건 흰색(White)으로 고정하여 가독성 확보!
   const timeStyles = useMemo(() => {
-    switch (timeStatus) {
-      case 'DAYS': // 1일 이상 (평온함 - 블루/그레이 톤)
-        return { bg: '#f1f5f9', color: '#475569', border: 'transparent', showDot: false };
-      case 'HOURS': // 24시간~1시간 (주의 - 옐로우 톤)
-        return { bg: '#fef9c3', color: '#ca8a04', border: 'transparent', showDot: false };
-      case 'SOON': // 59분~15분 (경고 - 오렌지 톤)
-        return { bg: '#ffedd5', color: '#ea580c', border: 'transparent', showDot: false };
-      case 'URGENT': // 14분~1초 (긴급 - 프리미엄 레드 톤 + 라이브 닷)
-        return { bg: '#fff1f2', color: '#e11d48', border: '#ffe4e6', showDot: true };
-      case 'ENDED': // 종료 (비활성화 - 진회색 톤)
-      default:
-        return { bg: '#f3f4f6', color: '#9ca3af', border: 'transparent', showDot: false };
+    // 1. 종료 및 1시간 이상 상태들 (고정 색상)
+    if (timeStatus === 'ENDED') {
+      return { leftBg: '#9ca3af', rightBg: '#e5e7eb', gaugeBg: '#d1d5db', textColor: '#ffffff', showDot: false };
     }
-  }, [timeStatus]);
+    if (timeStatus === 'DAYS') {
+      return { leftBg: '#475569', rightBg: '#334155', gaugeBg: '#3b82f6', textColor: '#ffffff', showDot: false };
+    }
+    if (timeStatus === 'HOURS') {
+      return { leftBg: '#4a3b32', rightBg: '#eed9c4', gaugeBg: '#eed9c4', textColor: '#4a3b32', showDot: false };
+    }
+    
+    // 2. 🌟 1시간 미만 (SOON, URGENT) 상태일 때: 실시간 색상 혼합 (Interpolation)
+    if (localSeconds !== null) {
+      // t 값: 60분(3600초)일 때 0, 1분(60초)일 때 1이 되는 비율 값 (0 ~ 1 사이)
+      const t = Math.max(0, Math.min(1, (3600 - localSeconds) / 3540));
+      
+      // [A] 게이지 색상: 샌드 베이지 -> 강력한 레드로 초마다 변환
+      const gR = Math.round(238 + (220 - 238) * t);
+      const gG = Math.round(217 + (38 - 217) * t);
+      const gB = Math.round(196 + (38 - 196) * t);
+
+      // [B] 좌측 입찰수 배경: 모카 -> 부드러운 다크 그레이로 자연스럽게 변환
+      const lR = Math.round(74 + (82 - 74) * t);
+      const lG = Math.round(59 + (82 - 59) * t);
+      const lB = Math.round(50 + (91 - 50) * t);
+
+      return { 
+        leftBg: `rgb(${lR}, ${lG}, ${lB})`,   
+        rightBg: '#3f3f46', 
+        gaugeBg: `rgb(${gR}, ${gG}, ${gB})`,  
+        // 🌟 [수정] 어중간한 회색을 버리고, 1시간 미만일 땐 무조건 깔끔한 흰색으로 통일!
+        textColor: '#ffffff', 
+        showDot: localSeconds < 15 * 60
+      };
+    }
+    
+    // Fallback
+    return { leftBg: '#9ca3af', rightBg: '#e5e7eb', gaugeBg: '#d1d5db', textColor: '#ffffff', showDot: false };
+  }, [timeStatus, localSeconds]);
+
+  // 60분(3600초) 기준 슬라이더 퍼센트 계산
+  const sliderPercentage = useMemo(() => {
+    if (timeStatus === 'ENDED') return 0;
+    if (localSeconds === null) return 100;
+    return Math.max(0, Math.min(100, (localSeconds / 3600) * 100));
+  }, [localSeconds, timeStatus]);
 
   // 화면에 보여줄 텍스트 포맷팅
   const displayTimeLeft = useMemo(() => {
@@ -141,6 +172,7 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
 
   const styles = {
     card: {
+      position: 'relative' as const, 
       backgroundColor: 'white',
       border: '1px solid #f3f4f6',
       borderRadius: isMobile ? '16px' : '20px',
@@ -154,6 +186,8 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
       display: 'flex',
       flexDirection: 'column' as const,
       height: '100%',
+      // 야후 옥션일 경우 하단 40px 바 높이만큼 여백 확보
+      paddingBottom: item.platform === 'yahoo_auction' ? '40px' : '0', 
     },
     imageContainer: {
       position: 'relative' as const,
@@ -237,20 +271,8 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
       cursor: 'pointer',
       transition: 'all 0.3s ease',
       opacity: item.status === 'sold_out' ? 0 : 1,
+      whiteSpace: 'nowrap' as const,
     }
-  };
-
-  // 🌟 배지(Badge) 공통 기본 스타일
-  const badgeStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    padding: '4px 8px',
-    borderRadius: '6px',
-    fontSize: '12px',
-    fontWeight: 700,
-    letterSpacing: '-0.3px',
-    transition: 'all 0.3s ease',
   };
 
   return (
@@ -270,9 +292,8 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
           width: 6px;
           height: 6px;
           border-radius: 50%;
-          background-color: #e11d48;
+          background-color: currentColor; /* 텍스트 색상과 자동으로 맞춤 */
           animation: pulseDot 1.5s infinite ease-in-out;
-          margin-right: 2px;
         }
       `}</style>
 
@@ -299,79 +320,105 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
         
         <div className="notranslate" translate="no" style={styles.priceRow}>
           
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: '8px' }}>
             <span className="notranslate" translate="no" style={styles.price}>
               <span className="notranslate" translate="no" style={styles.currency}>¥</span>
               {item.price ? item.price.toLocaleString() : '0'}
             </span>
-
-            {/* 🌟 디자인이 업그레이드된 야후 옥션 배지 영역 */}
-            {item.platform === 'yahoo_auction' && (
-              <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                
-                {/* 🔨 입찰수 배지 (모던한 회색 고정) */}
-                <div style={{ 
-                  ...badgeStyle, 
-                  backgroundColor: '#f3f4f6', 
-                  color: '#4b5563' 
-                }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M3.586 12.07a2 2 0 0 0 0 2.83l3.534 3.535a2 2 0 0 0 2.828 0l8.484-8.485a2 2 0 0 0 0-2.829l-3.535-3.535a2 2 0 0 0-2.828 0L3.586 12.07Zm11.665 1.062-2.121 2.121 5.746 5.748 2.121-2.122-5.746-5.747Z" />
-                  </svg>
-                  <span>{item.bidCount || 0}</span>
-                </div>
-
-                {/* ⏳ 시간에 따라 변하는 다이내믹 남은 시간 배지 */}
-                <div style={{ 
-                  ...badgeStyle, 
-                  backgroundColor: timeStyles.bg, 
-                  color: timeStyles.color,
-                  border: `1px solid ${timeStyles.border}`,
-                  fontWeight: timeStatus === 'URGENT' || timeStatus === 'SOON' ? 800 : 700,
-                }}>
-                  {/* 14분 미만일 때만 숨 쉬는 빨간 점 표시 */}
-                  {timeStyles.showDot && <div className="live-dot" />}
-                  
-                  {/* 빨간 점이 없을 때만 시계 아이콘 표시 */}
-                  {!timeStyles.showDot && (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.8 }}>
-                      <path d="M2 12C2 6.48 6.47 2 11.99 2 17.52 2 22 6.48 22 12s-4.48 10-10.01 10C6.47 22 2 17.52 2 12Zm2 0c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8-8 3.58-8 8Zm7-5h1.5v5.25l4.5 2.67-.75 1.23L11 13V7Z" />
-                    </svg>
-                  )}
-                  
-                  {/* 긴급할 수록 폰트를 미세하게 키움 */}
-                  <span style={{ fontSize: timeStatus === 'URGENT' ? '13px' : '12px' }}>
-                    {displayTimeLeft}
-                  </span>
-                </div>
-
-              </div>
-            )}
+            
+            <button 
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                alert("관심상품에 등록되었습니다. ✨"); 
+              }}
+              onMouseOver={(e) => {
+                if (isMobile) return;
+                e.currentTarget.style.color = themeColor;
+                e.currentTarget.style.borderColor = themeColor + '80';
+                e.currentTarget.style.backgroundColor = themeColor + '05';
+              }}
+              onMouseOut={(e) => {
+                if (isMobile) return;
+                e.currentTarget.style.color = '#9ca3af';
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.backgroundColor = 'white';
+              }}
+              style={styles.wishButton}
+            >
+              ★ 관심등록
+            </button>
           </div>
           
-          <button 
-            onClick={(e) => { 
-              e.stopPropagation(); 
-              alert("관심상품에 등록되었습니다. ✨"); 
-            }}
-            onMouseOver={(e) => {
-              if (isMobile) return;
-              e.currentTarget.style.color = themeColor;
-              e.currentTarget.style.borderColor = themeColor + '80';
-              e.currentTarget.style.backgroundColor = themeColor + '05';
-            }}
-            onMouseOut={(e) => {
-              if (isMobile) return;
-              e.currentTarget.style.color = '#9ca3af';
-              e.currentTarget.style.borderColor = '#e5e7eb';
-              e.currentTarget.style.backgroundColor = 'white';
-            }}
-            style={styles.wishButton}
-          >
-            ★ 관심등록
-          </button>
         </div>
       </div>
+
+      {/* 🌟 [디자인 개편] 알약(Pill)을 제거하고, 배경색과 톤온톤 게이지로 고급스럽게 마감한 플랫 UI */}
+      {item.platform === 'yahoo_auction' && (
+        <div style={{ 
+          position: 'absolute', bottom: 0, left: 0, 
+          width: '100%', 
+          height: '40px', 
+          display: 'flex', 
+          overflow: 'hidden', 
+          borderBottomLeftRadius: isMobile ? '16px' : '20px',
+          borderBottomRightRadius: isMobile ? '16px' : '20px',
+        }}>
+          
+          {/* 1. 좌측: 입찰수 영역 (짙고 묵직한 배경색) */}
+          <div style={{
+            display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', 
+            width: '70px', 
+            backgroundColor: timeStyles.leftBg, 
+            color: '#ffffff', // 좌측은 항상 어두운 톤이므로 흰색 텍스트 고정
+            fontSize: '13px', fontWeight: 800,
+            zIndex: 10
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.9 }}>
+              <path d="M3.586 12.07a2 2 0 0 0 0 2.83l3.534 3.535a2 2 0 0 0 2.828 0l8.484-8.485a2 2 0 0 0 0-2.829l-3.535-3.535a2 2 0 0 0-2.828 0L3.586 12.07Zm11.665 1.062-2.121 2.121 5.746 5.748 2.121-2.122-5.746-5.747Z" />
+            </svg>
+            <span>{item.bidCount || 0}</span>
+          </div>
+
+          {/* 2. 우측: 슬라이더 바 + 플랫(Flat) 텍스트 */}
+          <div style={{
+            flex: 1, 
+            position: 'relative',
+            backgroundColor: timeStyles.rightBg // 빈 슬라이더 트랙의 부드러운 배경색
+          }}>
+            {/* 차오르는 톤온톤 게이지 바 */}
+            <div style={{
+              width: `${sliderPercentage}%`,
+              height: '100%',
+              backgroundColor: timeStyles.gaugeBg, // 이질감 없이 스며드는 게이지 색상
+              transition: 'width 1s linear',
+              position: 'absolute',
+              left: 0, top: 0
+            }} />
+
+            {/* 🌟 캡슐 없이 슬라이더 중앙에 직접 스며든 텍스트 */}
+            <div style={{
+              position: 'absolute', inset: 0, 
+              display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px',
+              color: timeStyles.textColor, // 배경 대비에 맞춘 텍스트 색상
+              zIndex: 10
+            }}>
+              {/* 긴급할 때 깜빡이는 라이브 닷(Dot) */}
+              {timeStyles.showDot && <div className="live-dot" />}
+              
+              {/* 여유 있을 때 표시되는 시계 아이콘 */}
+              {!timeStyles.showDot && (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.85 }}>
+                  <path d="M2 12C2 6.48 6.47 2 11.99 2 17.52 2 22 6.48 22 12s-4.48 10-10.01 10C6.47 22 2 17.52 2 12Zm2 0c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8-8 3.58-8 8Zm7-5h1.5v5.25l4.5 2.67-.75 1.23L11 13V7Z" />
+                </svg>
+              )}
+              <span style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '-0.3px' }}>
+                {displayTimeLeft}
+              </span>
+            </div>
+          </div>
+          
+        </div>
+      )}
     </div>
   );
 }

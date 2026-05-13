@@ -85,8 +85,11 @@ enum OrderType {
 // 2. 주문 상태 Enum (신규 추가)
 enum OrderStatus {
   ALL            // 전체 내역
+  BID_PENDING    // 경매 요청
+  BIDDING        // 경매 낙찰 실패
+  BID_SUCCESS    // 경매 낙찰 성공
   CART           // 장바구니
-  FAILED         // 구매실패
+  FAILED         // 낙찰/구매실패
   PAID           // 상품 결제 완료
   ARRIVED        // 입고완료
   PREPARING      // 배송 준비중
@@ -104,47 +107,61 @@ enum DeliveryStatus {
   COMPLETED      // 배송완료
 }
 
+// 🌟 경매 상태값을 관리하는 Enum
+enum BidStatus {
+  PENDING               // 입찰 대기중
+  COMPLETED             // 입찰 완료
+  ADDITIONAL            // 추가 입찰 완료
+}
+
 model Order {
   // 1. 시스템 및 관계 필드
-  id                  Int            @id @default(autoincrement())                  // 데이터베이스 내부 관리용 고유 ID (자동 증가)
-  userId              Int            @map("user_id")                                // 주문한 사용자의 고유 번호
-  user                User           @relation(fields: [userId], references: [id])  // User 모델과의 참조 관계 설정
+  id                  Int            @id @default(autoincrement())
+  userId              Int            @map("user_id")
+  user                User           @relation(fields: [userId], references: [id])
 
   // 2. 서비스 구분
-  type                OrderType      @default(PURCHASE) @map("order_type")          // 주문 유형 (PURCHASE: 구매대행, DELIVERY: 배송대행)
+  type                OrderType      @default(PURCHASE) @map("order_type")
 
   // 3. 주문 식별 및 배송 정보
-  bundleId            String?        @map("bundle_id")                              // 합포장(묶음 배송) 처리를 위한 그룹 ID
-  orderId             String         @unique @map("order_id")                       // 사용자에게 노출되는 고유 주문 번호 (중복 불가)
-  productId           String?        @map("product_id")                             // 현지 쇼핑몰의 상품 고유 번호
-  trackingNo          String?        @map("tracking_no")                            // 현지 또는 국제 운송장 번호
+  bundleId            String?        @map("bundle_id")
+  orderId             String         @unique @map("order_id")
+  productId           String?        @map("product_id")
+  trackingNo          String?        @map("tracking_no")
 
   // 4. 상품 상세 정보
-  productImageUrl     String?        @db.Text @map("product_image_url")             // 상품 이미지 URL (긴 문자열 허용)
-  productPrice        Int            @map("product_price")                          // 상품 가격 (현지 통화 기준)
-  productCount        Int?           @default(1)                                    // 구매처 전달 요청사항
-  productName         String         @map("product_name")                           // 상품 명칭
-  productUrl          String?        @db.Text @map("product_url")                   // 상품 구매 원본 링크
-  productOption       String?        @map("product_option")                         // 선택한 옵션 (사이즈, 색상 등)
-  productRequest      String?        @map("productRequest")                         // 구매처 전달 요청사항
+  productImageUrl     String?        @db.Text @map("product_image_url")
+  productPrice        Int            @map("product_price") // 현재 최고가 또는 낙찰가로 활용
+  productCount        Int?           @default(1)
+  productName         String         @map("product_name")
+  productUrl          String?        @db.Text @map("product_url")
+  productOption       String?        @map("product_option")
+  productRequest      String?        @map("productRequest")
 
-  // 5. 타임스탬프 (진행 단계별 일시)
-  registeredAt        DateTime       @default(now()) @map("registered_at")          // 주문 등록 일시 (기본값: 현재 시간)
-  receivedAt          DateTime?      @map("received_at")                            // 현지 물류 센터 입고 완료 일시
-  shippedAt           DateTime?      @map("shipped_at")                             // 국제 배송 시작(출고) 일시
+  // 5. 타임스탬프 (경매 관련 추가)
+  registeredAt        DateTime       @default(now()) @map("registered_at")
+  receivedAt          DateTime?      @map("received_at")
+  shippedAt           DateTime?      @map("shipped_at")
+  auctionEndDate      DateTime?      @map("auction_end_date")       // 🌟 1. 경매 종료 시간
 
   // 6. 상태 관리
-  serviceRequest      String?        @map("service_request")                        // 부가 서비스 요청 (사진 검수, 포장 보완 등)
-  status              OrderStatus    @default(CART)                                 // 주문 단계 상태 (장바구니, 결제완료, 입고완료 등)
-  deliveryStatus      DeliveryStatus @default(PREPARING) @map("delivery_status")    // 물류 배송 상태 (준비중, 배송중 등)
+  serviceRequest      String?        @map("service_request")
+  status              OrderStatus    @default(CART)
+  deliveryStatus      DeliveryStatus @default(PREPARING) @map("delivery_status")
 
-  // 7. 비용 및 결제 관련
-  purchaseFee         Int            @default(0) @map("purchase_fee")               // 대행 수수료
-  domesticShippingFee Int            @default(0) @map("domestic_shipping_fee")      // 일본 내 현지 배송비
-  addressId           Int?           @map("address_id")                             // 배송지 주소 ID
-  secondPaymentAmount Int?           @map("second_payment_amount")                  // 2차 결제 금액 (국제 배송비 등 추가 비용)
+  // 7. 비용 및 결제 관련 (경매 정보 추가)
+  purchaseFee         Int            @default(0) @map("purchase_fee")
+  domesticShippingFee Int            @default(0) @map("domestic_shipping_fee")
+  addressId           Int?           @map("address_id")
+  secondPaymentAmount Int?           @map("second_payment_amount")
+  
+  myBidPrice          Int?           @default(0) @map("my_bid_price") // 🌟 2. 내 입찰 금액 (현지 통화)
+  depositAmount       Int?           @default(0) @map("deposit_amount") // 🌟 3. 보증금 (원화 또는 현지 통화)
+  
+  // 🌟 [수정됨] 타입을 String? 에서 BidStatus? 로 변경하고 기본값을 PENDING으로 설정
+  bidStatus           BidStatus?     @default(PENDING) @map("bid_status") 
 
-  @@map("orders") // 실제 데이터베이스 테이블 이름을 "orders"로 지정
+  @@map("orders")
 }
 
 enum FeeType {

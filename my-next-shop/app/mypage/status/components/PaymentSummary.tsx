@@ -10,6 +10,7 @@ interface PaymentSummaryProps {
     transfer: number;
     delivery: number; // 🌟 부모가 준 123원이 담긴 곳
     agency: number;
+    deposit?: number; // 🌟 경매 보증금이 담길 곳 추가
   };
   totalPriceWon: number;
   exchangeRate: number;
@@ -25,8 +26,13 @@ export default function PaymentSummary({
   selectedItems, 
   handleUpdateStatus 
 }: PaymentSummaryProps) {
-  // 배송비 요청 모드인지 확인
+  
+  // 상태 확인용 변수
   const isPaymentRequest = activeTab === ORDER_STATUS.PAYMENT_REQ;
+  const isBidPending = activeTab === ORDER_STATUS.BID_PENDING; // 🌟 경매 요청 탭 확인용
+  
+  // 배송비 요청이나 경매 요청일 경우, 단일 강조 박스를 보여주기 위한 조건
+  const isSingleHighlightMode = isPaymentRequest || isBidPending;
 
   // 🌟 1. DB 수수료 설정을 저장할 상태 (기본값 설정)
   const [feeSettings, setFeeSettings] = useState({
@@ -56,7 +62,7 @@ export default function PaymentSummary({
 
   // 🌟 3. 선택된 상품의 실제 DB 필드(domesticShippingFee)를 참조하여 계산
   const calculatedTotals = useMemo(() => {
-    if (!isPaymentRequest && selectedItems.length > 0) {
+    if (!isSingleHighlightMode && selectedItems.length > 0) {
       const itemCount = selectedItems.length;
       
       // 💡 DB의 domesticShippingFee 값을 각각 더함
@@ -80,7 +86,26 @@ export default function PaymentSummary({
       };
     }
     return totals;
-  }, [selectedItems, totals, isPaymentRequest, feeSettings]);
+  }, [selectedItems, totals, isSingleHighlightMode, feeSettings]);
+
+  // 🌟 4. 동적 텍스트 및 타겟 상태 설정
+  const getHighlightTitle = () => {
+    if (isPaymentRequest) return '청구된 총 배송비';
+    if (isBidPending) return '청구된 총 보증금';
+    return '';
+  };
+
+  const getButtonText = () => {
+    if (isPaymentRequest) return `총 ${totalPriceWon.toLocaleString()}원 배송비 결제하기`;
+    if (isBidPending) return `총 ${totalPriceWon.toLocaleString()}원 보증금 결제하기`;
+    return `선택상품(${selectedItems.length}건) 결제 하기`;
+  };
+
+  const getTargetStatus = () => {
+    if (isPaymentRequest) return ORDER_STATUS.PAYMENT_DONE;
+    if (isBidPending) return ORDER_STATUS.BIDDING; // 경매 대기 -> 경매 진행중으로 변경
+    return ORDER_STATUS.PAID;
+  };
 
   return (
     <div className="payment-summary-wrap">
@@ -109,7 +134,7 @@ export default function PaymentSummary({
           text-align: center;
         }
 
-        /* 🌟 배송비 단일 강조 박스 */
+        /* 🌟 단일 강조 박스 (배송비 or 보증금) */
         .single-delivery-box {
           flex: 1;
           display: flex;
@@ -179,7 +204,7 @@ export default function PaymentSummary({
           font-weight: 900;
           border-radius: 12px;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          width: ${isPaymentRequest ? '100%' : 'auto'};
+          width: ${isSingleHighlightMode ? '100%' : 'auto'};
         }
         
         .action-btn:hover:not(:disabled) {
@@ -197,22 +222,24 @@ export default function PaymentSummary({
       `}</style>
 
       <div className="summary-flex">
-        {isPaymentRequest ? (
+        {/* 🌟 배송비 요청 또는 경매 요청 탭일 때의 UI (이미지 참고) */}
+        {isSingleHighlightMode ? (
           <div className="single-delivery-box">
-            <span className="sub-label" style={{ color: '#ea580c', fontSize: '18px', marginBottom: '8px' }}>청구된 총 배송비</span>
+            <span className="sub-label" style={{ color: '#ea580c', fontSize: '18px', marginBottom: '8px' }}>
+              {getHighlightTitle()}
+            </span>
             <span className="total-value" style={{ fontSize: '40px' }}>
               ₩ {totalPriceWon.toLocaleString()}
             </span>
           </div>
         ) : (
+          /* 장바구니 결제일 때의 UI */
           <>
             <div className="sub-items-grid">
               <div className="sub-item">
                 <span className="sub-label">상품 가격</span>
-                {/* 🌟 계산된 값(calculatedTotals) 사용 */}
                 <span className="sub-value">¥ {calculatedTotals.product.toLocaleString()}</span>
               </div>
-              {/* 🌟 핵심 포인트: 부모(page.tsx)에서 계산된 totals.delivery를 직접 출력 */}
               <div className="sub-item">
                 <span className="sub-label">일본내 배송료</span>
                 <span className="sub-value" >
@@ -241,20 +268,16 @@ export default function PaymentSummary({
       <div className="action-btn-wrap">
         <button 
           className="action-btn"
-          onClick={() => handleUpdateStatus(
-            activeTab === ORDER_STATUS.CART ? ORDER_STATUS.PAID : ORDER_STATUS.PAYMENT_DONE
-          )} 
+          onClick={() => handleUpdateStatus(getTargetStatus())} 
           disabled={selectedItems.length === 0} 
           style={{ 
-            backgroundColor: selectedItems.length > 0 ? (isPaymentRequest ? '#ea580c' : '#ff4b2b') : '#cbd5e1', 
+            backgroundColor: selectedItems.length > 0 ? (isSingleHighlightMode ? '#ea580c' : '#ff4b2b') : '#cbd5e1', 
             color: '#fff', 
             cursor: selectedItems.length > 0 ? 'pointer' : 'not-allowed',
             boxShadow: selectedItems.length > 0 ? '0 4px 12px rgba(255, 75, 43, 0.2)' : 'none'
           }}
         >
-          {activeTab === ORDER_STATUS.CART 
-            ? `선택상품(${selectedItems.length}건) 결제 하기` 
-            : `총 ${totalPriceWon.toLocaleString()}원 배송비 결제하기`}
+          {getButtonText()}
         </button>
       </div>
     </div>

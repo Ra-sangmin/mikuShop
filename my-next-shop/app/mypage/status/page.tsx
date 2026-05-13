@@ -12,9 +12,13 @@ import { useMikuAlert } from '@/app/context/MikuAlertContext';
 // 🌟 탭 구성: 표시용 name(한글)과 필터링용 key(영문)를 명확히 분리
 const initialTabs = [
   { name: '전체내역', count: 0, key: ORDER_STATUS.ALL },
+  // 추가된 경매 탭
+  { name: ORDER_STATUS_LABEL[ORDER_STATUS.BID_PENDING], count: 0, key: ORDER_STATUS.BID_PENDING },
+  { name: ORDER_STATUS_LABEL[ORDER_STATUS.BIDDING], count: 0, key: ORDER_STATUS.BIDDING },
+  { name: ORDER_STATUS_LABEL[ORDER_STATUS.BID_SUCCESS], count: 0, key: ORDER_STATUS.BID_SUCCESS },
   { name: ORDER_STATUS_LABEL[ORDER_STATUS.CART], count: 0, key: ORDER_STATUS.CART },
-  { name: ORDER_STATUS_LABEL[ORDER_STATUS.FAILED], count: 0, key: ORDER_STATUS.FAILED },
   { name: ORDER_STATUS_LABEL[ORDER_STATUS.PAID], count: 0, key: ORDER_STATUS.PAID },
+  { name: ORDER_STATUS_LABEL[ORDER_STATUS.FAILED], count: 0, key: ORDER_STATUS.FAILED },
   { name: ORDER_STATUS_LABEL[ORDER_STATUS.ARRIVED], count: 0, key: ORDER_STATUS.ARRIVED },
   { name: ORDER_STATUS_LABEL[ORDER_STATUS.PREPARING], count: 0, key: ORDER_STATUS.PREPARING },
   { name: ORDER_STATUS_LABEL[ORDER_STATUS.PAYMENT_REQ], count: 0, key: ORDER_STATUS.PAYMENT_REQ },
@@ -163,57 +167,56 @@ function MyPurchaseStatusContent() {
   }, [orders, activeTab]);
 
   const totals = useMemo(() => {
-  // 1. 필터링 대상 및 ID 타입 체크 로그
-  const selectedOrders = items.filter(item => {
-    const isMatched = selectedItems.map(String).includes(String(item.orderId));
-    return isMatched;
-  });
+    const selectedOrders = items.filter(item => {
+      const isMatched = selectedItems.map(String).includes(String(item.orderId));
+      return isMatched;
+    });
 
-  console.group("🔍 일내 배송료 계산 디버그");
-  console.log("활성 탭:", activeTab);
-  console.log("선택된 ID 목록:", selectedItems);
-  console.log("필터링된 주문 개수:", selectedOrders.length);
-
-  if (selectedOrders.length > 0) {
-    // 2. 선택된 각 상품의 배송료 값과 타입을 표로 출력
-    console.table(selectedOrders.map(item => ({
-      상품명: item.productName,
-      ID: item.orderId,
-      일내배송료_값: item.domesticShippingFee,
-      일내배송료_타입: typeof item.domesticShippingFee
-    })));
-  }
-  console.groupEnd();
-
-  return selectedOrders.reduce((acc, item) => {
-    // 3. 안전한 숫자 변환 (123원 등 데이터 파싱)
-    const productP = Number(item.productPrice * item.productCount) || 0;
-    const domesticS = Number(item.domesticShippingFee) || 0; // 🌟 핵심: 로그의 123이 여기서 처리됨
-    const transferF = Number(item.transferFee) || 0;
-    const agencyF = Number(item.purchaseFee) || 0;
-    const secondP = Number(item.secondPaymentAmount) || 0;
-
-    if (activeTab === ORDER_STATUS.PAYMENT_REQ) {
-      acc.product += secondP;
-    } else {
-      acc.product += productP;
+    return selectedOrders.reduce((acc, item) => {
+      const productP = Number(item.productPrice * item.productCount) || 0;
+      const domesticS = Number(item.domesticShippingFee) || 0; 
+      const transferF = Number(item.transferFee) || 0;
+      const agencyF = Number(item.purchaseFee) || 0;
+      const secondP = Number(item.secondPaymentAmount) || 0;
       
-      if (activeTab === ORDER_STATUS.CART) {
-        acc.transfer += (transferF || 450); //
-        acc.delivery += domesticS; // 🌟 누적 합산 확인
-        acc.agency += (agencyF || 100); //
-      } else {
-        acc.transfer += transferF;
-        acc.delivery += domesticS;
-        acc.agency += agencyF;
-      }
-    }
-    return acc;
-  }, { product: 0, transfer: 0, delivery: 0, agency: 0 });
-}, [items, selectedItems, activeTab]);
+      // 🌟 [핵심] 보증금 자동 계산 (2만엔 이하 2000엔, 초과 10%)
+      const myBid = Number(item.myBidPrice) || 0;
+      const fallbackDeposit = myBid > 0 ? (myBid <= 20000 ? 2000 : Math.floor(myBid * 0.1)) : 0;
+      
+      // DB에 보증금 값이 있으면 쓰고, 없으면 방금 위에서 계산한 fallbackDeposit 사용
+      const depositAmt = Number(item.depositAmount) || fallbackDeposit; 
 
-  const totalPriceVal = totals.product + totals.transfer + totals.delivery + totals.agency;
-  const totalPriceWon = activeTab === ORDER_STATUS.PAYMENT_REQ ? totalPriceVal : Math.floor(totalPriceVal * exchangeRate);
+      if (activeTab === ORDER_STATUS.PAYMENT_REQ) {
+        acc.product += secondP;
+      } else if (activeTab === ORDER_STATUS.BID_PENDING) {
+        // 🌟 경매 요청 탭일 때는 '보증금'만 누적!
+        acc.deposit += depositAmt;
+      } else {
+        acc.product += productP;
+        
+        if (activeTab === ORDER_STATUS.CART) {
+          acc.transfer += (transferF || 450); 
+          acc.delivery += domesticS; 
+          acc.agency += (agencyF || 100); 
+        } else {
+          acc.transfer += transferF;
+          acc.delivery += domesticS;
+          acc.agency += agencyF;
+        }
+      }
+      return acc;
+    }, { product: 0, transfer: 0, delivery: 0, agency: 0, deposit: 0 }); // 👈 초기값에 deposit: 0 꼭 추가!
+  }, [items, selectedItems, activeTab]);
+
+  // 🌟 2. 최종 엔화 결제액 결정
+  const totalPriceVal = activeTab === ORDER_STATUS.BID_PENDING 
+    ? totals.deposit // 경매 요청일 땐 누적된 보증금이 최종액
+    : totals.product + totals.transfer + totals.delivery + totals.agency;
+
+  // 🌟 3. 원화 환산 (엔화 보증금 * 환율 적용)
+  const totalPriceWon = activeTab === ORDER_STATUS.PAYMENT_REQ 
+    ? totalPriceVal 
+    : Math.floor(totalPriceVal * exchangeRate);
 
   // 🌟 상태 업데이트 핸들러 (showConfirm 적용)
   const handleUpdateStatus = async (newStatus: string) => {
@@ -227,13 +230,15 @@ function MyPurchaseStatusContent() {
     const confirmMsgs: any = {
       [ORDER_STATUS.PAID]: '선택한 상품을 결제 하시겠습니까?',
       [ORDER_STATUS.PREPARING]: `선택하신 ${selectedItems.length}건의 상품들을\n${addressDisplayName}(으)로 배송 합니다\n이대로 합포장 요청 하시겠습니까?`,
-      [ORDER_STATUS.PAYMENT_DONE]: '선택한 상품의 배송비 결제를 진행하시겠습니까?'
+      [ORDER_STATUS.PAYMENT_DONE]: '선택한 상품의 배송비 결제를 진행하시겠습니까?',
+      [ORDER_STATUS.BIDDING]: '선택한 상품의 보증금을 결제하고 입찰을 시작하시겠습니까?' // 🌟 경매 결제 컨펌 메시지 추가
     };
 
     const isConfirmed = await showConfirm(confirmMsgs[newStatus] || '상태를 변경하시겠습니까?');
 
     if (isConfirmed) {
-      if (newStatus === ORDER_STATUS.PAID || newStatus === ORDER_STATUS.PAYMENT_DONE) {
+      // 🌟 1. 결제 전 잔액 확인 로직에 'BIDDING(보증금 결제)' 추가
+      if (newStatus === ORDER_STATUS.PAID || newStatus === ORDER_STATUS.PAYMENT_DONE || newStatus === ORDER_STATUS.BIDDING) {
         try {
           const storedId = localStorage.getItem('user_id');
           const userRes = await fetch(`/api/users?id=${storedId}`);
@@ -242,7 +247,6 @@ function MyPurchaseStatusContent() {
             const currentMoney = uData.user.cyberMoney || 0;
             if (currentMoney < totalPriceWon) {
               const missing = totalPriceWon - currentMoney;
-              // 충전 유도는 중요하므로 confirm 유지 혹은 showAlert 후 이동 처리
               const chargeConfirmed = await showConfirm(`미쿠짱 금액이 부족합니다.\n부족한 금액: ₩${missing.toLocaleString()}\n충전하시겠습니까?`);
               if (chargeConfirmed) {
                 window.location.href = '/mypage/money/charge';
@@ -257,17 +261,29 @@ function MyPurchaseStatusContent() {
         ? { address_id: selectedAddress.id } 
         : {};
 
+      // 🌟 2. DB로 보낼 업데이트 데이터에 bidStatus: 'PENDING' 추가
       let updates = newStatus === ORDER_STATUS.PREPARING 
         ? selectedItems.map(id => ({ id, status: newStatus, bundleId: 'B' + Date.now(), ...addressUpdateData })) 
-        : selectedItems.map(id => ({ id, status: newStatus }));
+        : selectedItems.map(id => ({ 
+            id, 
+            status: newStatus,
+            ...(newStatus === ORDER_STATUS.BIDDING ? { bidStatus: 'PENDING' } : {}) // 경매 상황으로 넘어갈 때 PENDING 주입
+          }));
       
       try {
         const storedId = localStorage.getItem('user_id');
-        const isPayment = newStatus === ORDER_STATUS.PAID || newStatus === ORDER_STATUS.PAYMENT_DONE;
+        // 🌟 3. 실제 API 호출 시 머니 차감 조건에 'BIDDING(보증금 결제)' 추가
+        const isPayment = newStatus === ORDER_STATUS.PAID || newStatus === ORDER_STATUS.PAYMENT_DONE || newStatus === ORDER_STATUS.BIDDING;
+        
         const res = await fetch('/api/orders', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ updates, userId: isPayment ? storedId : null, deductAmount: isPayment ? totalPriceWon : 0 })
+          body: JSON.stringify({ 
+            updates, 
+            userId: isPayment ? storedId : null, 
+            deductAmount: isPayment ? totalPriceWon : 0,
+            paymentTitle: newStatus === ORDER_STATUS.BIDDING ? '경매 보증금 결제' : undefined // 🌟 결제 로그용 타이틀 추가
+          })
         });
 
         if (res.ok) {
@@ -307,8 +323,9 @@ function MyPurchaseStatusContent() {
     const isActive = activeTab === tab.key;
     
     let groupColor = '#64748b'; 
-    if ([ORDER_STATUS.CART, ORDER_STATUS.FAILED, ORDER_STATUS.PAID, ORDER_STATUS.ARRIVED].includes(tab.key)) groupColor = '#3b82f6';
-    else if ([ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(tab.key)) groupColor = '#f97316';
+    if ([ORDER_STATUS.BID_PENDING, ORDER_STATUS.BIDDING , ORDER_STATUS.BID_SUCCESS].includes(tab.key)) groupColor = '#8b5cf6';
+    else if ([ORDER_STATUS.CART, ORDER_STATUS.PAID,ORDER_STATUS.FAILED].includes(tab.key)) groupColor = '#3b82f6';
+    else if ([ORDER_STATUS.ARRIVED,ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(tab.key)) groupColor = '#f97316';
 
     return (
       <div 
@@ -358,8 +375,9 @@ function MyPurchaseStatusContent() {
       {/* 상태 탭 3단 분리 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '25px' }}>
         <div className="tab-group">{tabs.slice(0, 1).map(renderTabItem)}</div>
-        <div className="tab-group">{tabs.slice(1, 5).map(renderTabItem)}</div>
-        <div className="tab-group">{tabs.slice(5).map(renderTabItem)}</div>
+        <div className="tab-group">{tabs.slice(1, 4).map(renderTabItem)}</div>
+        <div className="tab-group">{tabs.slice(4, 7).map(renderTabItem)}</div>
+        <div className="tab-group">{tabs.slice(7).map(renderTabItem)}</div>
       </div>
 
       <OrderTable 
@@ -386,11 +404,11 @@ function MyPurchaseStatusContent() {
         </>
       )}
 
-      {/* 장바구니/배송비요청: 결제 요약 폼 */}
-      {(activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.PAYMENT_REQ) && (
+      {/* 장바구니/배송비요청/경매요청: 결제 요약 폼 */}
+      {(activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.PAYMENT_REQ || activeTab === ORDER_STATUS.BID_PENDING || activeTab === ORDER_STATUS.BID_SUCCESS) && (
         <PaymentSummary 
           activeTab={activeTab} 
-          totals={totals} // 👈 위에서 계산한 totals가 정확히 전달되어야 함
+          totals={totals} 
           totalPriceWon={totalPriceWon} 
           exchangeRate={exchangeRate} 
           selectedItems={selectedItems} 

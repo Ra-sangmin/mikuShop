@@ -8,13 +8,17 @@ const MIN_WAIT_COUNT = 1; // 1개라도 보이면 0.1초도 안 기다리고 즉
 const CHUNK_SIZE = 5;     // 단, 프론트엔드 화면에는 5개씩 예쁘게 묶어서 전송 (깜빡임 방지)
 
 // 🚀 [설계도] 아이템 형식 정의
-interface MercariItem {
+interface AuctionItem {
   id: string;
   name: string;
   thumbnail: string;
   price: number;
   status: 'on_sale' | 'sold_out';
   url: string;
+  bidCount?: number;
+  timeLeft?: string;
+  postage?: string;
+  platform?: string;
 }
 
 if (!puppeteer.plugins || puppeteer.plugins.length === 0) {
@@ -61,20 +65,62 @@ export async function GET(req: NextRequest) {
 function generateYahooTargetUrl(searchParams: URLSearchParams): string {
   const categoryId = searchParams.get('category_id') || '0';
   const keyword = searchParams.get('keyword') || '';
-  const sort = searchParams.get('sort') || 'featured'; // 추천순(featured), 종료임박(end) 등
+  const sort = searchParams.get('sort') || 'endtime'; // 프론트에서 넘어온 정렬 기준
   const page = searchParams.get('page') || '1';
+
+  let s1 = 'end';
+  let o1 = 'a';
+
+  // 🌟 [핵심 로직] 프론트엔드의 sort 값을 야후 옥션 전용 파라미터(s1, o1)로 완벽 매핑
+  switch (sort) {
+    case 'endtime': // 종료 임박순
+      s1 = 'end';
+      o1 = 'a';
+      break;
+    case 'cbids': // 입찰수 많은순
+      s1 = 'cbids';
+      o1 = 'd';
+      break;
+    case 'bidorbuy': // 즉시구매가 순
+      s1 = 'bidorbuy';
+      o1 = 'd'; 
+      break;
+    case 'a-price': // 현재가 낮은순
+      s1 = 'cbids'; 
+      o1 = 'a';
+      break;
+    case 'd-price': // 현재가 높은순
+      s1 = 'cbids';
+      o1 = 'd';
+      break;
+    case 'new': // 신규 등록순
+      s1 = 'new';
+      o1 = 'd';
+      break;
+    default:
+      s1 = 'end';
+      o1 = 'a';
+  }
 
   const params = new URLSearchParams();
   if (keyword) params.set('p', keyword); // 야후는 키워드 파라미터가 'p'입니다.
   params.set('auccat', categoryId);
-  params.set('s1', sort);
+  
+  // 🌟 매핑된 정렬 기준 적용
+  params.set('s1', s1);
+  params.set('o1', o1);
+  
   params.set('b', String((parseInt(page) - 1) * 50 + 1)); // 시작 번호 (1, 51, 101...)
 
   // 기본 옵션들 (배송비 포함 모드 등 필요시 추가)
-  params.set('is_postage_mode', '1');
-  params.set('dest_pref_code', '13'); // 도쿄 기준 배송비 계산용
+  //params.set('is_postage_mode', '1');
+  //params.set('dest_pref_code', '13'); // 도쿄 기준 배송비 계산용
 
-  return `https://auctions.yahoo.co.jp/category/list/${categoryId}/?${params.toString()}`;
+  let url = `https://auctions.yahoo.co.jp/category/list/${categoryId}/?${params.toString()}`;
+
+  console.log(`🔍 [URL 생성] ${url}`);
+
+  return url;
 }
 
 export function createYahooStream(targetUrl: string, signal: AbortSignal , startTime: number) {
@@ -259,7 +305,7 @@ async function extractItems(page: any, limit: number = 150): Promise<any[]> {
 }
 
 async function processAndSend(
-  newRawItems: MercariItem[],
+  newRawItems: AuctionItem[],
   sentItems: Set<string>,
   controller: ReadableStreamDefaultController,
   encoder: TextEncoder
@@ -361,7 +407,7 @@ function attachApiListener(params: {
         const rawItems = json.items || [];
 
         if (rawItems.length > 0) {
-          const mappedItems: MercariItem[] = rawItems.map((item: any) => ({
+          const mappedItems: AuctionItem[] = rawItems.map((item: any) => ({
             id: item.id,
             name: item.name,
             thumbnail: item.thumbnails?.[0] || '',

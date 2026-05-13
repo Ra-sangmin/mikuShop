@@ -27,18 +27,11 @@ export default function OrderManagement() {
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'default' | 'asc' | 'desc' }>({ key: 'date', direction: 'asc' });
 
   const persistWidths = true;
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
-    date: 300,
-    user: 150,
-    address: 350,
-    packing: 80,
-    product: 600,
-    request: 300,
-    price: 150,
-    status: 200,
-    manage: 150
-  });
-
+  const defaultWidths = {
+    date: 300, user: 150, address: 350, packing: 80, product: 600, 
+    request: 300, price: 150, bidStatus: 120, status: 200, manage: 150
+  };
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(defaultWidths);
   const [orders, setOrders] = useState<any[]>([]);
   const [originalOrders, setOriginalOrders] = useState<any[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
@@ -68,7 +61,10 @@ export default function OrderManagement() {
   const getVisibleColumns = () => {
     const cols = ['date', 'user', 'address'];
     if (statusFilter === ORDER_STATUS.ARRIVED) cols.push('packing');
-    cols.push('product', 'request', 'price', 'status', 'manage');
+    cols.push('product', 'request', 'price');
+    // 🌟 1-3. 경매 상황 탭일 때만 경매 상태 열이 보이도록 추가
+    if (statusFilter === ORDER_STATUS.BIDDING) cols.push('bidStatus');
+    cols.push('status', 'manage');
     return cols;
   };
 
@@ -124,6 +120,8 @@ export default function OrderManagement() {
             jpy: dbOrder.productPrice.toLocaleString(),
             krw: Math.round(dbOrder.productPrice * 9.05).toLocaleString(),
             status: dbOrder.status,
+            // 🌟 2-1. bidStatus 맵핑 추가
+            bidStatus: dbOrder.bidStatus || 'PENDING',
             secondPaymentAmount: dbOrder.secondPaymentAmount || 0,
             trackingNo: dbOrder.trackingNo || '',
             option: dbOrder.productOption || '-',
@@ -255,6 +253,29 @@ export default function OrderManagement() {
         newSet.add(orderId);
       } else {
         newSet.delete(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  // 🌟 경매 상태(bidStatus) 변경 핸들러
+  const handleBidStatusChange = (orderId: string, newBidStatus: string) => {
+    setOrders(orders.map(order => order.id === orderId ? { ...order, bidStatus: newBidStatus } : order));
+    
+    setChangedOrderIds(prev => {
+      const newSet = new Set(prev);
+      const originalOrder = originalOrders.find(o => o.id === orderId);
+      const updatedOrder = orders.find(o => o.id === orderId);
+      
+      // 기존 진행 상태, 2차 결제 금액, 그리고 새로운 경매 상태 중 하나라도 다르면 '변경됨'으로 처리
+      if (
+        originalOrder?.status !== updatedOrder?.status || 
+        originalOrder?.secondPaymentAmount !== updatedOrder?.secondPaymentAmount ||
+        originalOrder?.bidStatus !== newBidStatus
+      ) {
+        newSet.add(orderId);
+      } else {
+        newSet.delete(orderId); 
       }
       return newSet;
     });
@@ -397,6 +418,7 @@ export default function OrderManagement() {
             <col style={{ width: columnWidths.product }} />
             <col style={{ width: columnWidths.request }} />
             <col style={{ width: columnWidths.price }} />
+            {statusFilter === ORDER_STATUS.BIDDING && <col style={{ width: columnWidths.bidStatus }} />}
             <col style={{ width: columnWidths.status }} />
             <col style={{ width: columnWidths.manage }} />
           </colgroup>
@@ -458,6 +480,14 @@ export default function OrderManagement() {
                 <div onMouseDown={(e) => onMouseDown('price', 'right', e)} style={os.resizeHandleRight} onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
               </th>
               
+              {/* 🌟 3-2. 경매 상황 탭 전용 헤더 추가 */}
+              {statusFilter === ORDER_STATUS.BIDDING && (
+                <th style={{ ...os.thResizable, textAlign: 'center' }}>
+                  <div onMouseDown={(e) => onMouseDown('bidStatus', 'left', e)} style={os.resizeHandleLeft} onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
+                  경매 상태
+                  <div onMouseDown={(e) => onMouseDown('bidStatus', 'right', e)} style={os.resizeHandleRight} onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
+                </th>
+              )}
               {/* 진행 상태 */}
               <th style={{ ...os.thResizable, textAlign: 'center' }}>
                 <div onMouseDown={(e) => onMouseDown('status', 'left', e)} style={os.resizeHandleLeft} onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
@@ -479,10 +509,20 @@ export default function OrderManagement() {
             </tr>
           </thead>
           <tbody>
+            {/* 🌟 경매 상태 영어 -> 한글 변환용 객체 */}
             {renderedOrders.map((order) => {
               const statusStyle = getStatusColor(order.status);
               const isChanged = changedOrderIds.has(order.id);
               const originalStatus = originalOrders.find(o => o.id === order.id)?.status as OrderStatus;
+              
+              // 🌟 원본 경매 상태값 찾기 추가
+              const originalBidStatus = originalOrders.find(o => o.id === order.id)?.bidStatus || 'PENDING';
+              
+              const bidStatusLabels: Record<string, string> = {
+                PENDING: '입찰 대기중',
+                ADDITIONAL: '추가 입찰 완료',
+                COMPLETED: '입찰 완료'
+              };
 
               return (
                 <tr key={order.id} style={{ ...os.tableBodyRow, backgroundColor: isChanged ? '#f0fdf4' : 'transparent' }}>
@@ -525,7 +565,7 @@ export default function OrderManagement() {
                               const res = await fetch('/api/admin/orders', {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ updates: [{ id: order.id, status: '배송 준비중' }] })
+                                body: JSON.stringify({ updates: [{ id: order.id, status: 'PREPARING' }] })
                               });
                               if (res.ok) {
                                 alert('포장 요청(배송 준비중)으로 변경되었습니다.');
@@ -563,6 +603,37 @@ export default function OrderManagement() {
                   
                   <td style={{ ...os.td, textAlign: 'right', fontWeight: '700', color: colors.textMain }}>₩{order.krw}</td>
                   
+                  {/* 🌟 경매 상황 탭 전용: 경매 상태 (셀렉트 박스 + 취소선 인디케이터) */}
+                  {statusFilter === ORDER_STATUS.BIDDING && (
+                    <td style={{ ...os.td, textAlign: 'center' }}>
+                      
+                      {/* 🌟 변경 전 경매 상태 (취소선) 표시 */}
+                      {(isChanged && originalBidStatus !== order.bidStatus) && (
+                        <div style={os.statusChangeIndicator}>
+                          <span style={{ color: colors.emptyText, textDecoration: 'line-through' }}>
+                            {bidStatusLabels[originalBidStatus] || '상태 확인중'}
+                          </span>
+                          <span>➔</span>
+                        </div>
+                      )}
+
+                      <select
+                        value={order.bidStatus}
+                        onChange={(e) => handleBidStatusChange(order.id, e.target.value)}
+                        style={{ 
+                          ...os.statusSelect,
+                          backgroundColor: order.bidStatus === 'COMPLETED' ? '#d1fae5' : (order.bidStatus === 'ADDITIONAL' ? '#dbeafe' : '#fef3c7'),
+                          color: order.bidStatus === 'COMPLETED' ? '#10b981' : (order.bidStatus === 'ADDITIONAL' ? '#3b82f6' : '#d97706'),
+                          border: `1px solid ${order.bidStatus === 'COMPLETED' ? '#86efac' : (order.bidStatus === 'ADDITIONAL' ? '#93c5fd' : '#fde68a')}`,
+                        }}
+                      >
+                        <option value="PENDING" style={{ backgroundColor: colors.white, color: colors.textMain }}>입찰 대기중</option>
+                        <option value="ADDITIONAL" style={{ backgroundColor: colors.white, color: colors.textMain }}>추가 입찰 완료</option>
+                        <option value="COMPLETED" style={{ backgroundColor: colors.white, color: colors.textMain }}>입찰 완료</option>
+                      </select>
+                    </td>
+                  )}
+
                   <td style={{ ...os.td, textAlign: 'center' }}>
                     {(isChanged && originalStatus !== order.status) && (
                       <div style={os.statusChangeIndicator}>

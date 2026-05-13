@@ -21,6 +21,20 @@ export const getDetailStyles = (isMobile: boolean, theme: DetailTheme): Record<s
       boxSizing: 'border-box' 
     },
     
+    originalLink: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '6px',
+      color: '#6b7280', // 연한 회색으로 시선 분산 방지
+      fontSize: isMobile ? '13px' : '14px',
+      textDecoration: 'none',
+      cursor: 'pointer',
+      marginTop: '-6px', // 제목과 자연스럽게 이어지도록 위쪽 여백 축소
+      marginBottom: '20px', // 아래쪽 요소(가격 등)와의 간격
+      fontWeight: 600,
+      transition: 'color 0.2s ease',
+    },
+    
     CloseBtn: { 
       position: 'absolute', top: '12px', right: isMobile ? '12px' : '24px', zIndex: 30, 
       ...sharedFlexCenter, width: '36px', height: '36px', 
@@ -66,6 +80,25 @@ export const getDetailStyles = (isMobile: boolean, theme: DetailTheme): Record<s
     statValue: { fontSize: '20px', fontWeight: 800, color: 'white' },
     endSchedule: { fontSize: '13px', color: '#6b7280', textAlign: 'right', marginTop: '16px' },
 
+    // 🌟 [추가] 미쿠짱 AI 요약 박스 스타일
+    aiBox: { 
+      padding: '20px', 
+      backgroundColor: theme.light, 
+      borderRadius: '20px', 
+      border: `1.5px dashed ${theme.main}`, 
+      marginBottom: '20px',
+      position: 'relative',
+      overflow: 'hidden'
+    },
+    aiHeader: { 
+      display: 'flex', 
+      alignItems: 'center', 
+      gap: '8px', 
+      fontWeight: 'bold', 
+      marginBottom: '12px', 
+      fontSize: '15px', 
+      color: theme.main 
+    },
     // 플랫폼 공통 속성 컨테이너
     attrContainer: { borderTop: '1px solid #f3f4f6', padding: '24px 0', display: 'flex', flexDirection: 'column', gap: '15px' },
     attrRow: sharedFlexBetween,

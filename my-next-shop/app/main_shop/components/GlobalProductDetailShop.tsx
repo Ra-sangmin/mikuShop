@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState , useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
 import { FEE_POLICY } from "@/src/constants/feePolicy"; 
 import GlobalProductDetailBase from "./GlobalProductDetailBase";
 import { GlobalProduct } from "./GlobalProductDetail";
+import { getDetailStyles, DetailTheme } from "./GlobalProductDetail.styles";
 
 interface Props {
   product: GlobalProduct;
@@ -20,8 +21,20 @@ export default function GlobalProductDetailShop({ product, onClose }: Props) {
   const [quantity, setQuantity] = useState(1);
   const [optionMemo, setOptionMemo] = useState("");
 
+  const [isMobile, setIsMobile] = useState(false);
+  const theme = useMemo(() => {
+    switch(product.platform) {
+      case 'mercari': return { main: '#ff007f', light: '#fff5f6' };
+      case 'rakuten': return { main: '#bf0000', light: '#fdf2f2' };
+      case 'amazon':  return { main: '#ff9900', light: '#fff9f0' };
+      default:        return { main: '#ff007f', light: '#fff5f6' };
+    }
+  }, [product.platform]);
+
+  const styles = useMemo(() => getDetailStyles(isMobile, theme), [isMobile, theme]);
+
   const handleAddToCart = async () => {
-    const userId = localStorage.getItem('id');
+    const userId = localStorage.getItem('user_id');
     if (!userId) { showAlert("로그인이 필요한 서비스입니다. 🌸"); return; }
     
     try {
@@ -42,6 +55,67 @@ export default function GlobalProductDetailShop({ product, onClose }: Props) {
       }
     } catch (error) { showAlert("서버 통신 오류"); }
   };
+
+  // 🌟 [추가] 깜빡임 방지 및 디자인 복구된 AI 요약 로직
+  const renderedAiSummary = useMemo(() => {
+    const displayedName = product.name.length > 50 ? product.name.substring(0, 50) + "..." : product.name;
+
+    return (
+      <div style={styles.aiBox}>
+        <div className="notranslate" translate="no" style={styles.aiHeader}>
+          ✨ 미쿠짱 AI 간단 요약
+        </div>
+
+        <div style={{ fontSize: isMobile ? '15px' : '17px', color: '#4b5563', lineHeight: '1.8' }}>
+          {product.platform === 'rakuten' ? (
+            /* --- 1. 라쿠텐 전용 요약 --- */
+            <>
+              해당 상품은 <span style={{ fontWeight: '800', color: '#111827' }}>{product.shopName || 'Rakuten'}</span> 상점에서 판매되는<br/>
+              <span style={{ 
+                fontWeight: '800', 
+                color: theme.main, 
+                textDecoration: 'underline', 
+                textUnderlineOffset: '4px',
+                textDecorationColor: `${theme.main}44` 
+              }}>{displayedName}</span> 입니다.
+            </>
+          ) : (
+            /* --- 2. 메루카리 및 타 플랫폼 요약 --- */
+            <>
+              <div style={{ display: 'block', width: '100%', marginBottom: '4px' }}>
+                해당 상품은 <span style={{ fontWeight: 'bold' }}>{product.condition || '중고'}</span> 
+                <span className="notranslate" translate="no"> 상태의</span>
+              </div>
+              <div style={{ display: 'block', width: '100%', marginBottom: '4px' }}>
+                <span style={{ 
+                  color: '#1f2937', 
+                  fontWeight: '800', 
+                  fontSize: isMobile ? '17px' : '19px', 
+                  textDecoration: 'underline', 
+                  textUnderlineOffset: '4px',
+                  textDecorationColor: `${theme.main}44`
+                }}>{displayedName}</span>입니다.
+              </div>
+              <div style={{ display: 'block', width: '100%' }}>
+                <span style={{ fontWeight: 'bold' }}>{product.size || 'FREE'}</span>
+                <span className="notranslate" translate="no" style={{ marginLeft: '4px' }}>사이즈이며,</span>
+              </div>
+            </>
+          )}
+
+          {/* 공통 가격 표시 부분 */}
+          <div style={{ display: 'block', marginTop: '10px', borderTop: `1px dashed ${theme.main}33`, paddingTop: '8px' }}>
+            <span translate="no" className="notranslate" style={{ color: theme.main, fontWeight: '900', fontSize: isMobile ? '18px' : '20px' }}>
+              ¥{(product.price * quantity).toLocaleString()}
+            </span>
+            <span className="notranslate" translate="no" style={{ marginLeft: '4px', fontWeight: 'bold' }}>
+              가격으로 등록되었습니다.
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }, [product, quantity, isMobile, theme, styles]);
 
   return (
     <GlobalProductDetailBase 
@@ -80,6 +154,7 @@ export default function GlobalProductDetailShop({ product, onClose }: Props) {
               </div>
             </div>
           )}
+          {renderedAiSummary}
         </>
       )}
     </GlobalProductDetailBase>

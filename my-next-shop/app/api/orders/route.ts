@@ -31,6 +31,7 @@ export async function GET() {
         domesticShippingFee: true, 
         addressId: true,
         secondPaymentAmount: true,
+        bidStatus: true,
         user: {
           include: {
             addresses: true 
@@ -49,7 +50,39 @@ export async function GET() {
   }
 }
 
-// 🔵 [POST] 2. 상품 주문(장바구니) 생성
+function parseJapaneseDate(dateStr: string) {
+  if (!dateStr) return null;
+  
+  try {
+    // 예: "3月26日（木）15時24分 終了予定" -> 숫자만 추출
+    // 정규식 설명: (\d+) 뒤에 각 단위(月, 日, 時, 分)가 오는 패턴을 찾습니다.
+    const currentYear = new Date().getFullYear();
+    const match = dateStr.match(/(\d+)月\s*(\d+)日.*?\s*(\d+)時\s*(\d+)分/);
+    
+    if (match) {
+      const month = parseInt(match[1], 10);
+      const day = parseInt(match[2], 10);
+      const hour = parseInt(match[3], 10);
+      const minute = parseInt(match[4], 10);
+
+      // 월은 0부터 시작하므로 (month - 1)
+      const date = new Date(currentYear, month - 1, day, hour, minute);
+      
+      // 만약 생성된 날짜가 현재 시간보다 이전이라면 (예: 12월에 내년 1월 경매를 볼 때)
+      // 연도를 다음 해로 넘겨줍니다.
+      if (date < new Date()) {
+        date.setFullYear(currentYear + 1);
+      }
+      
+      return date;
+    }
+  } catch (e) {
+    console.error("일본어 날짜 파싱 에러:", e);
+  }
+  return null;
+}
+
+// 🔵 [POST] 2. 상품 주문(장바구니) 생성 및 경매 신청
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -66,6 +99,9 @@ export async function POST(req: Request) {
       productRequest,
       status = "CART",
       type,
+      auctionEndDate,
+      myBidPrice, 
+      depositAmount,
     } = body;
 
     let finalTitle = productName;
@@ -75,30 +111,94 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '필수 정보(유저ID, URL, 가격)가 누락되었습니다.' }, { status: 400 });
     }
 
-    const orderId = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // ====================================================================
+    // 🌟 사전 검사: 유저 확인 및 잔액 체크 (Fail-Fast)
+    // ====================================================================
+    const user = await prisma.user.findUnique({ where: { id: parseInt(userId) } });
 
-    const newOrder = await prisma.order.create({
-      data: {
-        userId: parseInt(userId),
-        orderId: orderId,
-        type: type || "PURCHASE",
-        productName: finalTitle,
-        productPrice: Math.round(productPrice),
-        productCount: Number(productCount) || 0,
-        domesticShippingFee: Number(domesticShippingFee) || 0,
-        productImageUrl: productImageUrl || "",
-        productUrl: productUrl,
-        productOption: productOption || "",
-        serviceRequest: serviceRequest || "",
-        productRequest: productRequest || "",
-        status: status === "장바구니" ? "CART" : (status || "CART"),
+    if (!user) {
+      return NextResponse.json({ 
+        success: false, 
+        errorCode: 'USER_NOT_FOUND', 
+        error: "유저 정보를 찾을 수 없습니다. 다시 로그인 해주세요." 
+      }, { status: 401 });
+    }
+
+    // 경매 신청일 경우에만 미쿠짱 머니 잔액 검사
+    // if (status === "BID_PENDING" && myBidPrice && myBidPrice > 0) {
+    //   if (user.cyberMoney < myBidPrice) {
+    //     const shortageAmount = myBidPrice - user.cyberMoney;
+    //     return NextResponse.json({ 
+    //       success: false, 
+    //       errorCode: 'INSUFFICIENT_FUNDS', 
+    //       shortage: shortageAmount, 
+    //       error: "보유한 미쿠짱 머니가 부족합니다." 
+    //     }, { status: 400 }); 
+    //   }
+    // }
+    // ====================================================================
+
+    const orderId = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const formattedDate = parseJapaneseDate(auctionEndDate);
+
+    // 🌟 모든 작업을 하나의 트랜잭션으로 묶어 안전하게 처리
+    const result = await prisma.$transaction(async (tx) => {
+      
+      // 1. 공통 주문 생성 (장바구니, 일반 구매, 경매 상관없이 무조건 1번만 작성!)
+      const newOrder = await tx.order.create({
+        data: {
+          userId: parseInt(userId),
+          orderId: orderId,
+          type: type || "PURCHASE",
+          productName: finalTitle,
+          productPrice: Math.round(productPrice),
+          // 일반 구매는 입력받은 갯수, 경매는 기본 1개로 처리
+          productCount: Number(productCount) || (status === "BID_PENDING" ? 1 : 0), 
+          domesticShippingFee: Number(domesticShippingFee) || 0,
+          productImageUrl: productImageUrl || "",
+          productUrl: productUrl,
+          productOption: productOption || "",
+          serviceRequest: serviceRequest || "",
+          productRequest: productRequest || "",
+          auctionEndDate: formattedDate,
+          status: status === "장바구니" ? "CART" : (status || "CART"),
+          
+          // 경매가 아니면 null/0이 들어가므로 문제없음
+          myBidPrice: Number(myBidPrice) || null,
+          depositAmount: Number(depositAmount) || 0,
+        }
+      });
+
+      // 2. 경매 대행일 경우에만 추가 작업 진행 (사이버머니 차감 및 로그 기록)
+      if (status === "BID_PENDING" && myBidPrice && myBidPrice > 0) {
+        const updatedUser = await tx.user.update({
+          where: { id: parseInt(userId) },
+          data: { cyberMoney: { decrement: Number(depositAmount) } }
+        });
+
+        await tx.moneyLog.create({
+          data: {
+            userId: parseInt(userId),
+            type: 'USE',
+            content: `[경매 보증금] ${finalTitle.substring(0, 15)}...`, 
+            amount: -Math.abs(Number(depositAmount)),
+            balanceAfter: updatedUser.cyberMoney
+          }
+        });
       }
+
+      // 최종적으로 생성된 주문 정보 반환
+      return newOrder;
     });
 
-    return NextResponse.json({ success: true, order: newOrder, productName: finalTitle });
-  } catch (error) {
+    return NextResponse.json({ success: true, order: result, productName: finalTitle });
+
+  } catch (error: any) {
     console.error("❌ API Route Fatal Error (POST):", error);
-    return NextResponse.json({ success: false, error: "주문 생성 중 서버 에러가 발생했습니다." }, { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      error: error?.message || "주문 생성 중 서버 에러가 발생했습니다." 
+    }, { status: 500 });
   }
 }
 
@@ -158,6 +258,9 @@ export async function PUT(request: Request) {
         if (order.bundleId !== undefined) updateData.bundleId = order.bundleId;
         if (order.trackingNo !== undefined) updateData.trackingNo = order.trackingNo;
         if (order.address_id !== undefined) updateData.addressId = order.address_id ? parseInt(order.address_id) : null;
+        
+        // 🌟 [핵심 추가] 프론트엔드에서 보낸 bidStatus 값이 있다면 업데이트 데이터에 포함!
+        if (order.bidStatus !== undefined) updateData.bidStatus = order.bidStatus;
 
         await tx.order.update({
           where: { orderId: order.id },

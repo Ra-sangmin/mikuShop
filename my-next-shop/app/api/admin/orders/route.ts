@@ -29,6 +29,7 @@ export async function GET() {
         domesticShippingFee: true, 
         addressId: true,
         secondPaymentAmount: true,
+        bidStatus: true,
         user: {
           include: {
             addresses: true 
@@ -98,6 +99,9 @@ export async function PUT(request: Request) {
         if (type === 'delivery') {
           updateData.deliveryStatus = order.status;
         } else {
+
+          console.log("업데이트할 주문 ID:", order.id, "새 상태:", order.status, "새 입찰 상태:", order.bidStatus);
+
           updateData.status = order.status;
           
           if (order.status === '입고완료') {
@@ -120,6 +124,10 @@ export async function PUT(request: Request) {
         if (order.address_id !== undefined) {
           updateData.addressId = order.address_id ? parseInt(order.address_id) : null;
         }
+
+        // 🌟 [핵심 추가] 프론트엔드에서 보낸 bidStatus 값이 있다면 업데이트 데이터에 포함!
+        if (order.bidStatus !== undefined) updateData.bidStatus = order.bidStatus;
+
 
         await tx.order.update({
           where: { orderId: order.id },

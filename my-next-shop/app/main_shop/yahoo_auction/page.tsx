@@ -35,12 +35,12 @@ interface YahooAuctionItem {
 
 // ✨ 야후 옥션 전용 정렬 옵션
 const YahooAuctionSortOptions = [
-  { id: 'end', label: '종료임박순' },
+  { id: 'new', label: '신규등록순' },
+  { id: 'endtime', label: '종료임박순' },
   { id: 'cbids', label: '입찰수많은순' },
   { id: 'bidorbuy', label: '즉시구매가격순' },
   { id: 'a-price', label: '현재가격낮은순' },
   { id: 'd-price', label: '현재가격높은순' },
-  { id: 'new', label: '신규등록순' },
 ];
 
 let globalItemsCache: { [key: string]: any[] } = {};
@@ -48,7 +48,7 @@ let globalItemsCache: { [key: string]: any[] } = {};
 function YahooAuctionContent() {
 
   const [currentFilters, setCurrentFilters] = useState<GlobalFilterState>({
-    sortOrder: 'end',      // 야후 옥션 기본 정렬값
+    sortOrder: 'new',      // 야후 옥션 기본 정렬값
     keyword: '',
     excludeKeyword: '',
     brand: '',
@@ -108,7 +108,8 @@ function YahooAuctionContent() {
 
     if (!filters) return params;
 
-    // TODO: 필터 적용 로직 주석 해제 필요 시 추가
+    if (filters.sortOrder) {params.append("sort", filters.sortOrder); }
+    if (filters.page) params.append("page", filters.page.toString());
 
     return params;
   };
@@ -295,6 +296,18 @@ function YahooAuctionContent() {
     router.push(`/main_shop/yahoo_auction?genreId=${id}`);
   };
 
+    // 페이지 변경 핸들러
+  const OnPageChange = (newPage: number) => {
+    
+    const updatedPageInfo = { ...pageInfo, page: newPage };
+
+    setPageInfo(updatedPageInfo);
+
+    loadItems(genreId, { ...currentFilters, page: newPage });
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const OnSearch = async (filters: GlobalFilterState) => {
       const translatedKeyword = await getTranslatedText(filters.keyword || "");
       const translatedExcludeKeyword = await getTranslatedText(filters.excludeKeyword || "");
@@ -351,7 +364,7 @@ function YahooAuctionContent() {
       onSearch={OnSearch}
       onCardClick={loadProductDetail}
       onCloseDetail={() => setProductDetail(null)}
-      onPageChange={(p) => router.push(`/main_shop/yahoo_auction?genreId=${genreId}&page=${p}&keyword=${keyword}`)}
+      onPageChange={OnPageChange}
     />
   );
 }

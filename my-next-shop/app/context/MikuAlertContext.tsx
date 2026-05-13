@@ -6,13 +6,13 @@ type AlertType = 'success' | 'error' | 'warning';
 interface MikuAlertContextType {
   showAlert: (message: string, type?: AlertType) => void;
   // 🌟 Confirm 기능 추가
-  showConfirm: (message: string) => Promise<boolean>;
+  showConfirm: (message: React.ReactNode) => Promise<boolean>;
 }
 
 const MikuAlertContext = createContext<MikuAlertContextType | undefined>(undefined);
 
 export function MikuAlertProvider({ children }: { children: ReactNode }) {
-  const [alert, setAlert] = useState<{ message: string, type: AlertType, isConfirm?: boolean } | null>(null);
+  const [alert, setAlert] = useState<{ message: React.ReactNode, type: AlertType, isConfirm?: boolean } | null>(null);
   // 🌟 Promise 해결을 위한 resolve 보관
   const [confirmResolve, setConfirmResolve] = useState<((value: boolean) => void) | null>(null);
 
