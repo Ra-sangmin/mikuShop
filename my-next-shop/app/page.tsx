@@ -42,12 +42,26 @@ export default function HomePage() {
   const [hasDragged, setHasDragged] = useState(false);
 
   // --- 배너 드래그 로직 ---
-  const nextSlide = () => { if (!isTransitioning) return; setCurrentBanner((prev) => prev + 1); };
-  const prevSlide = () => { if (!isTransitioning) return; setCurrentBanner((prev) => prev - 1); };
+  const nextSlide = () => {
+    if (!isTransitioning) return; 
+    // 🌟 방어막: 가짜 마지막 배너(인덱스 5) 이상으로는 숫자가 올라가지 못하게 막습니다.
+    setCurrentBanner((prev) => prev >= banners.length + 1 ? prev : prev + 1);
+  };
+  
+  const prevSlide = () => { 
+    if (!isTransitioning) return; 
+    // 🌟 방어막: 가짜 첫 배너(인덱스 0) 이하로는 숫자가 내려가지 못하게 막습니다.
+    setCurrentBanner((prev) => prev <= 0 ? prev : prev - 1);
+  };
 
   const handleTransitionEnd = () => {
-    if (currentBanner === 0) { setIsTransitioning(false); setCurrentBanner(banners.length); } 
-    else if (currentBanner === banners.length + 1) { setIsTransitioning(false); setCurrentBanner(1); }
+    if (currentBanner <= 0) { 
+      setIsTransitioning(false); 
+      setCurrentBanner(banners.length); 
+    } else if (currentBanner >= banners.length + 1) { 
+      setIsTransitioning(false); 
+      setCurrentBanner(1); 
+    }
   };
 
   const updateMask = () => {
@@ -77,6 +91,29 @@ export default function HomePage() {
     else el.classList.remove('mask-on-right');
   };
 
+  // 🌟 핵심 해결책: 브라우저 탭 비활성화 시 무한 슬라이드 버그 방지 (Visibility API)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setIsPaused(true); // 사용자가 탭을 벗어나면 슬라이더를 멈춥니다.
+      } else {
+        setIsPaused(false); // 다시 돌아오면 재시작합니다.
+        
+        // 사용자가 돌아왔을 때 혹시라도 인덱스가 꼬여있다면 즉시 정상 위치로 복구시킵니다.
+        if (currentBanner >= banners.length + 1) {
+          setIsTransitioning(false);
+          setCurrentBanner(1);
+        } else if (currentBanner <= 0) {
+          setIsTransitioning(false);
+          setCurrentBanner(banners.length);
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [currentBanner, banners.length]);
+  
   useEffect(() => {
     const el = scrollRef.current;
     if (el) {
@@ -660,11 +697,15 @@ function HomeGlobalStyles() {
         .quick-box { width: 100%; height: 90px; border-radius: 20px; padding: 10px; } 
         .quick-label { font-size: 13px; text-align: center; display: block; margin-top: 8px; }
         
-        /* 사이트 카드 반응형 */
-        .site-card-wrap { justify-content: center; gap: 15px; } 
-        .site-card-link { width: calc(50% - 10px); } 
-        .site-card-box { padding: 25px 15px; border-radius: 16px; } 
-        .site-logo-wrap { height: 80px; margin-bottom: 15px; }
+        /* 🌟 사이트 카드 반응형 (모바일 2열 최적화) */
+        .site-card-wrap { justify-content: space-between; gap: 12px; padding: 0 10px; } 
+        .site-card-link { width: calc(50% - 6px); } 
+        .site-card-box { padding: 20px 10px; border-radius: 16px; } 
+        .site-logo-wrap { height: 60px; margin-bottom: 12px; }
+        
+        /* 모바일에서는 글씨 크기를 조금 줄여 텍스트 넘침 방지 */
+        .site-card-box h3 { font-size: 15px !important; }
+        .site-card-box p { font-size: 12px !important; letter-spacing: -0.5px; }
         
         .scroll-arrow-btn { display: none; }
 
@@ -708,7 +749,7 @@ const styles: Record<string, React.CSSProperties> = {
   bankFooterText: { padding: '12px', backgroundColor: '#ecfdf5', borderRadius: '12px', textAlign: 'center', fontSize: '13px', color: '#059669', fontWeight: '600' },
   quickLink: { textDecoration: 'none' },
   quickImg: { width: '65%', height: '65%', objectFit: 'contain' },
-  siteCardLink: { textDecoration: 'none',width: '220px' },
+  siteCardLink: { textDecoration: 'none' }, /* 🌟 width 속성 삭제 */
   siteImg: { maxWidth: '90%', maxHeight: '100%', objectFit: 'contain' },
   siteName: { fontWeight: '900', color: '#0f172a', fontSize: '17px', marginBottom: '8px' },
   siteDesc: { color: '#64748b', lineHeight: '1.4', fontWeight: '500', fontSize: '13px' },
