@@ -35,6 +35,7 @@ export default function Footer() {
         .menu-links {
           display: flex;
           gap: 32px;
+          flex-wrap: wrap;
         }
         .menu-links a {
           color: #f1f5f9;
@@ -42,6 +43,8 @@ export default function Footer() {
           font-weight: 600;
           transition: all 0.2s ease;
           font-size: 16px;
+          white-space: nowrap; /* 🌟 추가: 글자 중간에 강제로 줄이 바뀌는 것을 완벽 방지 */
+          word-break: keep-all; /* 🌟 추가: 단어 단위 유지 보장 */
         }
         .menu-links a:hover {
           color: #ff4b2b;
