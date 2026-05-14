@@ -12,6 +12,7 @@
     "@phosphor-icons/react": "^2.1.10",
     "@prisma/client": "^5.22.0",
     "@prisma/config": "^7.5.0",
+    "@tosspayments/payment-widget-sdk": "^0.12.1",
     "@vitalets/google-translate-api": "^9.2.1",
     "cheerio": "^1.2.0",
     "clsx": "^2.1.1",

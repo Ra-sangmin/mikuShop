@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useMikuAlert } from '@/app/context/MikuAlertContext';
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,12 @@ export default function HomePage() {
     { title: <>메루카리·야후옥션<br />실시간 입찰 및 구매</>, subTitle: "간편한 일본 직구 솔루션", bgColor: "#E1F5FE", image: "/images/hero.png" },
     { title: <>다양한 혜택과 이벤트<br />회원 등급별 포인트 적립</>, subTitle: "신규 가입 시 적립금 증정", bgColor: "#FFEBEE", image: "/images/hero.png" }
   ];
+
+  const { showAlert } = useMikuAlert();
+  const handleComingSoon = (e: React.MouseEvent) => {
+    e.preventDefault(); // 페이지 이동 방지
+    showAlert('이 서비스는 현재 준비중입니다.', 'warning');
+  };
 
   const extendedBanners = [banners[banners.length - 1], ...banners, banners[0]];
 
@@ -153,39 +160,23 @@ export default function HomePage() {
             }}>
               {/* 🌟 배경 장식용 흐릿한 원형 (더 깊이감 있는 공간 연출) */}
               <div className="bg-blur-circle" style={{ backgroundColor: banner.bgColor }}></div>
+                <div className="align-container banner-inner">
+                    {/* 텍스트 영역: 강제 여백 제거 */}
+                    <div className="text-area">
+                      <div className="premium-badge">
+                        <span className="badge-dot" style={{ backgroundColor: '#d27377' }}></span>
+                        {banner.subTitle}
+                      </div>
+                      <h1 className="premium-hero-title">{banner.title}</h1>
+                    </div>
 
-
-
-              <div className="align-container banner-inner">
-              {/* 텍스트 영역: 왼쪽 여백(paddingLeft)을 주어 오른쪽으로 밀어냄 */}
-              <div 
-                className="text-area" 
-                style={{ 
-                  marginRight: '60px', 
-                  paddingLeft: '80px' // 🌟 이 값을 키울수록 글자가 오른쪽으로 이동합니다.
-                }}
-              >
-                <div className="premium-badge">
-                  <span className="badge-dot" style={{ backgroundColor: '#d27377' }}></span>
-                  {banner.subTitle}
-                </div>
-                <h1 className="premium-hero-title">{banner.title}</h1>
+                    {/* 이미지 영역: 강제 여백 제거 */}
+                    <div className="premium-image-area">
+                      <div className="image-aura" style={{ backgroundColor: banner.bgColor }}></div>
+                      <img src={banner.image} alt="Miku" className="premium-floating-img" draggable="false" />
+                    </div>
+                  </div>
               </div>
-
-              {/* 이미지 영역: 오른쪽 여백(paddingRight)을 주어 왼쪽으로 밀어냄 */}
-              <div 
-                className="premium-image-area" 
-                style={{ 
-                  paddingRight: '80px' // 🌟 이 값을 키울수록 이미지가 왼쪽으로 이동합니다.
-                }}
-              >
-                <div className="image-aura" style={{ backgroundColor: banner.bgColor }}></div>
-                <img src={banner.image} alt="Miku" className="premium-floating-img" draggable="false" />
-              </div>
-            </div>
-
-
-            </div>
           ))}
         </div>
 
@@ -227,11 +218,12 @@ export default function HomePage() {
         <div className="align-container" style={{ display: 'flex', flexDirection: 'column' }}>
           <h2 className="section-title">자주 방문하는 사이트</h2>
           <div className="site-card-wrap">
+              {/* 정상 작동 사이트 */}
               <SiteCard shopId="rakuten" logoSrc="rakuten_logo" name="라쿠텐" desc="일본 대표 종합 쇼핑몰" />
-              <SiteCard shopId="yahoo_shopping" logoSrc="yahoo_shopping_logo" name="야후 쇼핑" desc="다양한 혜택의 야후 쇼핑" />
-              <SiteCard shopId="amazon" logoSrc="amazon_logo" name="아마존" desc="빠른 배송의 아마존 재팬" />
+              <SiteCard shopId="yahoo_shopping" logoSrc="yahoo_shopping_logo" name="야후 쇼핑" desc="다양한 혜택의 야후 쇼핑" onClick={handleComingSoon}/>
+              <SiteCard shopId="amazon" logoSrc="amazon_logo" name="아마존" desc="빠른 배송의 아마존 재팬" onClick={handleComingSoon}/>
               <SiteCard shopId="mercari" logoSrc="merukari_logo" name="메루카리" desc="일본 최대 중고거래 사이트" />
-              <SiteCard shopId="yahoo_auction" logoSrc="yahoo_auction_logo" name="야후 옥션" desc="실시간 일본 옥션 입찰" />
+              <SiteCard shopId="yahoo_auction" logoSrc="yahoo_auction_logo" name="야후 옥션" desc="실시간 일본 옥션 입찰" onClick={handleComingSoon}/>
           </div>
         </div>
       </section>
@@ -278,7 +270,16 @@ export default function HomePage() {
                 <div style={styles.infoHeaderWrap}><i className="fa fa-headset" style={styles.infoIconCS}></i><span style={styles.infoTitle}>CUSTOMER CENTER</span></div>
                 <h3 style={styles.csHeading}>1:1문의 - 카카오톡</h3>
                 <p style={styles.csDesc}>상담시간 ⏰ 10:00 ~ 24:00<br/><span style={styles.csHighlight}>365일 연중무휴</span> 실시간 대응</p>
-                <div style={styles.csBtnWrap}><button style={styles.csKakaoBtn}>카카오톡</button><button style={styles.csReviewBtn}>이용후기</button></div>
+                <div style={styles.csBtnWrap}>
+                    {/* 🌟 카카오톡 버튼에 onClick 이벤트 추가 */}
+                    <button 
+                      style={styles.csKakaoBtn} 
+                      onClick={() => window.location.href = '/contact'}
+                    >
+                      카카오톡
+                    </button>
+                    {/*<button style={styles.csReviewBtn}>이용후기</button>*/}
+                </div>
             </div>
             <div className="bottom-info-box" style={styles.infoBox}>
                 <div style={styles.infoHeaderWrap}><i className="fa fa-bullhorn" style={styles.infoIconNotice}></i><span style={styles.infoTitle}>NOTICE</span></div>
@@ -318,14 +319,21 @@ function QuickIcon({ href, label }: any) {
     );
 }
 
-function SiteCard({ shopId, logoSrc, name, desc }: any) {
+function SiteCard({ shopId, logoSrc, name, desc, onClick }: any) {
     return (
-        <Link href={`/main_shop/${shopId}`} className="site-card-link" style={styles.siteCardLink} onDragStart={(e) => e.preventDefault()}>
+        <Link 
+            href={`/main_shop/${shopId}`} 
+            className="site-card-link" 
+            style={styles.siteCardLink} 
+            onDragStart={(e) => e.preventDefault()}
+            onClick={onClick} // 🌟 클릭 이벤트 전달
+        >
             <div className="site-card-box">
                 <div className="site-logo-wrap">
                     <img src={`/images/${logoSrc}.png`} alt={name} style={styles.siteImg} draggable="false" />
                 </div>
-                <h3 style={styles.siteName}>{name}</h3><p style={styles.siteDesc}>{desc}</p>
+                <h3 style={styles.siteName}>{name}</h3>
+                <p style={styles.siteDesc}>{desc}</p>
             </div>
         </Link>
     );
@@ -396,16 +404,26 @@ function HomeGlobalStyles() {
 
       .premium-image-area { position: relative; display: flex; align-items: center; justify-content: center; }
       .image-aura { position: absolute; width: 280px; height: 280px; border-radius: 50%; filter: blur(50px); opacity: 0.6; z-index: 1; animation: pulseAura 4s ease-in-out infinite alternate; }
-      .premium-floating-img { height: 380px; position: relative; z-index: 2; filter: drop-shadow(0 30px 40px rgba(0,0,0,0.15)); animation: floatPremium 4s ease-in-out infinite; }
+      .premium-floating-img { 
+        height: 380px; 
+        width: auto;             /* 원본 가로 비율 유지 */
+        object-fit: contain;     /* 어떤 상황에서도 찌그러지지 않게 보호 */
+        flex-shrink: 0;          /* 이미지 자체 축소 방지 */
+        position: relative; 
+        z-index: 2; 
+        filter: drop-shadow(0 30px 40px rgba(0,0,0,0.15)); 
+        animation: floatPremium 4s ease-in-out infinite; 
+      }
 
+      /* 🌟 1. 배너 내부 컨테이너 폭 확장 (이미지를 오른쪽으로 밀어낼 공간 확보) */
       .align-container.banner-inner {
         display: flex;
-        justify-content: space-between; /* 혹은 center */
+        justify-content: space-between; 
         align-items: center;
-        width: 50%;
-        
-        /* 부모의 좌우 패딩을 왕창 주면 콘텐츠가 가운데로 모입니다 */
-        padding: 0 100px; 
+        width: 100%;             /* 기존 50%에서 100%로 변경하여 넓은 공간 사용 */
+        max-width: 1200px;       /* 텍스트와 이미지가 너무 멀어지지 않게 최대폭 설정 */
+        margin: 0 auto;
+        padding: 0 40px;         /* 기존 100px의 과도한 패딩 축소 */
         box-sizing: border-box;
       }
 
@@ -494,8 +512,14 @@ function HomeGlobalStyles() {
       /* -------------------------------------
        * 5. 사이트 카드 섹션 
        * ------------------------------------- */
-      .site-card-wrap { display: flex; justify-content: space-between; flex-wrap: wrap; width: 100%; }
-      .site-card-link { display: block; text-decoration: none; width: 240px; }
+      .site-card-wrap { 
+        display: flex; 
+        justify-content: center; /* 카드들을 화면 가운데로 예쁘게 모아줍니다 */
+        gap: 20px;               /* 카드 사이의 간격을 30px로 고정 (원하는 만큼 조절 가능) */
+        flex-wrap: wrap; 
+        width: 100%; 
+      }
+      .site-card-link { display: block; text-decoration: none; width: 220px; flex-shrink: 1;}
       .site-card-box { width: 100%; height: 100%; padding: 40px 20px; background-color: #fff; border-radius: 20px; border: 1px solid #f1f5f9; text-align: center; cursor: pointer; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; align-items: center; justify-content: flex-start; box-shadow: 0 10px 20px rgba(0,0,0,0.02); }
       .site-logo-wrap { width: 100%; height: 128px; margin-bottom: 24px; display: flex; align-items: center; justify-content: center; }
 
@@ -606,15 +630,18 @@ function HomeGlobalStyles() {
         
         /* 배너 반응형 */
         .hero-banner-wrap { height: 360px; } 
+        .premium-image-area {
+          transform: translateX(10px); /* 모바일에서는 오른쪽 밀림 수치 축소 */
+          justify-content: center;
+        }
         .premium-hero-title { font-size: 32px; margin-top: 15px; } 
         .premium-badge { font-size: 13px; padding: 6px 16px; } 
         .premium-floating-img { height: 220px; }
         .bg-blur-circle { width: 300px; height: 300px; }
         .image-aura { width: 150px; height: 150px; }
-        .premium-indicators { bottom: 20px; }
         .line-dot { width: 20px; }
         .premium-indicator-container { 
-          bottom: calc(20% + 20px); 
+          bottom: 20px;
           padding: 2px 8px;
         }
         .indicator-track { 
@@ -681,7 +708,7 @@ const styles: Record<string, React.CSSProperties> = {
   bankFooterText: { padding: '12px', backgroundColor: '#ecfdf5', borderRadius: '12px', textAlign: 'center', fontSize: '13px', color: '#059669', fontWeight: '600' },
   quickLink: { textDecoration: 'none' },
   quickImg: { width: '65%', height: '65%', objectFit: 'contain' },
-  siteCardLink: { textDecoration: 'none' },
+  siteCardLink: { textDecoration: 'none',width: '220px' },
   siteImg: { maxWidth: '90%', maxHeight: '100%', objectFit: 'contain' },
   siteName: { fontWeight: '900', color: '#0f172a', fontSize: '17px', marginBottom: '8px' },
   siteDesc: { color: '#64748b', lineHeight: '1.4', fontWeight: '500', fontSize: '13px' },

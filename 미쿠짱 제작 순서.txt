@@ -4,6 +4,8 @@
 4. node server.js 실행
 5. http://localhost:3000/  URL 접속
 
+Putty 접속
+
 예시 사이트 - https://www.jinsight.co.kr/
 
 express-js-on-vercel-orcin-six-60.vercel.app
@@ -51,3 +53,9 @@ SELECT * FROM MercariCategory LIMIT 10;
 
 
 pm2 start npm --name "miku-app" -- start
+
+
+git fetch origin
+git pull origin main
+npm run build
+pm2 reload miku-chan-prod
