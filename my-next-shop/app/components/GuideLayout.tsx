@@ -1,5 +1,5 @@
 "use client";
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
@@ -13,6 +13,7 @@ interface GuideLayoutProps {
 
 export default function GuideLayout({ children, title, type, hideSidebar = false }: GuideLayoutProps) {
   const pathname = usePathname();
+  const scrollMenuRef = useRef<HTMLDivElement>(null);
 
   const mypageMenu = [
     { label: '내 정보', href: '/mypage' },
@@ -26,7 +27,7 @@ export default function GuideLayout({ children, title, type, hideSidebar = false
     { label: '배송대행 신청방법', href: '/guide/delivery-method' },
     { label: '자주하는 질문', href: '/guide/faq' },
     { label: '이용약관', href: '/guide/terms' }, 
-    { label: '개인정보처리방침', href: '/guide/privacy' }, /* 🌟 개인정보처리방침 메뉴 추가됨 */
+    { label: '개인정보처리방침', href: '/guide/privacy' },
   ];
 
   const feeMenu = [
@@ -47,6 +48,19 @@ export default function GuideLayout({ children, title, type, hideSidebar = false
     type === 'guide' ? guideMenu : 
     type === 'fee' ? feeMenu : 
     type === 'money' ? moneyMenu : [];
+
+  useEffect(() => {
+    if (scrollMenuRef.current) {
+      const activeElement = scrollMenuRef.current.querySelector('.active');
+      if (activeElement) {
+        activeElement.scrollIntoView({ 
+          behavior: 'smooth', 
+          inline: 'center', 
+          block: 'nearest' 
+        });
+      }
+    }
+  }, [pathname]);
 
   const handleLogout = async () => {
     if (window.confirm("로그아웃 하시겠습니까?")) {
@@ -108,38 +122,46 @@ export default function GuideLayout({ children, title, type, hideSidebar = false
 
         /* 📱 모바일 대응 최적화 */
         @media (max-width: 768px) {
-          /* 🌟 좌우 여백을 완전히 없애어 화면 전체를 쓰도록 변경 */
-          .layout-wrapper { padding: 15px 0; }
-          .layout-container { flex-direction: column; gap: 15px; }
+          .layout-wrapper { padding: 15px 0; overflow-x: hidden; }
+          
+          /* 🌟 핵심수정: align-items를 stretch로 변경하고 가로 폭을 100%로 보장 */
+          .layout-container { flex-direction: column; gap: 15px; align-items: stretch; width: 100%; }
           
           .guide-sidebar { width: 100%; position: relative; top: 0; border: none; box-shadow: none; background-color: transparent; border-radius: 0; }
           .guide-sidebar-header { display: none; }
           
-          /* 스와이프 메뉴 탭은 좌우 여백 유지 */
           .guide-sidebar-menu { 
             flex-direction: row; 
             overflow-x: auto; 
             white-space: nowrap; 
-            padding: 0 15px 5px 15px; 
+            padding: 5px 15px 10px 15px; 
             gap: 10px; 
             scrollbar-width: none; 
+            -webkit-overflow-scrolling: touch; 
           }
           .guide-sidebar-menu::-webkit-scrollbar { display: none; }
+          .guide-sidebar-menu::after { content: ''; padding-right: 15px; }
+
           .guide-sidebar-item { 
-            display: inline-block; 
+            display: inline-flex; 
+            align-items: center;
+            justify-content: center;
             width: auto; 
             border-bottom: none; 
-            padding: 10px 16px; 
+            padding: 10px 18px; 
             background-color: #fff; 
             border: 1px solid #e2e8f0; 
             border-radius: 20px; 
             font-size: 14px; 
             text-align: center; 
+            flex-shrink: 0; 
           }
           
-          /* 🌟 핵심 해결: content-area의 이중 패딩/테두리/배경색 제거하여 자식 컴포넌트가 100% 꽉 차게 됨 */
+          /* 🌟 핵심수정: 인라인 스타일의 폭(width)을 강제로 덮어쓰고 100% 영역을 확보 */
           .content-area { 
-            padding: 0; 
+            width: 100% !important; 
+            box-sizing: border-box !important;
+            padding: 0 20px; 
             border-radius: 0; 
             border: none; 
             box-shadow: none; 
@@ -157,7 +179,7 @@ export default function GuideLayout({ children, title, type, hideSidebar = false
                type === 'money' ? '미쿠짱머니' : '이용가이드'}
             </div>
             
-            <div className="guide-sidebar-menu">
+            <div className="guide-sidebar-menu" ref={scrollMenuRef}>
               {currentMenu.map((item, idx) => {
                 const isActive = pathname === item.href;
                 return (

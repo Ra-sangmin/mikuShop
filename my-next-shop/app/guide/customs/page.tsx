@@ -4,7 +4,7 @@ import GuideLayout from '../../components/GuideLayout';
 
 const taxCategories = [
   {
-    name: '의류/잡화', // 명칭을 짧게 최적화
+    name: '의류/잡화', 
     icon: '👕',
     items: [
       { name: '가방 및 지갑', tariff: '8%', vat: '10%' },
@@ -74,10 +74,12 @@ export default function CustomsTaxGuidePage() {
           
           .customs-container {
             max-width: 1000px;
+            width: 100%;
             margin: 0 auto;
             padding: 20px;
             font-family: "Noto Sans KR", sans-serif;
             color: #334155;
+            box-sizing: border-box;
           }
 
           .base-card {
@@ -86,35 +88,40 @@ export default function CustomsTaxGuidePage() {
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
             border: 1px solid #e2e8f0;
             overflow: hidden;
+            width: 100%;
+            box-sizing: border-box;
           }
 
-          .tab-menu-wrap { display: flex; gap: 10px; margin-bottom: 30px; }
+          .tab-menu-wrap { display: flex; gap: 10px; margin-bottom: 30px; width: 100%; }
           .tab-btn {
             flex: 1; padding: 18px 10px; border-radius: 14px; fontWeight: 800; fontSize: 18px;
             cursor: pointer; border: none; transition: all 0.2s;
             display: flex; align-items: center; justifyContent: center; gap: 8px;
           }
 
-          /* 📱 모바일 레이아웃 버그 수정 (image_74ddb8 대응) */
+          /* 📱 모바일 레이아웃 버그 수정 */
           @media (max-width: 768px) {
             .customs-container {
-              max-width: 85%; /* 가로 넓이 압축 유지 */
+              /* 🌟 85% 제거, width 100%로 컨텐츠를 레이아웃 중앙에 꽉 차게 배치 */
+              max-width: 100% !important; 
+              width: 100% !important;
               padding: 10px 0 !important;
+              margin: 0 auto !important;
             }
 
-            /* 🌟 핵심수정: 1열 배치를 2x2 그리드로 변경하여 글자 겹침 방지 */
             .tab-menu-wrap {
               display: grid !important;
               grid-template-columns: 1fr 1fr !important;
               gap: 8px !important;
               margin-bottom: 20px !important;
+              width: 100% !important;
             }
 
             .tab-btn {
               padding: 12px 8px !important;
               font-size: 13px !important;
               border-radius: 10px !important;
-              white-space: nowrap !important; /* 글자 세로 방지 */
+              white-space: nowrap !important; 
               flex: none !important;
             }
             .tab-btn span { font-size: 16px !important; }
@@ -122,11 +129,12 @@ export default function CustomsTaxGuidePage() {
             .header-title { font-size: 22px !important; margin-top: 10px !important; }
             .header-desc { font-size: 13px !important; }
 
-            .grid-2col { grid-template-columns: 1fr !important; gap: 12px !important; }
-            .standard-card { padding: 20px !important; }
+            .grid-2col { grid-template-columns: 1fr !important; gap: 12px !important; width: 100% !important; }
+            .standard-card { padding: 20px !important; width: 100% !important; box-sizing: border-box !important; }
             .standard-card h4 { font-size: 17px !important; }
             .standard-card p, .standard-card div { font-size: 14px !important; }
 
+            .table-wrap { width: 100% !important; box-sizing: border-box !important; }
             .table-wrap th { padding: 10px 4px !important; font-size: 11px !important; }
             .table-wrap td { padding: 10px 4px !important; font-size: 11px !important; }
           }
@@ -150,7 +158,7 @@ export default function CustomsTaxGuidePage() {
           </div>
         </div>
 
-        {/* 2. 품목별 관세율 (수정된 그리드 적용) */}
+        {/* 2. 품목별 관세율 */}
         <div className="animate-4" style={{ marginBottom: '40px' }}>
           <div className="tab-menu-wrap">
             {taxCategories.map((cat) => (

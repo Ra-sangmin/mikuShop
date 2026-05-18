@@ -7,8 +7,11 @@ import {
   ClipboardText, ChatCircleDots, ShoppingCartSimple, MapPin, AirplaneTilt, 
   Wallet, Coins, Money, Crown, Info, Scales, BookOpen, PaperPlaneTilt, 
   Question, Headset, SignOut, User, FilePlus, CaretDown,
-  Notepad, ShieldCheck /* 🌟 새 정책 메뉴용 아이콘 추가 임포트 */
+  Notepad, ShieldCheck, Calculator 
 } from "@phosphor-icons/react";
+
+/* 🌟 전역 MikuAlert Hook 임포트 */
+import { useMikuAlert } from '@/app/context/MikuAlertContext';
 
 // ==========================================
 // 1. 메인 컴포넌트 (Logic)
@@ -18,10 +21,11 @@ export default function Header() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  // 🌟 모바일 아코디언 메뉴 상태 (기본으로 첫 번째 메뉴 열어두기: 0)
   const [openSection, setOpenSection] = useState<number | null>(0);
-  
   const pathname = usePathname();
+
+  // 🌟 MikuAlert 훅 사용
+  const { showAlert, showConfirm } = useMikuAlert();
 
   useEffect(() => {
     const syncAuth = async () => {
@@ -38,29 +42,48 @@ export default function Header() {
     syncAuth();
   }, [session, status]);
 
-  const handleLogout = async () => {
-    if (window.confirm("로그아웃 하시겠습니까?")) {
+  // 🌟 Promise 기반의 showConfirm을 활용한 로그아웃 로직
+  const handleLogoutClick = async () => {
+    setIsSidebarOpen(false); // 사이드바가 열려있다면 닫아줍니다
+    
+    // showConfirm은 Promise<boolean>을 반환하므로 await로 결과를 기다립니다.
+    const isConfirmed = await showConfirm('로그아웃 하시겠습니까?');
+    
+    if (isConfirmed) {
+      // 실제 로그아웃 처리
       if (status === "authenticated") await signOut({ redirect: false });
       localStorage.clear();
       setIsLoggedIn(false);
-      window.location.href = '/';
+
+      // 로그아웃 완료 알림 띄우기 (success 타입 사용)
+      showAlert('로그아웃 되었습니다.', 'success');
+      
+      // 알림 메시지를 읽을 수 있도록 1.5초 후 메인으로 이동
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1500); 
     }
   };
 
   useEffect(() => setIsSidebarOpen(false), [pathname]);
 
-  // 🌟 이용가이드 메뉴 배열에 2개의 신규 정책 링크 추가됨
   const menuData = [
     { label: "구매대행", items: [{ label: '전체내역', href: '/mypage/status?tab=전체내역' }, { label: '견적문의', href: '/purchase/quote' }, { label: '구매대행 신청', href: '/purchase/request' }] },
     { label: "배송대행", items: [{ label: '전체내역', href: '/mypage/status?tab=전체내역' }, { label: '일본 배송주소 확인', href: '/delivery/address' }, { label: '배송신청', href: '/delivery/request' }] },
     { label: "미쿠짱머니", items: [{ label: '충전하기', href: '/mypage/money/charge' }, { label: '이용내역', href: '/mypage/money/history' }, { label: '환불신청', href: '/mypage/money/refund' }] },
-    { label: "수수료/배송비", items: [{ label: '회원 등급 및 혜택', href: '/guide/membership' }, { label: '수수료 안내', href: '/guide/fee-guide' }, { label: '국제 배송 요금표', href: '/guide/shipping-fee' }] },
+    { label: "수수료/배송비", items: [
+        { label: '회원 등급 및 혜택', href: '/guide/membership' }, 
+        { label: '수수료 안내', href: '/guide/fee-guide' }, 
+        { label: '국제 배송 요금표', href: '/guide/shipping-fee' },
+        { label: '예상 관부과세 안내', href: '/guide/customs' }
+      ] 
+    },
     { label: "이용가이드", items: [
         { label: '구매대행 방법', href: '/guide/purchase-method' }, 
         { label: '배송대행 방법', href: '/guide/delivery-method' }, 
         { label: '자주하는 질문', href: '/guide/faq' },
-        { label: '이용약관', href: '/guide/terms' }, /* 추가됨 */
-        { label: '개인정보처리방침', href: '/guide/privacy' } /* 추가됨 */
+        { label: '이용약관', href: '/guide/terms' }, 
+        { label: '개인정보처리방침', href: '/guide/privacy' } 
       ] 
     },
     { label: "고객문의", items: [{ label: '카카오톡 문의', href: '/contact' }] }
@@ -71,7 +94,7 @@ export default function Header() {
       <HeaderCSS />
       <header className="header-wrapper">
         <div className="header-container">
-          {/* 🌟 로고 영역 */}
+          {/* 로고 영역 */}
           <Link href="/" style={{ textDecoration: 'none' }}>
             <div style={styles.logoContainer}>
               <img src="/images/logo.png" alt="Miku Logo" style={styles.logoImgRefined} />
@@ -82,7 +105,7 @@ export default function Header() {
             </div>
           </Link>
 
-          {/* 🌟 데스크탑 네비게이션 */}
+          {/* 데스크탑 네비게이션 */}
           <nav className="desktop-nav">
             {menuData.map((menu, idx) => (
               <NavItem key={idx} label={menu.label} items={menu.items} />
@@ -92,7 +115,7 @@ export default function Header() {
                 로그인
               </Link>
             ) : (
-              <NavItem label="마이페이지" items={[ { label: '내 정보', href: '/mypage' }, { label: '전체내역', href: '/mypage/status' }, { label: '로그아웃', onClick: handleLogout } ]} />
+              <NavItem label="마이페이지" items={[ { label: '내 정보', href: '/mypage' }, { label: '전체내역', href: '/mypage/status' }, { label: '로그아웃', onClick: handleLogoutClick } ]} />
             )}
           </nav>
           
@@ -100,32 +123,27 @@ export default function Header() {
         </div>
       </header>
 
-      {/* ==========================================
-          2. 모바일 사이드바 영역
-      ========================================== */}
+      {/* 모바일 사이드바 영역 */}
       <div className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
-        {/* 상단 닫기 및 로고 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' }}>
           <img src="/images/logo.png" alt="로고" style={{ height: '35px' }} />
           <button onClick={() => setIsSidebarOpen(false)} style={{ background: 'none', border: 'none', fontSize: '24px', color: '#999', cursor: 'pointer' }}>✕</button>
         </div>
 
-        {/* 로그인/회원가입 버튼 */}
         <div style={{ display: 'flex', gap: '10px', margin: '24px 0' }}>
           {!isLoggedIn ? (
             <>
-              <Link href="/login" style={{ flex: 1, textAlign: 'center', padding: '14px', backgroundColor: '#f8fafc', borderRadius: '12px', color: '#475569', textDecoration: 'none', fontWeight: '800', fontSize: '15px', border: '1px solid #e2e8f0' }}>로그인</Link>
-              <Link href="/register" style={{ flex: 1, textAlign: 'center', padding: '14px', background: 'linear-gradient(135deg, #e3868a 0%, #d27377 100%)', borderRadius: '12px', color: '#fff', textDecoration: 'none', fontWeight: '800', fontSize: '15px', boxShadow: '0 4px 12px rgba(210,115,119,0.2)' }}>회원가입</Link>
+              <Link href="/login" style={{ flex: 1, textAlign: 'center', padding: '14px', backgroundColor: '#f8fafc', borderRadius: '12px', color: '#475569', textDecoration: 'none', fontWeight: '800', fontSize: '15px', border: '1px solid #e2e8f0' }} onClick={() => setIsSidebarOpen(false)}>로그인</Link>
+              <Link href="/register" style={{ flex: 1, textAlign: 'center', padding: '14px', background: 'linear-gradient(135deg, #e3868a 0%, #d27377 100%)', borderRadius: '12px', color: '#fff', textDecoration: 'none', fontWeight: '800', fontSize: '15px', boxShadow: '0 4px 12px rgba(210,115,119,0.2)' }} onClick={() => setIsSidebarOpen(false)}>회원가입</Link>
             </>
           ) : (
             <>
-              <Link href="/mypage" style={{ flex: 1, textAlign: 'center', padding: '14px', backgroundColor: '#f8fafc', borderRadius: '12px', color: '#475569', textDecoration: 'none', fontWeight: '800', fontSize: '15px', border: '1px solid #e2e8f0' }}>마이페이지</Link>
-              <button onClick={handleLogout} style={{ flex: 1, textAlign: 'center', padding: '14px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', color: '#ef4444', fontWeight: '800', fontSize: '15px', cursor: 'pointer' }}>로그아웃</button>
+              <Link href="/mypage" style={{ flex: 1, textAlign: 'center', padding: '14px', backgroundColor: '#f8fafc', borderRadius: '12px', color: '#475569', textDecoration: 'none', fontWeight: '800', fontSize: '15px', border: '1px solid #e2e8f0' }} onClick={() => setIsSidebarOpen(false)}>마이페이지</Link>
+              <button onClick={handleLogoutClick} style={{ flex: 1, textAlign: 'center', padding: '14px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', color: '#ef4444', fontWeight: '800', fontSize: '15px', cursor: 'pointer' }}>로그아웃</button>
             </>
           )}
         </div>
 
-        {/* 🌟 프리미엄 아코디언 메뉴 리스트 */}
         <div className="sidebar-accordion-wrapper">
           {menuData.map((section, idx) => {
             const isOpen = openSection === idx;
@@ -146,7 +164,7 @@ export default function Header() {
                     {section.items.map((item, itemIdx) => (
                       <Link 
                         key={itemIdx} 
-                        href={item.href} 
+                        href={item.href || '#'} 
                         className="sidebar-link"
                         onClick={() => setIsSidebarOpen(false)} 
                       >
@@ -162,7 +180,6 @@ export default function Header() {
         </div>
       </div>
 
-      {/* 3. 어두운 배경 오버레이 */}
       <div className={`overlay ${isSidebarOpen ? 'open' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
     </>
   );
@@ -189,10 +206,10 @@ function NavItem({ label, items }: { label: string, items?: any[] }) {
       case '회원 등급 및 혜택': return <Crown {...iconProps} />;
       case '수수료 안내': return <Info {...iconProps} />;
       case '국제 배송 요금표': return <Scales {...iconProps} />;
+      case '예상 관부과세 안내': return <Calculator {...iconProps} />;
       case '구매대행 방법': return <BookOpen {...iconProps} />;
       case '배송대행 방법': return <PaperPlaneTilt {...iconProps} />;
       case '자주하는 질문': return <Question {...iconProps} />;
-      /* 🌟 추가된 메뉴들에 대한 아이콘 매핑 설정 */
       case '이용약관': return <Notepad {...iconProps} />;
       case '개인정보처리방침': return <ShieldCheck {...iconProps} />;
       case '카카오톡 문의': return <Headset {...iconProps} />;
@@ -208,7 +225,6 @@ function NavItem({ label, items }: { label: string, items?: any[] }) {
     <li onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)} style={styles.navItemLi}>
       <div style={{ ...styles.navItemLabel, color: isHovered ? '#d27377' : '#555' }}>
         {label}
-        {/* 🌟 텍스트 화살표를 고급스러운 CaretDown 아이콘으로 교체 */}
         <span style={styles.arrowIcon(isHovered)}>
           <CaretDown size={14} weight="bold" />
         </span>
@@ -219,12 +235,19 @@ function NavItem({ label, items }: { label: string, items?: any[] }) {
           <div style={styles.dropdownPointer}></div>
           {items.map((item: any, index: number) => (
             <li key={index} style={{ padding: '2px 8px' }}>
-              <Link href={item.href || '#'} style={{ textDecoration: 'none' }} onClick={item.onClick}>
-                <div className="dropdown-item-link">
+              {item.href ? (
+                <Link href={item.href} style={{ textDecoration: 'none' }} onClick={item.onClick}>
+                  <div className="dropdown-item-link">
+                    <div className="icon-box" style={styles.iconBox}>{getIconByLabel(item.label)}</div>
+                    <span style={styles.itemText}>{item.label}</span>
+                  </div>
+                </Link>
+              ) : (
+                <div className="dropdown-item-link" onClick={item.onClick} style={{ cursor: 'pointer' }}>
                   <div className="icon-box" style={styles.iconBox}>{getIconByLabel(item.label)}</div>
                   <span style={styles.itemText}>{item.label}</span>
                 </div>
-              </Link>
+              )}
             </li>
           ))}
         </ul>
@@ -354,7 +377,6 @@ function HeaderCSS() {
         color: #d27377;
       }
 
-      /* 🌟 모바일 화살표 애니메이션에 SVG 컨테이너 설정 추가 */
       .sidebar-arrow {
         display: flex;
         align-items: center;

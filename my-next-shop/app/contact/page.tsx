@@ -1,14 +1,12 @@
 "use client";
 import React from 'react';
 import GuideLayout from '../components/GuideLayout';
-import { useMikuAlert } from '@/app/context/MikuAlertContext';
 
 export default function ContactPage() {
-  const { showAlert } = useMikuAlert();
 
-  // 핸들러 함수 분리
+  // 🌟 스크린샷의 공식 1:1 채팅 URL 연동 완료
   const handleKakaoClick = () => {
-    showAlert('이 서비스는 현재 준비중입니다', 'warning');
+    window.open('https://pf.kakao.com/_fxgLsX/chat', '_blank', 'noopener,noreferrer');
   };
 
   return (

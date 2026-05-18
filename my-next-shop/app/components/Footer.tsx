@@ -209,12 +209,23 @@ export default function Footer() {
             font-size: 13px;
           }
           .policy-divider {
-            margin: 0 10px; /* 모바일에서는 여백 축소 */
+            margin: 0 10px;
           }
           .footer-main .container {
             flex-direction: column;
             gap: 32px; 
           }
+          
+          /* 🌟 핵심 해결: 모바일에서는 각 정보들을 줄바꿈하여 세로로 깔끔하게 나열 */
+          .mobile-block {
+            display: block;
+            margin-bottom: 4px;
+          }
+          /* 모바일에서는 구분선 숨김 */
+          .info-divider {
+            display: none;
+          }
+
           .footer-extra {
             flex-direction: column-reverse;
             align-items: flex-start;
@@ -225,7 +236,7 @@ export default function Footer() {
 
       <footer className="footer-wrapper">
         
-        {/* 🌟 수정된 상단 정책 링크 영역 (구분선 명시) */}
+        {/* 상단 정책 링크 영역 */}
         <div className="footer-top">
           <div className="container">
             <div className="policy-links">
@@ -233,7 +244,6 @@ export default function Footer() {
               <span className="policy-divider">|</span>
               <Link href="/guide/terms">이용약관</Link>
               <span className="policy-divider">|</span>
-              {/* 🌟 기존 '/privacy'에서 '/guide/privacy'로 경로 수정 완료 */}
               <Link href="/guide/privacy" className="highlight">개인정보처리방침</Link>
             </div>
           </div>
@@ -241,20 +251,20 @@ export default function Footer() {
 
         <div className="footer-main">
           <div className="container">
-           {/* 한국 법인 영역 */}
+            {/* 한국 법인 영역 */}
             <div className="info-group">
               <span className="corporate-title">Korea Office</span>
               <div className="info-content">
+                {/* 🌟 모바일 대응: 각각의 요소를 span으로 감싸고 className="mobile-block" 부여 */}
                 <p>
-                  <strong>상호</strong> 미쿠짱 <span className="info-divider">|</span>
-                  <strong>대표</strong> 임성민 <span className="info-divider">|</span> 
-                  <strong>전화번호</strong> 070-4845-3023  
+                  <span className="mobile-block"><strong>상호</strong> 미쿠짱 <span className="info-divider">|</span></span>
+                  <span className="mobile-block"><strong>대표</strong> 임성민 <span className="info-divider">|</span></span>
+                  <span className="mobile-block"><strong>전화번호</strong> 070-4845-3023</span>
                 </p>
                 <p><strong>이메일</strong> company_ss@naver.com</p>
                 <p><strong>주소</strong> 서울특별시 은평구 진흥로 13가길 23-3 102호</p>
                 <p><strong>통신판매번호</strong> 1234-서울은평-56789</p>
                 <p><strong>사업자번호</strong> 599-26-00188</p>
-                
               </div>
             </div>
 
@@ -262,7 +272,7 @@ export default function Footer() {
             <div className="info-group">
               <span className="corporate-title">Japan Office</span>
               <div className="info-content">
-                <p><strong>상호</strong> (株)ASOBIBA (アソビバ)</p>
+                <p><strong>상호</strong> (株)ASOBIBA (アソ비바)</p>
                 <p><strong>주소</strong> 〒123-0865 東京都足立区新田3-35-31</p>
               </div>
             </div>

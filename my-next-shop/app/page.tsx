@@ -44,13 +44,11 @@ export default function HomePage() {
   // --- 배너 드래그 로직 ---
   const nextSlide = () => {
     if (!isTransitioning) return; 
-    // 🌟 방어막: 가짜 마지막 배너(인덱스 5) 이상으로는 숫자가 올라가지 못하게 막습니다.
     setCurrentBanner((prev) => prev >= banners.length + 1 ? prev : prev + 1);
   };
   
   const prevSlide = () => { 
     if (!isTransitioning) return; 
-    // 🌟 방어막: 가짜 첫 배너(인덱스 0) 이하로는 숫자가 내려가지 못하게 막습니다.
     setCurrentBanner((prev) => prev <= 0 ? prev : prev - 1);
   };
 
@@ -69,37 +67,28 @@ export default function HomePage() {
     if (!el) return;
 
     const { scrollLeft, scrollWidth, clientWidth } = el;
-
-    // 1. 상태 판정 (5px 여유)
     const isAtStart = scrollLeft <= 5;
     const isAtEnd = scrollLeft + clientWidth >= scrollWidth - 5;
 
-    // 2. [화살표 제어] 기존 로직 유지 (시작/끝에 도달하면 클래스 추가)
     if (isAtStart) el.classList.add('is-start'); 
     else el.classList.remove('is-start');
 
     if (isAtEnd) el.classList.add('is-end'); 
     else el.classList.remove('is-end');
 
-    // 3. [마스크 제어] 화살표가 떠 있는 동안 '계속' 활성화
-    // 왼쪽으로 갈 수 있다면(!isAtStart) 왼쪽 마스크 유지
     if (!isAtStart) el.classList.add('mask-on-left');
     else el.classList.remove('mask-on-left');
 
-    // 오른쪽으로 갈 수 있다면(!isAtEnd) 오른쪽 마스크 유지
     if (!isAtEnd) el.classList.add('mask-on-right');
     else el.classList.remove('mask-on-right');
   };
 
-  // 🌟 핵심 해결책: 브라우저 탭 비활성화 시 무한 슬라이드 버그 방지 (Visibility API)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        setIsPaused(true); // 사용자가 탭을 벗어나면 슬라이더를 멈춥니다.
+        setIsPaused(true); 
       } else {
-        setIsPaused(false); // 다시 돌아오면 재시작합니다.
-        
-        // 사용자가 돌아왔을 때 혹시라도 인덱스가 꼬여있다면 즉시 정상 위치로 복구시킵니다.
+        setIsPaused(false); 
         if (currentBanner >= banners.length + 1) {
           setIsTransitioning(false);
           setCurrentBanner(1);
@@ -118,7 +107,7 @@ export default function HomePage() {
     const el = scrollRef.current;
     if (el) {
       el.addEventListener('scroll', updateMask);
-      updateMask(); // 초기 실행
+      updateMask(); 
     }
     return () => el?.removeEventListener('scroll', updateMask);
   }, []);
@@ -150,10 +139,9 @@ export default function HomePage() {
     scrollRef.current.scrollLeft = scrollLeftPos - walk;
   };
 
-  // 🌟 화살표 클릭 시 좌우 스크롤 기능
   const handleManualScroll = (direction: 'left' | 'right') => {
     if (scrollRef.current) {
-      const scrollAmount = 400; // 한 번 클릭 시 이동할 거리
+      const scrollAmount = 400; 
       scrollRef.current.scrollBy({
         left: direction === 'left' ? -scrollAmount : scrollAmount,
         behavior: 'smooth'
@@ -165,7 +153,7 @@ export default function HomePage() {
     <div style={styles.pageWrapper}>
       <HomeGlobalStyles />
 
-      {/* 🌟 1. 프리미엄 Hero Banner Section */}
+      {/* 1. 프리미엄 Hero Banner Section */}
       <section 
         className="hero-banner-wrap"
         onMouseDown={handleDragStart} onMouseMove={handleDragMove} onMouseUp={handleDragEnd} onMouseLeave={handleDragEnd}
@@ -176,7 +164,6 @@ export default function HomePage() {
           onTransitionEnd={handleTransitionEnd}
           style={{
             display: 'flex', 
-            // 🌟 전체 높이를 80%로 조정 (부모 높이 기준)
             height: '100%', 
             width: `${extendedBanners.length * 100}%`,
             transform: `translateX(calc(-${currentBanner * (100 / extendedBanners.length)}% + ${dragOffset}px))`,
@@ -186,7 +173,6 @@ export default function HomePage() {
           {extendedBanners.map((banner, index) => (
             <div key={index} style={{
                 width: `${100 / extendedBanners.length}%`, 
-                // 🌟 아이템 높이도 부모(80%)의 100%를 꽉 채우도록 설정
                 height: '100%', 
                 background: `radial-gradient(circle at 75% 50%, ${banner.bgColor} 0%, #ffffff 65%)`,
                 display: 'flex', 
@@ -195,10 +181,8 @@ export default function HomePage() {
                 position: 'relative', 
                 overflow: 'hidden'
             }}>
-              {/* 🌟 배경 장식용 흐릿한 원형 (더 깊이감 있는 공간 연출) */}
               <div className="bg-blur-circle" style={{ backgroundColor: banner.bgColor }}></div>
                 <div className="align-container banner-inner">
-                    {/* 텍스트 영역: 강제 여백 제거 */}
                     <div className="text-area">
                       <div className="premium-badge">
                         <span className="badge-dot" style={{ backgroundColor: '#d27377' }}></span>
@@ -207,7 +191,6 @@ export default function HomePage() {
                       <h1 className="premium-hero-title">{banner.title}</h1>
                     </div>
 
-                    {/* 이미지 영역: 강제 여백 제거 */}
                     <div className="premium-image-area">
                       <div className="image-aura" style={{ backgroundColor: banner.bgColor }}></div>
                       <img src={banner.image} alt="Miku" className="premium-floating-img" draggable="false" />
@@ -217,15 +200,13 @@ export default function HomePage() {
           ))}
         </div>
 
-        {/* 🌟 하이엔드 리퀴드 슬라이딩 바 인디케이터 */}
+        {/* 하이엔드 리퀴드 슬라이딩 바 인디케이터 */}
         <div className="premium-indicator-container">
           <div className="indicator-track">
-            {/* 배경에 깔리는 옅은 구분선들 (선택 사항, 더 정교해 보임) */}
             {banners.map((_, i) => (
               <div key={i} className="track-segment"></div>
             ))}
             
-            {/* 🌟 실제로 미끄러지듯 움직이는 활성 바 */}
             <div 
               className="sliding-active-bar"
               style={{
@@ -255,7 +236,6 @@ export default function HomePage() {
         <div className="align-container" style={{ display: 'flex', flexDirection: 'column' }}>
           <h2 className="section-title">자주 방문하는 사이트</h2>
           <div className="site-card-wrap">
-              {/* 정상 작동 사이트 */}
               <SiteCard shopId="rakuten" logoSrc="rakuten_logo" name="라쿠텐" desc="일본 대표 종합 쇼핑몰" />
               <SiteCard shopId="yahoo_shopping" logoSrc="yahoo_shopping_logo" name="야후 쇼핑" desc="다양한 혜택의 야후 쇼핑" onClick={handleComingSoon}/>
               <SiteCard shopId="amazon" logoSrc="amazon_logo" name="아마존" desc="빠른 배송의 아마존 재팬" onClick={handleComingSoon}/>
@@ -288,11 +268,9 @@ export default function HomePage() {
               <SocialIcon url="www.toranoana.jp/" src="toranoana_logo" brandColor="#F39800" desc="토라노아나" isDragging={hasDragged} />
           </div>
           
-          {/* 왼쪽 화살표 버튼 */}
           <button className="scroll-arrow-btn left" onClick={() => handleManualScroll('left')}>
             <i className="fa fa-chevron-left"></i>
           </button>
-          {/* 오른쪽 화살표 버튼 */}
           <button className="scroll-arrow-btn right" onClick={() => handleManualScroll('right')}>
             <i className="fa fa-chevron-right"></i>
           </button>
@@ -308,14 +286,12 @@ export default function HomePage() {
                 <h3 style={styles.csHeading}>1:1문의 - 카카오톡</h3>
                 <p style={styles.csDesc}>상담시간 ⏰ 10:00 ~ 24:00<br/><span style={styles.csHighlight}>365일 연중무휴</span> 실시간 대응</p>
                 <div style={styles.csBtnWrap}>
-                    {/* 🌟 카카오톡 버튼에 onClick 이벤트 추가 */}
                     <button 
                       style={styles.csKakaoBtn} 
                       onClick={() => window.location.href = '/contact'}
                     >
                       카카오톡
                     </button>
-                    {/*<button style={styles.csReviewBtn}>이용후기</button>*/}
                 </div>
             </div>
             <div className="bottom-info-box" style={styles.infoBox}>
@@ -363,7 +339,7 @@ function SiteCard({ shopId, logoSrc, name, desc, onClick }: any) {
             className="site-card-link" 
             style={styles.siteCardLink} 
             onDragStart={(e) => e.preventDefault()}
-            onClick={onClick} // 🌟 클릭 이벤트 전달
+            onClick={onClick} 
         >
             <div className="site-card-box">
                 <div className="site-logo-wrap">
@@ -434,40 +410,65 @@ function HomeGlobalStyles() {
       
       .bg-blur-circle { position: absolute; width: 600px; height: 600px; right: -10%; top: -20%; border-radius: 50%; filter: blur(80px); opacity: 0.4; z-index: 0; pointer-events: none; }
 
-      .premium-hero-title { font-family: 'Jua', sans-serif; font-size: 58px; color: #1e293b; line-height: 1.25; margin-top: 25px; margin-bottom: 0; letter-spacing: -1.5px; text-shadow: 0 15px 30px rgba(0,0,0,0.04); }
+      /* 🌟 강제 줄바꿈 방지 추가 */
+      .premium-hero-title { 
+        font-family: 'Jua', sans-serif; 
+        font-size: 58px; 
+        color: #1e293b; 
+        line-height: 1.25; 
+        margin-top: 25px; 
+        margin-bottom: 0; 
+        letter-spacing: -1.5px; 
+        text-shadow: 0 15px 30px rgba(0,0,0,0.04); 
+        white-space: nowrap; 
+      }
 
-      .premium-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 22px; background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: 0 8px 20px rgba(0,0,0,0.03), inset 0 0 0 1px rgba(255,255,255,0.5); border-radius: 50px; font-weight: 800; font-size: 16px; color: #d27377; }
+      /* 🌟 white-space: nowrap 추가하여 줄바꿈 방지 */
+      .premium-badge { 
+        display: inline-flex; 
+        align-items: center; 
+        gap: 8px; 
+        padding: 8px 22px; 
+        background: rgba(255, 255, 255, 0.6); 
+        backdrop-filter: blur(10px); 
+        -webkit-backdrop-filter: blur(10px); 
+        border: 1px solid rgba(255, 255, 255, 0.9); 
+        box-shadow: 0 8px 20px rgba(0,0,0,0.03), inset 0 0 0 1px rgba(255,255,255,0.5); 
+        border-radius: 50px; 
+        font-weight: 800; 
+        font-size: 16px; 
+        color: #d27377; 
+        white-space: nowrap; 
+        flex-shrink: 0;
+      }
       .badge-dot { width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 8px #d27377; }
 
       .premium-image-area { position: relative; display: flex; align-items: center; justify-content: center; }
       .image-aura { position: absolute; width: 280px; height: 280px; border-radius: 50%; filter: blur(50px); opacity: 0.6; z-index: 1; animation: pulseAura 4s ease-in-out infinite alternate; }
       .premium-floating-img { 
         height: 380px; 
-        width: auto;             /* 원본 가로 비율 유지 */
-        object-fit: contain;     /* 어떤 상황에서도 찌그러지지 않게 보호 */
-        flex-shrink: 0;          /* 이미지 자체 축소 방지 */
+        width: auto;             
+        object-fit: contain;     
+        flex-shrink: 0;          
         position: relative; 
         z-index: 2; 
         filter: drop-shadow(0 30px 40px rgba(0,0,0,0.15)); 
         animation: floatPremium 4s ease-in-out infinite; 
       }
 
-      /* 🌟 1. 배너 내부 컨테이너 폭 확장 (이미지를 오른쪽으로 밀어낼 공간 확보) */
       .align-container.banner-inner {
         display: flex;
         justify-content: space-between; 
         align-items: center;
-        width: 100%;             /* 기존 50%에서 100%로 변경하여 넓은 공간 사용 */
-        max-width: 1200px;       /* 텍스트와 이미지가 너무 멀어지지 않게 최대폭 설정 */
+        width: 100%;             
+        max-width: 1200px;       
         margin: 0 auto;
-        padding: 0 40px;         /* 기존 100px의 과도한 패딩 축소 */
+        padding: 0 40px;         
         box-sizing: border-box;
       }
 
-      /* 🌟 하이엔드 리퀴드 인디케이터 스타일 */
       .premium-indicator-container {
         position: absolute;
-        /* 기존 25px에서 배너가 줄어든 20%만큼 더 위로 올림 */
         bottom: 25px; 
         left: 50%;
         transform: translateX(-50%);
@@ -486,8 +487,7 @@ function HomeGlobalStyles() {
 
       .indicator-track {
         position: relative;
-        width: 210px; /* 1.5배 확장된 가로 길이는 유지 */
-        /* 🌟 트랙 높이 4px -> 2px로 축소 */
+        width: 210px; 
         height: 2px; 
         display: flex;
         align-items: center;
@@ -504,31 +504,23 @@ function HomeGlobalStyles() {
         position: absolute;
         top: -0.5px;
         height: 3px;
-        
-        /* 🌟 수정: 강한 빨강 대신 반투명한 파스텔 코랄 핑크 적용 */
         background: rgba(210, 115, 119, 0.45); 
-        
         border-radius: 10px;
         transition: all 0.7s cubic-bezier(0.65, 0, 0.35, 1);
-        
-        /* 🌟 수정: 그림자도 훨씬 연하게 처리하여 눈의 피로도를 낮춤 */
         box-shadow: 0 0 8px rgba(210, 115, 119, 0.2);
       }
 
       .banner-item {
         display: flex;
-        justify-content: center; /* 중앙 정렬 */
+        justify-content: center;
         align-items: center;
-        gap: 40px; /* 글자와 이미지 사이의 간격. 이 값을 조절해 보세요! */
+        gap: 40px;
       }
-      /* 왼쪽 텍스트 영역 */
       .banner-text-area {
-        margin-left: 40px; /* 오른쪽으로 이동 */
+        margin-left: 40px;
       }
-
-      /* 오른쪽 이미지 영역 */
       .banner-image-area {
-        margin-right: 40px; /* 왼쪽으로 이동 */
+        margin-right: 40px; 
       }
 
       /* -------------------------------------
@@ -551,8 +543,8 @@ function HomeGlobalStyles() {
        * ------------------------------------- */
       .site-card-wrap { 
         display: flex; 
-        justify-content: center; /* 카드들을 화면 가운데로 예쁘게 모아줍니다 */
-        gap: 20px;               /* 카드 사이의 간격을 30px로 고정 (원하는 만큼 조절 가능) */
+        justify-content: center; 
+        gap: 20px;              
         flex-wrap: wrap; 
         width: 100%; 
       }
@@ -572,7 +564,6 @@ function HomeGlobalStyles() {
       .social-link { display: block; text-decoration: none; flex-shrink: 0; }
       .social-circle { width: 180px; height: 180px; border-radius: 40px; background-color: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 15px; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
 
-      /* 🌟 스크롤 화살표 프리미엄 스타일 */
       .scroll-arrow-btn {
         position: absolute;
         top: 50%;
@@ -604,58 +595,25 @@ function HomeGlobalStyles() {
       .scroll-arrow-btn.left { left: -60px; }
       .scroll-arrow-btn.right { right: -60px; }
 
-      /* 🌟 스마트 숨김 로직: 컨테이너의 클래스 상태에 따라 화살표 제어 */
-      /* 맨 왼쪽(is-start)일 때 왼쪽 버튼 숨김 */
-      .social-wrap.is-start ~ .scroll-arrow-btn.left {
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-      }
-
-      /* 맨 오른쪽(is-end)일 때 오른쪽 버튼 숨김 */
-      .social-wrap.is-end ~ .scroll-arrow-btn.right {
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-      }
+      .social-wrap.is-start ~ .scroll-arrow-btn.left { opacity: 0; visibility: hidden; pointer-events: none; }
+      .social-wrap.is-end ~ .scroll-arrow-btn.right { opacity: 0; visibility: hidden; pointer-events: none; }
 
       /* -------------------------------------
        * 7. 하단 3단 정보 섹션 
        * ------------------------------------- */
       .bottom-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; align-items: stretch; margin-top: 80px; margin-bottom: 80px; width: 100%; }
 
-
-      /* 화살표 숨김 로직 (기존 스타일) */
       .is-start .arrow-left { display: none; }
       .is-end .arrow-right { display: none; }
 
-      /* 마스크 로직: 화살표가 있는 동안 계속 유지될 스타일 */
-      .scroll-container {
-        /* 마스크 애니메이션을 부드럽게 */
-        transition: mask-image 0.2s ease;
-        -webkit-mask-image: none; /* 기본 상태 */
-      }
+      .scroll-container { transition: mask-image 0.2s ease; -webkit-mask-image: none; }
+      .mask-on-left { -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%); }
+      .mask-on-right { -webkit-mask-image: linear-gradient(to left, transparent 0%, black 10%); }
+      .mask-on-left.mask-on-right { -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%); }
 
-      /* 왼쪽 화살표가 활성화된 동안 계속 나타날 마스크 */
-      .mask-on-left {
-        -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%);
-      }
-
-      /* 오른쪽 화살표가 활성화된 동안 계속 나타날 마스크 */
-      .mask-on-right {
-        -webkit-mask-image: linear-gradient(to left, transparent 0%, black 10%);
-      }
-
-      /* 양쪽 다 이동 가능할 때 (가장 많이 보게 될 상태) */
-      .mask-on-left.mask-on-right {
-        -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
-      }
-
-      /* 🌟 반응형: 화면이 작아져서 화살표가 화면 밖으로 나갈 경우를 대비 */
       @media (max-width: 1400px) {
         .scroll-arrow-btn.left { left: -20px; }
         .scroll-arrow-btn.right { right: -20px; }
-        /* 카드가 살짝 비치도록 화살표 배경 투명도 조절 (선택 사항) */
         .scroll-arrow-btn { background: rgba(255, 255, 255, 0.9); }
       }
         
@@ -668,11 +626,20 @@ function HomeGlobalStyles() {
         /* 배너 반응형 */
         .hero-banner-wrap { height: 360px; } 
         .premium-image-area {
-          transform: translateX(10px); /* 모바일에서는 오른쪽 밀림 수치 축소 */
+          transform: translateX(10px); 
           justify-content: center;
         }
-        .premium-hero-title { font-size: 32px; margin-top: 15px; } 
-        .premium-badge { font-size: 13px; padding: 6px 16px; } 
+        
+        /* 🌟 제목 강제 줄바꿈 완전 방지 및 폰트 사이즈 살짝 조정 */
+        .premium-hero-title { 
+          font-size: 28px; 
+          margin-top: 15px; 
+          white-space: nowrap; 
+          word-break: keep-all; 
+        } 
+        
+        .premium-badge { font-size: 13px; padding: 6px 16px; white-space: nowrap; flex-shrink: 0; } 
+        
         .premium-floating-img { height: 220px; }
         .bg-blur-circle { width: 300px; height: 300px; }
         .image-aura { width: 150px; height: 150px; }
@@ -683,7 +650,7 @@ function HomeGlobalStyles() {
         }
         .indicator-track { 
           width: 135px; 
-          height: 1.5px; /* 모바일은 더 얇게 */
+          height: 1.5px; 
         }
         .sliding-active-bar { 
           height: 2.5px; 
@@ -697,13 +664,12 @@ function HomeGlobalStyles() {
         .quick-box { width: 100%; height: 90px; border-radius: 20px; padding: 10px; } 
         .quick-label { font-size: 13px; text-align: center; display: block; margin-top: 8px; }
         
-        /* 🌟 사이트 카드 반응형 (모바일 2열 최적화) */
+        /* 사이트 카드 반응형 (모바일 2열 최적화) */
         .site-card-wrap { justify-content: space-between; gap: 12px; padding: 0 10px; } 
         .site-card-link { width: calc(50% - 6px); } 
         .site-card-box { padding: 20px 10px; border-radius: 16px; } 
         .site-logo-wrap { height: 60px; margin-bottom: 12px; }
         
-        /* 모바일에서는 글씨 크기를 조금 줄여 텍스트 넘침 방지 */
         .site-card-box h3 { font-size: 15px !important; }
         .site-card-box p { font-size: 12px !important; letter-spacing: -0.5px; }
         
@@ -749,7 +715,7 @@ const styles: Record<string, React.CSSProperties> = {
   bankFooterText: { padding: '12px', backgroundColor: '#ecfdf5', borderRadius: '12px', textAlign: 'center', fontSize: '13px', color: '#059669', fontWeight: '600' },
   quickLink: { textDecoration: 'none' },
   quickImg: { width: '65%', height: '65%', objectFit: 'contain' },
-  siteCardLink: { textDecoration: 'none' }, /* 🌟 width 속성 삭제 */
+  siteCardLink: { textDecoration: 'none' },
   siteImg: { maxWidth: '90%', maxHeight: '100%', objectFit: 'contain' },
   siteName: { fontWeight: '900', color: '#0f172a', fontSize: '17px', marginBottom: '8px' },
   siteDesc: { color: '#64748b', lineHeight: '1.4', fontWeight: '500', fontSize: '13px' },
