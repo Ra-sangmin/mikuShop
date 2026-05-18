@@ -1,5 +1,6 @@
 "use client";
 import React from 'react';
+import Link from 'next/link';
 
 export default function Footer() {
   return (
@@ -12,8 +13,7 @@ export default function Footer() {
           font-family: 'Pretendard', -apple-system, sans-serif;
           position: relative;
           overflow: hidden;
-          /* 🌟 위쪽 여백(padding-top) 대폭 축소 (80px -> 50px) */
-          padding-top: 50px; 
+          padding-top: 24px; 
         }
 
         .footer-wrapper::before {
@@ -30,9 +30,48 @@ export default function Footer() {
           padding: 0 24px;
         }
 
-        /* 🌟 2. 메인 정보 영역 */
+        /* 🌟 2. 상단 정책/가이드 링크 영역 (구조 안정화) */
+        .footer-top {
+          padding-bottom: 20px;
+          margin-bottom: 24px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .policy-links {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        
+        .policy-links a {
+          color: #8492a6; 
+          font-size: 14px; 
+          font-weight: 500;
+          text-decoration: none;
+          transition: color 0.2s ease;
+          word-break: keep-all;
+          letter-spacing: -0.3px;
+        }
+        
+        .policy-links a.highlight {
+          color: #cbd5e1;
+          font-weight: 700;
+        }
+        
+        .policy-links a:hover {
+          color: #ffffff;
+        }
+
+        /* 🌟 충돌 없는 안전하고 세련된 텍스트 구분선 */
+        .policy-divider {
+          color: rgba(255, 255, 255, 0.15); /* 은은하고 고급스러운 투명도 */
+          font-size: 12px;
+          margin: 0 16px; /* 완벽하게 보장되는 좌우 여백 */
+          font-weight: 300;
+        }
+
+        /* 🌟 3. 메인 정보 영역 */
         .footer-main {
-          /* 🌟 아래쪽 여백(padding-bottom) 대폭 축소 (70px -> 40px) */
           padding-bottom: 20px;
         }
 
@@ -55,7 +94,6 @@ export default function Footer() {
           color: #ffffff;
           font-weight: 800;
           font-size: 16px; 
-          /* 🌟 타이틀 아래 여백 축소 (24px -> 18px) */
           margin-bottom: 18px;
           letter-spacing: 2px;
           text-transform: uppercase;
@@ -68,18 +106,16 @@ export default function Footer() {
           width: 100%; 
           height: 3px;
           margin-top: 10px;
-          /* 🌟 글자 중간(50%)부터 자연스럽게 사라지는 그라데이션 */
           background: linear-gradient(to right, #ff4b2b 0%, #ff4b2b 50%, transparent 100%);
           border-radius: 2px;
         }
 
         /* 본문 정보 스타일 */
         .info-content p {
-          /* 🌟 정보 간의 줄 간격 살짝 축소 (12px -> 8px) */
           margin: 0 0 8px 0; 
           font-weight: 400;
           color: #cbd5e1; 
-          font-size: 16px; 
+          font-size: 15px; 
           line-height: 1.7; 
           transition: color 0.3s;
           word-break: keep-all;
@@ -92,10 +128,14 @@ export default function Footer() {
         .info-content p:hover {
           color: #ffffff;
         }
+        
+        .info-divider {
+          margin: 0 10px;
+          color: #64748b;
+        }
 
-        /* 🌟 3. 하단 카피라이트 & 파트너 뱃지 영역 */
+        /* 🌟 4. 하단 카피라이트 & 파트너 뱃지 영역 */
         .footer-extra {
-          /* 🌟 상하 여백 축소 (30px 0 40px 0 -> 24px 0 32px 0) */
           padding: 24px 0 32px 0;
           border-top: 1px solid rgba(255, 255, 255, 0.06);
           display: flex;
@@ -107,7 +147,7 @@ export default function Footer() {
         }
 
         .copyright-box {
-          font-size: 15px;
+          font-size: 14px;
           color: #94a3b8;
           font-weight: 400;
           line-height: 1.6;
@@ -157,35 +197,64 @@ export default function Footer() {
           margin-right: 2px;
         }
 
-        /* 📱 4. 반응형 (모바일) */
+        /* 📱 5. 반응형 (모바일) */
         @media (max-width: 768px) {
           .footer-wrapper {
-            /* 🌟 모바일 상단 여백 축소 */
-            padding-top: 40px;
+            padding-top: 24px;
+          }
+          .footer-top {
+            margin-bottom: 20px;
+          }
+          .policy-links a {
+            font-size: 13px;
+          }
+          .policy-divider {
+            margin: 0 10px; /* 모바일에서는 여백 축소 */
           }
           .footer-main .container {
             flex-direction: column;
-            gap: 32px; /* 🌟 모바일 법인 정보 사이 간격 축소 */
+            gap: 32px; 
           }
           .footer-extra {
             flex-direction: column-reverse;
             align-items: flex-start;
-            gap: 20px; /* 🌟 모바일 뱃지와 카피라이트 사이 간격 축소 */
+            gap: 20px;
           }
         }
       `}</style>
 
       <footer className="footer-wrapper">
+        
+        {/* 🌟 수정된 상단 정책 링크 영역 (구분선 명시) */}
+        <div className="footer-top">
+          <div className="container">
+            <div className="policy-links">
+              <Link href="/guide/purchase-method">이용가이드</Link>
+              <span className="policy-divider">|</span>
+              <Link href="/guide/terms">이용약관</Link>
+              <span className="policy-divider">|</span>
+              {/* 🌟 기존 '/privacy'에서 '/guide/privacy'로 경로 수정 완료 */}
+              <Link href="/guide/privacy" className="highlight">개인정보처리방침</Link>
+            </div>
+          </div>
+        </div>
+
         <div className="footer-main">
           <div className="container">
-            {/* 한국 법인 영역 */}
+           {/* 한국 법인 영역 */}
             <div className="info-group">
               <span className="corporate-title">Korea Office</span>
               <div className="info-content">
-                <p><strong>상호</strong> 미쿠짱</p>
-                <p><strong>대표</strong> 임성민 <span style={{ margin: '0 10px', color: '#64748b' }}>|</span> <strong>사업자번호</strong> 599-26-00188</p>
+                <p>
+                  <strong>상호</strong> 미쿠짱 <span className="info-divider">|</span>
+                  <strong>대표</strong> 임성민 <span className="info-divider">|</span> 
+                  <strong>전화번호</strong> 070-4845-3023  
+                </p>
                 <p><strong>이메일</strong> company_ss@naver.com</p>
                 <p><strong>주소</strong> 서울특별시 은평구 진흥로 13가길 23-3 102호</p>
+                <p><strong>통신판매번호</strong> 2023-서울은평-00188</p>
+                <p><strong>사업자번호</strong> 599-26-00188</p>
+                
               </div>
             </div>
 

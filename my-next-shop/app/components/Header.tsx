@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation';
 import { 
   ClipboardText, ChatCircleDots, ShoppingCartSimple, MapPin, AirplaneTilt, 
   Wallet, Coins, Money, Crown, Info, Scales, BookOpen, PaperPlaneTilt, 
-  Question, Headset, SignOut, User, FilePlus, CaretDown 
+  Question, Headset, SignOut, User, FilePlus, CaretDown,
+  Notepad, ShieldCheck /* 🌟 새 정책 메뉴용 아이콘 추가 임포트 */
 } from "@phosphor-icons/react";
 
 // ==========================================
@@ -48,12 +49,20 @@ export default function Header() {
 
   useEffect(() => setIsSidebarOpen(false), [pathname]);
 
+  // 🌟 이용가이드 메뉴 배열에 2개의 신규 정책 링크 추가됨
   const menuData = [
     { label: "구매대행", items: [{ label: '전체내역', href: '/mypage/status?tab=전체내역' }, { label: '견적문의', href: '/purchase/quote' }, { label: '구매대행 신청', href: '/purchase/request' }] },
     { label: "배송대행", items: [{ label: '전체내역', href: '/mypage/status?tab=전체내역' }, { label: '일본 배송주소 확인', href: '/delivery/address' }, { label: '배송신청', href: '/delivery/request' }] },
     { label: "미쿠짱머니", items: [{ label: '충전하기', href: '/mypage/money/charge' }, { label: '이용내역', href: '/mypage/money/history' }, { label: '환불신청', href: '/mypage/money/refund' }] },
     { label: "수수료/배송비", items: [{ label: '회원 등급 및 혜택', href: '/guide/membership' }, { label: '수수료 안내', href: '/guide/fee-guide' }, { label: '국제 배송 요금표', href: '/guide/shipping-fee' }] },
-    { label: "이용가이드", items: [{ label: '구매대행 방법', href: '/guide/purchase-method' }, { label: '배송대행 방법', href: '/guide/delivery-method' }, { label: '자주하는 질문', href: '/guide/faq' }] },
+    { label: "이용가이드", items: [
+        { label: '구매대행 방법', href: '/guide/purchase-method' }, 
+        { label: '배송대행 방법', href: '/guide/delivery-method' }, 
+        { label: '자주하는 질문', href: '/guide/faq' },
+        { label: '이용약관', href: '/guide/terms' }, /* 추가됨 */
+        { label: '개인정보처리방침', href: '/guide/privacy' } /* 추가됨 */
+      ] 
+    },
     { label: "고객문의", items: [{ label: '카카오톡 문의', href: '/contact' }] }
   ];
 
@@ -183,6 +192,9 @@ function NavItem({ label, items }: { label: string, items?: any[] }) {
       case '구매대행 방법': return <BookOpen {...iconProps} />;
       case '배송대행 방법': return <PaperPlaneTilt {...iconProps} />;
       case '자주하는 질문': return <Question {...iconProps} />;
+      /* 🌟 추가된 메뉴들에 대한 아이콘 매핑 설정 */
+      case '이용약관': return <Notepad {...iconProps} />;
+      case '개인정보처리방침': return <ShieldCheck {...iconProps} />;
       case '카카오톡 문의': return <Headset {...iconProps} />;
       case '내 정보': return <User {...iconProps} />;
       default:
@@ -246,7 +258,6 @@ const styles: Record<string, any> = {
     fontSize: '20px', fontWeight: '700', display: 'flex', alignItems: 'center',
     gap: '5px', transition: '0.2s', letterSpacing: '-0.5px', whiteSpace: 'nowrap', flexShrink: 0,
   },
-  // 🌟 화살표 애니메이션 및 색상 동기화 업데이트
   arrowIcon: (isHovered: boolean) => ({
     display: 'flex',
     alignItems: 'center',

@@ -25,6 +25,8 @@ export default function GuideLayout({ children, title, type, hideSidebar = false
     { label: '구매대행 신청방법', href: '/guide/purchase-method' },
     { label: '배송대행 신청방법', href: '/guide/delivery-method' },
     { label: '자주하는 질문', href: '/guide/faq' },
+    { label: '이용약관', href: '/guide/terms' }, 
+    { label: '개인정보처리방침', href: '/guide/privacy' }, /* 🌟 개인정보처리방침 메뉴 추가됨 */
   ];
 
   const feeMenu = [
