@@ -252,7 +252,7 @@ export default function Footer() {
                 </p>
                 <p><strong>이메일</strong> company_ss@naver.com</p>
                 <p><strong>주소</strong> 서울특별시 은평구 진흥로 13가길 23-3 102호</p>
-                <p><strong>통신판매번호</strong> 2023-서울은평-00188</p>
+                <p><strong>통신판매번호</strong> 1234-서울은평-56789</p>
                 <p><strong>사업자번호</strong> 599-26-00188</p>
                 
               </div>
