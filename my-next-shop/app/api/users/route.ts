@@ -1,6 +1,7 @@
 // app/api/users/route.ts
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import bcrypt from 'bcrypt';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -92,12 +93,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: '이미 존재하는 아이디입니다.' }, { status: 400 });
     }
 
-    // 유저 생성
+    // 🌟 1. 비밀번호 암호화 (해싱)
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // 🌟 2. 암호화된 비밀번호를 저장
     const newUser = await prisma.user.create({
       data: {
         loginId,
         email,
-        password,
+        password: hashedPassword, // 평문이 아닌 해싱된 값을 저장!
         name,
         level: '일반회원',
         cyberMoney: 0

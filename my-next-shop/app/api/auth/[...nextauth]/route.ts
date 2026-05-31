@@ -3,9 +3,41 @@ import NextAuth from "next-auth";
 import NaverProvider from "next-auth/providers/naver";
 import KakaoProvider from "next-auth/providers/kakao";
 import prisma from "@/lib/prisma";
+import CredentialsProvider from "next-auth/providers/credentials"; // 🌟 상단에 임포트 추가
+import bcrypt from "bcrypt"; // 🌟 상단에 임포트 추가
 
 const handler = NextAuth({
   providers: [
+
+    // 🌟 1. 이메일/비밀번호 로그인 추가
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "text" },
+        password: { label: "Password", type: "password" }
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) return null;
+
+        // DB에서 유저 조회
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email }
+        });
+
+        // 1. 이메일 자체가 존재하지 않음
+        if (!user) {
+          throw new Error("EMAIL_NOT_FOUND");
+        }
+        
+        // 2. 비밀번호 불일치
+        const isMatch = await bcrypt.compare(credentials.password, user.password);
+        if (!isMatch) {
+          throw new Error("PASSWORD_INCORRECT");
+        }
+        
+        return { id: user.id.toString(), email: user.email, name: user.name };
+      }
+    }),
     NaverProvider({
       clientId: process.env.NAVER_CLIENT_ID as string,
       clientSecret: process.env.NAVER_CLIENT_SECRET as string,

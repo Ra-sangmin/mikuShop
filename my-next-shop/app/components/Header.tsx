@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
@@ -9,22 +10,17 @@ import {
   Question, Headset, SignOut, User, FilePlus, CaretDown,
   Notepad, ShieldCheck, Calculator 
 } from "@phosphor-icons/react";
-
-/* 🌟 전역 MikuAlert Hook 임포트 */
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 
 // ==========================================
-// 1. 메인 컴포넌트 (Logic)
+// 🧠 2. 비즈니스 로직 (Main Component)
 // ==========================================
 export default function Header() {
   const { data: session, status } = useSession();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
   const [openSection, setOpenSection] = useState<number | null>(0);
   const pathname = usePathname();
-
-  // 🌟 MikuAlert 훅 사용
   const { showAlert, showConfirm } = useMikuAlert();
 
   useEffect(() => {
@@ -42,26 +38,15 @@ export default function Header() {
     syncAuth();
   }, [session, status]);
 
-  // 🌟 Promise 기반의 showConfirm을 활용한 로그아웃 로직
   const handleLogoutClick = async () => {
-    setIsSidebarOpen(false); // 사이드바가 열려있다면 닫아줍니다
-    
-    // showConfirm은 Promise<boolean>을 반환하므로 await로 결과를 기다립니다.
+    setIsSidebarOpen(false);
     const isConfirmed = await showConfirm('로그아웃 하시겠습니까?');
-    
     if (isConfirmed) {
-      // 실제 로그아웃 처리
       if (status === "authenticated") await signOut({ redirect: false });
       localStorage.clear();
       setIsLoggedIn(false);
-
-      // 로그아웃 완료 알림 띄우기 (success 타입 사용)
       showAlert('로그아웃 되었습니다.', 'success');
-      
-      // 알림 메시지를 읽을 수 있도록 1.5초 후 메인으로 이동
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 1500); 
+      setTimeout(() => window.location.href = '/', 1500);
     }
   };
 
@@ -71,30 +56,16 @@ export default function Header() {
     { label: "구매대행", items: [{ label: '전체내역', href: '/mypage/status?tab=전체내역' }, { label: '견적문의', href: '/purchase/quote' }, { label: '구매대행 신청', href: '/purchase/request' }] },
     { label: "배송대행", items: [{ label: '전체내역', href: '/mypage/status?tab=전체내역' }, { label: '일본 배송주소 확인', href: '/delivery/address' }, { label: '배송신청', href: '/delivery/request' }] },
     { label: "미쿠짱머니", items: [{ label: '충전하기', href: '/mypage/money/charge' }, { label: '이용내역', href: '/mypage/money/history' }, { label: '환불신청', href: '/mypage/money/refund' }] },
-    { label: "수수료/배송비", items: [
-        { label: '회원 등급 및 혜택', href: '/guide/membership' }, 
-        { label: '수수료 안내', href: '/guide/fee-guide' }, 
-        { label: '국제 배송 요금표', href: '/guide/shipping-fee' },
-        { label: '예상 관부과세 안내', href: '/guide/customs' }
-      ] 
-    },
-    { label: "이용가이드", items: [
-        { label: '구매대행 방법', href: '/guide/purchase-method' }, 
-        { label: '배송대행 방법', href: '/guide/delivery-method' }, 
-        { label: '자주하는 질문', href: '/guide/faq' },
-        { label: '이용약관', href: '/guide/terms' }, 
-        { label: '개인정보처리방침', href: '/guide/privacy' } 
-      ] 
-    },
+    { label: "수수료/배송비", items: [{ label: '회원 등급 및 혜택', href: '/guide/membership' }, { label: '수수료 안내', href: '/guide/fee-guide' }, { label: '국제 배송 요금표', href: '/guide/shipping-fee' }, { label: '예상 관부과세 안내', href: '/guide/customs' }] },
+    { label: "이용가이드", items: [{ label: '구매대행 방법', href: '/guide/purchase-method' }, { label: '배송대행 방법', href: '/guide/delivery-method' }, { label: '자주하는 질문', href: '/guide/faq' }, { label: '이용약관', href: '/guide/terms' }, { label: '개인정보처리방침', href: '/guide/privacy' }] },
     { label: "고객문의", items: [{ label: '카카오톡 문의', href: '/contact' }] }
   ];
 
-  return (
+return (
     <>
       <HeaderCSS />
       <header className="header-wrapper">
         <div className="header-container">
-          {/* 로고 영역 */}
           <Link href="/" style={{ textDecoration: 'none' }}>
             <div style={styles.logoContainer}>
               <img src="/images/logo.png" alt="Miku Logo" style={styles.logoImgRefined} />
@@ -125,60 +96,63 @@ export default function Header() {
 
       {/* 모바일 사이드바 영역 */}
       <div className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' }}>
-          <img src="/images/logo.png" alt="로고" style={{ height: '35px' }} />
-          <button onClick={() => setIsSidebarOpen(false)} style={{ background: 'none', border: 'none', fontSize: '24px', color: '#999', cursor: 'pointer' }}>✕</button>
+        <div style={styles.sidebarHeader}>
+          <div style={styles.logoGroup}>
+            <img src="/images/logo.png" alt="로고" style={{ height: '35px' }} />
+            <span style={styles.mobileLogoTitle}>미쿠짱</span>
+          </div>
+          <button onClick={() => setIsSidebarOpen(false)} style={styles.closeBtn}>✕</button>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', margin: '24px 0' }}>
+        <div style={styles.authBtnGroup}>
           {!isLoggedIn ? (
             <>
-              <Link href="/login" style={{ flex: 1, textAlign: 'center', padding: '14px', backgroundColor: '#f8fafc', borderRadius: '12px', color: '#475569', textDecoration: 'none', fontWeight: '800', fontSize: '15px', border: '1px solid #e2e8f0' }} onClick={() => setIsSidebarOpen(false)}>로그인</Link>
-              <Link href="/register" style={{ flex: 1, textAlign: 'center', padding: '14px', background: 'linear-gradient(135deg, #e3868a 0%, #d27377 100%)', borderRadius: '12px', color: '#fff', textDecoration: 'none', fontWeight: '800', fontSize: '15px', boxShadow: '0 4px 12px rgba(210,115,119,0.2)' }} onClick={() => setIsSidebarOpen(false)}>회원가입</Link>
+              <Link href="/login" style={{ ...styles.authLinkBase, ...styles.loginBtn }} onClick={() => setIsSidebarOpen(false)}>로그인</Link>
+              <Link href="/register" style={{ ...styles.authLinkBase, ...styles.registerBtn }} onClick={() => setIsSidebarOpen(false)}>회원가입</Link>
             </>
           ) : (
             <>
-              <Link href="/mypage" style={{ flex: 1, textAlign: 'center', padding: '14px', backgroundColor: '#f8fafc', borderRadius: '12px', color: '#475569', textDecoration: 'none', fontWeight: '800', fontSize: '15px', border: '1px solid #e2e8f0' }} onClick={() => setIsSidebarOpen(false)}>마이페이지</Link>
-              <button onClick={handleLogoutClick} style={{ flex: 1, textAlign: 'center', padding: '14px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', color: '#ef4444', fontWeight: '800', fontSize: '15px', cursor: 'pointer' }}>로그아웃</button>
+              <Link href="/mypage" style={{ ...styles.authLinkBase, ...styles.loginBtn }} onClick={() => setIsSidebarOpen(false)}>마이페이지</Link>
+              <button onClick={handleLogoutClick} style={styles.logoutBtn}>로그아웃</button>
             </>
           )}
         </div>
 
         <div className="sidebar-accordion-wrapper">
-          {menuData.map((section, idx) => {
-            const isOpen = openSection === idx;
-            return (
-              <div key={idx} className="sidebar-accordion-group">
-                <button 
-                  className={`sidebar-section-btn ${isOpen ? 'active' : ''}`}
-                  onClick={() => setOpenSection(isOpen ? null : idx)}
-                >
-                  <span>{section.label}</span>
-                  <div className="sidebar-arrow">
-                    <CaretDown size={14} weight="bold" />
-                  </div>
-                </button>
-                
-                <div className={`sidebar-content ${isOpen ? 'open' : ''}`}>
-                  <div className="sidebar-content-inner">
-                    {section.items.map((item, itemIdx) => (
-                      <Link 
-                        key={itemIdx} 
-                        href={item.href || '#'} 
-                        className="sidebar-link"
-                        onClick={() => setIsSidebarOpen(false)} 
-                      >
-                        <span className="sidebar-bullet"></span>
-                        {item.label}
-                      </Link>
-                    ))}
+            {menuData.map((section, idx) => {
+              const isOpen = openSection === idx;
+              return (
+                <div key={idx} className="sidebar-accordion-group">
+                  <button 
+                    className={`sidebar-section-btn ${isOpen ? 'active' : ''}`}
+                    onClick={() => setOpenSection(isOpen ? null : idx)}
+                  >
+                    <span>{section.label}</span>
+                    <div className="sidebar-arrow">
+                      <CaretDown size={14} weight="bold" />
+                    </div>
+                  </button>
+                  
+                  <div className={`sidebar-content ${isOpen ? 'open' : ''}`}>
+                    <div className="sidebar-content-inner">
+                      {section.items.map((item, itemIdx) => (
+                        <Link 
+                          key={itemIdx} 
+                          href={item.href || '#'} 
+                          className="sidebar-link"
+                          onClick={() => setIsSidebarOpen(false)} 
+                        >
+                          <span className="sidebar-bullet"></span>
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
 
       <div className={`overlay ${isSidebarOpen ? 'open' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>
     </>
@@ -260,12 +234,9 @@ function NavItem({ label, items }: { label: string, items?: any[] }) {
 // 4. 인라인 스타일 (Styles)
 // ==========================================
 const styles: Record<string, any> = {
-  logoContainer: {
-    display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px', padding: '5px 0', minWidth: '280px', flexShrink: 0,
-  },
-  logoImgRefined: {
-    height: '60px', width: 'auto', display: 'block', objectFit: 'contain', mixBlendMode: 'multiply',
-  },
+
+  logoContainer: { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px', padding: '5px 0', minWidth: '280px', flexShrink: 0 },
+  logoImgRefined: { height: '60px', width: 'auto', display: 'block', objectFit: 'contain', mixBlendMode: 'multiply' },
   textStack: { display: 'flex', flexDirection: 'column', gap: '0px' },
   mainTitle: {
     marginTop: '20px', fontFamily: '"Jua", sans-serif', fontSize: '42px', fontWeight: 'normal',
@@ -273,32 +244,24 @@ const styles: Record<string, any> = {
     display: 'inline-block', color: '#ce8c83',
     textShadow: `0.5px 0.5px 0 #ce8c83, -0.5px -0.5px 0 #ce8c83, 0.5px -0.5px 0 #ce8c83, -0.5px 0.5px 0 #ce8c83, 0.5px 0 0 #ce8c83, -0.5px 0 0 #ce8c83, 0 0.5px 0 #ce8c83, 0 -0.5px 0 #ce8c83`,
   },
-  subTitle: {
-    fontFamily: '"Jua", sans-serif', fontSize: '14px', color: '#cc8f76', fontWeight: 'normal', letterSpacing: '-0.2px', whiteSpace: 'nowrap', marginTop: '0px',
-  },
+  subTitle: { fontFamily: '"Jua", sans-serif', fontSize: '14px', color: '#cc8f76', fontWeight: 'normal', letterSpacing: '-0.2px', whiteSpace: 'nowrap', marginTop: '0px' },
   navItemLi: { position: 'relative', cursor: 'pointer', padding: '15px 0' },
-  navItemLabel: {
-    fontSize: '20px', fontWeight: '700', display: 'flex', alignItems: 'center',
-    gap: '5px', transition: '0.2s', letterSpacing: '-0.5px', whiteSpace: 'nowrap', flexShrink: 0,
-  },
-  arrowIcon: (isHovered: boolean) => ({
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: isHovered ? '#d27377' : '#cbd5e1', 
-    transform: isHovered ? 'rotate(180deg)' : 'rotate(0deg)', 
-    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', 
-    flexShrink: 0,
-    marginLeft: '2px',
-  }),
-  dropdownUl: {
-    position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#fff', border: '1px solid #f0eada', listStyle: 'none', padding: '8px 0', margin: '0', minWidth: '220px', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', zIndex: 1000, borderRadius: '12px'
-  },
+  navItemLabel: { fontSize: '20px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px', transition: '0.2s', letterSpacing: '-0.5px', whiteSpace: 'nowrap', flexShrink: 0 },
+  arrowIcon: (isHovered: boolean) => ({ display: 'flex', alignItems: 'center', justifyContent: 'center', color: isHovered ? '#d27377' : '#cbd5e1', transform: isHovered ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', flexShrink: 0, marginLeft: '2px' }),
+  dropdownUl: { position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#fff', border: '1px solid #f0eada', listStyle: 'none', padding: '8px 0', margin: '0', minWidth: '220px', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', zIndex: 1000, borderRadius: '12px' },
   dropdownPointer: { position: 'absolute', top: '-6px', left: '50%', transform: 'translateX(-50%) rotate(45deg)', width: '12px', height: '12px', backgroundColor: '#fff', borderTop: '1px solid #f0eada', borderLeft: '1px solid #f0eada' },
-  iconBox: {
-    width: '36px', height: '36px', borderRadius: '11px', background: 'linear-gradient(135deg, #fdf5f5 0%, #f7e6e6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.3s ease'
-  },
-  itemText: { fontWeight: '700', fontSize: '15px', color: '#4a4a4a', letterSpacing: '-0.3px' }
+  iconBox: { width: '36px', height: '36px', borderRadius: '11px', background: 'linear-gradient(135deg, #fdf5f5 0%, #f7e6e6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.3s ease' },
+  itemText: { fontWeight: '700', fontSize: '15px', color: '#4a4a4a', letterSpacing: '-0.3px' },
+  mobileLogoTitle: { fontFamily: '"Jua", sans-serif', fontSize: '30px', fontWeight: 'normal', paddingTop: '6px', letterSpacing: '1px', lineHeight: '1', transform: 'scaleX(1.1)', transformOrigin: 'left center', display: 'inline-block', color: '#ce8c83', textShadow: '0.5px 0.5px 0 #ce8c83, -0.5px -0.5px 0 #ce8c83, 0.5px -0.5px 0 #ce8c83, -0.5px 0.5px 0 #ce8c83, 0.5px 0 0 #ce8c83, -0.5px 0 0 #ce8c83, 0 0.5px 0 #ce8c83, 0 -0.5px 0 #ce8c83' },
+
+  sidebarHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' },
+  logoGroup: { display: 'flex', alignItems: 'center', gap: '8px' },
+  closeBtn: { background: 'none', border: 'none', fontSize: '24px', color: '#999', cursor: 'pointer' },
+  authBtnGroup: { display: 'flex', gap: '10px', margin: '24px 0' },
+  authLinkBase: { flex: 1, textAlign: 'center', padding: '14px', borderRadius: '12px', textDecoration: 'none', fontWeight: '800', fontSize: '15px' },
+  loginBtn: { backgroundColor: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0' },
+  registerBtn: { background: 'linear-gradient(135deg, #e3868a 0%, #d27377 100%)', color: '#fff', boxShadow: '0 4px 12px rgba(210,115,119,0.2)' },
+  logoutBtn: { flex: 1, textAlign: 'center', padding: '14px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', color: '#ef4444', fontWeight: '800', fontSize: '15px', cursor: 'pointer' },
 };
 
 // ==========================================

@@ -1,18 +1,17 @@
-"use client";
-import React, { useState, useEffect, Suspense, useMemo } from 'react';
+'use client';
+
+import React, { useState, useEffect, Suspense, useMemo, useRef, useCallback } from 'react';
 import GuideLayout from '../../components/GuideLayout';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation'; // 🌟 useRouter 추가
 import OrderTable from './components/OrderTable';
 import AddressForm from './components/AddressForm';
 import PaymentSummary from './components/PaymentSummary';
-// 🌟 주문 상태 상수 및 라벨 임포트
+
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 
-// 🌟 탭 구성: 표시용 name(한글)과 필터링용 key(영문)를 명확히 분리
 const initialTabs = [
   { name: '전체내역', count: 0, key: ORDER_STATUS.ALL },
-  // 추가된 경매 탭
   { name: ORDER_STATUS_LABEL[ORDER_STATUS.BID_PENDING], count: 0, key: ORDER_STATUS.BID_PENDING },
   { name: ORDER_STATUS_LABEL[ORDER_STATUS.BIDDING], count: 0, key: ORDER_STATUS.BIDDING },
   { name: ORDER_STATUS_LABEL[ORDER_STATUS.BID_SUCCESS], count: 0, key: ORDER_STATUS.BID_SUCCESS },
@@ -28,10 +27,14 @@ const initialTabs = [
 
 function MyPurchaseStatusContent() {
   const searchParams = useSearchParams();
+  const router = useRouter(); // 🌟 라우터 초기화
   const { showAlert, showConfirm } = useMikuAlert();
-  // 🌟 activeTab은 반드시 영문 키(예: 'CART')로 관리합니다.
+  const hasAlerted = useRef(false); // 🌟 알림 중복 방지
+
+  // 🌟 로그인 확인 상태 추가
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+
   const [activeTab, setActiveTab] = useState<string>(ORDER_STATUS.CART);
-  
   const [userData, setUserData] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,20 +42,36 @@ function MyPurchaseStatusContent() {
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const exchangeRate = 9.05;
 
-  // 🚀 1. 삭제 핸들러 함수 추가
+  // 🌟 1. 컴포넌트 마운트 시 로그인 체크 수행
+  useEffect(() => {
+    const userId = localStorage.getItem('user_id');
+    
+    if (!userId) {
+      if (!hasAlerted.current) {
+        hasAlerted.current = true;
+        showAlert('로그인이 필요한 페이지입니다.', 'warning');
+        router.push('/login');
+      }
+      return;
+    }
+
+    // 로그인이 확인되면 인증 체크 종료 -> UI 렌더링 시작
+    setIsAuthChecking(false);
+  }, [router, showAlert]);
+
+
   const handleDeleteOrder = async (orderId: string) => {
     const isConfirmed = await showConfirm("정말 이 상품을 장바구니에서 삭제하시겠습니까? 🗑️");
     
     if (isConfirmed) {
       try {
-        // API 경로는 프로젝트 설정에 따라 /api/orders 혹은 /api/orders일 수 있습니다.
         const res = await fetch(`/api/orders?id=${orderId}`, {
           method: 'DELETE',
         });
 
         if (res.ok) {
           showAlert('상품이 삭제되었습니다.', 'success');
-          fetchOrders(); // 목록 새로고침
+          fetchOrders(); 
         } else {
           showAlert('삭제 처리에 실패했습니다.', 'error');
         }
@@ -63,16 +82,14 @@ function MyPurchaseStatusContent() {
     }
   };
 
-  // 🌟 개별 포장 처리 함수
   const handleIndividualPacking = async (item: any) => {
     if (!selectedAddress) {
-      return showAlert('하단 수취인 주소 리스트에서 배송지를 먼저 선택해주세요.');
+      return showAlert('하단 수취인 주소 리스트에서 배송지를 먼저 선택해주세요.', 'warning');
     }
 
     const addressDisplayName = selectedAddress.recipientName || selectedAddress.name || '선택된 배송지';
     const message = `선택하신 상품 \n[${item.productName}]을\n ${addressDisplayName}(으)로 배송 합니다\n이대로 개별 포장 요청 하시겠습니까?`;
 
-    // 🌟 커스텀 컨펌창 호출 및 대기
     const isConfirmed = await showConfirm(message);
 
     if (isConfirmed) {
@@ -104,7 +121,7 @@ function MyPurchaseStatusContent() {
     }
   };
 
-  const fetchOrders = () => {
+  const fetchOrders = useCallback(() => {
     const storedId = localStorage.getItem('user_id');
     if (storedId) {
       setIsLoading(true);
@@ -129,11 +146,15 @@ function MyPurchaseStatusContent() {
     } else {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchOrders(); }, []);
+  // 🌟 2. 로그인 체크(isAuthChecking)가 완료된 후에만 데이터를 가져오도록 의존성 변경
+  useEffect(() => { 
+    if (!isAuthChecking) {
+      fetchOrders(); 
+    }
+  }, [isAuthChecking, fetchOrders]);
 
-  // 🌟 URL 쿼리 파라미터가 한글일 경우를 대비한 매핑 로직
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab) {
@@ -150,7 +171,6 @@ function MyPurchaseStatusContent() {
     }
   }, [searchParams]);
 
-  // 🌟 탭별 주문 개수 카운트: item.status와 tab.key(영문)를 비교
   const tabs = useMemo(() => {
     return initialTabs.map(tab => {
       const count = orders.filter(item => 
@@ -160,7 +180,6 @@ function MyPurchaseStatusContent() {
     });
   }, [orders]);
 
-  // 🌟 실제 리스트 필터링: activeTab(영문)과 item.status를 비교
   const items = useMemo(() => {
     if (activeTab === ORDER_STATUS.ALL) return orders;
     return orders.filter(item => item.status === activeTab);
@@ -179,17 +198,13 @@ function MyPurchaseStatusContent() {
       const agencyF = Number(item.purchaseFee) || 0;
       const secondP = Number(item.secondPaymentAmount) || 0;
       
-      // 🌟 [핵심] 보증금 자동 계산 (2만엔 이하 2000엔, 초과 10%)
       const myBid = Number(item.myBidPrice) || 0;
       const fallbackDeposit = myBid > 0 ? (myBid <= 20000 ? 2000 : Math.floor(myBid * 0.1)) : 0;
-      
-      // DB에 보증금 값이 있으면 쓰고, 없으면 방금 위에서 계산한 fallbackDeposit 사용
       const depositAmt = Number(item.depositAmount) || fallbackDeposit; 
 
       if (activeTab === ORDER_STATUS.PAYMENT_REQ) {
         acc.product += secondP;
       } else if (activeTab === ORDER_STATUS.BID_PENDING) {
-        // 🌟 경매 요청 탭일 때는 '보증금'만 누적!
         acc.deposit += depositAmt;
       } else {
         acc.product += productP;
@@ -205,25 +220,22 @@ function MyPurchaseStatusContent() {
         }
       }
       return acc;
-    }, { product: 0, transfer: 0, delivery: 0, agency: 0, deposit: 0 }); // 👈 초기값에 deposit: 0 꼭 추가!
+    }, { product: 0, transfer: 0, delivery: 0, agency: 0, deposit: 0 }); 
   }, [items, selectedItems, activeTab]);
 
-  // 🌟 2. 최종 엔화 결제액 결정
   const totalPriceVal = activeTab === ORDER_STATUS.BID_PENDING 
-    ? totals.deposit // 경매 요청일 땐 누적된 보증금이 최종액
+    ? totals.deposit 
     : totals.product + totals.transfer + totals.delivery + totals.agency;
 
-  // 🌟 3. 원화 환산 (엔화 보증금 * 환율 적용)
   const totalPriceWon = activeTab === ORDER_STATUS.PAYMENT_REQ 
     ? totalPriceVal 
     : Math.floor(totalPriceVal * exchangeRate);
 
-  // 🌟 상태 업데이트 핸들러 (showConfirm 적용)
   const handleUpdateStatus = async (newStatus: string) => {
-    if (selectedItems.length === 0) return showAlert('상품을 선택해주세요.');
+    if (selectedItems.length === 0) return showAlert('상품을 선택해주세요.', 'warning');
 
     if (newStatus === ORDER_STATUS.PREPARING && !selectedAddress) {
-      return showAlert('하단 수취인 주소 리스트에서 배송지를 먼저 선택해주세요.');
+      return showAlert('하단 수취인 주소 리스트에서 배송지를 먼저 선택해주세요.', 'warning');
     }
 
     const addressDisplayName = selectedAddress?.recipientName || '선택된 배송지';
@@ -231,13 +243,12 @@ function MyPurchaseStatusContent() {
       [ORDER_STATUS.PAID]: '선택한 상품을 결제 하시겠습니까?',
       [ORDER_STATUS.PREPARING]: `선택하신 ${selectedItems.length}건의 상품들을\n${addressDisplayName}(으)로 배송 합니다\n이대로 합포장 요청 하시겠습니까?`,
       [ORDER_STATUS.PAYMENT_DONE]: '선택한 상품의 배송비 결제를 진행하시겠습니까?',
-      [ORDER_STATUS.BIDDING]: '선택한 상품의 보증금을 결제하고 입찰을 시작하시겠습니까?' // 🌟 경매 결제 컨펌 메시지 추가
+      [ORDER_STATUS.BIDDING]: '선택한 상품의 보증금을 결제하고 입찰을 시작하시겠습니까?' 
     };
 
     const isConfirmed = await showConfirm(confirmMsgs[newStatus] || '상태를 변경하시겠습니까?');
 
     if (isConfirmed) {
-      // 🌟 1. 결제 전 잔액 확인 로직에 'BIDDING(보증금 결제)' 추가
       if (newStatus === ORDER_STATUS.PAID || newStatus === ORDER_STATUS.PAYMENT_DONE || newStatus === ORDER_STATUS.BIDDING) {
         try {
           const storedId = localStorage.getItem('user_id');
@@ -261,18 +272,16 @@ function MyPurchaseStatusContent() {
         ? { address_id: selectedAddress.id } 
         : {};
 
-      // 🌟 2. DB로 보낼 업데이트 데이터에 bidStatus: 'PENDING' 추가
       let updates = newStatus === ORDER_STATUS.PREPARING 
         ? selectedItems.map(id => ({ id, status: newStatus, bundleId: 'B' + Date.now(), ...addressUpdateData })) 
         : selectedItems.map(id => ({ 
             id, 
             status: newStatus,
-            ...(newStatus === ORDER_STATUS.BIDDING ? { bidStatus: 'PENDING' } : {}) // 경매 상황으로 넘어갈 때 PENDING 주입
+            ...(newStatus === ORDER_STATUS.BIDDING ? { bidStatus: 'PENDING' } : {}) 
           }));
       
       try {
         const storedId = localStorage.getItem('user_id');
-        // 🌟 3. 실제 API 호출 시 머니 차감 조건에 'BIDDING(보증금 결제)' 추가
         const isPayment = newStatus === ORDER_STATUS.PAID || newStatus === ORDER_STATUS.PAYMENT_DONE || newStatus === ORDER_STATUS.BIDDING;
         
         const res = await fetch('/api/orders', {
@@ -282,7 +291,7 @@ function MyPurchaseStatusContent() {
             updates, 
             userId: isPayment ? storedId : null, 
             deductAmount: isPayment ? totalPriceWon : 0,
-            paymentTitle: newStatus === ORDER_STATUS.BIDDING ? '경매 보증금 결제' : undefined // 🌟 결제 로그용 타이틀 추가
+            paymentTitle: newStatus === ORDER_STATUS.BIDDING ? '경매 보증금 결제' : undefined 
           })
         });
 
@@ -349,6 +358,11 @@ function MyPurchaseStatusContent() {
     );
   };
 
+  // 🌟 3. 로그인 여부 확인 중일 때는 빈 화면을 렌더링해 깜빡임 방지
+  if (isAuthChecking) {
+    return <div style={{ height: '100vh', backgroundColor: '#fdfdfd' }} />;
+  }
+
   if (isLoading) return <div style={{ padding: '100px', textAlign: 'center' }}>로딩 중...</div>;
 
   return (
@@ -389,7 +403,7 @@ function MyPurchaseStatusContent() {
         fetchOrders={fetchOrders} 
         selectedAddress={selectedAddress} 
         onIndividualPacking={handleIndividualPacking}
-        onDelete={handleDeleteOrder} // ✨ 추가됨
+        onDelete={handleDeleteOrder} 
       />
       
       {/* 입고완료: 합포장 버튼 & 주소 폼 */}

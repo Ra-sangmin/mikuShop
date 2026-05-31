@@ -49,13 +49,14 @@ SET m.genreName = t.genreNameKo;
 -- 확인
 SELECT * FROM MercariCategory LIMIT 10;
 
-
+디바이스 툴바(Device Toolbar) 켜기
+단축키: Ctrl + Shift + M (Mac은 Cmd + Shift + M)
 
 
 pm2 start npm --name "miku-app" -- start
 
 
 git fetch origin
-git pull origin main
+git pull origin master
 npm run build
-pm2 reload miku-chan-prod
+pm2 reload miku-app
