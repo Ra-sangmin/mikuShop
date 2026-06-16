@@ -5,8 +5,10 @@ import prisma from '@/lib/prisma';
 
 const TABLE_MAP: Record<string, string> = {
   YAHOO_AUCTION: 'YahooAuctionCategory',
+  YAHOO_SHOPPING: 'YahooShoppingCategory',
   MERCARI: 'MercariCategory',
   RAKUTEN: 'RakutenCategory',
+  AMAZON: 'AmazonCategory',
 };
 
 // 🌟 2. 파라미터 타입을 NextRequest로 변경

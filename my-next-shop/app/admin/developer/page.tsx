@@ -1,30 +1,157 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
-// 🌟 1. 플랫폼 value를 직접 소문자(폴더명)로 변경
+// ==========================================
+// 🎨 1. 설정 및 스타일 객체 (디자인 영역)
+// ==========================================
+
 const PLATFORMS = [
   { value: 'yahoo_auction', label: '야후 옥션' },
+  { value: 'yahoo_shopping', label: '야후 쇼핑' },
   { value: 'rakuten', label: '라쿠텐' },
-  { value: 'mercari', label: '메루카리' }
+  { value: 'mercari', label: '메루카리' },
+  { value: 'amazon', label: '아마존' }
 ];
 
+const colors = {
+  white: '#fff',
+  border: '#f1f5f9',
+  textMain: '#0f172a',
+  textSub: '#64748b',
+};
+
+const mixins = {
+  flexBetween: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  } as React.CSSProperties,
+};
+
+// Developer Styles (devs)
+const devs: Record<string, React.CSSProperties> = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '24px',
+  },
+  // 매크로 상단 컨트롤 영역
+  macroCard: {
+    ...mixins.flexBetween,
+    backgroundColor: colors.white,
+    padding: '16px 24px',
+    borderRadius: '16px',
+    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+    border: `1px solid ${colors.border}`,
+  },
+  macroBrand: {
+    fontSize: '18px',
+    fontWeight: '700',
+    color: colors.textMain,
+  },
+  platformSelect: {
+    fontSize: '18px',
+    fontWeight: '800',
+    color: '#ec4899',
+    border: 'none',
+    outline: 'none',
+    backgroundColor: 'transparent',
+    appearance: 'auto',
+    paddingRight: '4px',
+  },
+  // 통계 뱃지 스타일
+  statBadgeTotal: {
+    padding: '4px 8px',
+    backgroundColor: '#f8fafc',
+    border: '1px solid #e2e8f0',
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: '#475569',
+    fontWeight: '600',
+  },
+  statBadgePending: {
+    padding: '4px 8px',
+    backgroundColor: '#fff1f2',
+    border: '1px solid #fecdd3',
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: '#e11d48',
+    fontWeight: '700',
+  },
+  // 버튼 스타일
+  btnMacroStop: {
+    padding: '8px 16px',
+    backgroundColor: '#94a3b8',
+    color: colors.white,
+    border: 'none',
+    borderRadius: '8px',
+    fontWeight: '700',
+    fontSize: '14px',
+    cursor: 'pointer',
+  },
+  btnMacroStart: {
+    padding: '8px 16px',
+    backgroundColor: '#ec4899',
+    color: colors.white,
+    border: 'none',
+    borderRadius: '8px',
+    fontWeight: '700',
+    fontSize: '14px',
+    cursor: 'pointer',
+  },
+  macroStatusText: {
+    fontSize: '13px',
+    color: colors.textSub,
+    minWidth: '250px',
+  },
+  // 로그 패널 영역
+  contentWrapper: {
+    backgroundColor: colors.white,
+    borderRadius: '16px',
+    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+    border: `1px solid ${colors.border}`,
+    padding: '24px',
+  },
+  sectionTitle: {
+    fontSize: '18px',
+    fontWeight: '700',
+    margin: '0 0 16px 0',
+    color: colors.textMain,
+  },
+  logContainer: {
+    backgroundColor: '#f8fafc',
+    padding: '16px',
+    borderRadius: '8px',
+    border: `1px solid #e2e8f0`,
+    fontSize: '13px',
+    maxHeight: '500px',
+    overflowY: 'auto',
+  },
+};
+
+
+// ==========================================
+// 🧠 2. 메인 컴포넌트 (로직 및 렌더링 영역)
+// ==========================================
+
 export default function DeveloperPage() {
+  // --- 상태 관리 (State) ---
   const [targetPlatform, setTargetPlatform] = useState(PLATFORMS[0].value);
   const [stats, setStats] = useState({ totalCount: 0, pendingCount: 0 });
-
   const [isAutoRunning, setIsAutoRunning] = useState(false);
   const isAutoRunningRef = useRef(false);
   const [log, setLog] = useState<string[]>([]);
   
+  // --- 공통 함수 ---
   const addLog = (msg: string) => setLog(prev => [msg, ...prev].slice(0, 100));
 
-  // 통계 및 다음 타겟 가져오기 API 호출
   const fetchTargetAndStats = async () => {
     const res = await fetch(`/api/admin/categories/auto-crawl?platform=${targetPlatform.toUpperCase()}`);
     return await res.json();
   };
 
+  // --- 생명주기 (Effects) ---
   useEffect(() => {
     const init = async () => {
       const data = await fetchTargetAndStats();
@@ -35,6 +162,7 @@ export default function DeveloperPage() {
     init();
   }, [targetPlatform]);
 
+  // --- 주요 액션 핸들러 ---
   const startAutoCrawl = async () => {
     if (isAutoRunning) return;
     setIsAutoRunning(true);
@@ -45,7 +173,6 @@ export default function DeveloperPage() {
 
     while (isAutoRunningRef.current) {
       try {
-        // 1. 공용 API 호출 (통계 갱신 포함)
         const data = await fetchTargetAndStats();
         if (!isAutoRunningRef.current) break;
         
@@ -54,14 +181,12 @@ export default function DeveloperPage() {
         }
 
         const { nextId, nextName } = data;
-        if (!nextId) {
+        if (!nextId && data.totalCount) {
           addLog(`✅ [${platformLabel}] 모든 카테고리 수집이 완료되었습니다!`);
           break;
         }
 
-        // 🌟 2. 소문자 변환 로직 삭제 및 동적 주소 호출
-        // targetPlatform이 이미 'yahoo_auction' 등이므로 바로 사용합니다.
-        const crawlRes = await fetch(`/api/admin/categories/${targetPlatform}?genre=${nextId}`);
+        const crawlRes = await fetch(`/api/admin/categories/${targetPlatform}?genreId=${nextId}`);
         const crawlResult = await crawlRes.json();
 
         if (!isAutoRunningRef.current) break;
@@ -94,6 +219,7 @@ export default function DeveloperPage() {
     setIsAutoRunning(false); 
   };
 
+  // --- UI 렌더링 (JSX) ---
   return (
     <div style={devs.container}>
       <div style={devs.macroCard}>
@@ -112,7 +238,7 @@ export default function DeveloperPage() {
           >
             {PLATFORMS.map(p => (
               <option key={p.value} value={p.value} style={{ color: '#0f172a', fontWeight: '500' }}>
-                {p.value.toUpperCase()} {/* 화면에는 대문자로 깔끔하게 표시 */}
+                {p.value.toUpperCase()}
               </option>
             ))}
           </select>
@@ -150,126 +276,3 @@ export default function DeveloperPage() {
     </div>
   );
 }
-
-// ==========================================
-// 🎨 스타일 정의 영역 (Developer Styles: devs)
-// ==========================================
-
-const colors = {
-  white: '#fff',
-  border: '#f1f5f9',
-  textMain: '#0f172a',
-  textSub: '#64748b',
-};
-
-const mixins = {
-  flexBetween: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  } as React.CSSProperties,
-};
-
-const devs: Record<string, React.CSSProperties> = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
-  },
-
-  // 매크로 상단 컨트롤 영역
-  macroCard: {
-    ...mixins.flexBetween,
-    backgroundColor: colors.white,
-    padding: '16px 24px',
-    borderRadius: '16px',
-    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-    border: `1px solid ${colors.border}`,
-  },
-  macroBrand: {
-    fontSize: '18px',
-    fontWeight: '700',
-    color: colors.textMain,
-  },
-  platformSelect: {
-    fontSize: '18px',
-    fontWeight: '800',
-    color: '#ec4899',
-    border: 'none',
-    outline: 'none',
-    backgroundColor: 'transparent',
-    appearance: 'auto',
-    paddingRight: '4px',
-  },
-  
-  // 🌟 추가된 통계 뱃지 스타일
-  statBadgeTotal: {
-    padding: '4px 8px',
-    backgroundColor: '#f8fafc',
-    border: '1px solid #e2e8f0',
-    borderRadius: '6px',
-    fontSize: '12px',
-    color: '#475569',
-    fontWeight: '600',
-  },
-  statBadgePending: {
-    padding: '4px 8px',
-    backgroundColor: '#fff1f2',
-    border: '1px solid #fecdd3',
-    borderRadius: '6px',
-    fontSize: '12px',
-    color: '#e11d48',
-    fontWeight: '700',
-  },
-
-  // 버튼들
-  btnMacroStop: {
-    padding: '8px 16px',
-    backgroundColor: '#94a3b8',
-    color: colors.white,
-    border: 'none',
-    borderRadius: '8px',
-    fontWeight: '700',
-    fontSize: '14px',
-    cursor: 'pointer',
-  },
-  btnMacroStart: {
-    padding: '8px 16px',
-    backgroundColor: '#ec4899',
-    color: colors.white,
-    border: 'none',
-    borderRadius: '8px',
-    fontWeight: '700',
-    fontSize: '14px',
-    cursor: 'pointer',
-  },
-  macroStatusText: {
-    fontSize: '13px',
-    color: colors.textSub,
-    minWidth: '250px',
-  },
-
-  // 로그 패널 영역
-  contentWrapper: {
-    backgroundColor: colors.white,
-    borderRadius: '16px',
-    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-    border: `1px solid ${colors.border}`,
-    padding: '24px',
-  },
-  sectionTitle: {
-    fontSize: '18px',
-    fontWeight: '700',
-    margin: '0 0 16px 0',
-    color: colors.textMain,
-  },
-  logContainer: {
-    backgroundColor: '#f8fafc',
-    padding: '16px',
-    borderRadius: '8px',
-    border: `1px solid #e2e8f0`,
-    fontSize: '13px',
-    maxHeight: '500px',
-    overflowY: 'auto',
-  },
-};

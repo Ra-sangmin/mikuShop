@@ -8,7 +8,7 @@ let recentParentIds: number[] = [];
 export async function GET(request: NextRequest) {
   // 1. URL 파라미터 추출
   const searchParams = request.nextUrl.searchParams;
-  const genreIdParam = searchParams.get('genre') || searchParams.get('category');
+  const genreIdParam = searchParams.get('genreId') || searchParams.get('category');
   const genreId = Number(genreIdParam) || 0;
 
   try {

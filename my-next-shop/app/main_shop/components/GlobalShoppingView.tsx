@@ -75,7 +75,7 @@ const MikuLoadingOverlay = ({ message }: { message: string }) => (
 );
 
 interface GlobalShoppingViewProps {
-  platform: 'rakuten' | 'mercari' | 'amazon' | 'yahoo_auction';
+  platform: 'rakuten' | 'mercari' | 'amazon' | 'yahoo_auction' | 'yahoo_shopping';
   // 데이터
   path: { id: number; name: string }[];
   categories: any[];

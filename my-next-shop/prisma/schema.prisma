@@ -218,6 +218,31 @@ model YahooAuctionCategory {
   @@map("YahooAuctionCategory")
 }
 
+model YahooShoppingCategory {
+  id         Int      @id @default(autoincrement())
+  genreId    Int      @unique
+  genreName  String
+  genreLevel Int?     @default(1) 
+  parentId   Int
+  isLeaf     Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  @@map("YahooShoppingCategory")
+}
+
+model AmazonCategory {
+  id         Int      @id @default(autoincrement())
+  genreId    Int      @unique
+  genreName  String
+  genreLevel Int?     @default(1) 
+  parentId   Int
+  isLeaf     Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  @@map("AmazonCategory")
+}
+
+
 // 2. 머니 로그 타입 Enum 추가
 enum MoneyLogType {
   CHARGE  // 충전

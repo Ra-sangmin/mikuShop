@@ -6,7 +6,7 @@ import { getDetailStyles, DetailTheme } from "./GlobalProductDetail.styles";
 
 export interface GlobalProduct {
   id: string;
-  platform: 'mercari' | 'rakuten' | 'amazon' | 'yahoo_auction';
+  platform: 'mercari' | 'rakuten' | 'amazon' | 'yahoo_auction' | 'yahoo_shopping';
   name: string;
   price: number;
   thumbnail: string;

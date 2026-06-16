@@ -31,7 +31,7 @@ const COLOR_OPTIONS = [
 ];
 
 // --- 플랫폼별 타입 정의 ---
-export type ShoppingPlatform = 'mercari' | 'rakuten' | 'amazon' | 'yahoo' | 'yahoo_auction' | 'default';
+export type ShoppingPlatform = 'mercari' | 'rakuten' | 'amazon' | 'yahoo_shopping' | 'yahoo_auction' | 'default';
 
 interface GlobalCategory {
   genreId: number;
@@ -72,7 +72,7 @@ const PLATFORM_THEMES: Record<ShoppingPlatform, { color: string; bg: string; lig
   mercari: { color: '#ff0038', bg: '#fff1f2', light: '#f9fafb' },
   rakuten: { color: '#bf0000', bg: '#fef2f2', light: '#f9fafb' },
   amazon: { color: '#ff9900', bg: '#fff7ed', light: '#f9fafb' },
-  yahoo: { color: '#ff0033', bg: '#fff1f2', light: '#f9fafb' },
+  yahoo_shopping: { color: '#ff0033', bg: '#fff1f2', light: '#f9fafb' },
   yahoo_auction: { color: '#ffa600', bg: '#fff7ed', light: '#f9fafb' },
   default: { color: '#6366f1', bg: '#f5f3ff', light: '#f9fafb' }
 };
@@ -351,7 +351,7 @@ export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: G
             </Section>
 
 
-            {platform !== 'rakuten' && platform !== 'yahoo_auction' && (
+            {platform == 'mercari' && (
               <>
                 <Section title="출품자" isOpen={openSections['출품자']} onToggle={() => toggleSection('출품자')} isMobile={isMobile}>
                   <CapsuleGroup options={['모두', '개인', '메루카리샵']} current={filters.sellerType} onChange={(v: string) => handleChange('sellerType', v)} isMobile={isMobile} />

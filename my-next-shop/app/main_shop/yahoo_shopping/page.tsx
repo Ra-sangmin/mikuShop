@@ -1,289 +1,197 @@
 "use client";
 
-import React, { useState, useEffect, useRef, Suspense } from 'react'; // Suspense 추가
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 
-// 1. 실제 비즈니스 로직과 UI를 담당하는 Content 컴포넌트
-function YahooShoppingContent() {
+// --- 📦 공용 글로벌 컴포넌트 ---
+import GlobalShoppingView from "@/app/main_shop/components/GlobalShoppingView";
+import { GlobalFilterState } from "@/app/main_shop/components/GlobalSidebar";
+import { GlobalProduct } from "@/app/main_shop/components/GlobalProductDetail";
+
+// --- 🛠️ 유틸리티 ---
+import { getTranslatedText } from '@/lib/search-utils';
+
+// ✨ 야후 쇼핑 전용 정렬 옵션 (야후 API 기준)
+const YahooSortOptions = [
+  { id: '-score', label: '추천순' },
+  { id: '+price', label: '가격낮은순' },
+  { id: '-price', label: '가격높은순' },
+  { id: '-review_count', label: '리뷰많은순' },
+  { id: '-sold', label: '판매량순' },
+];
+
+function YahooContent() {
+  const [currentFilters, setCurrentFilters] = useState<GlobalFilterState>({});
   const router = useRouter();
   const searchParams = useSearchParams();
+  const categoryId = searchParams.get('categoryId') || '1';
 
-  // URL에서 상태 추출
-  const genreId = searchParams.get('genreId') || '0';
-  const sort = searchParams.get('sort') || 'standard';
-  const page = searchParams.get('page') || '1';
-  
-  const [categories, setCategories] = useState([]); 
-  const [currentGenre, setCurrentGenre] = useState({ genreName: '' }); 
-  const [parentsGenre, setParentsGenre] = useState<any[]>([]); 
-  const [childrenGenre, setChildrenGenre] = useState([]); 
-  const [items, setItems] = useState([]);
-  const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 0, sort : 'standard' });
-  const [loading, setLoading] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [isLeaf, setIsLeaf] = useState(false); 
+  const [path, setPath] = useState<{id: number, name: string}[]>([]);
 
-  // ★ 브라우저 뒤로가기 제어
-  useEffect(() => {
-    if (selectedItem) {
-      window.history.pushState({ isDetail: true }, "");
-    }
+  const [items, setItems] = useState<GlobalProduct[]>([]);
+  const [productDetail, setProductDetail] = useState<GlobalProduct | null>(null);
+  const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 1 });
 
-    const handlePopState = (event: PopStateEvent) => {
-      if (selectedItem) {
-        setSelectedItem(null);
-        window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-      }
+  // 🚀 [로직 1] 야후 데이터를 Global 규격으로 변환
+  const mapToGlobal = (item: any): GlobalProduct => {
+
+    const getHighResImage = (url?: string) => {
+      if (!url) return '';
+      // /i/c/ 나 /i/g/ 같은 화질 폴더명을 /i/n/ (고해상도)로 덮어씌움
+      return url.replace(/\/i\/[a-z]\//, '/i/n/');
     };
 
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [selectedItem]);
+    // 변환된 고해상도 URL 생성
+    const highResImageUrl = getHighResImage(item.image?.medium);
 
-  const detailRef = useRef<HTMLDivElement>(null);
-  const { exchangeRate } = useExchangeRate();
-  const [cartCount, setCartCount] = useState<number>(0);
-  const [wishlistCount, setWishlistCount] = useState<number>(0);
+    return {
+      id: item.index,
+      platform: 'yahoo_shopping',
+      name: item.name,
+      price: item.price,
+      description: item.description || "상세 설명이 없습니다.",
+      images: [highResImageUrl],
+      thumbnail: highResImageUrl,
+      condition: item.condition || "new",
+      size: "",
+      categories: [],
+      url: item.url,
+      shopUrl: item.url,
+      status: 'on_sale',
+      shopName: item.brand.name,
+    };
+  };
 
-  const getDynamicApiUrl = (path: string, queryParams: string) => {
-    const hostName = window.location.hostname; 
-    const protocol = window.location.protocol;
+  // 🚀 [로직 2] 상품 로드 함수
+  const loadItems = async (catId: any, filters?: GlobalFilterState) => {
+    setItems([]);
+    setProductDetail(null);
+
+    const params = new URLSearchParams({ categoryId: catId.toString() });
+    if (filters?.page) params.append("page", filters.page.toString());
+    if (filters?.sortOrder) params.append("sort", filters.sortOrder);
+    if (filters?.keyword) params.append("keyword", filters.keyword);
+    if (filters?.excludeKeyword) params.append("NGKeyword", filters.excludeKeyword);
+    if (filters?.minPrice) params.append("minPrice", filters.minPrice);
+    if (filters?.maxPrice) params.append("maxPrice", filters.maxPrice);
+
+    const res = await fetch(`/api/yahoo_shopping/items?${params.toString()}`);
+    const data = await res.json();
+
+    if (data.items) {
+      setItems(data.items.map(mapToGlobal));
+      setPageInfo({ page: data.page, pageCount: data.pageCount });
+      //setPageInfo({ page: filters?.page || 1, pageCount: Math.ceil(data.totalResultsAvailable / 20) });
+    }
+  };
+
+  const updateNavigation = (id: number, name: string, levelIndex: number) => {
     
-    if (hostName.includes('ngrok-free.dev')) {
-        return `${protocol}//${hostName}/rakuten/${path}?${queryParams}`;
+    setIsLeaf(false);
+    setItems([]); 
+    setProductDetail(null);
+    setPageInfo(prev => ({ ...prev, page: 1 }));
+
+    if (!id || id === 0 ||  name === 'HOME') { 
+      setPath([]); 
+      router.push('/main_shop/yahoo_shopping'); 
+      return; 
     }
-    return `${protocol}//${hostName}:4000/rakuten/${path}?${queryParams}`;
+    
+    setPath(prev => {
+      const filtered = prev.slice(0, levelIndex);
+      return [...filtered, { id: id, name: name }];
+    });
+    router.push(`/main_shop/yahoo_shopping?categoryId=${id}`);
   };
 
-  const updateCounts = () => {
-    const savedCart = JSON.parse(localStorage.getItem('rakutenCart') || '[]');
-    setCartCount(savedCart.length);
-    const savedWishlist = JSON.parse(localStorage.getItem('rakutenWishlist') || '[]');
-    setWishlistCount(savedWishlist.length);
+  // 🚀 [로직 3] 검색 및 필터링
+  const OnSearch = async (filters: GlobalFilterState) => {
+    const translatedKeyword = await getTranslatedText(filters.keyword || "");
+    const updatedFilters = { ...filters, keyword: translatedKeyword };
+    setCurrentFilters(updatedFilters);
+    loadItems(categoryId, updatedFilters);
   };
 
+  // 🚀 [로직 4] 카테고리 로드 및 초기 페칭
   useEffect(() => {
-    updateCounts();
-  }, []);
+    const fetchData = async () => {
 
-  useEffect(() => {
-      const domain = window.location.hostname;
-      document.cookie = `googtrans=/ja/ko; path=/;`;
-      document.cookie = `googtrans=/ja/ko; domain=${domain}; path=/;`;
+      //setIsLeaf(false);
+      setCategories([]); 
 
-      async function fetchCategories() {
-          setSelectedItem(null);
-          setItems([]); 
 
-          const apiUrl = getDynamicApiUrl('categories', `genreId=${genreId}`);
-          const res = await fetch(apiUrl); 
-          const data = await res.json();
-
-          setCategories(data.children || []); 
-          setCurrentGenre(data.current || { genreName: '' }); 
-          setParentsGenre(data.parents || []); 
-          setChildrenGenre(data.children || []); 
-      }
-      fetchCategories();
-  }, [genreId]);
-
-  useEffect(() => {
-    async function loadItems() {
-      if (genreId === '0') {
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
       try {
-        const apiUrl = getDynamicApiUrl('items', `genreId=${genreId}&sort=${sort}&page=${page}`);
-        const response = await fetch(apiUrl);
-        const data = await response.json();
+        const apiUrl = `/api/yahoo_shopping/categories?genreId=${categoryId}`;
 
-        setItems(data.items || []);
-        setPageInfo({ page: data.page, pageCount: data.pageCount, sort : sort});
-      } catch (error) {
-        console.error("데이터 로드 실패:", error);
-      } finally {
-        setLoading(false);
+        const res = await fetch(apiUrl);
+        const result = await res.json();
+
+        if (result.success) {
+
+          const serverData = result.data || [];
+          //const serverIsLeaf = !!result.isLeaf;
+          
+          setCategories(serverData);
+          //setIsLeaf(serverIsLeaf);
+
+          if (result.parents) {
+            setPath(result.parents.map((p: any) => ({ id: p.genreId, name: p.genreName })));
+          }
+
+          if (categoryId !== '0') {
+            console.log(`📦 장르 변경 감지: ${categoryId}번 카테고리 상품 로드 시작`);
+            await loadItems(categoryId, currentFilters);
+          }
+        }
+      } catch (e) { 
+        console.error("Data Load Error", e); 
+      } finally { 
       }
-    }
-    if (genreId !== '0') loadItems();
-  }, [genreId, sort, page]);
+
+      // 카테고리 로드 로직 (API 연동 필요)
+      // const res = await fetch(`/api/yahoo_shopping/categories?categoryId=${categoryId}`);
+      // const result = await res.json();
+      
+      // if (result.success) {
+
+      //   console.log(JSON.stringify(result, null, 2));
+
+      //   setCategories(result.categories);
+      //   //if (categoryId !== '0') await loadItems(categoryId, currentFilters);
+      // }
+    };
+    fetchData();
+  }, [categoryId]);
 
   return (
-    <div className="category-box">
-      <div className="page-title-container" role="alert">
-        <nav className="breadcrumb-bar">
-          <a href="/" style={{ fontSize: '20px' }}><i className="fa fa-home" style={{ marginRight: '8px' }}></i> 홈 </a>
-          {parentsGenre.map((parent, index) => {
-            const currentSort = searchParams.get('sort');
-            const params = new URLSearchParams();
-            params.set('genreId', parent.genreId);
-            if (currentSort) {
-              params.set('sort', currentSort);
-            }
-            params.set('page', '1'); 
-
-            return (
-              <span key={parent.genreId || index} style={{ fontSize: '13px', color: '#666' }}>
-                <span style={{ margin: '0 8px', color: '#ccc' }}>  `&gt;` </span>
-                <Link 
-                  href={`/rakuten?${params.toString()}`}
-                  style={{ 
-                    fontSize: '18px',
-                    textDecoration: 'none', 
-                    color: '#666',
-                    cursor: 'pointer' 
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
-                  onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
-                >
-                  {parent.genreName}
-                </Link>
-              </span>
-            );
-          })}
-
-          {currentGenre.genreName && (
-            <>
-              <span style={{ margin: '0 8px', color: '#ccc' }}> `&gt;` </span>
-              <span style={{ 
-                fontSize: '18px', 
-                fontWeight: 'bold', 
-                color: '#333' 
-              }}>
-                {currentGenre.genreName}
-              </span>
-            </>
-          )}
-        </nav>
-      </div>
-
-      <div className="category-box" style={{ width: '100%', marginBottom: '20px' }}>
-        {categories.length === 0 ? (
-          <p style={{ fontSize: '16px', color: '#888', padding: '20px' }}>하위 카테고리가 없습니다.</p> 
-        ) : (
-            <div 
-              className="category-flex-container" 
-              style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', 
-                  gap: '10px 20px', 
-                  width: '100%'
-              }}
-            >
-              {categories.map((cat: any) => {
-                  const params = new URLSearchParams();
-                  params.set('genreId', cat.genreId); 
-                  if (sort) params.set('sort', sort);
-
-                  return (
-                    <div key={cat.genreId} className="cat-item">
-                      <Link href={`/rakuten?${params.toString()}`}
-                          style={{
-                              fontSize: '16px',
-                              fontWeight: '500',         
-                              padding: '6px 12px',
-                              letterSpacing: '-0.3px',
-                              display: 'inline-block',
-                              border: 'none',            
-                              backgroundColor: 'transparent', 
-                              color: '#666',             
-                              textDecoration: 'none',
-                              textAlign: 'left',         
-                              whiteSpace: 'nowrap',
-                              transition: 'color 0.2s ease', 
-                              lineHeight: '1.2'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.color = '#337ab7'}
-                          onMouseLeave={(e) => e.currentTarget.style.color = '#333'}
-                      >
-                        {cat.genreName}
-                      </Link>
-                    </div>
-                  );
-              })}
-            </div>
-        )}
-      </div>
-
-      {!loading && items.length > 0 ? (
-        <>
-          
-          <div ref={detailRef} style={{ scrollMarginTop: '20px' }}>
-          {selectedItem && (
-            <div className="detail-view-container" style={{ 
-                position: 'relative',    
-                width: '100%',            
-                maxWidth: '1500px',      
-                margin: '20px auto',     
-                backgroundColor: '#fff',
-                border: '1px solid #ddd',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-                zIndex: 1000
-            }}>
-              <div style={{ textAlign: 'right' }}>
-                <button 
-                  onClick={() => {
-                    setSelectedItem(null);
-                      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-                  }}
-                  style={{ 
-                    position: 'absolute', top: '-15px', right: '-20px', width: '50px', height: '50px',
-                    borderRadius: '50%', backgroundColor: '#fff', border: '2px solid #333',
-                    fontSize: '25px', fontWeight: 'bold', cursor: 'pointer', display: 'flex',
-                    alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                    paddingTop: '4px', paddingLeft: '2px', zIndex: 1001
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#eee'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
-                >
-                  X
-                </button>
-              </div>
-              
-              
-            </div>
-          )}
-          </div>
-          <div className="item-box">
-            <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
-              gap: '15px', padding: '20px', backgroundColor: '#f9f9f9'
-            }}>
-              
-            </div>
-          </div>
-
-          
-        </>
-      ) : (
-        loading && (
-          <div style={{
-            display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
-            padding: '100px 0', width: '100%', minHeight: '400px'  
-          }}>
-            <i className="fa fa-spinner fa-spin fa-3x" style={{ color: '#337ab7', marginBottom: '20px' }}></i>
-            <p style={{ fontSize: '16px', color: '#666' }}>상품 정보를 불러오는 중입니다...</p>
-          </div>
-        )
-      )}
-    </div>
+    <GlobalShoppingView
+      platform="yahoo_shopping"
+      path={[]} // 필요시 카테고리 path 추가
+      categories={categories}
+      items={items}
+      pageInfo={pageInfo}
+      selectedProduct={productDetail}
+      sortOptions={YahooSortOptions}
+      isLoading={false}
+      isItemLoading={false}
+      isLeaf={false}
+      //onNavigate={(id, name) => router.push(`/main_shop/yahoo_shopping?categoryId=${id}`)}
+      onNavigate={updateNavigation}
+      onSearch={OnSearch}
+      onCardClick={(item) => { setProductDetail(item); window.scrollTo(0,0); }}
+      onCloseDetail={() => setProductDetail(null)}
+      onPageChange={(p) => loadItems(categoryId, { ...currentFilters, page: p })}
+    />
   );
 }
 
-// 2. 최종 Export할 페이지 컴포넌트 (Suspense 적용)
-export default function YahooShoppingPage() {
+export default function YahooPage() {
   return (
-    <Suspense fallback={
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-        <i className="fa fa-spinner fa-spin fa-2x" style={{ color: '#ffcc00' }}></i>
-        <p style={{ marginTop: '15px', color: '#666' }}>야후 쇼핑 정보를 불러오는 중입니다...</p>
-      </div>
-    }>
-      <YahooShoppingContent />
+    <Suspense fallback={<div>야후 쇼핑 정보를 불러오는 중입니다...</div>}>
+      <YahooContent />
     </Suspense>
   );
 }
