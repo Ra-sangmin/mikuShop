@@ -375,6 +375,9 @@ function MercariCategoryContent() {
 
   const updateNavigation = (id: number, name: string, level?: number) => {
 
+    if(id.toString() === genreId.toString())
+        return;
+      
     setIsLeaf(false);
 
     setItems([]); 

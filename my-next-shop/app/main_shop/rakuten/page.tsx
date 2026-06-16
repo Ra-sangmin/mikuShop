@@ -161,6 +161,9 @@ function RakutenContent() {
     // 🚀 [로직 2] 네비게이션 함수
   const updateNavigation = (id: number, name: string, levelIndex: number) => {
     
+    if(id.toString() === genreId.toString())
+        return;
+      
     setIsLeaf(false);
     setItems([]); 
     setProductDetail(null);

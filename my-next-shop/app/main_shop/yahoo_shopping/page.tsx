@@ -21,17 +21,21 @@ const YahooSortOptions = [
 ];
 
 function YahooContent() {
+
   const [currentFilters, setCurrentFilters] = useState<GlobalFilterState>({});
+
   const router = useRouter();
   const searchParams = useSearchParams();
-  const categoryId = searchParams.get('categoryId') || '1';
+  const genreId = searchParams.get('genreId') || '1';
 
   const [categories, setCategories] = useState<any[]>([]);
   const [isLeaf, setIsLeaf] = useState(false); 
   const [path, setPath] = useState<{id: number, name: string}[]>([]);
 
   const [items, setItems] = useState<GlobalProduct[]>([]);
+
   const [productDetail, setProductDetail] = useState<GlobalProduct | null>(null);
+
   const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 1 });
 
   // 🚀 [로직 1] 야후 데이터를 Global 규격으로 변환
@@ -64,12 +68,15 @@ function YahooContent() {
     };
   };
 
-  // 🚀 [로직 2] 상품 로드 함수
-  const loadItems = async (catId: any, filters?: GlobalFilterState) => {
-    setItems([]);
-    setProductDetail(null);
+  
+  const GetParams = (genreId: number, filters?: GlobalFilterState): URLSearchParams => {
+    
+    const params = new URLSearchParams({});
 
-    const params = new URLSearchParams({ categoryId: catId.toString() });
+    if (genreId !== 0) params.append("genreId", genreId.toString());
+
+    if (!filters) return params;
+
     if (filters?.page) params.append("page", filters.page.toString());
     if (filters?.sortOrder) params.append("sort", filters.sortOrder);
     if (filters?.keyword) params.append("keyword", filters.keyword);
@@ -77,18 +84,33 @@ function YahooContent() {
     if (filters?.minPrice) params.append("minPrice", filters.minPrice);
     if (filters?.maxPrice) params.append("maxPrice", filters.maxPrice);
 
-    const res = await fetch(`/api/yahoo_shopping/items?${params.toString()}`);
-    const data = await res.json();
+    return params;
+  };
 
-    if (data.items) {
-      setItems(data.items.map(mapToGlobal));
+  // 🚀 [로직 2] 상품 로드 함수
+  const loadItems = async (catId: any, filters?: GlobalFilterState) => {
+
+    setItems([]);
+    setProductDetail(null);
+
+    const targetId = Number(catId);
+    const params = GetParams(targetId, filters);
+
+    if (targetId !== 1) {
+
+      const res = await fetch(`/api/yahoo_shopping/items?${params.toString()}`);
+      const data = await res.json();
+
       setPageInfo({ page: data.page, pageCount: data.pageCount });
-      //setPageInfo({ page: filters?.page || 1, pageCount: Math.ceil(data.totalResultsAvailable / 20) });
+      setItems(data.items.map(mapToGlobal));
     }
   };
 
   const updateNavigation = (id: number, name: string, levelIndex: number) => {
     
+    if(id.toString() === genreId.toString())
+        return;
+   
     setIsLeaf(false);
     setItems([]); 
     setProductDetail(null);
@@ -104,7 +126,7 @@ function YahooContent() {
       const filtered = prev.slice(0, levelIndex);
       return [...filtered, { id: id, name: name }];
     });
-    router.push(`/main_shop/yahoo_shopping?categoryId=${id}`);
+    router.push(`/main_shop/yahoo_shopping?genreId=${id}`);
   };
 
   // 🚀 [로직 3] 검색 및 필터링
@@ -112,19 +134,18 @@ function YahooContent() {
     const translatedKeyword = await getTranslatedText(filters.keyword || "");
     const updatedFilters = { ...filters, keyword: translatedKeyword };
     setCurrentFilters(updatedFilters);
-    loadItems(categoryId, updatedFilters);
+    loadItems(genreId, updatedFilters);
   };
 
   // 🚀 [로직 4] 카테고리 로드 및 초기 페칭
   useEffect(() => {
     const fetchData = async () => {
 
-      //setIsLeaf(false);
+      setIsLeaf(false);
       setCategories([]); 
 
-
       try {
-        const apiUrl = `/api/yahoo_shopping/categories?genreId=${categoryId}`;
+        const apiUrl = `/api/yahoo_shopping/categories?genreId=${genreId}`;
 
         const res = await fetch(apiUrl);
         const result = await res.json();
@@ -132,18 +153,18 @@ function YahooContent() {
         if (result.success) {
 
           const serverData = result.data || [];
-          //const serverIsLeaf = !!result.isLeaf;
-          
+          const serverIsLeaf = !!result.isLeaf;
+
           setCategories(serverData);
-          //setIsLeaf(serverIsLeaf);
+          setIsLeaf(serverIsLeaf);
 
           if (result.parents) {
             setPath(result.parents.map((p: any) => ({ id: p.genreId, name: p.genreName })));
           }
 
-          if (categoryId !== '0') {
-            console.log(`📦 장르 변경 감지: ${categoryId}번 카테고리 상품 로드 시작`);
-            await loadItems(categoryId, currentFilters);
+          if (genreId !== '0') {
+            console.log(`📦 장르 변경 감지: ${genreId}번 카테고리 상품 로드 시작`);
+            await loadItems(genreId, currentFilters);
           }
         }
       } catch (e) { 
@@ -164,12 +185,12 @@ function YahooContent() {
       // }
     };
     fetchData();
-  }, [categoryId]);
+  }, [genreId]);
 
   return (
     <GlobalShoppingView
       platform="yahoo_shopping"
-      path={[]} // 필요시 카테고리 path 추가
+      path={path}
       categories={categories}
       items={items}
       pageInfo={pageInfo}
@@ -177,13 +198,12 @@ function YahooContent() {
       sortOptions={YahooSortOptions}
       isLoading={false}
       isItemLoading={false}
-      isLeaf={false}
-      //onNavigate={(id, name) => router.push(`/main_shop/yahoo_shopping?categoryId=${id}`)}
+      isLeaf={isLeaf}
       onNavigate={updateNavigation}
       onSearch={OnSearch}
       onCardClick={(item) => { setProductDetail(item); window.scrollTo(0,0); }}
       onCloseDetail={() => setProductDetail(null)}
-      onPageChange={(p) => loadItems(categoryId, { ...currentFilters, page: p })}
+      onPageChange={(p) => loadItems(genreId, { ...currentFilters, page: p })}
     />
   );
 }

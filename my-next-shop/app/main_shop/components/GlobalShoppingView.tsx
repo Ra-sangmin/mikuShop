@@ -134,7 +134,7 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
 
           {/* 메인 콘텐츠 */}
           <main style={styles.contentArea}>
-            <nav style={styles.breadcrumb}>
+            <nav style={styles.breadcrumb} className="notranslate">
               <span onClick={() => props.onNavigate(0, "HOME", 0)} style={{ cursor: 'pointer' }}>HOME</span>
               {props.path.map((p, i) => (
                 <span key={p.id} onClick={() => props.onNavigate(p.id, p.name, i)} style={{ cursor: 'pointer' }}> / {p.name}</span>

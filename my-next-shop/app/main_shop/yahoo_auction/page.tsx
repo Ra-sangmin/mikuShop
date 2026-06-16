@@ -277,6 +277,10 @@ function YahooAuctionContent() {
   }, [genreId]); 
 
   const updateNavigation = (id: number, name: string, levelIndex: number) => {
+
+    if(id.toString() === genreId.toString())
+        return;
+      
     setIsLeaf(false);
     setItems([]); 
     setProductDetail(null);

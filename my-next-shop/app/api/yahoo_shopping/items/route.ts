@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   
   // 1. 프론트엔드에서 넘어온 파라미터 받기
-  const categoryId = searchParams.get('categoryId') || '1';
+  const genreId = searchParams.get('genreId') || '1';
   const keyword = searchParams.get('keyword') || '';
   const NGKeyword = searchParams.get('NGKeyword') || null; // 🌟 라쿠텐과 통일성을 위해 NGKeyword 파라미터 추가
   const sort = searchParams.get('sort') || '-score'; // 리뷰 많은 순은 '-review_count'로 들어와야 함
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
 
   // 4. API 파라미터 조립
   API_URL.searchParams.append('appid', appId);
-  API_URL.searchParams.append('genre_category_id', categoryId);
+  API_URL.searchParams.append('genre_category_id', genreId);
   API_URL.searchParams.append('results', resultsPerPage.toString());
   API_URL.searchParams.append('start', startPosition.toString());
   API_URL.searchParams.append('sort', sort);
@@ -115,8 +115,6 @@ export async function GET(request: Request) {
     const realTotalItems = data?.totalResultsAvailable || 0;
     const safeTotalItems = Math.min(realTotalItems, MAX_ALLOWED_ITEMS);
     const totalPages = Math.ceil(safeTotalItems / resultsPerPage);
-
-    console.log(`[Yahoo Item API] 카테고리: ${categoryId}, 키워드: "${keyword}", 페이지: ${page}/${totalPages}, 총 상품 수(실제): ${realTotalItems}`);
 
     // 8. 정제된 데이터 프론트엔드로 전달
     return NextResponse.json({
