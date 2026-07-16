@@ -20,6 +20,7 @@ export default function GuideLayout({ children, title, type, hideSidebar = false
     { label: '구매대행 상황', href: '/mypage/status' },
     { label: '나의 배송지 정보 수정', href: '/mypage/profile' },
     { label: '관심목록', href: '/wishlist' },
+    { label: '비밀번호 수정', href: '/auth/change-password' },
   ];
 
   const guideMenu = [
