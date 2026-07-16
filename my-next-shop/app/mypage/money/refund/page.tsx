@@ -89,7 +89,7 @@ function useMoneyRefundLogic() {
       if (!hasAlerted.current) {
         hasAlerted.current = true;
         showAlert('로그인이 필요한 페이지입니다.', 'warning');
-        router.push('/login');
+        router.push('/auth/login');
       }
       return;
     }
@@ -111,7 +111,7 @@ function useMoneyRefundLogic() {
     // 🌟 기본 alert를 모두 showAlert로 교체
     if (!userId) {
       showAlert('로그인이 필요합니다.', 'warning');
-      router.push('/login');
+      router.push('/auth/login');
       return;
     }
     if (!amount || amountNum <= 0) return showAlert('환불할 금액을 입력해주세요.', 'warning');

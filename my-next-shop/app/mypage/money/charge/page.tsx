@@ -87,7 +87,7 @@ function useMoneyChargeLogic() {
       if (!hasAlerted.current) {
         hasAlerted.current = true;
         showAlert('로그인이 필요한 페이지입니다.', 'warning');
-        router.push('/login');
+        router.push('/auth/login');
       }
       return; 
     }
@@ -177,7 +177,7 @@ function useMoneyChargeLogic() {
       const storedId = localStorage.getItem('user_id');
       if (!storedId) {
         showAlert('로그인이 필요합니다.', 'warning');
-        router.push('/login');
+        router.push('/auth/login');
         return;
       }
 

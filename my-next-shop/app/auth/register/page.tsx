@@ -67,7 +67,7 @@ export default function RegisterPage() {
 
       if (data.success) {
         showAlert("회원가입이 완료되었습니다. 로그인해주세요.", "success");
-        router.push('/login');
+        router.push('/auth/login');
       } else {
         showAlert(data.error || "회원가입에 실패했습니다.", "error");
       }
@@ -107,7 +107,7 @@ export default function RegisterPage() {
 
         <div style={styles.footer}>
           이미 계정이 있으신가요? 
-          <Link href="/login" style={styles.link}>로그인</Link>
+          <Link href="/auth/login" style={styles.link}>로그인</Link>
         </div>
       </div>
     </div>

@@ -90,9 +90,9 @@ export default function LoginPage() {
         </form>
 
         <div className="utility-wrapper">
-          <Link href="/find-id" className="utility-link">아이디 찾기</Link>
+          <Link href="/auth/find-id" className="utility-link">아이디 찾기</Link>
           <span className="utility-separator">|</span>
-          <Link href="/find-password" className="utility-link">비밀번호 찾기</Link>
+          <Link href="/auth/find-password" className="utility-link">비밀번호 찾기</Link>
         </div>
 
         <div className="login-divider">

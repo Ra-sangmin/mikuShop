@@ -4,21 +4,14 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 
-export default function FindPasswordPage() {
-  const [userId, setUserId] = useState('');
+export default function FindIdPage() {
   const [email, setEmail] = useState('');
-  const [isSent, setIsSent] = useState(false); // 🌟 메일 발송 완료 상태
-  const [loading, setLoading] = useState(false);
+  const [foundId, setFoundId] = useState<string | null>(null);
   const { showAlert } = useMikuAlert();
 
-  const handleFindPassword = async (e: React.FormEvent) => {
+  const handleFindId = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!userId) {
-      showAlert("아이디를 입력해주세요.", "warning");
-      return;
-    }
-
     if (!email) {
       showAlert("가입 시 등록한 이메일을 입력해주세요.", "warning");
       return;
@@ -30,33 +23,24 @@ export default function FindPasswordPage() {
       return;
     }
 
-    setLoading(true);
-
     try {
-      // 🌟 [TODO] 실제 백엔드 API 연동 (임시 비밀번호 발송 API)
-      // const res = await fetch('/api/auth/find-password', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ userId, email })
-      // });
-      // const data = await res.json();
-      //
-      // if (data.success) {
-      //   setIsSent(true);
-      // } else {
-      //   showAlert(data.message || "일치하는 회원 정보가 없습니다.", "error");
-      // }
+      const res = await fetch('/api/auth/find-id', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
 
-      // --- 프론트엔드 임시 시뮬레이션 로직 ---
-      setTimeout(() => {
-        setIsSent(true);
-        setLoading(false);
-      }, 800);
+      const data = await res.json();
+
+      if (data.success) {
+        setFoundId(data.maskedId);
+      } else {
+        showAlert(data.message || "일치하는 회원 정보가 없습니다.", "error");
+      }
 
     } catch (error) {
-      console.error("비밀번호 찾기 중 오류 발생:", error);
+      console.error("아이디 찾기 중 오류 발생:", error);
       showAlert("처리 중 오류가 발생했습니다. 다시 시도해주세요.", "error");
-      setLoading(false);
     }
   };
 
@@ -65,28 +49,16 @@ export default function FindPasswordPage() {
       <div className="login-card fade-in-up">
         
         <div className="login-header">
-          <h1 className="login-title">비밀번호 찾기</h1>
+          <h1 className="login-title">아이디 찾기</h1>
           <p className="login-subtitle">
-            {!isSent 
-              ? '가입하신 아이디와 이메일 주소를 입력해주세요.' 
-              : '메일 발송이 완료되었습니다.'}
+            {!foundId 
+              ? '가입 시 등록하신 이메일 주소를 입력해주세요.' 
+              : '입력하신 정보와 일치하는 아이디입니다.'}
           </p>
         </div>
 
-        {!isSent ? (
-          <form onSubmit={handleFindPassword} className="fade-in-up">
-            <div className="input-group">
-              <label className="input-label">아이디</label>
-              <input 
-                type="text"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)} 
-                placeholder="아이디 입력"
-                className="login-input" 
-                autoFocus 
-              />
-            </div>
-
+        {!foundId ? (
+          <form onSubmit={handleFindId} className="fade-in-up">
             <div className="input-group">
               <label className="input-label">이메일 주소</label>
               <input 
@@ -95,42 +67,36 @@ export default function FindPasswordPage() {
                 onChange={(e) => setEmail(e.target.value)} 
                 placeholder="example@mail.com"
                 className="login-input" 
+                autoFocus 
               />
             </div>
 
-            <button type="submit" className="submit-btn" disabled={loading} style={{ marginTop: '12px' }}>
-              {loading ? '처리 중...' : '임시 비밀번호 발송'}
+            <button type="submit" className="submit-btn" style={{ marginTop: '12px' }}>
+              아이디 확인하기
             </button>
           </form>
         ) : (
           <div className="fade-in-up">
-            {/* 🌟 성공 시 보여줄 결과 박스 */}
             <div className="result-box">
-              <span className="result-label" style={{ color: '#03C75A' }}>✓ 확인 완료</span>
-              <strong className="result-id" style={{ fontSize: '18px', lineHeight: '1.6', color: '#0f172a' }}>
-                입력하신 이메일 주소로<br />
-                <span style={{ color: '#ff4b2b' }}>임시 비밀번호</span>를 발송했습니다.
-              </strong>
-              <p style={{ fontSize: '13px', color: '#64748b', marginTop: '16px', lineHeight: '1.5' }}>
-                로그인 후 마이페이지에서<br />비밀번호를 반드시 변경해주세요.
-              </p>
+              <span className="result-label">회원님의 아이디</span>
+              <strong className="result-id">{foundId}</strong>
             </div>
 
-            <Link href="/login" className="submit-btn" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
+            <Link href="/auth/login" className="submit-btn" style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
               로그인하러 가기
             </Link>
 
             <div style={{ textAlign: 'center', marginTop: '24px' }}>
-              <Link href="/find-id" className="utility-link" style={{ fontSize: '14px' }}>
-                아이디가 기억나지 않으신가요?
+              <Link href="/auth/find-password" className="utility-link" style={{ fontSize: '14px' }}>
+                비밀번호가 기억나지 않으신가요?
               </Link>
             </div>
           </div>
         )}
 
-        {!isSent && (
+        {!foundId && (
           <div className="login-footer">
-            <Link href="/login" className="utility-link" style={{ fontSize: '15px', fontWeight: '700' }}>
+            <Link href="/auth/login" className="utility-link" style={{ fontSize: '15px', fontWeight: '700' }}>
               ← 로그인 화면으로 돌아가기
             </Link>
           </div>
@@ -139,7 +105,7 @@ export default function FindPasswordPage() {
       </div>
 
       <style>{`
-        /* 🌟 아이디 찾기와 동일한 프리미엄 디자인 시스템 공유 */
+        /* 🌟 바탕을 더 깊이감 있는 방사형 그라데이션으로 변경 */
         .login-page-wrapper { 
           min-height: 100vh; 
           display: flex; 
@@ -150,6 +116,7 @@ export default function FindPasswordPage() {
           font-family: 'Pretendard', sans-serif;
         }
         
+        /* 🌟 여백 확대 및 그림자 고급화 */
         .login-card { 
           width: 100%; 
           max-width: 440px; 
@@ -167,6 +134,7 @@ export default function FindPasswordPage() {
         .input-group { margin-bottom: 28px; }
         .input-label { display: block; font-size: 14px; font-weight: 700; color: #334155; margin-bottom: 10px; }
         
+        /* 🌟 인풋 필드: 조금 더 부드러운 형태와 정교한 포커스 효과 */
         .login-input { 
           width: 100%; 
           padding: 18px 20px; 
@@ -187,6 +155,7 @@ export default function FindPasswordPage() {
           box-shadow: 0 0 0 4px rgba(255, 75, 43, 0.08); 
         }
 
+        /* 🌟 메인 버튼: 깔끔한 솔리드 컬러와 부드러운 호버 트랜지션 */
         .submit-btn { 
           width: 100%; 
           padding: 18px; 
@@ -201,21 +170,17 @@ export default function FindPasswordPage() {
           transform: translateY(0);
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
         }
-        .submit-btn:hover:not(:disabled) { 
+        .submit-btn:hover { 
           transform: translateY(-2px);
           box-shadow: 0 12px 24px rgba(255, 75, 43, 0.25);
           background-color: #f03e1e; 
-        }
-        .submit-btn:disabled {
-          background-color: #cbd5e1;
-          cursor: not-allowed;
-          box-shadow: none;
         }
 
         .login-footer { margin-top: 40px; padding-top: 24px; text-align: center; }
         .utility-link { color: #64748b; font-weight: 600; text-decoration: none; transition: color 0.2s; }
         .utility-link:hover { color: #0f172a; }
 
+        /* 🌟 결과 박스: 더욱 세련된 타이포그래피와 미세한 입체감 */
         .result-box {
           background: #f8fafc;
           border: 1px solid #e2e8f0;
@@ -227,14 +192,19 @@ export default function FindPasswordPage() {
         .result-label {
           display: block;
           font-size: 14px;
-          font-weight: 800;
+          color: #64748b;
+          font-weight: 700;
           margin-bottom: 12px;
         }
         .result-id {
           display: block;
-          letter-spacing: -0.5px;
+          font-size: 26px;
+          color: #ff4b2b;
+          font-weight: 900;
+          letter-spacing: 1px;
         }
 
+        /* 🌟 진입 애니메이션 길이 조정으로 더 우아한 느낌 부여 */
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(15px); }
           to { opacity: 1; transform: translateY(0); }

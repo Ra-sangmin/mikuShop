@@ -50,7 +50,7 @@ function MyPurchaseStatusContent() {
       if (!hasAlerted.current) {
         hasAlerted.current = true;
         showAlert('로그인이 필요한 페이지입니다.', 'warning');
-        router.push('/login');
+        router.push('/auth/login');
       }
       return;
     }

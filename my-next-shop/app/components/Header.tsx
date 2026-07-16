@@ -82,7 +82,7 @@ return (
               <NavItem key={idx} label={menu.label} items={menu.items} />
             ))}
             {!isLoggedIn ? (
-              <Link href="/login" style={{ ...styles.navItemLabel, color: '#555', textDecoration: 'none' }}>
+              <Link href="/auth/login" style={{ ...styles.navItemLabel, color: '#555', textDecoration: 'none' }}>
                 로그인
               </Link>
             ) : (
@@ -107,8 +107,8 @@ return (
         <div style={styles.authBtnGroup}>
           {!isLoggedIn ? (
             <>
-              <Link href="/login" style={{ ...styles.authLinkBase, ...styles.loginBtn }} onClick={() => setIsSidebarOpen(false)}>로그인</Link>
-              <Link href="/register" style={{ ...styles.authLinkBase, ...styles.registerBtn }} onClick={() => setIsSidebarOpen(false)}>회원가입</Link>
+              <Link href="/auth/login" style={{ ...styles.authLinkBase, ...styles.loginBtn }} onClick={() => setIsSidebarOpen(false)}>로그인</Link>
+              <Link href="/auth/register" style={{ ...styles.authLinkBase, ...styles.registerBtn }} onClick={() => setIsSidebarOpen(false)}>회원가입</Link>
             </>
           ) : (
             <>
