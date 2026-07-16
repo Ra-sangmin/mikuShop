@@ -110,7 +110,7 @@ export default function LoginPage() {
         </button>
 
         <div className="login-footer">
-          계정이 없으신가요? <Link href="/register" className="register-link">회원가입</Link>
+          계정이 없으신가요? <Link href="/auth/register" className="register-link">회원가입</Link>
         </div>
 
       </div>
