@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense, useMemo, useRef, useCallback } from 'react';
 import GuideLayout from '../../components/GuideLayout';
-import { useSearchParams, useRouter } from 'next/navigation'; // 🌟 useRouter 추가
+import { useSearchParams, useRouter } from 'next/navigation';
 import OrderTable from './components/OrderTable';
 import AddressForm from './components/AddressForm';
 import PaymentSummary from './components/PaymentSummary';
@@ -25,15 +25,16 @@ const initialTabs = [
   { name: ORDER_STATUS_LABEL[ORDER_STATUS.SHIPPING], count: 0, key: ORDER_STATUS.SHIPPING },
 ];
 
-function MyPurchaseStatusContent() {
+// =================================================================
+// 1. 비즈니스 로직 영역 (Business Logic Layer)
+// =================================================================
+function usePurchaseStatusLogic() {
   const searchParams = useSearchParams();
-  const router = useRouter(); // 🌟 라우터 초기화
+  const router = useRouter();
   const { showAlert, showConfirm } = useMikuAlert();
-  const hasAlerted = useRef(false); // 🌟 알림 중복 방지
+  const hasAlerted = useRef(false);
 
-  // 🌟 로그인 확인 상태 추가
   const [isAuthChecking, setIsAuthChecking] = useState(true);
-
   const [activeTab, setActiveTab] = useState<string>(ORDER_STATUS.CART);
   const [userData, setUserData] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
@@ -42,10 +43,9 @@ function MyPurchaseStatusContent() {
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   const exchangeRate = 9.05;
 
-  // 🌟 1. 컴포넌트 마운트 시 로그인 체크 수행
+  // 로그인 상태 확인
   useEffect(() => {
     const userId = localStorage.getItem('user_id');
-    
     if (!userId) {
       if (!hasAlerted.current) {
         hasAlerted.current = true;
@@ -54,72 +54,8 @@ function MyPurchaseStatusContent() {
       }
       return;
     }
-
-    // 로그인이 확인되면 인증 체크 종료 -> UI 렌더링 시작
     setIsAuthChecking(false);
   }, [router, showAlert]);
-
-
-  const handleDeleteOrder = async (orderId: string) => {
-    const isConfirmed = await showConfirm("정말 이 상품을 장바구니에서 삭제하시겠습니까? 🗑️");
-    
-    if (isConfirmed) {
-      try {
-        const res = await fetch(`/api/orders?id=${orderId}`, {
-          method: 'DELETE',
-        });
-
-        if (res.ok) {
-          showAlert('상품이 삭제되었습니다.', 'success');
-          fetchOrders(); 
-        } else {
-          showAlert('삭제 처리에 실패했습니다.', 'error');
-        }
-      } catch (error) {
-        console.error('삭제 오류:', error);
-        showAlert('서버 통신 중 오류가 발생했습니다.', 'error');
-      }
-    }
-  };
-
-  const handleIndividualPacking = async (item: any) => {
-    if (!selectedAddress) {
-      return showAlert('하단 수취인 주소 리스트에서 배송지를 먼저 선택해주세요.', 'warning');
-    }
-
-    const addressDisplayName = selectedAddress.recipientName || selectedAddress.name || '선택된 배송지';
-    const message = `선택하신 상품 \n[${item.productName}]을\n ${addressDisplayName}(으)로 배송 합니다\n이대로 개별 포장 요청 하시겠습니까?`;
-
-    const isConfirmed = await showConfirm(message);
-
-    if (isConfirmed) {
-      const nextStatus = ORDER_STATUS.PREPARING;
-      const updates = [{
-        id: item.orderId,
-        status: ORDER_STATUS.PREPARING,
-        address_id: selectedAddress.id 
-      }];
-
-      try {
-        const res = await fetch('/api/orders', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ updates })
-        });
-
-        if (res.ok) {
-          showAlert('개별 포장 처리가 완료되었습니다.', 'success');
-          fetchOrders();
-          setActiveTab(nextStatus);
-        } else {
-          showAlert('처리에 실패했습니다.', 'error');
-        }
-      } catch (error) {
-        console.error('개별 포장 오류:', error);
-        showAlert('서버 통신 중 오류가 발생했습니다.', 'error');
-      }
-    }
-  };
 
   const fetchOrders = useCallback(() => {
     const storedId = localStorage.getItem('user_id');
@@ -148,11 +84,8 @@ function MyPurchaseStatusContent() {
     }
   }, []);
 
-  // 🌟 2. 로그인 체크(isAuthChecking)가 완료된 후에만 데이터를 가져오도록 의존성 변경
   useEffect(() => { 
-    if (!isAuthChecking) {
-      fetchOrders(); 
-    }
+    if (!isAuthChecking) fetchOrders(); 
   }, [isAuthChecking, fetchOrders]);
 
   useEffect(() => {
@@ -165,17 +98,14 @@ function MyPurchaseStatusContent() {
         '입고완료': ORDER_STATUS.ARRIVED,
         '배송비 요청': ORDER_STATUS.PAYMENT_REQ,
       };
-      const targetTab = tabMap[tab] || tab; 
-      setActiveTab(targetTab);
+      setActiveTab(tabMap[tab] || tab);
       setSelectedItems([]);
     }
   }, [searchParams]);
 
   const tabs = useMemo(() => {
     return initialTabs.map(tab => {
-      const count = orders.filter(item => 
-        tab.key === ORDER_STATUS.ALL ? true : item.status === tab.key
-      ).length;
+      const count = orders.filter(item => tab.key === ORDER_STATUS.ALL ? true : item.status === tab.key).length;
       return { ...tab, count };
     });
   }, [orders]);
@@ -186,11 +116,7 @@ function MyPurchaseStatusContent() {
   }, [orders, activeTab]);
 
   const totals = useMemo(() => {
-    const selectedOrders = items.filter(item => {
-      const isMatched = selectedItems.map(String).includes(String(item.orderId));
-      return isMatched;
-    });
-
+    const selectedOrders = items.filter(item => selectedItems.map(String).includes(String(item.orderId)));
     return selectedOrders.reduce((acc, item) => {
       const productP = Number(item.productPrice * item.productCount) || 0;
       const domesticS = Number(item.domesticShippingFee) || 0; 
@@ -208,7 +134,6 @@ function MyPurchaseStatusContent() {
         acc.deposit += depositAmt;
       } else {
         acc.product += productP;
-        
         if (activeTab === ORDER_STATUS.CART) {
           acc.transfer += (transferF || 450); 
           acc.delivery += domesticS; 
@@ -231,12 +156,42 @@ function MyPurchaseStatusContent() {
     ? totalPriceVal 
     : Math.floor(totalPriceVal * exchangeRate);
 
+  // 데이터 삭제 처리
+  const handleDeleteOrder = async (orderId: string) => {
+    const isConfirmed = await showConfirm("정말 이 상품을 장바구니에서 삭제하시겠습니까? 🗑️");
+    if (isConfirmed) {
+      try {
+        const res = await fetch(`/api/orders?id=${orderId}`, { method: 'DELETE' });
+        if (res.ok) {
+          showAlert('상품이 삭제되었습니다.', 'success');
+          fetchOrders(); 
+        } else showAlert('삭제 처리에 실패했습니다.', 'error');
+      } catch (error) { showAlert('서버 통신 중 오류가 발생했습니다.', 'error'); }
+    }
+  };
+
+  // 개별 포장 처리
+  const handleIndividualPacking = async (item: any) => {
+    if (!selectedAddress) return showAlert('하단 수취인 주소 리스트에서 배송지를 먼저 선택해주세요.', 'warning');
+    const addressDisplayName = selectedAddress.recipientName || selectedAddress.name || '선택된 배송지';
+    const isConfirmed = await showConfirm(`선택하신 상품 \n[${item.productName}]을\n ${addressDisplayName}(으)로 배송 합니다\n이대로 개별 포장 요청 하시겠습니까?`);
+    if (isConfirmed) {
+      try {
+        const updates = [{ id: item.orderId, status: ORDER_STATUS.PREPARING, address_id: selectedAddress.id }];
+        const res = await fetch('/api/orders', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates }) });
+        if (res.ok) {
+          showAlert('개별 포장 처리가 완료되었습니다.', 'success');
+          fetchOrders();
+          setActiveTab(ORDER_STATUS.PREPARING);
+        } else showAlert('처리에 실패했습니다.', 'error');
+      } catch (error) { showAlert('서버 통신 중 오류가 발생했습니다.', 'error'); }
+    }
+  };
+
+  // 상태 업데이트 및 결제 처리
   const handleUpdateStatus = async (newStatus: string) => {
     if (selectedItems.length === 0) return showAlert('상품을 선택해주세요.', 'warning');
-
-    if (newStatus === ORDER_STATUS.PREPARING && !selectedAddress) {
-      return showAlert('하단 수취인 주소 리스트에서 배송지를 먼저 선택해주세요.', 'warning');
-    }
+    if (newStatus === ORDER_STATUS.PREPARING && !selectedAddress) return showAlert('하단 수취인 주소 리스트에서 배송지를 먼저 선택해주세요.', 'warning');
 
     const addressDisplayName = selectedAddress?.recipientName || '선택된 배송지';
     const confirmMsgs: any = {
@@ -249,7 +204,7 @@ function MyPurchaseStatusContent() {
     const isConfirmed = await showConfirm(confirmMsgs[newStatus] || '상태를 변경하시겠습니까?');
 
     if (isConfirmed) {
-      if (newStatus === ORDER_STATUS.PAID || newStatus === ORDER_STATUS.PAYMENT_DONE || newStatus === ORDER_STATUS.BIDDING) {
+      if ([ORDER_STATUS.PAID, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.BIDDING].includes(newStatus)) {
         try {
           const storedId = localStorage.getItem('user_id');
           const userRes = await fetch(`/api/users?id=${storedId}`);
@@ -257,42 +212,27 @@ function MyPurchaseStatusContent() {
           if (uData.success) {
             const currentMoney = uData.user.cyberMoney || 0;
             if (currentMoney < totalPriceWon) {
-              const missing = totalPriceWon - currentMoney;
-              const chargeConfirmed = await showConfirm(`미쿠짱 금액이 부족합니다.\n부족한 금액: ₩${missing.toLocaleString()}\n충전하시겠습니까?`);
-              if (chargeConfirmed) {
-                window.location.href = '/mypage/money/charge';
-              }
+              const chargeConfirmed = await showConfirm(`미쿠짱 금액이 부족합니다.\n부족한 금액: ₩${(totalPriceWon - currentMoney).toLocaleString()}\n충전하시겠습니까?`);
+              if (chargeConfirmed) window.location.href = '/mypage/money/charge';
               return;
             }
           }
         } catch (error) { return showAlert('잔액 확인 중 오류가 발생했습니다.', 'error'); }
       }
 
-      const addressUpdateData = newStatus === ORDER_STATUS.PREPARING && selectedAddress 
-        ? { address_id: selectedAddress.id } 
-        : {};
-
+      const addressUpdateData = newStatus === ORDER_STATUS.PREPARING && selectedAddress ? { address_id: selectedAddress.id } : {};
       let updates = newStatus === ORDER_STATUS.PREPARING 
         ? selectedItems.map(id => ({ id, status: newStatus, bundleId: 'B' + Date.now(), ...addressUpdateData })) 
-        : selectedItems.map(id => ({ 
-            id, 
-            status: newStatus,
-            ...(newStatus === ORDER_STATUS.BIDDING ? { bidStatus: 'PENDING' } : {}) 
-          }));
+        : selectedItems.map(id => ({ id, status: newStatus, ...(newStatus === ORDER_STATUS.BIDDING ? { bidStatus: 'PENDING' } : {}) }));
       
       try {
         const storedId = localStorage.getItem('user_id');
-        const isPayment = newStatus === ORDER_STATUS.PAID || newStatus === ORDER_STATUS.PAYMENT_DONE || newStatus === ORDER_STATUS.BIDDING;
+        const isPayment = [ORDER_STATUS.PAID, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.BIDDING].includes(newStatus);
         
         const res = await fetch('/api/orders', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            updates, 
-            userId: isPayment ? storedId : null, 
-            deductAmount: isPayment ? totalPriceWon : 0,
-            paymentTitle: newStatus === ORDER_STATUS.BIDDING ? '경매 보증금 결제' : undefined 
-          })
+          body: JSON.stringify({ updates, userId: isPayment ? storedId : null, deductAmount: isPayment ? totalPriceWon : 0, paymentTitle: newStatus === ORDER_STATUS.BIDDING ? '경매 보증금 결제' : undefined })
         });
 
         if (res.ok) {
@@ -305,130 +245,261 @@ function MyPurchaseStatusContent() {
     }
   };
 
+  return { 
+    isAuthChecking, isLoading, tabs, activeTab, setActiveTab, items, orders, userData,
+    selectedItems, setSelectedItems, selectedAddress, setSelectedAddress, exchangeRate,
+    totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus
+  };
+}
+
+
+// =================================================================
+// 2. 화면 컴포넌트 영역 (View Layer)
+// 그룹핑을 통한 컬러 테마 클래스 전달
+// =================================================================
+const StatusTab = ({ tab, isActive, onClick }: { tab: any, isActive: boolean, onClick: () => void }) => {
   const formatTabName = (key: string) => {
     if (key === ORDER_STATUS.ALL) return '전체내역';
     const label = ORDER_STATUS_LABEL[key as OrderStatus] || key;
-    
-    if (key === ORDER_STATUS.PAID) {
-      return (
-        <>
-          <span className="pc-text">{label}</span>
-          <span className="mobile-text">상품<br/>결제완료</span>
-        </>
-      );
-    }
-    if (key === ORDER_STATUS.PAYMENT_DONE) {
-      return (
-        <>
-          <span className="pc-text">{label}</span>
-          <span className="mobile-text">배송비<br/>결제 완료</span>
-        </>
-      );
-    }
+    if (key === ORDER_STATUS.PAID) return <><span className="pc-text">{label}</span><span className="mobile-text">상품<br/>결제완료</span></>;
+    if (key === ORDER_STATUS.PAYMENT_DONE) return <><span className="pc-text">{label}</span><span className="mobile-text">배송비<br/>결제 완료</span></>;
     return label;
   };
 
-  const renderTabItem = (tab: any) => {
-    const isActive = activeTab === tab.key;
-    
-    let groupColor = '#64748b'; 
-    if ([ORDER_STATUS.BID_PENDING, ORDER_STATUS.BIDDING , ORDER_STATUS.BID_SUCCESS].includes(tab.key)) groupColor = '#8b5cf6';
-    else if ([ORDER_STATUS.CART, ORDER_STATUS.PAID,ORDER_STATUS.FAILED].includes(tab.key)) groupColor = '#3b82f6';
-    else if ([ORDER_STATUS.ARRIVED,ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(tab.key)) groupColor = '#f97316';
+  return (
+    <div className={`miku-status-tab ${isActive ? 'active' : ''}`} onClick={onClick}>
+      <span className="tab-name">{formatTabName(tab.key)}</span>
+      <span className="tab-count">{tab.count}</span>
+    </div>
+  );
+};
 
-    return (
-      <div 
-        key={tab.key} 
-        className={`tab-item-box ${isActive ? 'active-tab' : ''}`}
-        onClick={() => { setActiveTab(tab.key); setSelectedItems([]); }}
-        style={{ 
-          backgroundColor: isActive ? groupColor : '#fff', 
-          color: isActive ? '#fff' : '#475569', 
-          borderBottom: isActive ? 'none' : `3px solid ${groupColor}` 
-        }}
-      >
-        <span className="tab-text">{formatTabName(tab.key)}</span>
-        <span className="tab-badge" style={{ 
-          backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : '#f1f5f9', 
-          color: isActive ? '#fff' : groupColor 
-        }}>
-          {tab.count}
-        </span>
-      </div>
-    );
-  };
 
-  // 🌟 3. 로그인 여부 확인 중일 때는 빈 화면을 렌더링해 깜빡임 방지
-  if (isAuthChecking) {
-    return <div style={{ height: '100vh', backgroundColor: '#fdfdfd' }} />;
-  }
+function MyPurchaseStatusContent() {
+  const { 
+    isAuthChecking, isLoading, tabs, activeTab, setActiveTab, items, orders, userData,
+    selectedItems, setSelectedItems, selectedAddress, setSelectedAddress, exchangeRate,
+    totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus
+  } = usePurchaseStatusLogic();
 
-  if (isLoading) return <div style={{ padding: '100px', textAlign: 'center' }}>로딩 중...</div>;
+  if (isAuthChecking) return <div style={{ height: '100vh', backgroundColor: '#f8fafc' }} />;
+  if (isLoading) return <div style={{ padding: '100px', textAlign: 'center', color: '#64748b' }}>데이터를 불러오는 중입니다...</div>;
+
+  // 🌟 탭을 4개의 컬러 그룹으로 나눔 (이미지 디자인 복구)
+  const tabGroups = [
+    { theme: 'theme-gray', items: tabs.slice(0, 1) },
+    { theme: 'theme-purple', items: tabs.slice(1, 4) },
+    { theme: 'theme-blue', items: tabs.slice(4, 7) },
+    { theme: 'theme-orange', items: tabs.slice(7) }
+  ];
 
   return (
-    <div style={{ fontFamily: '"Noto Sans KR", sans-serif', color: '#333' }}>
+    <div className="miku-status-wrapper">
       
-      <style jsx global>{`
-        .tab-group { display: flex; flex-wrap: nowrap; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; width: 100%; }
-        .tab-item-box { flex: 1 1 0px; min-width: 0; padding: 14px 4px; text-align: center; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 6px; border-right: 1px solid #eee; transition: all 0.2s ease; box-sizing: border-box; }
-        .tab-item-box:last-child { border-right: none; }
-        .tab-text { font-size: 13px; font-weight: 600; word-break: keep-all; line-height: 1.3; }
-        .tab-item-box.active-tab .tab-text { font-weight: 800; }
-        .tab-badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 800; white-space: nowrap; }
-        .mobile-text { display: none; }
-        .pc-text { display: inline; }
-        @media (max-width: 768px) {
-          .tab-item-box { flex-direction: column; padding: 8px 2px; gap: 4px; }
-          .tab-text { font-size: 11px; }
-          .tab-badge { font-size: 10px; padding: 2px 4px; }
-          .mobile-text { display: inline; }
-          .pc-text { display: none; }
-        }
-      `}</style>
-
-      {/* 상태 탭 3단 분리 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '25px' }}>
-        <div className="tab-group">{tabs.slice(0, 1).map(renderTabItem)}</div>
-        <div className="tab-group">{tabs.slice(1, 4).map(renderTabItem)}</div>
-        <div className="tab-group">{tabs.slice(4, 7).map(renderTabItem)}</div>
-        <div className="tab-group">{tabs.slice(7).map(renderTabItem)}</div>
+      {/* 🌟 상단 탭 리스트 (색상별 그룹화 디자인 복구) */}
+      <div className="miku-status-tabs-container anim-slide-up">
+        {tabGroups.map((group, gIdx) => (
+          <div key={gIdx} className={`tabs-group ${group.theme}`}>
+            {group.items.map(t => (
+              <StatusTab 
+                key={t.key} tab={t} isActive={activeTab === t.key} 
+                onClick={() => { setActiveTab(t.key); setSelectedItems([]); }} 
+              />
+            ))}
+          </div>
+        ))}
       </div>
 
-      <OrderTable 
-        items={items} 
-        orders={orders} 
-        activeTab={activeTab} 
-        selectedItems={selectedItems} 
-        setSelectedItems={setSelectedItems} 
-        fetchOrders={fetchOrders} 
-        selectedAddress={selectedAddress} 
-        onIndividualPacking={handleIndividualPacking}
-        onDelete={handleDeleteOrder} 
-      />
+      <div className="anim-slide-up delay-1">
+        <OrderTable 
+          items={items} orders={orders} activeTab={activeTab} 
+          selectedItems={selectedItems} setSelectedItems={setSelectedItems} 
+          fetchOrders={fetchOrders} selectedAddress={selectedAddress} 
+          onIndividualPacking={handleIndividualPacking} onDelete={handleDeleteOrder} 
+        />
+      </div>
       
       {/* 입고완료: 합포장 버튼 & 주소 폼 */}
       {activeTab === ORDER_STATUS.ARRIVED && (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '30px', marginBottom: '40px' }}>
-            <button onClick={() => handleUpdateStatus(ORDER_STATUS.PREPARING)} disabled={selectedItems.length < 2} style={{ backgroundColor: selectedItems.length >= 2 ? '#ff4b2b' : '#cbd5e1', color: '#fff', border: 'none', padding: '16px 32px', fontSize: '16px', fontWeight: '900', borderRadius: '12px', cursor: selectedItems.length >= 2 ? 'pointer' : 'not-allowed' }}>
+        <div className="anim-slide-up delay-2">
+          <div className="bundle-request-area">
+            <button 
+              className={`bundle-btn ${selectedItems.length >= 2 ? 'active' : ''}`}
+              onClick={() => handleUpdateStatus(ORDER_STATUS.PREPARING)} 
+              disabled={selectedItems.length < 2}
+            >
               📦 합포장 요청 ({selectedItems.length}개 선택됨)
             </button>
+            {selectedItems.length < 2 && <p className="bundle-helper">합포장은 2개 이상의 상품을 선택해야 가능합니다.</p>}
           </div>
           <AddressForm userData={userData} selectedItems={selectedItems} fetchOrders={fetchOrders} selectedAddress={selectedAddress} setSelectedAddress={setSelectedAddress} />
-        </>
+        </div>
       )}
 
       {/* 장바구니/배송비요청/경매요청: 결제 요약 폼 */}
-      {(activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.PAYMENT_REQ || activeTab === ORDER_STATUS.BID_PENDING || activeTab === ORDER_STATUS.BID_SUCCESS) && (
-        <PaymentSummary 
-          activeTab={activeTab} 
-          totals={totals} 
-          totalPriceWon={totalPriceWon} 
-          exchangeRate={exchangeRate} 
-          selectedItems={selectedItems} 
-          handleUpdateStatus={handleUpdateStatus} 
-        />
+      {([ORDER_STATUS.CART, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS].includes(activeTab as OrderStatus)) && (
+        <div className="anim-slide-up delay-2">
+          <PaymentSummary 
+            activeTab={activeTab} totals={totals} totalPriceWon={totalPriceWon} 
+            exchangeRate={exchangeRate} selectedItems={selectedItems} 
+            handleUpdateStatus={handleUpdateStatus} 
+          />
+        </div>
       )}
+
+      {/* ================================================================= */}
+      {/* 3. 디자인 영역 (CSS Layer) */}
+      {/* 하단 컬러 라인과 활성 탭 채우기 등 순수 CSS로 제어합니다. */}
+      {/* ================================================================= */}
+      <style jsx global>{`
+        .miku-status-wrapper {
+          font-family: 'Pretendard', "Noto Sans KR", sans-serif;
+          color: #0f172a;
+          box-sizing: border-box;
+        }
+
+        .miku-status-tabs-container {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          margin-bottom: 32px;
+        }
+
+        /* 🌟 탭 그룹 디자인 (이미지의 하단 컬러 라인 복구) */
+        .tabs-group {
+          display: flex;
+          background: #ffffff;
+          border: 1px solid rgba(226, 232, 240, 0.8);
+          border-radius: 12px;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+          overflow: hidden;
+          /* 이미지처럼 하단에 테마 색상 굵은 선 적용 */
+          border-bottom-width: 3px;
+          border-bottom-style: solid;
+        }
+
+        .tabs-group.theme-gray { border-color: #94a3b8; }
+        .tabs-group.theme-purple { border-color: #a855f7; }
+        .tabs-group.theme-blue { border-color: #3b82f6; }
+        .tabs-group.theme-orange { border-color: #ff7e36; }
+
+        /* 🌟 개별 탭 디자인 */
+        .miku-status-tab {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 12px 8px;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          color: #64748b;
+          text-align: center;
+        }
+        
+        .miku-status-tab:hover:not(.active) { background: #f8fafc; color: #0f172a; }
+        
+        .tab-name { font-size: 14px; font-weight: 700; line-height: 1.3; word-break: keep-all; }
+        .tab-count {
+          padding: 2px 8px;
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 800;
+          background: #f1f5f9;
+          color: inherit;
+          transition: all 0.3s;
+        }
+
+        .pc-text { display: inline; }
+        .mobile-text { display: none; }
+
+        /* 🌟 탭 활성화 상태 (해당 테마 색상으로 배경 채우기) */
+        .tabs-group.theme-gray .miku-status-tab.active { background: #0f172a; color: #ffffff; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2); }
+        .tabs-group.theme-purple .miku-status-tab.active { background: linear-gradient(135deg, #a855f7 0%, #8b5cf6 100%); color: #ffffff; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3); }
+        .tabs-group.theme-blue .miku-status-tab.active { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+        .tabs-group.theme-orange .miku-status-tab.active { background: linear-gradient(135deg, #ff7e36 0%, #e63e1f 100%); color: #ffffff; box-shadow: 0 4px 12px rgba(255, 126, 54, 0.3); }
+
+        .miku-status-tab.active .tab-count { background: rgba(255,255,255,0.2); color: #ffffff; }
+
+        /* 🌟 합포장 요청 버튼 영역 */
+        .bundle-request-area {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          margin-top: 32px;
+          margin-bottom: 48px;
+          padding: 0 10px;
+        }
+        .bundle-btn {
+          padding: 16px 32px;
+          font-size: 16px;
+          font-weight: 800;
+          border-radius: 16px;
+          border: none;
+          background: #e2e8f0;
+          color: #94a3b8;
+          cursor: not-allowed;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .bundle-btn.active {
+          background: linear-gradient(135deg, #ff4b2b 0%, #e63e1f 100%);
+          color: #ffffff;
+          cursor: pointer;
+          box-shadow: 0 8px 20px -4px rgba(255, 75, 43, 0.3);
+        }
+        .bundle-btn.active:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 24px -6px rgba(255, 75, 43, 0.4);
+        }
+        .bundle-helper {
+          margin: 10px 0 0 0;
+          font-size: 13px;
+          color: #ef4444;
+          font-weight: 600;
+        }
+
+        /* 애니메이션 */
+        @keyframes slideUpFade {
+          0% { opacity: 0; transform: translateY(15px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .anim-slide-up { opacity: 0; animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+
+        /* =============================================================
+           📱 모바일 반응형 최적화
+           ============================================================= */
+        @media (max-width: 768px) {
+          .tabs-group {
+            flex-direction: row;
+            overflow-x: auto;
+            white-space: nowrap;
+            padding: 8px;
+            gap: 8px;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+          }
+          .tabs-group::-webkit-scrollbar { display: none; }
+          
+          .miku-status-tab {
+            flex: 0 0 auto;
+            flex-direction: column;
+            padding: 10px 16px;
+            min-width: 80px;
+          }
+          .tab-name { font-size: 12px; }
+          .tab-count { font-size: 11px; padding: 2px 6px; }
+          
+          .pc-text { display: none; }
+          .mobile-text { display: inline; text-align: center; }
+
+          .bundle-request-area { align-items: stretch; margin-bottom: 32px; }
+          .bundle-btn { width: 100%; text-align: center; padding: 16px; }
+          .bundle-helper { text-align: center; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -436,7 +507,7 @@ function MyPurchaseStatusContent() {
 export default function MyPurchaseStatusPage() {
   return (
     <GuideLayout title="구매대행 상황" type="mypage">
-      <Suspense fallback={<div style={{ padding: '100px', textAlign: 'center' }}>로딩 중...</div>}>
+      <Suspense fallback={<div style={{ padding: '100px', textAlign: 'center', color: '#64748b', fontWeight: '600' }}>페이지를 불러오는 중입니다...</div>}>
         <MyPurchaseStatusContent />
       </Suspense>
     </GuideLayout>

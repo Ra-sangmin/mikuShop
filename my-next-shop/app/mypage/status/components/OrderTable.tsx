@@ -1,170 +1,26 @@
-"use client";
-import React, { useState, useEffect, useMemo } from 'react';
+'use client';
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
-import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
+import { ORDER_STATUS, ORDER_STATUS_LABEL } from '@/src/types/order';
 
-export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress , onIndividualPacking , onDelete }: any) {
-  const [expandedRows, setExpandedRows] = useState<string[]>([]);
+// =================================================================
+// 1. 비즈니스 로직 영역 (Business Logic Layer)
+// 실시간 타이머 계산, 입찰 처리, 테이블 열(ColSpan) 계산 등 기능 전담
+// =================================================================
+function useOrderTableLogic({ activeTab, fetchOrders }: any) {
   const { showConfirm, showAlert } = useMikuAlert();
+  const [expandedRows, setExpandedRows] = useState<string[]>([]);
   const [isMobile, setIsMobile] = useState(false);
-
-  // 🌟 실시간 시간 계산을 위한 현재 시간 state
   const [now, setNow] = useState(new Date());
 
-  // 입찰 금액 입력 및 보증금 계산을 위한 컴포넌트
-  const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string) => void }) => {
-      const [amount, setAmount] = useState("");
-
-      const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        setAmount(val);
-        onChange(val); // 부모(Promise)에게 값 전달
-      };
-
-      const originalBid = item.myBidPrice || 0;
-      const parsedAmount = parseInt(amount) || 0;
-      const totalMyBid = originalBid + parsedAmount;
-      const deposit = parsedAmount > 0 
-        ? (parsedAmount <= 20000 ? 2000 : Math.floor(parsedAmount * 0.1)) 
-        : 0;
-
-      return (
-      <div className="notranslate" translate="no" style={{ textAlign: 'left', width: '100%' }}>
-        {/* 1. 상품명 */}
-        <p style={{ 
-          fontSize: '13px', color: '#64748b', marginBottom: '24px', 
-          textAlign: 'center', lineHeight: '1.6', wordBreak: 'keep-all' 
-        }}>
-          {item.productName}
-        </p>
-        
-        {/* 2. 현재 최고가 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', padding: '0 4px' }}>
-          <span style={{ fontSize: '14.5px', color: '#475569', fontWeight: '600' }}>현재 최고가</span>
-          <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '16px' }}>
-            ¥ {item.productPrice?.toLocaleString()}
-          </span>
-        </div>
-        
-        {/* 🌟 3. 내 입찰 금액 (취소선 및 화살표 애니메이션 적용) */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px', padding: '0 4px', alignItems: 'center' }}>
-          <span style={{ fontSize: '14.5px', color: '#475569', fontWeight: '600' }}>내 입찰 금액</span>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {parsedAmount > 0 ? (
-              // 추가 금액을 입력했을 때: 기존 금액(취소선) -> 새 금액
-              <>
-                <span style={{ color: '#94a3b8', textDecoration: 'line-through', fontSize: '14px', fontWeight: '500' }}>
-                  ¥ {originalBid.toLocaleString()}
-                </span>
-                <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: '800' }}>→</span>
-                <span style={{ fontWeight: '900', color: '#3b82f6', fontSize: '17px' }}>
-                  ¥ {totalMyBid.toLocaleString()}
-                </span>
-              </>
-            ) : (
-              // 아무것도 입력하지 않았을 때: 기존 금액만 표시
-              <span style={{ fontWeight: '800', color: '#3b82f6', fontSize: '16px' }}>
-                ¥ {originalBid.toLocaleString()}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* 4. 파스텔 톤 프리미엄 입력 컨테이너 */}
-        <div style={{ 
-          background: 'linear-gradient(145deg, #f8faff 0%, #f0f4f8 100%)', 
-          padding: '20px', 
-          borderRadius: '16px', 
-          marginBottom: '24px',
-          border: '1px solid rgba(226, 232, 240, 0.8)', 
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.02), inset 0 2px 0 rgba(255, 255, 255, 1)' 
-        }}>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '10px', color: '#64748b' }}>
-            추가 입찰 금액 (¥)
-          </label>
-          
-          <input 
-            type="number" 
-            placeholder="추가할 금액 입력"
-            value={amount}
-            onChange={handleInputChange}
-            style={{ 
-              width: '100%', 
-              padding: '14px 16px', 
-              borderRadius: '12px', 
-              border: '1px solid #cbd5e1',
-              backgroundColor: '#ffffff',
-              fontSize: '18px',
-              fontWeight: '700',
-              color: '#1e293b',
-              boxSizing: 'border-box',
-              marginBottom: '16px',
-              outline: 'none',
-              boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.02)', 
-              transition: 'border-color 0.2s ease'
-            }}
-          />
-
-
-        </div>
-      </div>
-    );
-  }
-
-  const handleBidClick = async (item: any) => {
-    let finalAmount = ""; // 입력값을 추적하기 위한 변수
-
-    const isConfirmed = await showConfirm(
-      <BidInputContent 
-        item={item} 
-        onChange={(val) => { finalAmount = val; }} 
-      />
-    );
-
-    if (isConfirmed) {
-      const amount = parseInt(finalAmount);
-      if (!amount || amount <= 0) {
-        showAlert("올바른 금액을 입력해주세요.", "error");
-        return;
-      }
-
-      const deposit = amount <= 20000 ? 2000 : Math.floor(amount * 0.1);
-
-      try {
-        const res = await fetch('/api/orders/bid', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            orderId: item.orderId, 
-            amount: amount,
-            deposit: deposit // 계산된 보증금도 함께 전송
-          })
-        });
-        
-        if (res.ok) {
-          showAlert(`¥${amount.toLocaleString()} 추가 입찰 완료!`, 'success');
-          fetchOrders();
-        } else {
-            const errorData = await res.json();
-            showAlert(errorData.error || "입찰에 실패했습니다.", "error");
-        }
-      } catch (error) {
-        showAlert("통신 에러가 발생했습니다.", "error");
-      }
-    }
-  };
-
-  // 📱 모바일 감지
+  // 📱 모바일 감지 및 🌟 실시간 1초 타이머
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     handleResize();
     window.addEventListener('resize', handleResize);
 
-    // 1초마다 현재 시간을 갱신하여 남은 시간이 실시간으로 변하게 함
-    const timer = setInterval(() => {
-      setNow(new Date());
-    }, 1000);
+    const timer = setInterval(() => setNow(new Date()), 1000);
 
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -172,233 +28,458 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     };
   }, []);
 
-  // --- 🎨 스타일 정의 ---
-  const styles = useMemo(() => ({
-    label: { fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: '500' as const },
-    value: { fontWeight: '700' as const, fontSize: '13px', color: '#1e293b', lineHeight: '1.2' },
-    badge: (bgColor: string) => ({ display: 'inline-block', padding: '4px 8px', borderRadius: '6px', fontWeight: '800' as const, fontSize: '11px', backgroundColor: bgColor, color: '#fff' }),
-    mobileCard: { backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '16px', marginBottom: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }
-  }), []);
-
-  // 🚀 종료 일시를 기준으로 현재 남은 시간을 계산하는 함수
-  const formatAuctionDate = (dateString: string | Date) => {
-    if (!dateString) return "-";
-    
-    const targetDate = new Date(dateString);
-    const diff = targetDate.getTime() - now.getTime(); // 밀리초 차이 계산
-
-    // 🌟 종료 시간이 현재보다 이전일 경우
-    if (diff <= 0) {
-      return <span style={{ color: '#94a3b8', fontWeight: 'bold' }}>경매 종료</span>;
-    }
-
-    const diffDays = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const diffHours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-    const diffMinutes = Math.floor((diff / (1000 * 60)) % 60);
-    const diffSeconds = Math.floor((diff / 1000) % 60);
-
-    // 1. 남은 시간이 1일 이상일 때: "N일 N시간"
-    if (diffDays > 0) {
-      return `${diffDays}일 ${diffHours}시간`;
-    }
-    
-    // 2. 남은 시간이 1시간 이상일 때: "N시간 N분"
-    if (diffHours > 0) {
-      return `${diffHours}시간 ${diffMinutes}분`;
-    }
-
-    // 3. 남은 시간이 1시간 미만일 때: "N분 N초" (빨간색 강조)
-    return (
-      <span className="time-pulse" style={{ color: '#ef4444', fontWeight: 'bold' }}>
-        {diffMinutes}분 {diffSeconds}초
-      </span>
-    );
+  const toggleRow = (orderId: string) => {
+    setExpandedRows(prev => prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]);
   };
 
-  // 🚀 데이터 그룹화 및 정렬
-  const isAuctionTab = activeTab === 'BID_PENDING' || activeTab === 'BIDDING';
-  const showBundleAndRecipientTabs = [ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING];
-  
-  // 🌟 컬럼 수 계산기 수정 (BID_PENDING 추가)
-  const getColSpanCount = () => {
-    let count = 3; 
+  // 🚀 남은 시간 계산 로직 (데이터만 반환)
+  const getAuctionTimeData = useCallback((dateString: string | Date) => {
+    if (!dateString) return { text: "-", isUrgent: false, isEnded: false };
+    
+    const diff = new Date(dateString).getTime() - now.getTime();
+
+    if (diff <= 0) return { text: "경매 종료", isUrgent: false, isEnded: true };
+
+    const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+    const m = Math.floor((diff / (1000 * 60)) % 60);
+    const s = Math.floor((diff / 1000) % 60);
+
+    if (d > 0) return { text: `${d}일 ${h}시간`, isUrgent: false, isEnded: false };
+    if (h > 0) return { text: `${h}시간 ${m}분`, isUrgent: false, isEnded: false };
+    return { text: `${m}분 ${s}초`, isUrgent: true, isEnded: false };
+  }, [now]);
+
+  // 🚀 동적 테이블 컬럼 수 계산
+  const getColSpanCount = useCallback(() => {
+    let count = 3; // 기본: 상품명, 가격, 상세보기
     if (activeTab === 'ALL') count += 1; 
-    if ([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS].includes(activeTab)) count += 1;
-    if (showBundleAndRecipientTabs.includes(activeTab)) count += 1; 
-    if (isAuctionTab) count += 2; 
-    if (activeTab === ORDER_STATUS.SHIPPING) count += 1; 
-    if (activeTab === ORDER_STATUS.PAYMENT_REQ) count += 1; 
-    if (activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.ARRIVED || activeTab === ORDER_STATUS.BIDDING || activeTab === ORDER_STATUS.BID_PENDING) count += 1; 
-    
-    // 🌟 경매 상황(BIDDING) 탭에 '경매 상태' 열 추가
-    if (activeTab === 'BIDDING') count += 1; 
-
+    if ([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS].includes(activeTab)) count += 1; // 체크박스
+    if ([ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(activeTab)) count += 1; // 수취인
+    if (activeTab === 'BID_PENDING' || activeTab === 'BIDDING') count += 2; // 남은시간, 내 입찰금액
+    if (activeTab === ORDER_STATUS.SHIPPING) count += 1; // 운송장
+    if (activeTab === ORDER_STATUS.PAYMENT_REQ) count += 1; // 배송비
+    if ([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, 'BIDDING', ORDER_STATUS.BID_PENDING].includes(activeTab)) count += 1; // 관리 버튼
+    if (activeTab === 'BIDDING') count += 1; // 경매 상태
     return count;
+  }, [activeTab]);
+
+  return {
+    expandedRows, toggleRow, isMobile, now, showConfirm, showAlert,
+    getAuctionTimeData, getColSpanCount
+  };
+}
+
+
+// =================================================================
+// 2. 화면 컴포넌트 영역 (View Layer)
+// 인라인 스타일을 배제하고 시각적 요소와 클래스명 위주로 구성합니다.
+// =================================================================
+
+// 🌟 입찰 금액 입력 프리미엄 모달 콘텐츠
+const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string) => void }) => {
+  const [amount, setAmount] = useState("");
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setAmount(val);
+    onChange(val);
   };
 
-  const renderOrderDetail = (item: any) => (
-    <div style={{ display: 'flex', flexDirection: 'column', borderTop: '1px solid #e2e8f0', width: '100%', backgroundColor: '#f8fafc' }}>
-      {(item.isBundleGroup ? item.originalItems : [item]).map((sub: any, idx: number) => (
-        <div key={sub.orderId} style={{ padding: '20px', borderBottom: idx !== (item.isBundleGroup ? item.originalItems.length : 1) - 1 ? '1px dashed #cbd5e1' : 'none' }}>
-          <div style={{ fontWeight: '800' }}>{sub.productName}</div>
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-            ¥ {(sub.productPrice || 0).toLocaleString()} x {sub.productCount || sub.quantity || 1}개
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  const originalBid = item.myBidPrice || 0;
+  const parsedAmount = parseInt(amount) || 0;
+  const totalMyBid = originalBid + parsedAmount;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {isMobile ? (
-        /* 📱 모바일 뷰 (생략 - 필요시 추가 구현) */
-        <div>모바일 뷰 생략</div>
-      ) : (
-        /* 💻 PC 테이블 뷰 */
-        <div className="table-wrapper">
-          <style jsx>{`
-            .table-wrapper { overflow-x: auto; border-radius: 12px; border: 1px solid #e2e8f0; background-color: #fff; }
-            .custom-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-            .th-cell { padding: 12px 5px; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #e2e8f0; font-weight: 800; color: #475569; background-color: #f8fafc; text-align: center; font-size: 13px; white-space: nowrap; }
-            .td-cell { padding: 12px 5px; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #e2e8f0; vertical-align: middle; text-align: center; }
-            .prod-name { font-size: 13px; font-weight: 700; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; width: 100%; text-align: left; padding: 0 15px; }
-            .btn-action { padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 800; font-size: 12px; border: none; }
-          `}</style>
-          <table className="custom-table">
-            <thead>
-              <tr>
-                {/* 🌟 BID_PENDING 탭에 체크박스 헤더 추가 */}
-                {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS].includes(activeTab) && (
-                  <th className="th-cell" style={{width:'45px'}}>
-                    <input type="checkbox" />
-                  </th>
-                )}
-                {activeTab === 'ALL' && <th className="th-cell" style={{width:'90px'}}>상태</th>}
-                <th className="th-cell">상품명</th>
-                
-                {isAuctionTab && <th className="th-cell" style={{width:'120px'}}>남은 시간</th>}
-                <th className="th-cell" style={{width:'130px'}}>{isAuctionTab ? '현재 최고가' : '상품 금액'}</th>
-                {isAuctionTab && <th className="th-cell" style={{width:'130px'}}>내 입찰금액</th>}
-                
-                {/* 🌟 경매 상황(BIDDING) 탭 전용: 경매 상태 헤더 */}
-                {activeTab === 'BIDDING' && <th className="th-cell" style={{width:'110px'}}>경매 상태</th>}
-                
-                {showBundleAndRecipientTabs.includes(activeTab) && <th className="th-cell" style={{width:'100px'}}>수취인</th>}
-                {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell" style={{width:'110px'}}>배송비(₩)</th>}
-                {activeTab === ORDER_STATUS.SHIPPING && <th className="th-cell" style={{width:'130px'}}>운송장 번호</th>}
+    <div className="miku-bid-modal notranslate" translate="no">
+      <p className="prod-name-title">{item.productName}</p>
+      
+      <div className="info-row">
+        <span className="label">현재 최고가</span>
+        <span className="val highlight">¥ {item.productPrice?.toLocaleString()}</span>
+      </div>
+      
+      <div className="info-row my-bid-row">
+        <span className="label">내 입찰 금액</span>
+        <div className="bid-calc">
+          {parsedAmount > 0 ? (
+            <>
+              <span className="old-bid">¥ {originalBid.toLocaleString()}</span>
+              <span className="arrow">→</span>
+              <span className="new-bid">¥ {totalMyBid.toLocaleString()}</span>
+            </>
+          ) : (
+            <span className="new-bid">¥ {originalBid.toLocaleString()}</span>
+          )}
+        </div>
+      </div>
 
-                {/* 🌟 BID_PENDING 탭에도 관리(삭제) 열 추가 */}
-                {(activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.ARRIVED || activeTab === 'BIDDING' || activeTab === ORDER_STATUS.BID_PENDING) && (
-                  <th className="th-cell" style={{width:'110px'}}>관리</th>
-                )}
-                
-                <th className="th-cell" style={{width:'100px'}}>상세보기</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item: any) => {
+      <div className="input-container">
+        <label>추가 입찰 금액 (¥)</label>
+        <input 
+          type="number" placeholder="추가할 금액 입력"
+          value={amount} onChange={handleInputChange}
+          className="premium-input"
+        />
+      </div>
+    </div>
+  );
+};
+
+
+// 🌟 메인 테이블 컴포넌트
+export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete }: any) {
+  const { 
+    expandedRows, toggleRow, isMobile, showConfirm, showAlert, 
+    getAuctionTimeData, getColSpanCount 
+  } = useOrderTableLogic({ activeTab, fetchOrders });
+
+  const isAuctionTab = activeTab === 'BID_PENDING' || activeTab === 'BIDDING';
+  const showBundleAndRecipientTabs = [ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING];
+
+  // 입찰 처리 로직
+  const handleBidClick = async (item: any) => {
+    let finalAmount = "";
+    const isConfirmed = await showConfirm(<BidInputContent item={item} onChange={(val) => { finalAmount = val; }} />);
+
+    if (isConfirmed) {
+      const amount = parseInt(finalAmount);
+      if (!amount || amount <= 0) return showAlert("올바른 금액을 입력해주세요.", "error");
+
+      const deposit = amount <= 20000 ? 2000 : Math.floor(amount * 0.1);
+
+      try {
+        const res = await fetch('/api/orders/bid', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: item.orderId, amount, deposit })
+        });
+        
+        if (res.ok) {
+          showAlert(`¥${amount.toLocaleString()} 추가 입찰 완료!`, 'success');
+          fetchOrders();
+        } else {
+          const errorData = await res.json();
+          showAlert(errorData.error || "입찰에 실패했습니다.", "error");
+        }
+      } catch (error) { showAlert("통신 에러가 발생했습니다.", "error"); }
+    }
+  };
+
+  const toggleCheck = (orderId: string) => {
+    if (selectedItems.includes(orderId)) setSelectedItems(selectedItems.filter((id: string) => id !== orderId));
+    else setSelectedItems([...selectedItems, orderId]);
+  };
+
+  return (
+    <div className="miku-ordertable-wrapper">
+      
+      {isMobile ? (
+        <div className="mobile-fallback">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          <p>상세 내역은 PC 환경에 최적화되어 있습니다.<br/>화면을 옆으로 스크롤하여 확인해주세요.</p>
+        </div>
+      ) : null}
+
+      <div className="table-container anim-slide-up">
+        <table className="premium-table">
+          <thead>
+            <tr>
+              {/* 체크박스 헤더 */}
+              {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS].includes(activeTab) && (
+                <th className="th-cell th-check"><div className="header-spacer"></div></th>
+              )}
+              {activeTab === 'ALL' && <th className="th-cell th-status">상태</th>}
+              <th className="th-cell th-product">상품명</th>
+              
+              {isAuctionTab && <th className="th-cell th-time">남은 시간</th>}
+              <th className="th-cell th-price">{isAuctionTab ? '현재 최고가' : '상품 금액'}</th>
+              {isAuctionTab && <th className="th-cell th-mybid">내 입찰금액</th>}
+              
+              {activeTab === 'BIDDING' && <th className="th-cell th-auction-status">경매 상태</th>}
+              {showBundleAndRecipientTabs.includes(activeTab) && <th className="th-cell th-recipient">수취인</th>}
+              {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell th-shipping-fee">배송비(₩)</th>}
+              {activeTab === ORDER_STATUS.SHIPPING && <th className="th-cell th-tracking">운송장 번호</th>}
+
+              {/* 관리 버튼 헤더 */}
+              {([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, 'BIDDING', ORDER_STATUS.BID_PENDING].includes(activeTab)) && (
+                <th className="th-cell th-manage">관리</th>
+              )}
+              <th className="th-cell th-detail">상세보기</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {items.length === 0 ? (
+              <tr><td colSpan={getColSpanCount()} className="empty-row">해당하는 상품이 없습니다.</td></tr>
+            ) : (
+              items.map((item: any) => {
                 const isExpanded = expandedRows.includes(item.orderId);
+                const isChecked = selectedItems.includes(item.orderId);
+                const timeData = getAuctionTimeData(item.auctionEndDate);
+
                 return (
                   <React.Fragment key={item.orderId}>
-                    <tr>
-                      {/* 🌟 BID_PENDING 탭에 체크박스 바디 추가 및 정상 작동하도록 onChange 로직 수정 */}
+                    <tr className={`tr-row ${isChecked ? 'selected' : ''}`}>
+                      
+                      {/* 체크박스 */}
                       {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS].includes(activeTab) && (
                         <td className="td-cell">
-                          <input 
-                            type="checkbox" 
-                            checked={selectedItems.includes(item.orderId)} 
-                            onChange={() => {
-                              if (selectedItems.includes(item.orderId)) {
-                                setSelectedItems(selectedItems.filter((id: string) => id !== item.orderId));
-                              } else {
-                                setSelectedItems([...selectedItems, item.orderId]);
-                              }
-                            }} 
-                          />
-                        </td>
-                      )}
-                      {activeTab === 'ALL' && <td className="td-cell"><span style={styles.badge('#3b82f6')}>{item.status}</span></td>}
-                      <td className="td-cell"><div className="prod-name" title={item.productName}>{item.productName}</div></td>
-                      
-                      {isAuctionTab && (
-                        <td className="td-cell" style={{fontSize: '12px'}}>
-                          {formatAuctionDate(item.auctionEndDate)}
+                          <div className={`custom-checkbox ${isChecked ? 'checked' : ''}`} onClick={() => toggleCheck(item.orderId)}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                          </div>
                         </td>
                       )}
 
-                      <td className="td-cell">
-                        <div style={{ fontWeight: '900', color: '#1e293b' }}>¥ {(item.productPrice || 0).toLocaleString()}</div>
+                      {activeTab === 'ALL' && <td className="td-cell"><span className="badge-status">{ORDER_STATUS_LABEL[item.status as OrderStatus] || item.status}</span></td>}
+                      
+                      <td className="td-cell td-product">
+                        <div className="prod-name-box" title={item.productName}>{item.productName}</div>
                       </td>
 
                       {isAuctionTab && (
                         <td className="td-cell">
-                          <div style={{ fontWeight: '900', color: '#2563eb' }}>¥ {(item.myBidPrice || 0).toLocaleString()}</div>
+                          <span className={`time-text ${timeData.isEnded ? 'ended' : ''} ${timeData.isUrgent ? 'time-pulse urgent' : ''}`}>
+                            {timeData.text}
+                          </span>
                         </td>
                       )}
 
-                      {/* 🌟 경매 상황(BIDDING) 탭 전용: bidStatus 값 표시 뱃지 */}
+                      <td className="td-cell"><div className="price-val">¥ {(item.productPrice || 0).toLocaleString()}</div></td>
+
+                      {isAuctionTab && (
+                        <td className="td-cell"><div className="mybid-val">¥ {(item.myBidPrice || 0).toLocaleString()}</div></td>
+                      )}
+
                       {activeTab === 'BIDDING' && (
                         <td className="td-cell">
-                          {/* 🌟 PENDING(최초 입찰 대기) 또는 ADDITIONAL(추가 입찰 대기)일 경우 모두 '입찰 대기중'으로 표시 */}
-                          {(item.bidStatus === 'PENDING' || item.bidStatus === 'ADDITIONAL') && (
-                            <span style={{ color: '#d97706', fontWeight: '800', fontSize: '12px', background: '#fef3c7', padding: '4px 8px', borderRadius: '4px' }}>
-                              입찰 대기중
-                            </span>
-                          )}
-                          
-                          {/* 🌟 관리자가 수동으로 입찰을 완료 처리했을 경우 */}
-                          {item.bidStatus === 'COMPLETED' && (
-                            <span style={{ color: '#10b981', fontWeight: '800', fontSize: '12px', background: '#d1fae5', padding: '4px 8px', borderRadius: '4px' }}>
-                              입찰 완료
-                            </span>
-                          )}
-                          
-                          {/* 만약 DB에 값이 없거나 다른 값이 들어있을 경우의 기본값 */}
-                          {(!item.bidStatus || !['PENDING', 'COMPLETED', 'ADDITIONAL'].includes(item.bidStatus)) && (
-                            <span style={{ color: '#64748b', fontWeight: '800', fontSize: '12px', background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px' }}>
-                              상태 확인중
-                            </span>
-                          )}
+                          {['PENDING', 'ADDITIONAL'].includes(item.bidStatus) ? <span className="badge-bid pending">입찰 대기중</span>
+                          : item.bidStatus === 'COMPLETED' ? <span className="badge-bid completed">입찰 완료</span>
+                          : <span className="badge-bid default">상태 확인중</span>}
                         </td>
                       )}
 
                       {showBundleAndRecipientTabs.includes(activeTab) && <td className="td-cell">{item.address?.recipientName || '미지정'}</td>}
-                      {activeTab === ORDER_STATUS.PAYMENT_REQ && <td className="td-cell">₩ {(item.secondPaymentAmount || 0).toLocaleString()}</td>}
+                      {activeTab === ORDER_STATUS.PAYMENT_REQ && <td className="td-cell font-bold">₩ {(item.secondPaymentAmount || 0).toLocaleString()}</td>}
                       {activeTab === ORDER_STATUS.SHIPPING && <td className="td-cell">{item.trackingNo || '준비중'}</td>}
 
-                      {/* 🌟 관리 열: 상태에 따른 버튼 노출 */}
-                      {(activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.ARRIVED || activeTab === 'BIDDING' || activeTab === ORDER_STATUS.BID_PENDING) && (
+                      {/* 관리 버튼 */}
+                      {([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, 'BIDDING', ORDER_STATUS.BID_PENDING].includes(activeTab)) && (
                         <td className="td-cell">
-                          {/* 🌟 경매 요청(BID_PENDING) 탭에서도 삭제 버튼 노출 */}
-                          {(activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.BID_PENDING) && (
-                            <button className="btn-action" onClick={() => onDelete(item.orderId)} style={{ color: '#ef4444', border: '1px solid #fee2e2', background: '#fff' }}>삭제</button>
-                          )}
-                          {activeTab === ORDER_STATUS.ARRIVED && (
-                            <button className="btn-action" onClick={() => onIndividualPacking(item)} style={{ background: '#10b981', color: '#fff' }}>개별 포장</button>
-                          )}
-                          
-                          {activeTab === 'BIDDING' && (
-                            <button className="btn-action" onClick={() => handleBidClick(item)} style={{ background: '#3b82f6', color: '#fff' }}>추가 입찰</button>
-                          )}
+                          <div className="action-btn-group">
+                            {([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) && (
+                              <button className="btn-action btn-del" onClick={() => onDelete(item.orderId)}>삭제</button>
+                            )}
+                            {activeTab === ORDER_STATUS.ARRIVED && (
+                              <button className="btn-action btn-pack" onClick={() => onIndividualPacking(item)}>개별 포장</button>
+                            )}
+                            {activeTab === 'BIDDING' && (
+                              <button className="btn-action btn-bid" onClick={() => handleBidClick(item)}>추가 입찰</button>
+                            )}
+                          </div>
                         </td>
                       )}
-                      
+
                       <td className="td-cell">
-                        <button style={{ padding: '6px 12px', border: '1px solid #cbd5e1', background: '#fff', borderRadius: '6px', cursor: 'pointer' }} 
-                                onClick={() => setExpandedRows(prev => prev.includes(item.orderId) ? prev.filter(id => id !== item.orderId) : [...prev, item.orderId])}>
+                        <button className={`btn-expand ${isExpanded ? 'active' : ''}`} onClick={() => toggleRow(item.orderId)}>
                           {isExpanded ? '접기 ▲' : '보기 ▼'}
                         </button>
                       </td>
                     </tr>
-                    {isExpanded && <tr><td colSpan={getColSpanCount()} style={{ padding: 0 }}>{renderOrderDetail(item)}</td></tr>}
+
+                    {/* 확장 아코디언 영역 */}
+                    {isExpanded && (
+                      <tr className="expanded-tr">
+                        <td colSpan={getColSpanCount()} className="expanded-td">
+                          <div className="expanded-content">
+                            {(item.isBundleGroup ? item.originalItems : [item]).map((sub: any, idx: number) => (
+                              <div key={sub.orderId} className={`expanded-item ${idx !== (item.isBundleGroup ? item.originalItems.length : 1) - 1 ? 'border-bottom' : ''}`}>
+                                <div className="sub-name">{sub.productName}</div>
+                                <div className="sub-price">¥ {(sub.productPrice || 0).toLocaleString()} <span className="sub-qty">x {sub.productCount || sub.quantity || 1}개</span></div>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   </React.Fragment>
                 );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ================================================================= */}
+      {/* 3. 디자인 영역 (CSS Layer) */}
+      {/* 글로벌 오염을 막기 위해 모든 클래스는 .miku-ordertable- 관련 스코프로 작성 */}
+      {/* ================================================================= */}
+      <style jsx global>{`
+        .miku-ordertable-wrapper {
+          width: 100%;
+          font-family: 'Pretendard', "Noto Sans KR", sans-serif;
+        }
+
+        /* 📱 모바일 폴백 메시지 */
+        .mobile-fallback {
+          display: none;
+          background: #f8fafc;
+          border: 1px dashed #cbd5e1;
+          border-radius: 16px;
+          padding: 20px;
+          text-align: center;
+          color: #64748b;
+          margin-bottom: 16px;
+        }
+        .mobile-fallback svg { width: 32px; height: 32px; margin-bottom: 8px; color: #94a3b8; }
+        .mobile-fallback p { font-size: 13px; line-height: 1.5; margin: 0; }
+        
+        @media (max-width: 768px) { .mobile-fallback { display: block; } }
+
+        /* 🌟 테이블 컨테이너 (가로 스크롤 허용, 둥근 모서리 보존) */
+        .table-container {
+          background: #ffffff;
+          border-radius: 20px;
+          border: 1px solid rgba(226, 232, 240, 0.8);
+          box-shadow: 0 10px 30px rgba(0,0,0,0.02);
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        /* 🌟 프리미엄 테이블 스타일 */
+        .premium-table {
+          width: 100%;
+          border-collapse: separate;
+          border-spacing: 0;
+          min-width: 800px;
+        }
+        
+        .th-cell {
+          padding: 18px 12px;
+          background: #f8fafc;
+          font-size: 14px;
+          font-weight: 800;
+          color: #475569;
+          text-align: center;
+          border-bottom: 1px solid #e2e8f0;
+          white-space: nowrap;
+        }
+        .th-cell:first-child { border-top-left-radius: 20px; }
+        .th-cell:last-child { border-top-right-radius: 20px; }
+
+        .td-cell {
+          padding: 16px 12px;
+          font-size: 14px;
+          color: #334155;
+          text-align: center;
+          vertical-align: middle;
+          border-bottom: 1px solid #f1f5f9;
+        }
+        .tr-row { transition: all 0.2s ease; }
+        .tr-row:hover { background: #f8fafc; }
+        .tr-row.selected { background: #fff8f6; }
+
+        .empty-row { padding: 60px; text-align: center; color: #94a3b8; font-weight: 600; }
+
+        /* 🌟 상품명 영역 */
+        .td-product { text-align: left; max-width: 250px; }
+        .prod-name-box {
+          font-weight: 700; color: #0f172a;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          padding: 0 8px;
+        }
+
+        /* 🌟 커스텀 체크박스 */
+        .custom-checkbox {
+          width: 22px; height: 22px; margin: 0 auto;
+          border-radius: 6px; border: 2px solid #cbd5e1;
+          background: #ffffff; display: flex; align-items: center; justify-content: center;
+          cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .custom-checkbox svg { width: 12px; height: 12px; color: white; opacity: 0; transform: scale(0.5); transition: all 0.2s; }
+        .custom-checkbox.checked { border-color: transparent; background: linear-gradient(135deg, #ff4b2b 0%, #e63e1f 100%); box-shadow: 0 2px 6px rgba(255, 75, 43, 0.3); }
+        .custom-checkbox.checked svg { opacity: 1; transform: scale(1); }
+
+        /* 🌟 뱃지 및 상태 값 */
+        .badge-status { background: #e0e7ff; color: #2563eb; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 800; }
+        .badge-bid { padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 800; white-space: nowrap; }
+        .badge-bid.pending { background: #fef3c7; color: #d97706; }
+        .badge-bid.completed { background: #d1fae5; color: #10b981; }
+        .badge-bid.default { background: #f1f5f9; color: #64748b; }
+
+        .price-val { font-weight: 900; color: #0f172a; font-size: 15px; }
+        .mybid-val { font-weight: 900; color: #3b82f6; font-size: 15px; }
+        .font-bold { font-weight: 800; }
+
+        /* 🌟 타이머 및 애니메이션 */
+        .time-text { font-weight: 700; color: #475569; }
+        .time-text.ended { color: #94a3b8; }
+        .urgent { color: #ef4444; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .time-pulse { animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+        /* 🌟 버튼 영역 */
+        .action-btn-group { display: flex; gap: 6px; justify-content: center; }
+        .btn-action {
+          padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 800; cursor: pointer; transition: all 0.2s; border: none;
+        }
+        .btn-del { background: #ffffff; border: 1px solid #fca5a5; color: #ef4444; }
+        .btn-del:hover { background: #fff1f2; }
+        .btn-pack { background: #10b981; color: #ffffff; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.2); }
+        .btn-pack:hover { background: #059669; }
+        .btn-bid { background: #3b82f6; color: #ffffff; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.2); }
+        .btn-bid:hover { background: #2563eb; }
+
+        .btn-expand {
+          padding: 6px 12px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px;
+          font-size: 12px; font-weight: 700; color: #475569; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-expand:hover { background: #f8fafc; border-color: #94a3b8; }
+        .btn-expand.active { background: #0f172a; color: #ffffff; border-color: #0f172a; }
+
+        /* 🌟 확장(아코디언) 영역 */
+        .expanded-tr { background: #f8fafc; }
+        .expanded-td { padding: 0; border-bottom: 1px solid #e2e8f0; }
+        .expanded-content { display: flex; flex-direction: column; padding: 10px 30px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.02); }
+        .expanded-item { padding: 16px 0; text-align: left; }
+        .expanded-item.border-bottom { border-bottom: 1px dashed #cbd5e1; }
+        .sub-name { font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 6px; }
+        .sub-price { font-size: 13px; color: #475569; font-weight: 600; }
+        .sub-qty { color: #94a3b8; font-weight: 500; margin-left: 4px; }
+
+        /* 🌟 입찰 모달 콘텐츠 (.miku-bid-modal) */
+        .miku-bid-modal { width: 100%; text-align: left; font-family: 'Pretendard', sans-serif; }
+        .prod-name-title { font-size: 14px; color: #64748b; margin: 0 0 24px 0; text-align: center; line-height: 1.5; word-break: keep-all; font-weight: 600; }
+        
+        .info-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 0 8px; }
+        .info-row .label { font-size: 14px; color: #475569; font-weight: 700; }
+        .info-row .val { font-size: 16px; font-weight: 800; color: #0f172a; }
+        .info-row .val.highlight { font-size: 18px; color: #ef4444; }
+        
+        .my-bid-row { margin-bottom: 24px; }
+        .bid-calc { display: flex; align-items: center; gap: 8px; }
+        .old-bid { color: #94a3b8; text-decoration: line-through; font-size: 14px; font-weight: 600; }
+        .arrow { color: #cbd5e1; font-weight: 900; }
+        .new-bid { color: #3b82f6; font-size: 18px; font-weight: 900; }
+
+        .input-container {
+          background: linear-gradient(145deg, #f8faff 0%, #f0f4f8 100%);
+          padding: 24px; border-radius: 20px; border: 1px solid rgba(226, 232, 240, 0.8);
+          box-shadow: inset 0 2px 4px rgba(255,255,255,1);
+        }
+        .input-container label { display: block; font-size: 13px; font-weight: 800; color: #475569; margin-bottom: 12px; }
+        .premium-input {
+          width: 100%; padding: 16px; border-radius: 14px; border: 1px solid #cbd5e1;
+          font-size: 18px; font-weight: 800; color: #0f172a; outline: none; box-sizing: border-box;
+          transition: all 0.2s; background: #ffffff;
+        }
+        .premium-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
+
+        /* 애니메이션 */
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .anim-slide-up { opacity: 0; animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      `}</style>
     </div>
   );
 }

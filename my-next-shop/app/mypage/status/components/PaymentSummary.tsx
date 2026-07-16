@@ -1,8 +1,8 @@
-"use client";
+'use client';
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { ORDER_STATUS } from '@/src/types/order';
 
-// Props 타입을 명확히 정의 (디버깅 편의성)
 interface PaymentSummaryProps {
   activeTab: string;
   totals: {
@@ -10,7 +10,7 @@ interface PaymentSummaryProps {
     transfer: number;
     delivery: number; // 🌟 부모가 준 123원이 담긴 곳
     agency: number;
-    deposit?: number; // 🌟 경매 보증금이 담길 곳 추가
+    deposit?: number; // 🌟 경매 보증금
   };
   totalPriceWon: number;
   exchangeRate: number;
@@ -18,29 +18,19 @@ interface PaymentSummaryProps {
   handleUpdateStatus: (status: string) => void;
 }
 
-export default function PaymentSummary({ 
-  activeTab, 
-  totals, 
-  totalPriceWon, 
-  exchangeRate, 
-  selectedItems, 
-  handleUpdateStatus 
-}: PaymentSummaryProps) {
-  
-  // 상태 확인용 변수
+// =================================================================
+// 1. 비즈니스 로직 영역 (Business Logic Layer)
+// DB 수수료 로드, 금액 계산, 상태별 동적 텍스트 반환 등 순수 기능 전담
+// =================================================================
+function usePaymentSummaryLogic(props: PaymentSummaryProps) {
+  const { activeTab, totals, selectedItems, totalPriceWon } = props;
+
   const isPaymentRequest = activeTab === ORDER_STATUS.PAYMENT_REQ;
-  const isBidPending = activeTab === ORDER_STATUS.BID_PENDING; // 🌟 경매 요청 탭 확인용
-  
-  // 배송비 요청이나 경매 요청일 경우, 단일 강조 박스를 보여주기 위한 조건
+  const isBidPending = activeTab === ORDER_STATUS.BID_PENDING;
   const isSingleHighlightMode = isPaymentRequest || isBidPending;
 
-  // 🌟 1. DB 수수료 설정을 저장할 상태 (기본값 설정)
-  const [feeSettings, setFeeSettings] = useState({
-    TRANSFER: 450,
-    AGENCY: 100
-  });
+  const [feeSettings, setFeeSettings] = useState({ TRANSFER: 450, AGENCY: 100 });
 
-  // 🌟 2. DB에서 수수료 설정 불러오기
   useEffect(() => {
     const fetchFees = async () => {
       try {
@@ -60,35 +50,24 @@ export default function PaymentSummary({
     fetchFees();
   }, []);
 
-  // 🌟 3. 선택된 상품의 실제 DB 필드(domesticShippingFee)를 참조하여 계산
   const calculatedTotals = useMemo(() => {
     if (!isSingleHighlightMode && selectedItems.length > 0) {
       const itemCount = selectedItems.length;
       
-      // 💡 DB의 domesticShippingFee 값을 각각 더함
       const deliveryTotal = selectedItems.reduce((sum: number, item: any) => 
         sum + (Number(item.domesticShippingFee) || 0), 0
       );
 
-      const totalProduct = selectedItems.reduce((sum: number, item: any) => 
-        sum + (Number(item.productPrice * item.productCount) || 0), 0
-      );
-
-      // DB 설정값 기반 수수료 계산
-      const transferTotal = itemCount * feeSettings.TRANSFER;
-      const agencyTotal = itemCount * feeSettings.AGENCY;
-      
       return {
         product: totals.product,
-        delivery: deliveryTotal, // 🌟 DB 참조값으로 교체
-        transfer: transferTotal,
-        agency: agencyTotal
+        delivery: deliveryTotal, // DB 참조값 적용
+        transfer: itemCount * feeSettings.TRANSFER,
+        agency: itemCount * feeSettings.AGENCY
       };
     }
     return totals;
   }, [selectedItems, totals, isSingleHighlightMode, feeSettings]);
 
-  // 🌟 4. 동적 텍스트 및 타겟 상태 설정
   const getHighlightTitle = () => {
     if (isPaymentRequest) return '청구된 총 배송비';
     if (isBidPending) return '청구된 총 보증금';
@@ -103,156 +82,60 @@ export default function PaymentSummary({
 
   const getTargetStatus = () => {
     if (isPaymentRequest) return ORDER_STATUS.PAYMENT_DONE;
-    if (isBidPending) return ORDER_STATUS.BIDDING; // 경매 대기 -> 경매 진행중으로 변경
+    if (isBidPending) return ORDER_STATUS.BIDDING;
     return ORDER_STATUS.PAID;
   };
 
+  return {
+    isSingleHighlightMode,
+    calculatedTotals,
+    getHighlightTitle,
+    getButtonText,
+    getTargetStatus
+  };
+}
+
+// =================================================================
+// 2. 화면 컴포넌트 영역 (View Layer)
+// 불필요한 인라인 스타일 제거 및 직관적인 클래스명 배치
+// =================================================================
+export default function PaymentSummary(props: PaymentSummaryProps) {
+  const { totalPriceWon, exchangeRate, selectedItems, handleUpdateStatus } = props;
+  const { 
+    isSingleHighlightMode, calculatedTotals, getHighlightTitle, getButtonText, getTargetStatus 
+  } = usePaymentSummaryLogic(props);
+
+  const hasItems = selectedItems.length > 0;
+
   return (
-    <div className="payment-summary-wrap">
-      <style jsx>{`
-        .payment-summary-wrap {
-          margin-top: 40px;
-          background-color: #fff;
-          border-radius: 16px;
-          border: 1px solid #e2e8f0;
-          padding: 30px;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.03);
-        }
-
-        .summary-flex {
-          display: flex;
-          align-items: center;
-          gap: 20px;
-          margin-bottom: 30px;
-        }
-
-        .sub-items-grid {
-          flex: 1;
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 15px;
-          text-align: center;
-        }
-
-        /* 🌟 단일 강조 박스 (배송비 or 보증금) */
-        .single-delivery-box {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 10px 0;
-        }
-
-        .sub-item {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .sub-label {
-          color: #64748b;
-          font-weight: 800;
-          font-size: 15px;
-        }
-
-        .sub-value {
-          color: #1e293b;
-          font-weight: 700;
-          font-size: 20px;
-        }
-
-        .total-box {
-          width: 30%;
-          min-width: 250px;
-          background-color: #fff8f6;
-          border-radius: 16px;
-          padding: 24px;
-          text-align: center;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-
-        .total-label {
-          color: #0f172a;
-          font-weight: 900;
-          font-size: 16px;
-        }
-
-        .total-value {
-          color: #ff4b2b;
-          font-weight: 900;
-          font-size: 28px;
-        }
-
-        .exchange-rate {
-          color: #94a3b8;
-          font-size: 13px;
-          font-weight: 700;
-        }
-
-        .action-btn-wrap {
-          display: flex;
-          justify-content: flex-end;
-        }
-
-        .action-btn {
-          border: none;
-          padding: 18px 40px;
-          font-size: 18px;
-          font-weight: 900;
-          border-radius: 12px;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          width: ${isSingleHighlightMode ? '100%' : 'auto'};
-        }
+    <div className="miku-payment-wrapper anim-slide-up">
+      <div className="miku-payment-content-flex">
         
-        .action-btn:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(255, 75, 43, 0.25) !important;
-          background-color: #e63e1c !important;
-        }
-
-        @media (max-width: 768px) {
-          .summary-flex { flex-direction: column; align-items: stretch; }
-          .sub-items-grid { grid-template-columns: repeat(2, 1fr); border-bottom: 1px dashed #e2e8f0; padding-bottom: 20px; }
-          .total-box { width: 100%; min-width: 0; }
-          .action-btn { width: 100%; }
-        }
-      `}</style>
-
-      <div className="summary-flex">
-        {/* 🌟 배송비 요청 또는 경매 요청 탭일 때의 UI (이미지 참고) */}
         {isSingleHighlightMode ? (
-          <div className="single-delivery-box">
-            <span className="sub-label" style={{ color: '#ea580c', fontSize: '18px', marginBottom: '8px' }}>
-              {getHighlightTitle()}
-            </span>
-            <span className="total-value" style={{ fontSize: '40px' }}>
-              ₩ {totalPriceWon.toLocaleString()}
-            </span>
+          /* 🌟 배송비 요청 / 경매 요청 (단일 강조 박스) */
+          <div className="single-highlight-box">
+            <span className="highlight-title">{getHighlightTitle()}</span>
+            <span className="highlight-value">₩ {totalPriceWon.toLocaleString()}</span>
           </div>
         ) : (
-          /* 장바구니 결제일 때의 UI */
+          /* 🌟 장바구니 등 다중 요약 정보 그리드 */
           <>
-            <div className="sub-items-grid">
-              <div className="sub-item">
-                <span className="sub-label">상품 가격</span>
-                <span className="sub-value">¥ {calculatedTotals.product.toLocaleString()}</span>
+            <div className="detail-grid">
+              <div className="detail-item">
+                <span className="item-label">상품 가격</span>
+                <span className="item-val">¥ {calculatedTotals.product.toLocaleString()}</span>
               </div>
-              <div className="sub-item">
-                <span className="sub-label">일본내 배송료</span>
-                <span className="sub-value" >
-                   ¥ {totals.delivery.toLocaleString()}
-                </span>
+              <div className="detail-item">
+                <span className="item-label">일본내 배송료</span>
+                <span className="item-val">¥ {calculatedTotals.delivery.toLocaleString()}</span>
               </div>
-              <div className="sub-item">
-                <span className="sub-label">송금 수수료</span>
-                <span className="sub-value">¥ {calculatedTotals.transfer.toLocaleString()}</span>
+              <div className="detail-item">
+                <span className="item-label">송금 수수료</span>
+                <span className="item-val">¥ {calculatedTotals.transfer.toLocaleString()}</span>
               </div>
-              <div className="sub-item">
-                <span className="sub-label">대행 수수료</span>
-                <span className="sub-value">¥ {calculatedTotals.agency.toLocaleString()}</span>
+              <div className="detail-item">
+                <span className="item-label">대행 수수료</span>
+                <span className="item-val">¥ {calculatedTotals.agency.toLocaleString()}</span>
               </div>
             </div>
 
@@ -265,21 +148,155 @@ export default function PaymentSummary({
         )}
       </div>
 
-      <div className="action-btn-wrap">
+      <div className="payment-action-wrap">
         <button 
-          className="action-btn"
-          onClick={() => handleUpdateStatus(getTargetStatus())} 
-          disabled={selectedItems.length === 0} 
-          style={{ 
-            backgroundColor: selectedItems.length > 0 ? (isSingleHighlightMode ? '#ea580c' : '#ff4b2b') : '#cbd5e1', 
-            color: '#fff', 
-            cursor: selectedItems.length > 0 ? 'pointer' : 'not-allowed',
-            boxShadow: selectedItems.length > 0 ? '0 4px 12px rgba(255, 75, 43, 0.2)' : 'none'
-          }}
+          className={`btn-payment ${hasItems ? 'active' : 'disabled'} ${isSingleHighlightMode ? 'full-width' : ''}`}
+          onClick={() => handleUpdateStatus(getTargetStatus())}
+          disabled={!hasItems}
         >
           {getButtonText()}
         </button>
       </div>
+
+      {/* ================================================================= */}
+      {/* 3. 디자인 영역 (CSS Layer) */}
+      {/* 글로벌 오염 방지를 위해 .miku-payment- 네임스페이스 사용 */}
+      {/* ================================================================= */}
+      <style jsx global>{`
+        .miku-payment-wrapper {
+          margin-top: 40px;
+          background-color: #ffffff;
+          border-radius: 24px;
+          border: 1px solid rgba(226, 232, 240, 0.8);
+          padding: 32px 40px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+          font-family: 'Pretendard', "Noto Sans KR", sans-serif;
+          box-sizing: border-box;
+        }
+
+        .miku-payment-content-flex {
+          display: flex;
+          align-items: stretch;
+          gap: 24px;
+          margin-bottom: 32px;
+        }
+
+        /* 🌟 상세 그리드 (항목별 비용 내역) */
+        .detail-grid {
+          flex: 1;
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          background: #f8fafc;
+          border-radius: 20px;
+          border: 1px solid #f1f5f9;
+          padding: 24px;
+          box-sizing: border-box;
+        }
+        
+        .detail-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          border-right: 1px dashed #cbd5e1;
+        }
+        .detail-item:last-child { border-right: none; }
+        
+        .item-label { font-size: 14px; font-weight: 800; color: #64748b; }
+        .item-val { font-size: 20px; font-weight: 900; color: #0f172a; }
+
+        /* 🌟 최종 결제액 강조 박스 */
+        .total-box {
+          width: 320px;
+          flex-shrink: 0;
+          background: #fff8f6;
+          border-radius: 20px;
+          border: 1px solid #ffedd5;
+          padding: 24px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          box-sizing: border-box;
+        }
+        
+        .total-label { font-size: 15px; font-weight: 800; color: #ea580c; margin-bottom: 6px; }
+        .total-value { font-size: 32px; font-weight: 900; color: #ff4b2b; line-height: 1.2; }
+        .exchange-rate {
+          font-size: 12px; font-weight: 800; color: #f97316;
+          background: #ffedd5; padding: 4px 12px; border-radius: 100px; margin-top: 8px;
+        }
+
+        /* 🌟 단일 강조 박스 (배송비, 보증금 전용) */
+        .single-highlight-box {
+          width: 100%;
+          background: #fff8f6;
+          border-radius: 20px;
+          border: 1px solid #ffedd5;
+          padding: 40px 20px;
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          gap: 12px;
+        }
+        .highlight-title { font-size: 18px; font-weight: 800; color: #ea580c; }
+        .highlight-value { font-size: 48px; font-weight: 900; color: #ff4b2b; line-height: 1; }
+
+        /* 🌟 액션 버튼 */
+        .payment-action-wrap {
+          display: flex;
+          justify-content: flex-end;
+        }
+        .btn-payment {
+          padding: 18px 48px;
+          font-size: 18px;
+          font-weight: 900;
+          border-radius: 16px;
+          border: none;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-payment.disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
+        .btn-payment.active {
+          background: linear-gradient(135deg, #ff4b2b 0%, #e63e1f 100%);
+          color: #ffffff;
+          cursor: pointer;
+          box-shadow: 0 8px 20px -4px rgba(255, 75, 43, 0.3);
+        }
+        .btn-payment.active:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 24px -6px rgba(255, 75, 43, 0.4);
+        }
+        .btn-payment.full-width { width: 100%; text-align: center; }
+
+        /* 애니메이션 */
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .anim-slide-up { opacity: 0; animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        /* =============================================================
+           📱 모바일 반응형 처리
+           ============================================================= */
+        @media (max-width: 768px) {
+          .miku-payment-wrapper { padding: 24px 20px; border-radius: 20px; }
+          .miku-payment-content-flex { flex-direction: column; gap: 16px; }
+          
+          .detail-grid { grid-template-columns: repeat(2, 1fr); padding: 20px; gap: 20px 0; }
+          .detail-item { border-right: none; padding: 12px 0; border-bottom: 1px dashed #cbd5e1; }
+          .detail-item:nth-last-child(-n+2) { border-bottom: none; padding-bottom: 0; }
+          .item-label { font-size: 13px; }
+          .item-val { font-size: 18px; }
+          
+          .total-box { width: 100%; padding: 24px 20px; }
+          .total-label { font-size: 14px; }
+          .total-value { font-size: 28px; }
+          
+          .highlight-value { font-size: 36px; }
+          
+          .btn-payment { width: 100%; text-align: center; padding: 16px; font-size: 16px; }
+        }
+      `}</style>
     </div>
   );
 }
