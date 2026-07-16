@@ -6,9 +6,6 @@ import { signIn, getSession } from "next-auth/react";
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 
 export default function LoginPage() {
-  // ==========================================
-  // 🧠 1. 비즈니스 로직 (Logic)
-  // ==========================================
   const [userId, setUserId] = useState(''); 
   const [password, setPassword] = useState('');
   const { showAlert } = useMikuAlert();
@@ -54,17 +51,12 @@ export default function LoginPage() {
     }
   };
 
-  // ==========================================
-  // 🖥️ 2. 화면 렌더링 (View)
-  // ==========================================
   return (
     <div className="login-page-wrapper">
-      <div className="login-card">
+      <div className="login-card fade-in-up">
         
+        {/* 🌟 로고 이미지가 제거되고 타이틀만 남은 헤더 부분 */}
         <div className="login-header">
-          <Link href="/">
-            <img src="/images/logo.png" alt="Logo" className="login-logo" />
-          </Link>
           <h1 className="login-title">로그인</h1>
           <p className="login-subtitle">미쿠 서비스 이용을 위해 로그인해주세요.</p>
         </div>
@@ -97,21 +89,18 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* 🌟 1. 아이디/비밀번호 찾기를 가로로 정렬하여 로그인 버튼 밑에 밀착 */}
         <div className="utility-wrapper">
-          <button className="utility-btn">아이디 찾기</button>
+          <Link href="/find-id" className="utility-link">아이디 찾기</Link>
           <span className="utility-separator">|</span>
-          <button className="utility-btn">비밀번호 찾기</button>
+          <Link href="/find-password" className="utility-link">비밀번호 찾기</Link>
         </div>
 
-        {/* 🌟 2. 소셜 로그인 구분선 */}
         <div className="login-divider">
           <div className="divider-line"></div>
           <span className="divider-text">또는 간편 로그인</span>
           <div className="divider-line"></div>
         </div>
 
-        {/* 🌟 3. 간편 로그인 버튼들 */}
         <button onClick={() => signIn('kakao', { callbackUrl: '/' })} className="social-btn kakao-btn">
           <span className="social-icon kakao-icon">K</span> 카카오로 시작하기
         </button>
@@ -120,208 +109,120 @@ export default function LoginPage() {
           <span className="social-icon naver-icon">N</span> 네이버로 시작하기
         </button>
 
-        {/* 🌟 4. 회원가입 유도를 카드의 가장 하단으로 분리하여 밸런스 고정 */}
         <div className="login-footer">
           계정이 없으신가요? <Link href="/register" className="register-link">회원가입</Link>
         </div>
 
       </div>
 
-      {/* ==========================================
-          🎨 3. 순수 CSS 스타일 정의 (Style)
-          ========================================== */}
       <style>{`
-        .login-page-wrapper {
-          min-height: 80vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background-color: #f8fafc;
-          padding: 40px 20px;
+        .login-page-wrapper { 
+          min-height: 80vh; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%); 
+          padding: 40px 20px; 
+          font-family: 'Pretendard', sans-serif;
         }
         
-        .login-card {
-          width: 100%;
-          max-width: 400px;
-          padding: 40px;
-          background-color: #fff;
-          border-radius: 12px;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-          border: 1px solid #e2e8f0;
+        .login-card { 
+          width: 100%; 
+          max-width: 420px; 
+          padding: 48px 40px; 
+          background: rgba(255, 255, 255, 0.95); 
+          backdrop-filter: blur(10px);
+          border-radius: 24px; 
+          box-shadow: 0 20px 40px -10px rgba(0,0,0,0.08), 0 0 0 1px rgba(255,255,255,0.5) inset; 
+          border: 1px solid rgba(226, 232, 240, 0.6);
         }
 
-        .login-header {
-          text-align: center;
-          margin-bottom: 30px;
+        .login-header { text-align: center; margin-bottom: 36px; }
+        .login-title { font-size: 26px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.5px; }
+        .login-subtitle { color: #64748b; margin-top: 10px; font-size: 14px; }
+        
+        .input-group { margin-bottom: 24px; }
+        .input-label { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 8px; }
+        
+        .login-input { 
+          width: 100%; 
+          padding: 16px 20px; 
+          border-radius: 12px; 
+          border: 1px solid transparent; 
+          background-color: #f1f5f9;
+          font-size: 15px; 
+          color: #0f172a;
+          outline: none; 
+          box-sizing: border-box; 
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+        }
+        .login-input::placeholder { color: #94a3b8; font-weight: 500; }
+        .login-input:focus { 
+          background-color: #ffffff;
+          border-color: #ff4b2b; 
+          box-shadow: 0 0 0 4px rgba(255, 75, 43, 0.1); 
         }
 
-        .login-logo {
-          height: 60px;
-          margin-bottom: 20px;
+        .submit-btn { 
+          width: 100%; 
+          padding: 16px; 
+          background: linear-gradient(135deg, #ff4b2b 0%, #e63e1f 100%); 
+          color: #fff; 
+          border-radius: 12px; 
+          border: none; 
+          font-size: 16px; 
+          font-weight: 800; 
+          cursor: pointer; 
+          box-shadow: 0 8px 16px rgba(255, 75, 43, 0.2);
+          transform: translateY(0);
+          transition: all 0.3s ease; 
+        }
+        .submit-btn:hover { 
+          transform: translateY(-2px);
+          box-shadow: 0 12px 20px rgba(255, 75, 43, 0.3);
+          background: linear-gradient(135deg, #ff5b3f 0%, #ed4322 100%); 
         }
 
-        .login-title {
-          font-size: 24px;
-          font-weight: bold;
-          color: #1e293b;
-          margin: 0;
-        }
+        .utility-wrapper { display: flex; justify-content: center; align-items: center; margin-top: 20px; gap: 16px; }
+        .utility-link { color: #64748b; font-size: 13px; font-weight: 500; text-decoration: none; transition: color 0.2s; }
+        .utility-link:hover { color: #0f172a; text-decoration: underline; }
+        .utility-separator { color: #cbd5e1; font-size: 12px; }
 
-        .login-subtitle {
-          color: #64748b;
-          margin-top: 8px;
-          font-size: 14px;
-        }
+        .login-divider { display: flex; align-items: center; margin: 36px 0 24px 0; color: #94a3b8; font-size: 12px; font-weight: 500; }
+        .divider-line { flex: 1; height: 1px; background-color: #e2e8f0; }
+        .divider-text { padding: 0 14px; }
 
-        .input-group {
-          margin-bottom: 20px;
+        .social-btn { 
+          width: 100%; 
+          padding: 15px; 
+          border-radius: 12px; 
+          border: none; 
+          font-size: 15px; 
+          font-weight: 800; 
+          cursor: pointer; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          gap: 10px; 
+          margin-bottom: 12px; 
+          transition: all 0.2s ease; 
         }
+        .social-btn:hover { transform: translateY(-1px); filter: brightness(0.96); }
+        .kakao-btn { background-color: #FEE500; color: #191919; }
+        .naver-btn { background-color: #03C75A; color: #ffffff; }
+        .social-icon { font-size: 18px; font-weight: 900; }
+        .naver-icon { font-family: Arial, sans-serif; }
 
-        .input-label {
-          display: block;
-          font-size: 14px;
-          font-weight: 600;
-          color: #475569;
-          margin-bottom: 8px;
+        .login-footer { margin-top: 36px; padding-top: 24px; border-top: 1px dashed #e2e8f0; text-align: center; font-size: 14px; color: #64748b; }
+        .register-link { color: #ff4b2b; font-weight: 800; margin-left: 8px; text-decoration: none; transition: opacity 0.2s; }
+        .register-link:hover { text-decoration: underline; opacity: 0.8; }
+
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-
-        .login-input {
-          width: 100%;
-          padding: 12px 16px;
-          border-radius: 8px;
-          border: 1px solid #e2e8f0;
-          font-size: 15px;
-          outline: none;
-          box-sizing: border-box;
-          transition: border-color 0.2s;
-        }
-
-        .login-input:focus {
-          border-color: #ff4b2b;
-        }
-
-        .submit-btn {
-          width: 100%;
-          padding: 14px;
-          background-color: #ff4b2b;
-          color: #fff;
-          border-radius: 8px;
-          border: none;
-          font-size: 16px;
-          font-weight: bold;
-          cursor: pointer;
-          transition: background-color 0.2s;
-        }
-
-        .submit-btn:hover {
-          background-color: #e63e1f;
-        }
-
-        /* 🌟 아이디/비밀번호 찾기 영역 스타일 */
-        .utility-wrapper {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin-top: 16px;
-          gap: 12px;
-        }
-
-        .utility-btn {
-          background: none;
-          border: none;
-          color: #64748b;
-          font-size: 13px;
-          cursor: pointer;
-          padding: 0;
-        }
-
-        .utility-btn:hover {
-          color: #475569;
-          text-decoration: underline;
-        }
-
-        .utility-separator {
-          color: #cbd5e1;
-          font-size: 12px;
-        }
-
-        /* 🌟 간편 로그인 구분선 여백 조정 */
-        .login-divider {
-          display: flex;
-          align-items: center;
-          margin: 30px 0;
-          color: #94a3b8;
-          font-size: 12px;
-        }
-
-        .divider-line {
-          flex: 1;
-          height: 1px;
-          background-color: #e2e8f0;
-        }
-
-        .divider-text {
-          padding: 0 10px;
-        }
-
-        .social-btn {
-          width: 100%;
-          padding: 14px;
-          border-radius: 8px;
-          border: none;
-          font-size: 15px;
-          font-weight: bold;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          margin-bottom: 10px;
-          transition: filter 0.2s;
-        }
-
-        .social-btn:hover {
-          filter: brightness(0.95);
-        }
-
-        .kakao-btn {
-          background-color: #FEE500;
-          color: #000;
-        }
-
-        .naver-btn {
-          background-color: #03C75A;
-          color: #fff;
-        }
-
-        .social-icon {
-          font-size: 18px;
-          font-weight: 900;
-        }
-
-        .naver-icon {
-          font-family: Arial, sans-serif;
-        }
-
-        /* 🌟 회원가입 푸터 스타일 (상단에 얇은 선을 추가해 공간 분리) */
-        .login-footer {
-          margin-top: 30px;
-          padding-top: 20px;
-          border-top: 1px solid #f1f5f9;
-          text-align: center;
-          font-size: 14px;
-          color: #64748b;
-        }
-
-        .register-link {
-          color: #ff4b2b;
-          font-weight: bold;
-          margin-left: 8px;
-          text-decoration: none;
-        }
-
-        .register-link:hover {
-          text-decoration: underline;
+        .fade-in-up {
+          animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
     </div>

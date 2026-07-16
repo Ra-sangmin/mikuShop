@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import GuideLayout from '@/app/components/GuideLayout';
 import { loadPaymentWidget, PaymentWidgetInstance } from "@tosspayments/payment-widget-sdk";
 import { useRouter } from 'next/navigation';
-import { useMikuAlert } from '@/app/context/MikuAlertContext'; // 🌟 Context 임포트
+import { useMikuAlert } from '@/app/context/MikuAlertContext';
 
 // ==========================================
 // 🎨 1. 디자인 및 스타일 시스템
@@ -55,7 +55,7 @@ const globalAnimation = `
 // ==========================================
 function useMoneyChargeLogic() {
   const router = useRouter(); 
-  const { showAlert } = useMikuAlert(); // 🌟 미쿠짱 전역 Alert Context 연동
+  const { showAlert } = useMikuAlert();
   const hasAlerted = useRef(false); 
 
   const [isAuthChecking, setIsAuthChecking] = useState(true);
@@ -70,14 +70,24 @@ function useMoneyChargeLogic() {
   const paymentMethodsWidgetRef = useRef<any>(null);
   const clientKey = "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
 
+  // 🌟 100만 원 제한 로직 추가
+  const handleAmountChange = (newAmount: number) => {
+    if (newAmount > 1000000) {
+      setAmount('1000000');
+      showAlert('1회 최대 충전 가능 금액은 100만 원입니다.', 'warning');
+    } else {
+      setAmount(newAmount === 0 ? '' : newAmount.toString());
+    }
+  };
+
   useEffect(() => { 
     const storedId = localStorage.getItem('user_id');
     
     if (!storedId) {
       if (!hasAlerted.current) {
         hasAlerted.current = true;
-        showAlert('로그인이 필요한 페이지입니다.', 'warning'); // 🌟 경고 메시지 띄우기
-        router.push('/login'); // 페이지 라우팅
+        showAlert('로그인이 필요한 페이지입니다.', 'warning');
+        router.push('/login');
       }
       return; 
     }
@@ -212,9 +222,9 @@ function useMoneyChargeLogic() {
 
   return {
     isAuthChecking, 
-    amount, setAmount, depositor, setDepositor, method, setMethod, 
+    amount, depositor, setDepositor, method, setMethod, 
     currentMoney, isFocused, setIsFocused, loading, 
-    formatDisplay, handleChargeRequest
+    formatDisplay, handleChargeRequest, handleAmountChange // 🌟 수정된 함수 내보내기
   };
 }
 
@@ -224,12 +234,11 @@ function useMoneyChargeLogic() {
 export default function MoneyChargePage() {
   const {
     isAuthChecking,
-    amount, setAmount, depositor, setDepositor, method, setMethod,
+    amount, depositor, setDepositor, method, setMethod,
     currentMoney, isFocused, setIsFocused, loading,
-    formatDisplay, handleChargeRequest
+    formatDisplay, handleChargeRequest, handleAmountChange
   } = useMoneyChargeLogic();
 
-  // 로그인되지 않아 알림을 띄우는 중일 때는 배경만 렌더링
   if (isAuthChecking) {
     return <div style={{ height: '100vh', backgroundColor: '#fdfdfd' }} />;
   }
@@ -246,20 +255,22 @@ export default function MoneyChargePage() {
           
           <div style={s.formWrapper}>
             
-            {/* 현재 머니 요약 */}
             <div style={s.moneySummaryBox}>
               <span style={s.moneySummaryLabel}>현재 보유 머니</span>
               <span style={s.moneySummaryValue}>{currentMoney.toLocaleString()}원</span>
             </div>
 
-            {/* 금액 입력 */}
             <div>
               <label style={s.label}>충전 신청 금액</label>
               <div style={s.inputContainer}>
                 <input
                   type={isFocused ? "number" : "text"}
                   value={isFocused ? amount : formatDisplay(amount)}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={(e) => {
+                    // 🌟 숫자가 아닌 문자 제거 후 100만 원 제한 체크
+                    const val = parseInt(e.target.value.replace(/[^0-9]/g, '') || '0');
+                    handleAmountChange(val);
+                  }}
                   onFocus={() => setIsFocused(true)}
                   onBlur={() => setIsFocused(false)}
                   placeholder="최소 5,000원 이상"
@@ -269,14 +280,18 @@ export default function MoneyChargePage() {
               </div>
               <div style={s.quickBtnWrapper}>
                 {[10000, 30000, 50000, 100000].map((val) => (
-                  <button key={val} onClick={() => setAmount((prev) => (parseInt(prev || '0') + val).toString())} style={s.quickBtn}>
+                  <button 
+                    key={val} 
+                    // 🌟 퀵 버튼 클릭 시에도 100만 원 제한 체크
+                    onClick={() => handleAmountChange(parseInt(amount || '0') + val)} 
+                    style={s.quickBtn}
+                  >
                     +{val / 10000}만
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* 입금 수단 선택 */}
             <div>
               <label style={s.label}>입금 방법 선택</label>
               <div style={s.methodGrid}>
@@ -285,7 +300,6 @@ export default function MoneyChargePage() {
               </div>
             </div>
 
-            {/* 무통장 입금 UI */}
             {method === 'transfer' && (
               <div style={s.animatedSection}>
                 <div style={s.accountInfoBox}>
@@ -305,13 +319,11 @@ export default function MoneyChargePage() {
               </div>
             )}
 
-            {/* 카드 결제 위젯 영역 */}
             <div style={s.cardWidgetWrapper(method === 'card')}>
               <div id="payment-widget" style={s.fullWidth} />
               <div id="agreement" style={s.agreementWrapper} />
             </div>
 
-            {/* 무통장 입금 주의사항 */}
             {method === 'transfer' && (
               <div style={s.warningBox}>
                 <ul style={s.warningList}>
@@ -322,7 +334,6 @@ export default function MoneyChargePage() {
               </div>
             )}
 
-            {/* 결제/신청 버튼 */}
             <button 
               onClick={handleChargeRequest} 
               disabled={loading}
