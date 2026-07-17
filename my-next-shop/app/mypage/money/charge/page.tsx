@@ -54,9 +54,9 @@ const globalAnimation = `
 // 🧠 2. 비즈니스 로직 훅
 // ==========================================
 function useMoneyChargeLogic() {
-  const router = useRouter(); 
+  const router = useRouter();
   const { showAlert } = useMikuAlert();
-  const hasAlerted = useRef(false); 
+  const hasAlerted = useRef(false);
 
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [amount, setAmount] = useState<string>('');
@@ -68,9 +68,10 @@ function useMoneyChargeLogic() {
 
   const [paymentWidget, setPaymentWidget] = useState<PaymentWidgetInstance | null>(null);
   const paymentMethodsWidgetRef = useRef<any>(null);
-  const clientKey = "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
+  
+  // 🌟 환경 변수 적용 (운영/테스트 키 분리)
+  const clientKey = process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY || "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
 
-  // 🌟 100만 원 제한 로직 추가
   const handleAmountChange = (newAmount: number) => {
     if (newAmount > 1000000) {
       setAmount('1000000');
@@ -80,7 +81,7 @@ function useMoneyChargeLogic() {
     }
   };
 
-  useEffect(() => { 
+  useEffect(() => {
     const storedId = localStorage.getItem('user_id');
     
     if (!storedId) {
@@ -89,7 +90,7 @@ function useMoneyChargeLogic() {
         showAlert('로그인이 필요한 페이지입니다.', 'warning');
         router.push('/auth/login');
       }
-      return; 
+      return;
     }
 
     setIsAuthChecking(false);
@@ -104,7 +105,7 @@ function useMoneyChargeLogic() {
       }
     };
 
-    fetchUserMoney(); 
+    fetchUserMoney();
     
     (async () => {
       try {
@@ -123,13 +124,13 @@ function useMoneyChargeLogic() {
         console.error("토스 위젯 로드 실패:", error);
       }
     })();
-  }, [router, showAlert]);
+  }, [router, showAlert, clientKey]);
 
   useEffect(() => {
     if (paymentWidget == null) return;
 
     if (method === 'card') {
-      const initialAmount = Math.max(parseInt(amount || '0'), 5000); 
+      const initialAmount = Math.max(parseInt(amount || '0'), 5000);
       
       const paymentMethodsWidget = paymentWidget.renderPaymentMethods(
         '#payment-widget',
@@ -210,9 +211,9 @@ function useMoneyChargeLogic() {
         await paymentWidget.requestPayment({
           orderId: "ORDER_" + Date.now(),
           orderName: `미쿠짱머니 ${numAmount.toLocaleString()}원 충전`,
-          successUrl: `${window.location.origin}/payment/success`, 
+          successUrl: `${window.location.origin}/payment/success`,
           failUrl: `${window.location.origin}/payment/fail`,
-          customerName: depositor || "미쿠짱 고객", 
+          customerName: depositor || "미쿠짱 고객",
         });
       } catch (err) {
         console.error("결제 에러:", err);
@@ -221,10 +222,10 @@ function useMoneyChargeLogic() {
   };
 
   return {
-    isAuthChecking, 
-    amount, depositor, setDepositor, method, setMethod, 
-    currentMoney, isFocused, setIsFocused, loading, 
-    formatDisplay, handleChargeRequest, handleAmountChange // 🌟 수정된 함수 내보내기
+    isAuthChecking,
+    amount, depositor, setDepositor, method, setMethod,
+    currentMoney, isFocused, setIsFocused, loading,
+    formatDisplay, handleChargeRequest, handleAmountChange
   };
 }
 
@@ -267,7 +268,6 @@ export default function MoneyChargePage() {
                   type={isFocused ? "number" : "text"}
                   value={isFocused ? amount : formatDisplay(amount)}
                   onChange={(e) => {
-                    // 🌟 숫자가 아닌 문자 제거 후 100만 원 제한 체크
                     const val = parseInt(e.target.value.replace(/[^0-9]/g, '') || '0');
                     handleAmountChange(val);
                   }}
@@ -280,10 +280,9 @@ export default function MoneyChargePage() {
               </div>
               <div style={s.quickBtnWrapper}>
                 {[10000, 30000, 50000, 100000].map((val) => (
-                  <button 
-                    key={val} 
-                    // 🌟 퀵 버튼 클릭 시에도 100만 원 제한 체크
-                    onClick={() => handleAmountChange(parseInt(amount || '0') + val)} 
+                  <button
+                    key={val}
+                    onClick={() => handleAmountChange(parseInt(amount || '0') + val)}
                     style={s.quickBtn}
                   >
                     +{val / 10000}만
@@ -334,8 +333,8 @@ export default function MoneyChargePage() {
               </div>
             )}
 
-            <button 
-              onClick={handleChargeRequest} 
+            <button
+              onClick={handleChargeRequest}
               disabled={loading}
               style={s.submitBtn(loading)}
             >
