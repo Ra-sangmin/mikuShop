@@ -172,8 +172,13 @@ function useMoneyChargeLogic() {
       return showAlert('최소 신청 금액은 5,000원입니다.', 'warning');
     }
 
+    setLoading(true);
+
     if (method === 'transfer') {
-      if (!depositor) return showAlert('입금자명을 입력해주세요.', 'warning');
+      if (!depositor) {
+        setLoading(false); // 150라인: 유효성 검사 실패 시 버튼 활성화
+        return showAlert('입금자명을 입력해주세요.', 'warning');
+      }
       
       const storedId = localStorage.getItem('user_id');
       if (!storedId) {
@@ -205,7 +210,10 @@ function useMoneyChargeLogic() {
     }
 
     if (method === 'card') {
-      if (!paymentWidget) return showAlert('결제 모듈을 불러오는 중입니다. 잠시만 기다려주세요.', 'warning');
+      if (!paymentWidget) {
+        setLoading(false); // 174라인: 위젯 미로딩 시 버튼 활성화
+        return showAlert('결제 모듈을 불러오는 중입니다. 잠시만 기다려주세요.', 'warning');
+      }
 
       try {
         await paymentWidget.requestPayment({
@@ -217,6 +225,7 @@ function useMoneyChargeLogic() {
         });
       } catch (err) {
         console.error("결제 에러:", err);
+        setLoading(false);
       }
     }
   };
