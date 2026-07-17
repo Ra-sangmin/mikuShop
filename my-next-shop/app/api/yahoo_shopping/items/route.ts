@@ -102,7 +102,7 @@ export async function GET(request: Request) {
     }
 
     // 💡 테스트/디버깅용 (실제 운영 시 주석 처리 권장)
-    fs.writeFileSync('yahoo_test.json', JSON.stringify(data, null, 2), 'utf-8');
+    //fs.writeFileSync('yahoo_test.json', JSON.stringify(data, null, 2), 'utf-8');
 
     // 야후 서버 자체 JSON 에러 확인
     if (data?.Error) {

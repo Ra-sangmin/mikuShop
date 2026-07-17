@@ -44,57 +44,76 @@ function useMyPageLogic() {
     money: userMoney
   };
 
+  // 🌟 누락되었던 12개 모든 상태 항목 추가 및 진행 흐름에 맞춘 순서 정렬
   const purchaseStatus = useMemo(() => [
     { 
-      label: ORDER_STATUS_LABEL[ORDER_STATUS.ALL], 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.ALL] || "전체내역", 
       count: userOrders.length, 
       desc: '모든내역을 확인합니다.', 
       href: `/mypage/status?tab=${ORDER_STATUS.ALL}` 
     },
     { 
-      label: ORDER_STATUS_LABEL[ORDER_STATUS.CART], 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.CART] || "구매 요청", 
       count: userOrders.filter((i: any) => i.status === ORDER_STATUS.CART).length, 
       desc: '구매신청 장바구니 목록', 
       href: `/mypage/status?tab=${ORDER_STATUS.CART}` 
     },
     { 
-      label: ORDER_STATUS_LABEL[ORDER_STATUS.FAILED], 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.BID_PENDING] || "경매 요청", 
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.BID_PENDING).length, 
+      desc: '경매 입찰을 위한 보증금 결제대기', 
+      href: `/mypage/status?tab=${ORDER_STATUS.BID_PENDING}` 
+    },
+    { 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.BIDDING] || "경매 상황", 
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.BIDDING).length, 
+      desc: '현재 경매 입찰 진행중인 상품', 
+      href: `/mypage/status?tab=${ORDER_STATUS.BIDDING}` 
+    },
+    { 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.BID_SUCCESS] || "경매 낙찰 성공", 
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.BID_SUCCESS).length, 
+      desc: '경매 낙찰 성공, 1차결제 대기', 
+      href: `/mypage/status?tab=${ORDER_STATUS.BID_SUCCESS}` 
+    },
+    { 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.FAILED] || "경매/구매 실패", 
       count: userOrders.filter((i: any) => i.status === ORDER_STATUS.FAILED).length, 
       desc: '상품 결제 완료 구매불가 목록', 
       href: `/mypage/status?tab=${ORDER_STATUS.FAILED}` 
     },
     { 
-      label: ORDER_STATUS_LABEL[ORDER_STATUS.PAID], 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.PAID] || "상품 결제 완료", 
       count: userOrders.filter((i: any) => i.status === ORDER_STATUS.PAID).length, 
       desc: '1차결제완료 목록(구매진행)', 
       href: `/mypage/status?tab=${ORDER_STATUS.PAID}` 
     },
     { 
-      label: ORDER_STATUS_LABEL[ORDER_STATUS.ARRIVED], 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.ARRIVED] || "입고 완료", 
       count: userOrders.filter((i: any) => i.status === ORDER_STATUS.ARRIVED).length, 
       desc: '현지창고 도착, 합포장신청', 
       href: `/mypage/status?tab=${ORDER_STATUS.ARRIVED}` 
     },
     { 
-      label: ORDER_STATUS_LABEL[ORDER_STATUS.PREPARING], 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.PREPARING] || "배송 준비중", 
       count: userOrders.filter((i: any) => i.status === ORDER_STATUS.PREPARING).length, 
       desc: '미쿠짱창고 포장진행중', 
       href: `/mypage/status?tab=${ORDER_STATUS.PREPARING}` 
     },
     { 
-      label: ORDER_STATUS_LABEL[ORDER_STATUS.PAYMENT_REQ], 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.PAYMENT_REQ] || "배송비 요청", 
       count: userOrders.filter((i: any) => i.status === ORDER_STATUS.PAYMENT_REQ).length, 
       desc: '합포장완료 2차결제견적', 
       href: `/mypage/status?tab=${ORDER_STATUS.PAYMENT_REQ}` 
     },
     { 
-      label: ORDER_STATUS_LABEL[ORDER_STATUS.PAYMENT_DONE], 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.PAYMENT_DONE] || "배송비 결제 완료", 
       count: userOrders.filter((i: any) => i.status === ORDER_STATUS.PAYMENT_DONE).length, 
       desc: '출하준비중', 
       href: `/mypage/status?tab=${ORDER_STATUS.PAYMENT_DONE}` 
     },
     { 
-      label: ORDER_STATUS_LABEL[ORDER_STATUS.SHIPPING], 
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.SHIPPING] || "국제 배송", 
       count: userOrders.filter((i: any) => i.status === ORDER_STATUS.SHIPPING).length, 
       desc: '국제배송추적 및 도착', 
       href: `/mypage/status?tab=${ORDER_STATUS.SHIPPING}` 
@@ -111,7 +130,6 @@ function useMyPageLogic() {
 
 // =================================================================
 // 2. 화면 컴포넌트 영역 (View Layer)
-// 인라인 스타일과 JS 호버(onMouseOver 등)를 모두 제거했습니다.
 // =================================================================
 
 // 🌟 주소록 아이템
@@ -141,7 +159,7 @@ const SummaryBox = ({ label, value, unit, icon }: { label: string, value: number
 // 🌟 구매대행 상황 카드
 const StatusCard = ({ label, count, desc, href, index }: { label: string, count: number, desc: string, href: string, index: number }) => (
   <Link href={href} className="miku-mypage-status-link">
-    <div className="miku-mypage-status-card anim-slide-up" style={{ animationDelay: `${0.1 * index}s` }}>
+    <div className="miku-mypage-status-card anim-slide-up" style={{ animationDelay: `${0.05 * index}s` }}>
       <div className="status-card-header">
         <span className="status-title">{label}</span>
         <div className={`status-badge ${count > 0 ? 'active' : ''}`}>
@@ -167,7 +185,7 @@ export default function MyPage() {
     <GuideLayout title="마이페이지" type="mypage">
       <div className="miku-mypage-wrapper">
         
-        {/* 상단 회원 정보 헤더 (프리미엄 글래스모피즘 웰컴 보드) */}
+        {/* 상단 회원 정보 헤더 */}
         <div className="miku-mypage-welcome-board anim-slide-up">
           <div className="welcome-info">
             <div>
@@ -201,7 +219,6 @@ export default function MyPage() {
                 <AddressItem label="우편번호" value="123-4567" onCopy={copyToClipboard} />
                 <AddressItem label="도도부현" value="東京都 (Tokyo)" onCopy={copyToClipboard} />
                 <AddressItem label="구/군/시" value="港区 (Minato-ku)" onCopy={copyToClipboard} />
-                {/* 🌟 '東麻부' -> '東麻' 수정 완료 */}
                 <AddressItem label="상세주소 1" value="東麻 1-2-3" onCopy={copyToClipboard} />
               </div>
               <div className="address-col">
@@ -216,7 +233,7 @@ export default function MyPage() {
           </div>
         </div>
 
-        {/* 구매대행 상황 */}
+        {/* 구매대행 상황 (12개 아이템 표시) */}
         <div className="miku-mypage-section anim-slide-up delay-3" style={{ marginBottom: '40px' }}>
           <div className="section-header">
             <h2>구매대행 상황 <span>📦</span></h2>
@@ -232,7 +249,6 @@ export default function MyPage() {
 
       {/* ================================================================= */}
       {/* 3. 디자인 영역 (CSS Layer) */}
-      {/* 글로벌 오염 방지를 위해 .miku-mypage- 접두사를 일관되게 사용합니다. */}
       {/* ================================================================= */}
       <style jsx global>{`
         .miku-mypage-wrapper {
@@ -242,7 +258,7 @@ export default function MyPage() {
           color: #0f172a;
         }
 
-        /* 🌟 웰컴 보드 (프리미엄 헤더) */
+        /* 🌟 웰컴 보드 */
         .miku-mypage-welcome-board {
           display: flex;
           align-items: center;
@@ -330,7 +346,7 @@ export default function MyPage() {
         }
         .address-warning b { color: #ea580c; }
 
-        /* 🌟 구매대행 상황 카드 (9개 아이템을 위해 PC 기준 3단 그리드로 변경) */
+        /* 🌟 구매대행 상황 카드 (12개 아이템을 위해 3단 그리드 유지) */
         .status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
         .miku-mypage-status-link { text-decoration: none; display: block; }
         

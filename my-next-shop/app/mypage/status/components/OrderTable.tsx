@@ -4,6 +4,21 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { ORDER_STATUS, ORDER_STATUS_LABEL } from '@/src/types/order';
 
+// 🌟 [추가할 부분 1] 정렬을 위한 상태 우선순위 정의 (요청 -> 진행중 -> 창고 -> 배송 순)
+const STATUS_PRIORITY: Record<string, number> = {
+  [ORDER_STATUS.CART]: 1,
+  [ORDER_STATUS.BID_PENDING]: 2,
+  [ORDER_STATUS.BIDDING]: 3,
+  [ORDER_STATUS.BID_SUCCESS]: 4,
+  [ORDER_STATUS.PAID]: 5,
+  [ORDER_STATUS.FAILED]: 6,
+  [ORDER_STATUS.ARRIVED]: 7,
+  [ORDER_STATUS.PREPARING]: 8,
+  [ORDER_STATUS.PAYMENT_REQ]: 9,
+  [ORDER_STATUS.PAYMENT_DONE]: 10,
+  [ORDER_STATUS.SHIPPING]: 11,
+};
+
 // =================================================================
 // 1. 비즈니스 로직 영역 (Business Logic Layer)
 // 실시간 타이머 계산, 입찰 처리, 테이블 열(ColSpan) 계산 등 기능 전담
@@ -136,6 +151,16 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
   const isAuctionTab = activeTab === 'BID_PENDING' || activeTab === 'BIDDING';
   const showBundleAndRecipientTabs = [ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING];
 
+  // 🌟 [신규] 상태값에 따른 테마 색상 반환 함수
+  const getBadgeTheme = (status: string) => {
+    if ([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(status as any)) return 'theme-blue';
+    if ([ORDER_STATUS.FAILED].includes(status as any)) return 'theme-red';
+    if ([ORDER_STATUS.BIDDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.PAID].includes(status as any)) return 'theme-purple';
+    if ([ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING].includes(status as any)) return 'theme-green';
+    if ([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(status as any)) return 'theme-orange';
+    return 'theme-default';
+  };
+
   // 입찰 처리 로직
   const handleBidClick = async (item: any) => {
     let finalAmount = "";
@@ -154,6 +179,13 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         });
         
         if (res.ok) {
+          // 추가 입찰이 성공하면 상태를 다시 '입찰 대기중(PENDING)'으로 즉시 변경
+          await fetch('/api/orders', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updates: [{ id: item.orderId, bidStatus: 'PENDING' }] })
+          });
+
           showAlert(`¥${amount.toLocaleString()} 추가 입찰 완료!`, 'success');
           fetchOrders();
         } else {
@@ -232,7 +264,14 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                         </td>
                       )}
 
-                      {activeTab === 'ALL' && <td className="td-cell"><span className="badge-status">{ORDER_STATUS_LABEL[item.status as OrderStatus] || item.status}</span></td>}
+                      {/* 🌟 전체내역 탭일 때 동적으로 클래스(getBadgeTheme) 부여 */}
+                      {activeTab === 'ALL' && (
+                        <td className="td-cell">
+                          <span className={`badge-status ${getBadgeTheme(item.status)}`}>
+                            {ORDER_STATUS_LABEL[item.status as keyof typeof ORDER_STATUS_LABEL] || item.status}
+                          </span>
+                        </td>
+                      )}
                       
                       <td className="td-cell td-product">
                         <div className="prod-name-box" title={item.productName}>{item.productName}</div>
@@ -252,9 +291,11 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                         <td className="td-cell"><div className="mybid-val">¥ {(item.myBidPrice || 0).toLocaleString()}</div></td>
                       )}
 
+                      {/* 경매 상태 렌더링 */}
                       {activeTab === 'BIDDING' && (
                         <td className="td-cell">
-                          {['PENDING', 'ADDITIONAL'].includes(item.bidStatus) ? <span className="badge-bid pending">입찰 대기중</span>
+                          {item.bidStatus === 'PENDING' ? <span className="badge-bid pending">입찰 대기중</span>
+                          : item.bidStatus === 'ADDITIONAL' ? <span className="badge-bid additional">추가 입찰 완료</span>
                           : item.bidStatus === 'COMPLETED' ? <span className="badge-bid completed">입찰 완료</span>
                           : <span className="badge-bid default">상태 확인중</span>}
                         </td>
@@ -401,11 +442,22 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         .custom-checkbox.checked { border-color: transparent; background: linear-gradient(135deg, #ff4b2b 0%, #e63e1f 100%); box-shadow: 0 2px 6px rgba(255, 75, 43, 0.3); }
         .custom-checkbox.checked svg { opacity: 1; transform: scale(1); }
 
-        /* 🌟 뱃지 및 상태 값 */
-        .badge-status { background: #e0e7ff; color: #2563eb; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 800; }
+        /* 🌟 전체내역 상태 뱃지 (Theme별 색상 매핑) */
+        .badge-status { 
+          padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 800; white-space: nowrap; 
+        }
+        .badge-status.theme-blue { background: #dbeafe; color: var(--color-blue); }
+        .badge-status.theme-purple { background: #f3e8ff; color: var(--color-purple); }
+        .badge-status.theme-green { background: #d1fae5; color: var(--color-green); }
+        .badge-status.theme-orange { background: #ffedd5; color: var(--color-orange); }
+        .badge-status.theme-red { background: #fee2e2; color: var(--color-red); }
+        .badge-status.theme-default { background: #f1f5f9; color: #64748b; }
+
+        /* 경매 상태 특화 뱃지 (기존) */
         .badge-bid { padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 800; white-space: nowrap; }
         .badge-bid.pending { background: #fef3c7; color: #d97706; }
         .badge-bid.completed { background: #d1fae5; color: #10b981; }
+        .badge-bid.additional { background: #dbeafe; color: #2563eb; }
         .badge-bid.default { background: #f1f5f9; color: #64748b; }
 
         .price-val { font-weight: 900; color: #0f172a; font-size: 15px; }
