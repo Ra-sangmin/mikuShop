@@ -69,12 +69,12 @@ function useOrderTableLogic({ activeTab, fetchOrders }: any) {
   const getColSpanCount = useCallback(() => {
     let count = 3; // 기본: 상품명, 가격, 상세보기
     if (activeTab === 'ALL') count += 1; 
-    if ([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS].includes(activeTab)) count += 1; // 체크박스
+    if ([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab)) count += 1; // 체크박스
     if ([ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(activeTab)) count += 1; // 수취인
     if (activeTab === 'BID_PENDING' || activeTab === 'BIDDING') count += 2; // 남은시간, 내 입찰금액
     if (activeTab === ORDER_STATUS.SHIPPING) count += 1; // 운송장
     if (activeTab === ORDER_STATUS.PAYMENT_REQ) count += 1; // 배송비
-    if ([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, 'BIDDING', ORDER_STATUS.BID_PENDING].includes(activeTab)) count += 1; // 관리 버튼
+    if ([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) count += 1; // 관리 버튼
     if (activeTab === 'BIDDING') count += 1; // 경매 상태
     return count;
   }, [activeTab]);
@@ -90,7 +90,6 @@ function useOrderTableLogic({ activeTab, fetchOrders }: any) {
 // 2. 화면 컴포넌트 영역 (View Layer)
 // 인라인 스타일을 배제하고 시각적 요소와 클래스명 위주로 구성합니다.
 // =================================================================
-
 // 🌟 입찰 금액 입력 프리미엄 모달 콘텐츠
 const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string) => void }) => {
   const [amount, setAmount] = useState("");
@@ -140,7 +139,6 @@ const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string
   );
 };
 
-
 // 🌟 메인 테이블 컴포넌트
 export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete }: any) {
   const { 
@@ -160,7 +158,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     if ([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(status as any)) return 'theme-orange';
     return 'theme-default';
   };
-
+  
   // 입찰 처리 로직
   const handleBidClick = async (item: any) => {
     let finalAmount = "";
@@ -196,6 +194,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     }
   };
 
+
   const toggleCheck = (orderId: string) => {
     if (selectedItems.includes(orderId)) setSelectedItems(selectedItems.filter((id: string) => id !== orderId));
     else setSelectedItems([...selectedItems, orderId]);
@@ -219,7 +218,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           <thead>
             <tr>
               {/* 체크박스 헤더 */}
-              {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS].includes(activeTab) && (
+              {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab) && (
                 <th className="th-cell th-check"><div className="header-spacer"></div></th>
               )}
               {activeTab === 'ALL' && <th className="th-cell th-status">상태</th>}
@@ -235,7 +234,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
               {activeTab === ORDER_STATUS.SHIPPING && <th className="th-cell th-tracking">운송장 번호</th>}
 
               {/* 관리 버튼 헤더 */}
-              {([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, 'BIDDING', ORDER_STATUS.BID_PENDING].includes(activeTab)) && (
+              {([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) && (
                 <th className="th-cell th-manage">관리</th>
               )}
               <th className="th-cell th-detail">상세보기</th>
@@ -256,7 +255,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                     <tr className={`tr-row ${isChecked ? 'selected' : ''}`}>
                       
                       {/* 체크박스 */}
-                      {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS].includes(activeTab) && (
+                      {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab) && (
                         <td className="td-cell">
                           <div className={`custom-checkbox ${isChecked ? 'checked' : ''}`} onClick={() => toggleCheck(item.orderId)}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -304,20 +303,12 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                       {showBundleAndRecipientTabs.includes(activeTab) && <td className="td-cell">{item.address?.recipientName || '미지정'}</td>}
                       {activeTab === ORDER_STATUS.PAYMENT_REQ && <td className="td-cell font-bold">₩ {(item.secondPaymentAmount || 0).toLocaleString()}</td>}
                       {activeTab === ORDER_STATUS.SHIPPING && <td className="td-cell">{item.trackingNo || '준비중'}</td>}
-
-                      {/* 관리 버튼 */}
-                      {([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, 'BIDDING', ORDER_STATUS.BID_PENDING].includes(activeTab)) && (
+                      
+                      {/* 🛒 장바구니나 📌 보증금 대기 상태일 때만 '삭제' 버튼만 남김 */}
+                      {([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) && (
                         <td className="td-cell">
                           <div className="action-btn-group">
-                            {([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) && (
-                              <button className="btn-action btn-del" onClick={() => onDelete(item.orderId)}>삭제</button>
-                            )}
-                            {activeTab === ORDER_STATUS.ARRIVED && (
-                              <button className="btn-action btn-pack" onClick={() => onIndividualPacking(item)}>개별 포장</button>
-                            )}
-                            {activeTab === 'BIDDING' && (
-                              <button className="btn-action btn-bid" onClick={() => handleBidClick(item)}>추가 입찰</button>
-                            )}
+                            <button className="btn-action btn-del" onClick={() => onDelete(item.orderId)}>삭제</button>
                           </div>
                         </td>
                       )}
@@ -351,6 +342,24 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           </tbody>
         </table>
       </div>
+      {/* 🌟 경매 상황 탭일 때 테이블 하단에 노출되는 추가 입찰 버튼 */}
+      {activeTab === 'BIDDING' && (
+        <div className="anim-slide-up delay-3" style={{ marginTop: '24px' }}>
+          <div className="package-action-group">
+            <button 
+              className={`btn-package btn-combine ${selectedItems.length === 1 ? 'active' : 'disabled'}`}
+              onClick={() => {
+                const targetItem = items.find((i: any) => i.orderId === selectedItems[0]);
+                if (targetItem) handleBidClick(targetItem);
+              }} 
+              disabled={selectedItems.length !== 1}
+            >
+              🔨 선택한 상품 추가 입찰하기
+            </button>
+          </div>
+          {selectedItems.length !== 1 && <p className="bundle-helper" style={{ textAlign: 'right', color: '#ef4444', fontSize: '13px', fontWeight: 600, marginTop: '8px' }}>* 추가 입찰할 상품을 1개만 선택해주세요.</p>}
+        </div>
+      )}
 
       {/* ================================================================= */}
       {/* 3. 디자인 영역 (CSS Layer) */}
@@ -367,16 +376,18 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           display: none;
           background: #f8fafc;
           border: 1px dashed #cbd5e1;
-          border-radius: 16px;
-          padding: 20px;
-          text-align: center;
+          border-radius: 10px;
+          padding: 10px 16px;
           color: #64748b;
           margin-bottom: 16px;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
         }
-        .mobile-fallback svg { width: 32px; height: 32px; margin-bottom: 8px; color: #94a3b8; }
-        .mobile-fallback p { font-size: 13px; line-height: 1.5; margin: 0; }
-        
-        @media (max-width: 768px) { .mobile-fallback { display: block; } }
+        .mobile-fallback svg { width: 20px; height: 20px; color: #94a3b8; flex-shrink: 0; }
+        .mobile-fallback p { font-size: 12px; line-height: 1.4; margin: 0; text-align: left; }
+
+        @media (max-width: 768px) { .mobile-fallback { display: flex; } }
 
         /* 🌟 테이블 컨테이너 (가로 스크롤 허용, 둥근 모서리 보존) */
         .table-container {
