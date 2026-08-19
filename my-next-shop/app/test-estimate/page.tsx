@@ -72,10 +72,36 @@ export default function PremiumEstimatePage() {
   const handleCopyAmount = () => {
     const formattedAmount = `${resultCount.toLocaleString()}원`;
     
-    navigator.clipboard.writeText(formattedAmount).then(() => {
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000); 
-    });
+    // 1. HTTPS 환경 또는 로컬호스트 (클립보드 API 지원)
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(formattedAmount)
+        .then(() => {
+          setIsCopied(true);
+          setTimeout(() => setIsCopied(false), 2000); 
+        })
+        .catch((err) => console.error('복사 실패:', err));
+    } else {
+      // 2. HTTP 테스트 환경 (우회 로직)
+      const textArea = document.createElement('textarea');
+      textArea.value = formattedAmount;
+      
+      // 화면에 보이지 않도록 처리
+      textArea.style.position = 'absolute';
+      textArea.style.left = '-9999px';
+      document.body.appendChild(textArea);
+      
+      textArea.select();
+      
+      try {
+        document.execCommand('copy');
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+      } catch (err) {
+        console.error('복사 실패:', err);
+      } finally {
+        textArea.remove(); // 사용 후 임시 태그 제거
+      }
+    }
   };
 
   const handleForceRefresh = async () => {
