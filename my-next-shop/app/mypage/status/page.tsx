@@ -6,7 +6,6 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import OrderTable from './components/OrderTable';
 import AddressForm from './components/AddressForm';
 import PaymentSummary from './components/PaymentSummary';
-
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 
@@ -953,21 +952,68 @@ function MyPurchaseStatusContent() {
         .bundle-helper { margin: 0 0 32px 0; font-size: 13px; color: var(--color-red); font-weight: 600; text-align: right; }
 
         @media (max-width: 768px) {
-          .miku-status-wrapper { padding: 0 15px 40px; }
-          .miku-action-required-container { padding: 12px; border-radius: 12px; margin-bottom: 16px; }
+          .miku-status-wrapper { padding: 0 12px 40px; box-sizing: border-box; width: 100%; overflow-x: hidden; }
+          .miku-action-required-container { padding: 10px; border-radius: 12px; margin-bottom: 16px; width: 100%; box-sizing: border-box; overflow: hidden; }
           .container-header { margin-bottom: 10px; }
           .container-header .header-title { font-size: 14px; word-break: keep-all; line-height: 1.2; }
-          .action-cards-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
-          .miku-action-card { padding: 10px !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important; gap: 4px !important; min-height: 46px !important; }
-          .miku-action-card .card-info { display: flex !important; flex-direction: row !important; align-items: center !important; gap: 4px !important; }
-          .miku-action-card .card-badge { display: inline-block !important; padding: 4px 6px !important; background: #e2e8f0 !important; border-radius: 6px !important; font-size: 11px !important; font-weight: 700 !important; color: #475569 !important; margin: 0 !important; white-space: nowrap !important; }
-          .miku-action-card.alert .card-badge { background: #ffe4e6 !important; color: var(--color-red) !important; }
-          .miku-action-card .card-title { font-size: 0 !important; margin: 0 !important; display: block !important; }
-          .miku-action-card .card-count { font-size: 14px !important; font-weight: 900 !important; color: var(--color-purple) !important; margin-left: 2px !important; }
+
+          .action-cards-grid { 
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important; 
+            gap: 8px !important; /* 상자 사이의 간격 */
+            width: 100% !important; 
+          }
+          
+          .miku-action-card { 
+            padding: 8px 14px !important; /* 위아래 8px, 좌우 14px로 대폭 축소 */
+            flex-direction: row !important; 
+            align-items: center !important; 
+            min-height: 42px !important; /* 너무 납작해지지 않도록 최소 높이 고정 */
+          }
+
+          .miku-action-card .card-info { 
+            display: flex !important; 
+            flex-direction: row !important; 
+            align-items: center !important; /* 수직 중앙 정렬 */
+            justify-content: space-between !important; 
+            width: 100% !important; 
+            gap: 0 !important; 
+          }
+          
+          .miku-action-card .card-badge { 
+            padding: 0 !important; 
+            margin: 0 !important; 
+            background: transparent !important; 
+            font-size: 12px !important; 
+            font-weight: 800 !important; /* 👈 600에서 800으로 변경하여 아주 굵게! */
+            color: #1e293b !important; /* 👈 색상도 더 진하게 변경하여 선명도 업! */
+            line-height: 1 !important; 
+            display: flex !important;
+            align-items: center !important;
+          }
+          .miku-action-card.alert .card-badge { color: var(--color-red) !important; background: transparent !important; }
+
+          .miku-action-card .card-title { 
+            font-size: 0 !important; 
+            margin: 0 !important; 
+            display: flex !important;
+            align-items: center !important;
+          }
+
+          .miku-action-card .card-count { 
+            font-size: 12px !important; 
+            font-weight: 700 !important; 
+            color: var(--color-purple) !important; 
+            line-height: 1 !important; 
+          }
           .miku-action-card.alert .card-count { color: var(--color-red) !important; }
           .miku-action-card.action .card-count { color: var(--color-green) !important; }
-          .miku-action-card .card-desc { display: none !important; }
-          .miku-action-card .card-action-btn { background: none; border: none; padding: 0; color: #1e293b; font-size: 12px !important; font-weight: 700; cursor: pointer; transition: color 0.2s; white-space: nowrap !important; margin-left: auto !important; flex-shrink: 0 !important; }
+
+          .miku-action-card .card-desc,
+          .miku-action-card .card-action-btn { 
+            display: none !important; 
+          }
+          
           .miku-all-history-btn { width: 100%; justify-content: center; padding: 12px; font-size: 13px; }
           .pipeline-modules-wrapper { margin: -16px -15px 0 -15px; padding: 16px 20px 10px 15px; }
           .miku-phase-module { min-width: 260px; padding: 14px; gap: 10px; }
@@ -975,12 +1021,10 @@ function MyPurchaseStatusContent() {
           .phase-total-badge { font-size: 11px; padding: 3px 8px; }
           .miku-sub-status-chip { padding: 6px 10px; font-size: 12px; }
           
-          /* 🌟 모바일 하단 포장 액션 버튼 그룹 (수정된 디자인 반영) */
           .package-action-group { margin-top: 24px; margin-bottom: 8px; gap: 8px; flex-direction: row; }
           .btn-package { padding: 14px 8px; font-size: 14px; }
           .bundle-helper { text-align: center; font-size: 12px; margin-bottom: 32px; }
           
-          /* 🌟 모바일 테이블 뷰 압축 (가로 스크롤 방지 및 한눈에 보기) */
           .premium-table { min-width: 100% !important; table-layout: fixed; }
           .premium-table .th-check { width: 36px !important; } 
           .premium-table .th-cell { padding: 8px 4px !important; font-size: 10px !important; white-space: normal !important; word-break: keep-all !important; line-height: 1.2 !important; }
@@ -988,7 +1032,7 @@ function MyPurchaseStatusContent() {
           .premium-table .th-cell:first-child, .premium-table .td-cell:first-child { padding-left: 12px !important; padding-right: 2px !important; } 
           .premium-table .th-cell:last-child, .premium-table .td-cell:last-child { padding-right: 12px !important; }
           .premium-table .td-product { width: 28%; }
-          .premium-table .prod-name-box { white-space: normal !important; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 11px !important; line-height: 1.3 !important; padding: 0 !important; }
+          .premium-table .prod-name-box { white-space: normal !important; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;-webkit-box-orient: vertical; overflow: hidden; font-size: 11px !important; line-height: 1.3 !important; padding: 0 !important; }
           .premium-table .price-val, .premium-table .mybid-val { font-size: 11px !important; }
           .premium-table .badge-bid { display: block !important; padding: 4px !important; font-size: 10px !important; white-space: normal !important; word-break: keep-all !important; line-height: 1.2 !important; }
           .premium-table .btn-action { padding: 4px !important; font-size: 10px !important; white-space: normal !important; word-break: keep-all !important; line-height: 1.2 !important; width: 100%; box-sizing: border-box; }

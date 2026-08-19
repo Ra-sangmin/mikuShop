@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { ORDER_STATUS, ORDER_STATUS_LABEL } from '@/src/types/order';
 
-// 🌟 [추가할 부분 1] 정렬을 위한 상태 우선순위 정의 (요청 -> 진행중 -> 창고 -> 배송 순)
+// 🌟 상태 우선순위 정의 (요청 -> 진행중 -> 창고 -> 배송 순)
 const STATUS_PRIORITY: Record<string, number> = {
   [ORDER_STATUS.CART]: 1,
   [ORDER_STATUS.BID_PENDING]: 2,
@@ -21,11 +21,9 @@ const STATUS_PRIORITY: Record<string, number> = {
 
 // =================================================================
 // 1. 비즈니스 로직 영역 (Business Logic Layer)
-// 실시간 타이머 계산, 입찰 처리, 테이블 열(ColSpan) 계산 등 기능 전담
 // =================================================================
 function useOrderTableLogic({ activeTab, fetchOrders }: any) {
   const { showConfirm, showAlert } = useMikuAlert();
-  const [expandedRows, setExpandedRows] = useState<string[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const [now, setNow] = useState(new Date());
 
@@ -43,11 +41,7 @@ function useOrderTableLogic({ activeTab, fetchOrders }: any) {
     };
   }, []);
 
-  const toggleRow = (orderId: string) => {
-    setExpandedRows(prev => prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]);
-  };
-
-  // 🚀 남은 시간 계산 로직 (데이터만 반환)
+  // 🚀 남은 시간 계산 로직
   const getAuctionTimeData = useCallback((dateString: string | Date) => {
     if (!dateString) return { text: "-", isUrgent: false, isEnded: false };
     
@@ -67,29 +61,28 @@ function useOrderTableLogic({ activeTab, fetchOrders }: any) {
 
   // 🚀 동적 테이블 컬럼 수 계산
   const getColSpanCount = useCallback(() => {
-    let count = 3; // 기본: 상품명, 가격, 상세보기
-    if (activeTab === 'ALL') count += 1; 
+    let count = 2; // 기본: 상품명, 가격
+    if (activeTab === 'ALL') count += 1; // 상태 (전체내역 전용)
     if ([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab)) count += 1; // 체크박스
     if ([ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(activeTab)) count += 1; // 수취인
     if (activeTab === 'BID_PENDING' || activeTab === 'BIDDING') count += 2; // 남은시간, 내 입찰금액
     if (activeTab === ORDER_STATUS.SHIPPING) count += 1; // 운송장
     if (activeTab === ORDER_STATUS.PAYMENT_REQ) count += 1; // 배송비
-    if ([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) count += 1; // 관리 버튼
+    if ([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) count += 1; // 삭제버튼(휴지통)
     if (activeTab === 'BIDDING') count += 1; // 경매 상태
     return count;
   }, [activeTab]);
 
   return {
-    expandedRows, toggleRow, isMobile, now, showConfirm, showAlert,
+    isMobile, now, showConfirm, showAlert,
     getAuctionTimeData, getColSpanCount
   };
 }
 
-
 // =================================================================
 // 2. 화면 컴포넌트 영역 (View Layer)
-// 인라인 스타일을 배제하고 시각적 요소와 클래스명 위주로 구성합니다.
 // =================================================================
+
 // 🌟 입찰 금액 입력 프리미엄 모달 콘텐츠
 const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string) => void }) => {
   const [amount, setAmount] = useState("");
@@ -142,14 +135,15 @@ const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string
 // 🌟 메인 테이블 컴포넌트
 export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete }: any) {
   const { 
-    expandedRows, toggleRow, isMobile, showConfirm, showAlert, 
+    isMobile, showConfirm, showAlert, 
     getAuctionTimeData, getColSpanCount 
   } = useOrderTableLogic({ activeTab, fetchOrders });
 
   const isAuctionTab = activeTab === 'BID_PENDING' || activeTab === 'BIDDING';
   const showBundleAndRecipientTabs = [ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING];
+  const hasCheckbox = [ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab as any);
 
-  // 🌟 [신규] 상태값에 따른 테마 색상 반환 함수
+  // 상태값에 따른 테마 색상 반환 함수
   const getBadgeTheme = (status: string) => {
     if ([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(status as any)) return 'theme-blue';
     if ([ORDER_STATUS.FAILED].includes(status as any)) return 'theme-red';
@@ -177,7 +171,6 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         });
         
         if (res.ok) {
-          // 추가 입찰이 성공하면 상태를 다시 '입찰 대기중(PENDING)'으로 즉시 변경
           await fetch('/api/orders', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -193,7 +186,6 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
       } catch (error) { showAlert("통신 에러가 발생했습니다.", "error"); }
     }
   };
-
 
   const toggleCheck = (orderId: string) => {
     if (selectedItems.includes(orderId)) setSelectedItems(selectedItems.filter((id: string) => id !== orderId));
@@ -218,7 +210,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           <thead>
             <tr>
               {/* 체크박스 헤더 */}
-              {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab) && (
+              {hasCheckbox && (
                 <th className="th-cell th-check"><div className="header-spacer"></div></th>
               )}
               {activeTab === 'ALL' && <th className="th-cell th-status">상태</th>}
@@ -232,12 +224,11 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
               {showBundleAndRecipientTabs.includes(activeTab) && <th className="th-cell th-recipient">수취인</th>}
               {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell th-shipping-fee">배송비(₩)</th>}
               {activeTab === ORDER_STATUS.SHIPPING && <th className="th-cell th-tracking">운송장 번호</th>}
-
-              {/* 관리 버튼 헤더 */}
+              
+              {/* 삭제 버튼용 빈 헤더를 맨 끝으로 배치 */}
               {([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) && (
-                <th className="th-cell th-manage">관리</th>
+                <th className="th-cell th-delete-col"></th>
               )}
-              <th className="th-cell th-detail">상세보기</th>
             </tr>
           </thead>
 
@@ -246,26 +237,29 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
               <tr><td colSpan={getColSpanCount()} className="empty-row">해당하는 상품이 없습니다.</td></tr>
             ) : (
               items.map((item: any) => {
-                const isExpanded = expandedRows.includes(item.orderId);
                 const isChecked = selectedItems.includes(item.orderId);
                 const timeData = getAuctionTimeData(item.auctionEndDate);
 
                 return (
                   <React.Fragment key={item.orderId}>
-                    <tr className={`tr-row ${isChecked ? 'selected' : ''}`}>
-                      
+                    {/* 🌟 행 전체에 onClick 이벤트 및 커서 클래스 적용 */}
+                    <tr 
+                      className={`tr-row ${isChecked ? 'selected' : ''} ${hasCheckbox ? 'clickable' : ''}`}
+                      onClick={() => { if (hasCheckbox) toggleCheck(item.orderId); }}
+                    >
                       {/* 체크박스 */}
-                      {[ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab) && (
+                      {hasCheckbox && (
                         <td className="td-cell">
-                          <div className={`custom-checkbox ${isChecked ? 'checked' : ''}`} onClick={() => toggleCheck(item.orderId)}>
+                          {/* e.stopPropagation()으로 중복 클릭 방지 */}
+                          <div className={`custom-checkbox ${isChecked ? 'checked' : ''}`} onClick={(e) => { e.stopPropagation(); toggleCheck(item.orderId); }}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                           </div>
                         </td>
                       )}
 
-                      {/* 🌟 전체내역 탭일 때 동적으로 클래스(getBadgeTheme) 부여 */}
+                      {/* 상태 뱃지 */}
                       {activeTab === 'ALL' && (
-                        <td className="td-cell">
+                        <td className="td-cell td-status">
                           <span className={`badge-status ${getBadgeTheme(item.status)}`}>
                             {ORDER_STATUS_LABEL[item.status as keyof typeof ORDER_STATUS_LABEL] || item.status}
                           </span>
@@ -303,38 +297,22 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                       {showBundleAndRecipientTabs.includes(activeTab) && <td className="td-cell">{item.address?.recipientName || '미지정'}</td>}
                       {activeTab === ORDER_STATUS.PAYMENT_REQ && <td className="td-cell font-bold">₩ {(item.secondPaymentAmount || 0).toLocaleString()}</td>}
                       {activeTab === ORDER_STATUS.SHIPPING && <td className="td-cell">{item.trackingNo || '준비중'}</td>}
-                      
-                      {/* 🛒 장바구니나 📌 보증금 대기 상태일 때만 '삭제' 버튼만 남김 */}
+
+                      {/* 🛒 장바구니/보증금 대기 상태일 때만 휴지통(삭제) 아이콘 노출 */}
                       {([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) && (
-                        <td className="td-cell">
-                          <div className="action-btn-group">
-                            <button className="btn-action btn-del" onClick={() => onDelete(item.orderId)}>삭제</button>
-                          </div>
+                        <td className="td-cell td-delete-col">
+                          {/* e.stopPropagation()으로 삭제 시 행 선택 방지 */}
+                          <button className="btn-del-icon" onClick={(e) => { e.stopPropagation(); onDelete(item.orderId); }} title="삭제">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                              <line x1="10" y1="11" x2="10" y2="17"></line>
+                              <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
+                          </button>
                         </td>
                       )}
-
-                      <td className="td-cell">
-                        <button className={`btn-expand ${isExpanded ? 'active' : ''}`} onClick={() => toggleRow(item.orderId)}>
-                          {isExpanded ? '접기 ▲' : '보기 ▼'}
-                        </button>
-                      </td>
                     </tr>
-
-                    {/* 확장 아코디언 영역 */}
-                    {isExpanded && (
-                      <tr className="expanded-tr">
-                        <td colSpan={getColSpanCount()} className="expanded-td">
-                          <div className="expanded-content">
-                            {(item.isBundleGroup ? item.originalItems : [item]).map((sub: any, idx: number) => (
-                              <div key={sub.orderId} className={`expanded-item ${idx !== (item.isBundleGroup ? item.originalItems.length : 1) - 1 ? 'border-bottom' : ''}`}>
-                                <div className="sub-name">{sub.productName}</div>
-                                <div className="sub-price">¥ {(sub.productPrice || 0).toLocaleString()} <span className="sub-qty">x {sub.productCount || sub.quantity || 1}개</span></div>
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                   </React.Fragment>
                 );
               })
@@ -342,6 +320,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           </tbody>
         </table>
       </div>
+      
       {/* 🌟 경매 상황 탭일 때 테이블 하단에 노출되는 추가 입찰 버튼 */}
       {activeTab === 'BIDDING' && (
         <div className="anim-slide-up delay-3" style={{ marginTop: '24px' }}>
@@ -363,7 +342,6 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
 
       {/* ================================================================= */}
       {/* 3. 디자인 영역 (CSS Layer) */}
-      {/* 글로벌 오염을 막기 위해 모든 클래스는 .miku-ordertable- 관련 스코프로 작성 */}
       {/* ================================================================= */}
       <style jsx global>{`
         .miku-ordertable-wrapper {
@@ -389,7 +367,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
 
         @media (max-width: 768px) { .mobile-fallback { display: flex; } }
 
-        /* 🌟 테이블 컨테이너 (가로 스크롤 허용, 둥근 모서리 보존) */
+        /* 🌟 테이블 컨테이너 */
         .table-container {
           background: #ffffff;
           border-radius: 20px;
@@ -399,7 +377,6 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           -webkit-overflow-scrolling: touch;
         }
 
-        /* 🌟 프리미엄 테이블 스타일 */
         .premium-table {
           width: 100%;
           border-collapse: separate;
@@ -429,12 +406,18 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           border-bottom: 1px solid #f1f5f9;
         }
         .tr-row { transition: all 0.2s ease; }
+        .tr-row.clickable { cursor: pointer; }
         .tr-row:hover { background: #f8fafc; }
         .tr-row.selected { background: #fff8f6; }
 
         .empty-row { padding: 60px; text-align: center; color: #94a3b8; font-weight: 600; }
 
-        /* 🌟 상품명 영역 */
+        /* 🌟 상태 컬럼 너비 확보 (글자 겹침 방지) */
+        .th-status, .td-status {
+          width: 130px !important;
+          min-width: 130px !important;
+        }
+
         .td-product { text-align: left; max-width: 250px; }
         .prod-name-box {
           font-weight: 700; color: #0f172a;
@@ -453,9 +436,17 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         .custom-checkbox.checked { border-color: transparent; background: linear-gradient(135deg, #ff4b2b 0%, #e63e1f 100%); box-shadow: 0 2px 6px rgba(255, 75, 43, 0.3); }
         .custom-checkbox.checked svg { opacity: 1; transform: scale(1); }
 
-        /* 🌟 전체내역 상태 뱃지 (Theme별 색상 매핑) */
+        /* 🌟 전체내역 상태 뱃지 (고정 크기 적용) */
         .badge-status { 
-          padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 800; white-space: nowrap; 
+          display: inline-block;
+          width: 105px;
+          text-align: center;
+          padding: 6px 0; 
+          border-radius: 8px; 
+          font-size: 12px; 
+          font-weight: 800; 
+          white-space: nowrap; 
+          box-sizing: border-box;
         }
         .badge-status.theme-blue { background: #dbeafe; color: var(--color-blue); }
         .badge-status.theme-purple { background: #f3e8ff; color: var(--color-purple); }
@@ -464,7 +455,6 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         .badge-status.theme-red { background: #fee2e2; color: var(--color-red); }
         .badge-status.theme-default { background: #f1f5f9; color: #64748b; }
 
-        /* 경매 상태 특화 뱃지 (기존) */
         .badge-bid { padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 800; white-space: nowrap; }
         .badge-bid.pending { background: #fef3c7; color: #d97706; }
         .badge-bid.completed { background: #d1fae5; color: #10b981; }
@@ -482,34 +472,34 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         .time-pulse { animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 
-        /* 🌟 버튼 영역 */
-        .action-btn-group { display: flex; gap: 6px; justify-content: center; }
-        .btn-action {
-          padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 800; cursor: pointer; transition: all 0.2s; border: none;
+        /* 🌟 우측 휴지통(삭제) 버튼 스타일 */
+        .th-delete-col { 
+          width: 40px; 
+          min-width: 40px; 
+          padding: 0; 
         }
-        .btn-del { background: #ffffff; border: 1px solid #fca5a5; color: #ef4444; }
-        .btn-del:hover { background: #fff1f2; }
-        .btn-pack { background: #10b981; color: #ffffff; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.2); }
-        .btn-pack:hover { background: #059669; }
-        .btn-bid { background: #3b82f6; color: #ffffff; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.2); }
-        .btn-bid:hover { background: #2563eb; }
-
-        .btn-expand {
-          padding: 6px 12px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px;
-          font-size: 12px; font-weight: 700; color: #475569; cursor: pointer; transition: all 0.2s;
+        .td-delete-col { 
+          width: 40px; 
+          padding: 0 16px 0 0 !important; 
+          text-align: right; 
         }
-        .btn-expand:hover { background: #f8fafc; border-color: #94a3b8; }
-        .btn-expand.active { background: #0f172a; color: #ffffff; border-color: #0f172a; }
 
-        /* 🌟 확장(아코디언) 영역 */
-        .expanded-tr { background: #f8fafc; }
-        .expanded-td { padding: 0; border-bottom: 1px solid #e2e8f0; }
-        .expanded-content { display: flex; flex-direction: column; padding: 10px 30px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.02); }
-        .expanded-item { padding: 16px 0; text-align: left; }
-        .expanded-item.border-bottom { border-bottom: 1px dashed #cbd5e1; }
-        .sub-name { font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 6px; }
-        .sub-price { font-size: 13px; color: #475569; font-weight: 600; }
-        .sub-qty { color: #94a3b8; font-weight: 500; margin-left: 4px; }
+        .btn-del-icon {
+          background: transparent;
+          border: none;
+          color: #cbd5e1; 
+          cursor: pointer;
+          padding: 6px;
+          border-radius: 50%;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+        .btn-del-icon:hover {
+          background: #fee2e2;
+          color: #ef4444; 
+        }
 
         /* 🌟 입찰 모달 콘텐츠 (.miku-bid-modal) */
         .miku-bid-modal { width: 100%; text-align: left; font-family: 'Pretendard', sans-serif; }
