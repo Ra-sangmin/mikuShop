@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import '../admin-common.css';
 
 export default function PremiumEstimatePage() {
-  const [exchangeRate, setExchangeRate] = useState(0); 
+  const [exchangeRate, setExchangeRate] = useState(0);
   const [addRate, setAddRate] = useState<number>(0);
-  
+  // 🌟 "환율을 몇 엔 기준으로 다시 계산해서 보여줄지"의 기준값 (api/estimate의 getExchangeRateBasisUnit)
+  const [rateBasisUnit, setRateBasisUnit] = useState<number>(100);
+
   const [salePrice, setSalePrice] = useState<number>(0);
   const [paymentFee, setPaymentFee] = useState<number>(0);
   const [dailyTax, setDailyTax] = useState<number>(0);
@@ -16,6 +19,7 @@ export default function PremiumEstimatePage() {
   const [resultCount, setResultCount] = useState<number>(0);
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isApplyingGlobal, setIsApplyingGlobal] = useState<boolean>(false);
 
   useEffect(() => {
     fetch('/api/estimate', {
@@ -26,7 +30,11 @@ export default function PremiumEstimatePage() {
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        setExchangeRate(data.data.exchangeRate);
+        setExchangeRate(data.data.baseExchangeRate);
+        setRateBasisUnit(data.data.exchangeRateBasisUnit);
+        // 🌟 추가 증가액 기본값을 api/estimate의 getAdditionalRate 값(환율 단위)에
+        // getExchangeRateBasisUnit 기준값을 곱해 "원" 단위로 환산해 초기화합니다.
+        setAddRate(data.data.additionalRate * data.data.exchangeRateBasisUnit);
       }
     });
   }, []);
@@ -58,7 +66,7 @@ export default function PremiumEstimatePage() {
       if (data.success) {
         const apiResult = data.data;
         setResultCount(apiResult.finalPriceWon);
-        setExchangeRate(apiResult.exchangeRate); 
+        setExchangeRate(apiResult.baseExchangeRate);
       }
     };
 
@@ -122,12 +130,23 @@ export default function PremiumEstimatePage() {
       });
       const data = await res.json();
       if (data.success) {
-        setExchangeRate(data.data.exchangeRate);
+        setExchangeRate(data.data.baseExchangeRate);
         setResultCount(data.data.finalPriceWon);
       }
     } finally {
       setTimeout(() => setIsRefreshing(false), 800);
     }
+  };
+
+  // 🌟 TODO: 지금은 UI만 있는 자리표시자입니다. "추가 증가액"을 실제로 DB에 저장해서
+  // /api/estimate가 기본 addRate로 읽어 사이트 전체(견적문의/구매대행 신청 등) 계산에
+  // 반영하려면 FeeConfiguration에 새 FeeType을 추가하는 등 스키마 변경이 필요합니다
+  // (사용자가 이후 별도로 요청하면 그때 연결).
+  const handleApplyGlobally = () => {
+    if (isApplyingGlobal) return;
+    setIsApplyingGlobal(true);
+    alert(`추가 증가액 ${addRate}원을 전역 적용하는 기능은 아직 준비 중입니다.`);
+    setTimeout(() => setIsApplyingGlobal(false), 500);
   };
 
   return (
@@ -142,17 +161,17 @@ export default function PremiumEstimatePage() {
           
           {/* ================= 1. 환율 및 마진 설정 ================= */}
           <div className="premium-card">
-            <h3 className="card-title">환율 및 마진 설정</h3>
+            <h3 className="card-title admin-title-font">환율 및 마진 설정</h3>
             <div className="input-group">
-              <div className="input-row read-only-row">
-                <span className="label"><span className="color-dot bg-rate"></span>현재 환율 (100엔 기준)</span>
+              <div className="input-row read-only-row admin-flex-between">
+                <span className="label"><span className="color-dot bg-rate"></span>현재 환율 ({rateBasisUnit}엔 기준)</span>
                 
                 <div 
                   className="value-box highlight-rate refresh-box" 
                   onClick={handleForceRefresh}
                   title="클릭하여 환율 즉시 새로고침"
                 >
-                  {(exchangeRate * 100).toFixed(2)} <span className="unit">원</span>
+                  {(exchangeRate * rateBasisUnit).toFixed(2)} <span className="unit">원</span>
                   <svg className={`refresh-icon ${isRefreshing ? 'spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="23 4 23 10 17 10"></polyline>
                     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
@@ -160,23 +179,37 @@ export default function PremiumEstimatePage() {
                 </div>
 
               </div>
-              <div className="input-row">
+              <div className="input-row admin-flex-between">
                 <span className="label"><span className="color-dot bg-add"></span>추가 증가액</span>
                 <div className="input-with-unit">
                   <input type="number" value={addRate || ''} onChange={e => setAddRate(Number(e.target.value))} placeholder="0" className="c-add" />
                   <span className="unit">원</span>
                 </div>
               </div>
+
+              <div className="global-apply-divider" />
+
+              <button
+                className="global-apply-btn"
+                onClick={handleApplyGlobally}
+                disabled={isApplyingGlobal}
+              >
+                전역 적용
+                <svg className="gear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+              </button>
             </div>
           </div>
 
           {/* ================= 2. 상품 및 수수료 정보 ================= */}
           <div className="premium-card">
-            <h3 className="card-title">상품 및 수수료 정보</h3>
+            <h3 className="card-title admin-title-font">상품 및 수수료 정보</h3>
             <div className="input-group">
               
               <div className="bundled-group">
-                <div className="input-row">
+                <div className="input-row admin-flex-between">
                   <span className="label"><span className="color-dot bg-qty"></span>상품 수량</span>
                   <div className="quantity-control">
                     <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="qty-btn">−</button>
@@ -185,7 +218,7 @@ export default function PremiumEstimatePage() {
                   </div>
                 </div>
 
-                <div className="input-row read-only-row">
+                <div className="input-row read-only-row admin-flex-between">
                   <span className="label"><span className="color-dot bg-agency"></span>대행 수수료</span>
                   <div className="value-box highlight-agency">
                     {agencyFee} <span className="unit">엔</span>
@@ -193,7 +226,7 @@ export default function PremiumEstimatePage() {
                 </div>
               </div>
 
-              <div className="input-row">
+              <div className="input-row admin-flex-between">
                 <span className="label"><span className="color-dot bg-price"></span>상품 가격</span>
                 <div className="input-with-unit">
                   <input type="number" value={salePrice || ''} onChange={e => setSalePrice(Number(e.target.value))} placeholder="0" className="c-price" />
@@ -201,7 +234,7 @@ export default function PremiumEstimatePage() {
                 </div>
               </div>
 
-              <div className="input-row">
+              <div className="input-row admin-flex-between">
                 <span className="label"><span className="color-dot bg-pay"></span>결제 수수료</span>
                 <div className="input-with-unit">
                   {/* 🌟 결제 수수료에 placeholder="0" 추가됨 */}
@@ -210,7 +243,7 @@ export default function PremiumEstimatePage() {
                 </div>
               </div>
 
-              <div className="input-row">
+              <div className="input-row admin-flex-between">
                 <span className="label"><span className="color-dot bg-tax"></span>일내 배송료</span>
                 <div className="input-with-unit">
                   <input type="number" value={dailyTax || ''} onChange={e => setDailyTax(Number(e.target.value))} placeholder="0" className="c-tax" />
@@ -225,7 +258,7 @@ export default function PremiumEstimatePage() {
           <div className="premium-card summary-card">
             
             <div className="summary-header">
-              <h3 className="card-title">최종 견적 요약</h3>
+              <h3 className="card-title admin-title-font">최종 견적 요약</h3>
               <div className="pulse-indicator">실시간 환율 적용중</div>
             </div>
             
@@ -288,11 +321,14 @@ export default function PremiumEstimatePage() {
 
       {/* ================= STYLES ================= */}
       <style jsx>{`
+        /* 🌟 원래 app/test-estimate에 있던 독립 페이지라 min-height:100vh + 60px 여백을
+           썼는데, 이제 admin 레이아웃(사이드바/헤더가 이미 있는) 콘텐츠 영역 안에 들어가므로
+           불필요한 전체 화면 높이/여백은 줄이고 카드 자체 디자인은 그대로 뒀습니다. */
         .premium-calc-wrapper {
-          min-height: 100vh;
           background: #0f172a;
           color: #f8fafc;
-          padding: 60px 20px;
+          padding: 32px 20px;
+          border-radius: 24px;
           font-family: 'Pretendard', sans-serif;
         }
 
@@ -350,9 +386,8 @@ export default function PremiumEstimatePage() {
           margin-bottom: 16px;
         }
 
+        /* font-size/font-weight는 admin-common.css의 .admin-title-font(18px/700)를 재사용합니다 */
         .card-title {
-          font-size: 18px;
-          font-weight: 700;
           color: #e2e8f0;
           margin: 0 0 24px 0;
           padding-bottom: 12px;
@@ -398,10 +433,8 @@ export default function PremiumEstimatePage() {
           gap: 16px;
         }
 
+        /* display/justify-content/align-items는 admin-common.css의 .admin-flex-between을 재사용합니다 */
         .input-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
           gap: 10px;
         }
 
@@ -490,6 +523,45 @@ export default function PremiumEstimatePage() {
           color: #64748b;
           font-size: 14px;
           font-weight: 500;
+        }
+
+        .global-apply-divider {
+          height: 1px;
+          background: #334155;
+          margin: 16px 0;
+        }
+
+        .global-apply-btn {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 12px 16px;
+          border: none;
+          border-radius: 10px;
+          background: linear-gradient(to right, #38bdf8, #818cf8);
+          color: #fff;
+          font-size: 15px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .global-apply-btn:hover {
+          filter: brightness(1.08);
+          transform: translateY(-1px);
+        }
+
+        .global-apply-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+        }
+
+        .gear-icon {
+          width: 18px;
+          height: 18px;
         }
 
         .value-box {

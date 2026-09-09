@@ -216,10 +216,10 @@ export default function MyPage() {
           <div className="section-body address-panel">
             <div className="address-grid">
               <div className="address-col">
-                <AddressItem label="우편번호" value="123-4567" onCopy={copyToClipboard} />
+                <AddressItem label="우편번호" value="123-0865" onCopy={copyToClipboard} />
                 <AddressItem label="도도부현" value="東京都 (Tokyo)" onCopy={copyToClipboard} />
-                <AddressItem label="구/군/시" value="港区 (Minato-ku)" onCopy={copyToClipboard} />
-                <AddressItem label="상세주소 1" value="東麻 1-2-3" onCopy={copyToClipboard} />
+                <AddressItem label="구/군/시" value="足立区 (Adachi-ku)" onCopy={copyToClipboard} />
+                <AddressItem label="상세주소 1" value="新田 3-35-31 1008号" onCopy={copyToClipboard} />
               </div>
               <div className="address-col">
                 <AddressItem label="상세주소 2" value={userInfo.mailboxNumber} isHighlight onCopy={copyToClipboard} />

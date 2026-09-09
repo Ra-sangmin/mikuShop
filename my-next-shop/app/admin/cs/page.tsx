@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import '../admin-common.css';
 
 // 가짜 문의 데이터
 const dummyInquiries = [
@@ -28,29 +29,29 @@ export default function CSManagement() {
       
       {/* 🌟 통계 카드 섹션 */}
       <div style={css.cardGrid}>
-        <div style={css.statCard}>
+        <div className="admin-container admin-flex-between">
           <div>
-            <div style={css.statTitle}>미답변 문의</div>
-            <div style={{ ...css.statCount, color: colors.pendingText }}>{pendingCount}건</div>
+            <div className="admin-stat-title">미답변 문의</div>
+            <div className="admin-stat-count" style={{ color: colors.pendingText }}>{pendingCount}건</div>
           </div>
           <div style={css.statIcon}>💬</div>
         </div>
-        <div style={css.statCard}>
+        <div className="admin-container admin-flex-between">
           <div>
-            <div style={css.statTitle}>오늘 들어온 문의</div>
-            <div style={{ ...css.statCount, color: colors.accent }}>{todayCount}건</div>
+            <div className="admin-stat-title">오늘 들어온 문의</div>
+            <div className="admin-stat-count" style={{ color: colors.accent }}>{todayCount}건</div>
           </div>
           <div style={css.statIcon}>🔔</div>
         </div>
       </div>
 
       {/* 🌟 테이블 영역 */}
-      <div style={css.tableContainer}>
-        <h2 style={css.sectionTitleMargin}>문의 목록</h2>
-        
-        <table style={css.table}>
+      <div className="admin-container">
+        <h2 className="admin-section-title">문의 목록</h2>
+
+        <table className="admin-table-simple">
           <thead>
-            <tr style={css.tableHeadRow}>
+            <tr className="admin-table-head-row">
               <th style={css.th}>분류</th>
               <th style={css.th}>제목</th>
               <th style={css.th}>작성자</th>
@@ -64,7 +65,7 @@ export default function CSManagement() {
               const statusStyle = getStatusStyle(inquiry.status);
 
               return (
-                <tr key={inquiry.id} style={css.tableBodyRow}>
+                <tr key={inquiry.id} className="admin-table-body-row">
                   <td style={css.td}>
                     <span style={css.typeBadge}>{inquiry.type}</span>
                   </td>
@@ -115,27 +116,6 @@ const colors = {
   completedText: '#16a34a',
 };
 
-const mixins = {
-  flexBetween: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  } as React.CSSProperties,
-  
-  titleFont: {
-    fontSize: '18px',
-    fontWeight: '700',
-  } as React.CSSProperties,
-};
-
-const baseCard: React.CSSProperties = {
-  backgroundColor: colors.white,
-  borderRadius: '16px',
-  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-  border: `1px solid ${colors.border}`,
-  padding: '24px',
-};
-
 const baseTh: React.CSSProperties = { padding: '16px 12px' };
 const baseTd: React.CSSProperties = { padding: '16px 12px' };
 
@@ -153,51 +133,10 @@ const css: Record<string, React.CSSProperties> = {
     gridTemplateColumns: 'repeat(2, 1fr)',
     gap: '20px',
   },
-  statCard: {
-    ...baseCard,
-    ...mixins.flexBetween,
-  },
-  statTitle: {
-    color: colors.textSub,
-    fontSize: '15px',
-    fontWeight: '500',
-    marginBottom: '8px',
-  },
-  statCount: {
-    fontSize: '28px',
-    fontWeight: '700',
-  },
   statIcon: {
     fontSize: '30px',
   },
-  
-  // 테이블 컨테이너
-  tableContainer: {
-    ...baseCard,
-  },
-  sectionTitleMargin: {
-    ...mixins.titleFont,
-    margin: '0 0 20px 0',
-  },
-  
-  // 테이블 구조
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    textAlign: 'left',
-  },
-  tableHeadRow: {
-    borderBottom: `2px solid ${colors.borderDark}`,
-    color: colors.textSub,
-    fontSize: '14px',
-    backgroundColor: colors.bgHead,
-  },
-  tableBodyRow: {
-    borderBottom: `1px solid ${colors.border}`,
-    fontSize: '14px',
-    color: colors.textDark,
-  },
-  
+
   // 테이블 셀
   th: { ...baseTh },
   thCenter: { ...baseTh, textAlign: 'center' },

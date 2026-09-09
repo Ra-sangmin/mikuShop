@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
+import '../admin-common.css';
 
 // ==========================================
 // 🎨 1. 설정 및 스타일 객체 (디자인 영역)
@@ -21,14 +22,6 @@ const colors = {
   textSub: '#64748b',
 };
 
-const mixins = {
-  flexBetween: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  } as React.CSSProperties,
-};
-
 // Developer Styles (devs)
 const devs: Record<string, React.CSSProperties> = {
   container: {
@@ -38,7 +31,6 @@ const devs: Record<string, React.CSSProperties> = {
   },
   // 매크로 상단 컨트롤 영역
   macroCard: {
-    ...mixins.flexBetween,
     backgroundColor: colors.white,
     padding: '16px 24px',
     borderRadius: '16px',
@@ -106,13 +98,6 @@ const devs: Record<string, React.CSSProperties> = {
     minWidth: '250px',
   },
   // 로그 패널 영역
-  contentWrapper: {
-    backgroundColor: colors.white,
-    borderRadius: '16px',
-    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-    border: `1px solid ${colors.border}`,
-    padding: '24px',
-  },
   sectionTitle: {
     fontSize: '18px',
     fontWeight: '700',
@@ -222,7 +207,7 @@ export default function DeveloperPage() {
   // --- UI 렌더링 (JSX) ---
   return (
     <div style={devs.container}>
-      <div style={devs.macroCard}>
+      <div className="admin-flex-between" style={devs.macroCard}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={devs.macroBrand}>Miku</span>
           
@@ -259,7 +244,7 @@ export default function DeveloperPage() {
         </div>
       </div>
 
-      <div style={devs.contentWrapper}>
+      <div className="admin-container">
         <h2 style={devs.sectionTitle}>매크로 로그 내역 (최대 100줄)</h2>
         <div style={devs.logContainer}>
           {log.length === 0 && <span style={{ color: '#94a3b8' }}>기록된 로그가 없습니다.</span>}

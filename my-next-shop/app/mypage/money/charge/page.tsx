@@ -10,7 +10,9 @@ import { useMikuAlert } from '@/app/context/MikuAlertContext';
 // 🎨 1. 디자인 및 스타일 시스템
 // ==========================================
 const s = {
-  container: { maxWidth: '672px', margin: '0 auto', padding: '48px 16px', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif' },
+  // 🌟 padding-top을 0으로: GuideLayout이 헤더와 콘텐츠 패널 사이 간격을 이미 없앴는데,
+  // 이 컨테이너 자체의 위쪽 padding(48px)이 그 위에 또 여백을 만들고 있었음
+  container: { maxWidth: '672px', margin: '0 auto', padding: '0 16px 48px 16px', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif' },
   card: { backgroundColor: '#fff', borderRadius: '32px', boxShadow: '0 10px 40px rgba(0, 0, 0, 0.04)', border: '1px solid #e2e8f0', padding: '40px' },
   pageTitle: { fontSize: '26px', fontWeight: '900', color: '#0f172a', marginBottom: '32px', textAlign: 'center' as const },
   formWrapper: { display: 'flex', flexDirection: 'column' as const, gap: '28px' },
@@ -48,6 +50,11 @@ const globalAnimation = `
   input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
   .anim { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+  /* 🌟 모바일: currentMenu(고정 바)와 카드 사이 여백 제거 */
+  @media (max-width: 768px) {
+    .money-charge-container { padding-top: 0 !important; }
+  }
 `;
 
 // ==========================================
@@ -257,7 +264,7 @@ export default function MoneyChargePage() {
     <GuideLayout title="미쿠짱머니 충전 신청" type="money">
       <style jsx global>{globalAnimation}</style>
 
-      <div style={s.container}>
+      <div className="money-charge-container" style={s.container}>
         <div className="anim" style={s.card}>
           <h2 style={s.pageTitle}>
             미쿠짱머니 충전 신청

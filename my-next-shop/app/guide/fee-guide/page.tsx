@@ -1,6 +1,7 @@
 "use client";
 import React from 'react';
-import GuideLayout from '../../components/GuideLayout'; 
+import GuideLayout from '../../components/GuideLayout';
+import '../guide-common.css';
 
 export default function FeeGuidePage() {
   return (
@@ -9,16 +10,8 @@ export default function FeeGuidePage() {
         
         {/* 🌟 전역 애니메이션 및 반응형 CSS 정의 */}
         <style jsx global>{`
-          @keyframes fadeInUp {
-            0% { opacity: 0; transform: translateY(40px); }
-            100% { opacity: 1; transform: translateY(0); }
-          }
-          
-          .animate-1 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-          .animate-2 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards; }
-          .animate-3 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards; }
-          .animate-4 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards; }
-          .animate-5 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.8s forwards; }
+          /* 🌟 @keyframes fadeInUp / .animate-1~5는 customs 페이지와 공통이라
+             ../guide-common.css로 옮겼습니다. */
 
           .fee-guide-container {
             max-width: 1100px;
@@ -49,7 +42,8 @@ export default function FeeGuidePage() {
 
           /* 📱 모바일 대응 (768px 이하) */
           @media (max-width: 768px) {
-            .fee-guide-container { padding: 10px; }
+            /* 🌟 currentMenu(고정 바)와 콘텐츠 사이 여백 제거 */
+            .fee-guide-container { padding: 0 10px 10px 10px; }
             
             /* 헤더 섹션 */
             .header-section { margin-bottom: 50px !important; }

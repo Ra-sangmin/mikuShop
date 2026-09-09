@@ -1,6 +1,7 @@
 "use client";
 import React from 'react';
 import GuideLayout from '../../components/GuideLayout';
+import '../guide-common.css';
 
 export default function FAQPage() {
   // 질문과 답변 데이터를 배열로 정리하여 나중에 항목을 추가하기 쉽게 만들었습니다.
@@ -17,26 +18,9 @@ export default function FAQPage() {
 
   return (
     <GuideLayout title="자주하는 질문" type="guide">
+      {/* 🌟 .guide-title/.guide-desc/.guide-page-container는 ../guide-common.css의 공용 스타일을
+          쓰고, 이 페이지에만 있는 FAQ 카드 스타일만 여기 남겨둡니다. */}
       <style jsx>{`
-        .guide-container {
-          color: #334155;
-        }
-
-        .guide-title {
-          font-size: 24px;
-          font-weight: 900;
-          color: #0f172a;
-          margin-bottom: 12px;
-        }
-
-        .guide-desc {
-          font-size: 16px;
-          color: #64748b;
-          line-height: 1.6;
-          margin-bottom: 40px;
-          word-break: keep-all;
-        }
-
         /* 🌟 FAQ 카드 리스트 디자인 */
         .faq-list {
           display: flex;
@@ -107,18 +91,9 @@ export default function FAQPage() {
         }
 
         /* -------------------------------------------
-           📱 모바일 레이아웃 조정 (768px 이하 스마트폰) 
+           📱 모바일 레이아웃 조정 (768px 이하 스마트폰)
            ------------------------------------------- */
         @media (max-width: 768px) {
-          .guide-title {
-            font-size: 20px;
-          }
-          
-          .guide-desc {
-            font-size: 14px;
-            margin-bottom: 30px;
-          }
-
           .faq-list {
             gap: 12px;
           }
@@ -156,10 +131,10 @@ export default function FAQPage() {
         }
       `}</style>
 
-      <div className="guide-container">
+      <div className="guide-page-container">
         <h2 className="guide-title">자주하는 질문 (FAQ)</h2>
         <p className="guide-desc">고객님들께서 가장 많이 묻는 질문들을 모았습니다.</p>
-        
+
         <div className="faq-list">
           {faqs.map((faq, index) => (
             <div key={index} className="faq-item">

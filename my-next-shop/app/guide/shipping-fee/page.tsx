@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import GuideLayout from '../../components/GuideLayout';
 
 type TabType = '항공' | 'EMS' | '우체국해운';
@@ -57,6 +57,27 @@ export default function ShippingFeePage() {
   const [activeTab, setActiveTab] = useState<TabType>('항공');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const tabMenuRef = useRef<HTMLDivElement>(null);
+
+  // 🌟 탭 메뉴(항공/EMS/우체국해운)가 고정(fixed)되며 흐름에서 빠지므로,
+  // 실제 렌더링된 높이를 측정해 콘텐츠가 그만큼 밀려나도록 CSS 변수로 노출한다.
+  useEffect(() => {
+    const el = tabMenuRef.current;
+    const updateTabMenuHeight = () => {
+      const h = el ? el.getBoundingClientRect().height : 58;
+      document.documentElement.style.setProperty('--tab-menu-h', `${h}px`);
+    };
+
+    updateTabMenuHeight();
+
+    const ro = new ResizeObserver(updateTabMenuHeight);
+    if (el) ro.observe(el);
+    window.addEventListener('resize', updateTabMenuHeight);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateTabMenuHeight);
+    };
+  }, []);
 
   const airShippingFees = useMemo(() => Array.from({ length: 200 }, (_, i) => {
     const w = (i + 1) * 0.5;
@@ -125,26 +146,80 @@ export default function ShippingFeePage() {
             font-size: 13.5px; text-align: center;
           }
 
+          .card-list { display: none; }
+
+          .fee-card {
+            border-bottom: 1px solid #f1f5f9;
+            padding: 14px 16px;
+          }
+          .fee-card:last-child { border-bottom: none; }
+
+          .fee-card-header {
+            font-size: 16px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 10px;
+          }
+
+          .fee-card-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 12px;
+          }
+
+          .fee-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #f8fafc;
+            border-radius: 8px;
+            padding: 8px 10px;
+          }
+          .fee-item.dia { background-color: #fff1ee; }
+
+          .fee-item .label {
+            font-size: 13px;
+            font-weight: 700;
+            color: #94a3b8;
+          }
+          .fee-item.dia .label { color: #ff4b2b; }
+
+          .fee-item .value {
+            font-size: 15px;
+            font-weight: 800;
+            color: #334155;
+          }
+          .fee-item.dia .value { color: #ff4b2b; }
+
           @media (max-width: 600px) {
-            .shipping-fee-container { padding: 0; }
-            .tab-btn { padding: 8px 0 !important; font-size: 12px !important; border-radius: 6px !important; }
-            .tab-menu { gap: 4px !important; margin-bottom: 15px !important; }
+            /* 탭 바(고정 바)의 실제 높이(내부 16px 여백 포함)만큼 콘텐츠를 밀어냄 */
+            .shipping-fee-container {
+              padding: 0;
+              padding-top: var(--tab-menu-h, 58px);
+            }
+            .tab-btn { padding: 10px 0 !important; font-size: 14px !important; border-radius: 8px !important; }
+            /* 🌟 탭 메뉴도 드래그(스크롤)와 무관하게 완전 고정, currentMenu 바로 아래 틈 없이 붙임 */
+            .tab-menu {
+              gap: 6px !important;
+              margin: 0 !important;
+              padding: 10px 20px !important;
+              position: fixed;
+              left: 0;
+              right: 0;
+              top: calc(var(--sticky-header-h, 89px) + var(--sticky-menu-h, 64px));
+              z-index: 60;
+              background: rgba(248, 250, 252, 0.92);
+              backdrop-filter: blur(10px);
+            }
 
-            .shipping-table { min-width: auto !important; }
-            .shipping-table th { font-size: 9px !important; padding: 8px 1px !important; }
-            .shipping-table td { font-size: 9px !important; padding: 6px 1px !important; }
-            
-            .col-w { width: 14%; }
-            .col-n { width: 21.5%; }
-            .col-s { width: 21.5%; }
-            .col-g { width: 21.5%; }
-            .col-d { width: 21.5%; }
+            .table-wrapper { display: none; }
+            .card-list { display: block; }
 
-            .num-btn { width: 26px !important; height: 26px !important; font-size: 10px !important; }
+            .num-btn { width: 34px !important; height: 34px !important; font-size: 13px !important; }
           }
         `}</style>
-        
-        <div className="tab-menu">
+
+        <div className="tab-menu" ref={tabMenuRef}>
           {(['항공', 'EMS', '우체국해운'] as TabType[]).map((tab) => (
             <button
               key={tab}
@@ -186,7 +261,32 @@ export default function ShippingFeePage() {
           </table>
         </div>
 
-        {/* 🌟 수정된 페이지네이션 (이전/다음 버튼 제거) */}
+        <div className="table-wrapper card-list">
+          {currentItems.map((row, index) => (
+            <div className="fee-card" key={index}>
+              <div className="fee-card-header">{row.weight}</div>
+              <div className="fee-card-grid">
+                <div className="fee-item">
+                  <span className="label">New</span>
+                  <span className="value">{row.newMember}</span>
+                </div>
+                <div className="fee-item">
+                  <span className="label">Silver</span>
+                  <span className="value">{row.silver}</span>
+                </div>
+                <div className="fee-item">
+                  <span className="label">Gold</span>
+                  <span className="value">{row.gold}</span>
+                </div>
+                <div className="fee-item dia">
+                  <span className="label">Dia</span>
+                  <span className="value">{row.diamond}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '20px', paddingBottom: '30px' }}>
           <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'center' }}>
             {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (

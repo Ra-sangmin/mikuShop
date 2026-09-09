@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from 'react';
-import GuideLayout from '../../components/GuideLayout'; 
+import GuideLayout from '../../components/GuideLayout';
+import '../guide-common.css';
 
 const taxCategories = [
   {
@@ -64,14 +65,9 @@ export default function CustomsTaxGuidePage() {
       <div className="customs-container">
         
         <style jsx global>{`
-          @keyframes fadeInUp {
-            0% { opacity: 0; transform: translateY(30px); }
-            100% { opacity: 1; transform: translateY(0); }
-          }
-          .animate-1 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-          .animate-2 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards; }
-          .animate-4 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards; }
-          
+          /* 🌟 @keyframes fadeInUp / .animate-N은 fee-guide 페이지와 공통이라
+             ../guide-common.css로 옮겼습니다. */
+
           .customs-container {
             max-width: 1000px;
             width: 100%;
@@ -103,9 +99,10 @@ export default function CustomsTaxGuidePage() {
           @media (max-width: 768px) {
             .customs-container {
               /* 🌟 85% 제거, width 100%로 컨텐츠를 레이아웃 중앙에 꽉 차게 배치 */
-              max-width: 100% !important; 
+              max-width: 100% !important;
               width: 100% !important;
-              padding: 10px 0 !important;
+              /* currentMenu(고정 바)와 콘텐츠 사이 여백 제거 */
+              padding: 0 0 10px 0 !important;
               margin: 0 auto !important;
             }
 
@@ -137,6 +134,9 @@ export default function CustomsTaxGuidePage() {
             .table-wrap { width: 100% !important; box-sizing: border-box !important; }
             .table-wrap th { padding: 10px 4px !important; font-size: 11px !important; }
             .table-wrap td { padding: 10px 4px !important; font-size: 11px !important; }
+            /* 🌟 첫 번째 열(수입 품목)은 왼쪽 정렬 텍스트라 여백을 더 줘서 부가세 열과 균형을 맞춤 */
+            .table-wrap th:first-child { padding-left: 14px !important; }
+            .table-wrap td:first-child { padding-left: 14px !important; }
           }
         `}</style>
 

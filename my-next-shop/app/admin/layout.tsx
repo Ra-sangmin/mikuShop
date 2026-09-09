@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import AdminSidebar from '@/app/admin/components/AdminSidebar';
+import { ADMIN_MENU } from '@/app/admin/adminMenu';
 
 export default function AdminLayout({
   children,
@@ -13,21 +14,30 @@ export default function AdminLayout({
   const pathname = usePathname();
   const [adminName, setAdminName] = useState('관리자');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  // 🌟 사이트 전역 환율(가산액 포함)이 아니라, /api/estimate의 baseExchangeRate
+  // (fetchNaverExchangeRate가 반환하는 순수 네이버 금융 환율)를 직접 조회합니다.
+  const [exchangeRate, setExchangeRate] = useState(0);
+  // 🌟 "환율을 몇 엔 기준으로 다시 계산해서 보여줄지"의 기준값 (api/estimate의 getExchangeRateBasisUnit)
+  const [rateBasisUnit, setRateBasisUnit] = useState(100);
 
-  // 🌟 경로와 타이틀 매칭 객체
-  const menuTitles: Record<string, string> = {
-    '/admin/dashboard': '대시보드',
-    '/admin/users': '사용자 관리',
-    '/admin/orders': '주문 관리',
-    '/admin/delivery': '배송 현황',
-    '/admin/settlement': '정산 관리',
-    '/admin/refund': '환불 정보',
-    '/admin/cs': '고객 센터',
-    '/admin/developer': '개발자 전용',
-  };
+  useEffect(() => {
+    fetch('/api/estimate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ salePrice: 0, quantityCount: 0 })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setExchangeRate(data.data.baseExchangeRate);
+          setRateBasisUnit(data.data.exchangeRateBasisUnit);
+        }
+      });
+  }, []);
 
-  // 현재 경로에 맞는 타이틀 찾기 (없으면 기본값 설정)
-  const currentTitle = menuTitles[pathname] || '관리자 시스템';
+  // 현재 경로에 맞는 타이틀 찾기 (없으면 기본값 설정). AdminSidebar.tsx와 공유하는
+  // app/admin/adminMenu.ts의 ADMIN_MENU에서 그대로 조회합니다.
+  const currentTitle = ADMIN_MENU.find(item => item.path === pathname)?.name || '관리자 시스템';
 
   useEffect(() => {
     const storedId = localStorage.getItem('admin_id');
@@ -72,7 +82,7 @@ export default function AdminLayout({
             <div style={s.exchangeCard}>
               <span style={s.exchangeLabel}>현재 환율</span>
               <span style={s.exchangeValue}>
-                100엔 = <strong style={s.exchangeRed}>905.42원</strong>
+                {rateBasisUnit}엔 = <strong style={s.exchangeRed}>{(exchangeRate * rateBasisUnit).toFixed(2)}원</strong>
               </span>
             </div>
             

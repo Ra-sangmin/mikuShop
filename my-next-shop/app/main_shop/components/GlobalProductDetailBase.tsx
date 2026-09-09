@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { FEE_POLICY } from "@/src/constants/feePolicy"; 
-import { feeManager } from "@/src/models/FeeManager"; 
+import { feeManager } from "@/src/models/FeeManager";
+import { useExchangeRate } from "@/app/context/ExchangeRateContext";
 import { getDetailStyles, DetailTheme } from "./GlobalProductDetail.styles";
 import { GlobalProduct } from "./GlobalProductDetail"; // 타입 임포트
 
@@ -37,7 +37,10 @@ export default function GlobalProductDetailBase(props: BaseProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isDrag, setIsDrag] = useState(false);
   const [startX, setStartX] = useState(0);
-  const exchangeRate = FEE_POLICY.EXCHANGE_RATE || 9.5;
+  // 🌟 FEE_POLICY.EXCHANGE_RATE(고정값 9.5)는 더 이상 쓰지 않습니다. 사이트 전체가
+  // /api/estimate(네이버 금융 스크래핑)의 실제 환율을 참조하는 ExchangeRateContext를
+  // 공유하도록 통일했습니다.
+  const { exchangeRate } = useExchangeRate();
 
   const theme: DetailTheme = useMemo(() => {
     switch(product.platform) {
@@ -107,6 +110,50 @@ export default function GlobalProductDetailBase(props: BaseProps) {
 
   return (
     <div id="global-detail-view" style={styles.container}>
+      <style>{`
+        @media (max-width: 768px) {
+          #global-detail-view {
+            width: 100% !important;
+            max-width: 100vw !important;
+            min-width: 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding: 16px !important;
+            box-sizing: border-box !important;
+            overflow-x: clip !important;
+            overscroll-behavior-x: none !important;
+            touch-action: pan-y !important;
+            user-select: none;
+          }
+
+          #global-detail-view .topSection,
+          #global-detail-view .bottomSection {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+          }
+
+          #global-detail-view > div {
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+          }
+
+          #global-detail-view img,
+          #global-detail-view textarea,
+          #global-detail-view input,
+          #global-detail-view button {
+            max-width: 100%;
+            box-sizing: border-box;
+          }
+
+          #global-detail-view .custom-scrollbar {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
+            touch-action: pan-y !important;
+          }
+        }
+      `}</style>
       {onClose && (
         <button className="notranslate" onClick={onClose} style={styles.CloseBtn}>
           <svg width={isMobile ? "14" : "18"} height={isMobile ? "14" : "18"} viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -116,7 +163,7 @@ export default function GlobalProductDetailBase(props: BaseProps) {
         </button>
       )}
 
-      <div style={styles.topSection}>
+      <div className="topSection" style={styles.topSection}>
         {/* 이미지 영역 */}
         <div style={styles.imageWrapper}>
           <div style={styles.mainImgBox}>
@@ -183,7 +230,7 @@ export default function GlobalProductDetailBase(props: BaseProps) {
       )}
 
       {/* 하단 계산기 및 설명 영역 */}
-      <div style={styles.bottomSection}>
+      <div className="bottomSection" style={styles.bottomSection}>
         <div style={styles.calcBox}>
           <h4 className="notranslate" style={styles.calcHeader}>💰 {isAuction ? '현재가 기준 예상 결제 금액' : '예상 결제 금액'}</h4>
           <div style={styles.calcGrid}>

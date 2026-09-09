@@ -13,13 +13,25 @@ const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month
 
 const s = {
   // 공통 및 레이아웃
-  container: { maxWidth: '600px', margin: '0 auto', padding: '40px 16px', backgroundColor: '#fdfdfd', minHeight: '100vh' },
-  
+  // 🌟 padding-top을 0으로: GuideLayout이 헤더와 콘텐츠 패널 사이 간격을 이미 없앴는데,
+  // 이 컨테이너 자체의 위쪽 padding(40px)이 그 위에 또 여백을 만들고 있었음
+  // 🌟 배경색(#fdfdfd)은 더 이상 여기 두지 않습니다. container 전체에 배경을 깔면
+  // 둥근 모서리(28px)인 검은색 잔액 카드의 네모난 바깥 모서리 부분에서 이 배경이
+  // 삐죽 비쳐 보여 카드와 겹쳐 보이는 느낌을 줬습니다. 대신 contentPanel로 옮겨서
+  // "타입 필터 탭"부터 배경이 시작하게 하고, 잔액 카드는 페이지 배경 위에 독립적으로 뜨게 둡니다.
+  container: { maxWidth: '600px', margin: '0 auto', padding: '0 16px 40px 16px', minHeight: '100vh' },
+
   // 현재 머니 카드
-  balanceCard: { background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)', borderRadius: '28px', padding: '32px', color: '#fff', marginBottom: '32px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' },
+  // 🌟 marginBottom을 32px에서 16px로 줄임: 아래 contentPanel의 위쪽 padding(10px)과 합쳐
+  // 잔액 카드~타입 필터 탭 사이 간격이 기존 52px(32+20)에서 26px로, 정확히 절반이 됨
+  balanceCard: { background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)', borderRadius: '28px', padding: '32px', color: '#fff', marginBottom: '16px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' },
   balanceLabel: { fontSize: '14px', opacity: 0.8, marginBottom: '6px', fontWeight: '500' },
   balanceAmount: { fontSize: '32px', fontWeight: '900', letterSpacing: '-0.5px' },
-  
+
+  // 🌟 타입 필터 탭부터 목록 끝까지를 감싸는 배경 패널 (예전엔 container 전체 배경이었음)
+  // 위쪽 padding만 20px -> 10px로 줄임 (balanceCard와의 간격 절반화, 좌우/아래는 유지)
+  contentPanel: { backgroundColor: '#fdfdfd', borderRadius: '24px', padding: '10px 16px 20px 16px' },
+
   // 탭 (전체, 충전, 사용, 환불)
   tabContainer: { display: 'flex', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '16px', marginBottom: '24px' },
   tabItem: (active: boolean) => ({ flex: 1, padding: '12px 0', textAlign: 'center' as const, fontSize: '14px', fontWeight: '800', cursor: 'pointer', borderRadius: '12px', transition: 'all 0.3s ease', backgroundColor: active ? '#fff' : 'transparent', color: active ? '#0f172a' : '#94a3b8', boxShadow: active ? '0 4px 12px rgba(0,0,0,0.05)' : 'none' }),
@@ -247,13 +259,22 @@ export default function MoneyHistoryPage() {
 
   return (
     <GuideLayout title="이용내역" type="money">
-      <div style={s.container}>
-        
+      <style jsx global>{`
+        /* 🌟 모바일: currentMenu(고정 바)와 카드 사이 여백 제거 */
+        @media (max-width: 768px) {
+          .money-history-container { padding-top: 0 !important; }
+        }
+      `}</style>
+      <div className="money-history-container" style={s.container}>
+
         {/* 현재 머니 카드 */}
         <div style={s.balanceCard}>
           <p style={s.balanceLabel}>현재 보유 머니</p>
           <h2 style={s.balanceAmount}>{currentMoney.toLocaleString()}원</h2>
         </div>
+
+        {/* 🌟 타입 필터 탭부터 아래로는 별도 배경 패널로 감쌈 (잔액 카드와 배경이 겹쳐 보이지 않도록) */}
+        <div style={s.contentPanel}>
 
         {/* 타입 필터 탭 */}
         <div style={s.tabContainer}>
@@ -351,6 +372,8 @@ export default function MoneyHistoryPage() {
             </button>
           </div>
         )}
+
+        </div>
 
       </div>
     </GuideLayout>

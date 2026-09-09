@@ -1,0 +1,208 @@
+/* ============================================================
+   app/guide 하위 purchase-method, delivery-method, faq, terms, privacy
+   페이지들이 공통으로 쓰는 스타일입니다. 다섯 페이지의 <style jsx> 블록을
+   비교해서 실제로 겹치는 부분만 이곳으로 뽑아냈고, 각 페이지에만 있는
+   스타일(faq의 .faq-* 등)은 해당 page.tsx에 그대로 남아 있습니다.
+
+   🌟 이름 충돌 주의: 이 파일은 일반 global CSS라서 클래스명이 프로젝트
+   전체에서 유일해야 합니다. app/page.tsx와 app/guide/fee-guide/page.tsx가
+   이미 <style jsx global>로 전역 .section-title를 쓰고 있어서, 여기서는
+   .guide-section-title / .guide-section-block처럼 guide- 접두사를 붙여
+   충돌을 피했습니다. (참고: GuideLayout.tsx의 .sidebar-header가 Header.tsx의
+   전역 클래스와 이름이 겹쳐서 padding이 새어 들어왔던 것과 같은 종류의 버그를
+   여기서는 미리 피한 것입니다.)
+   ============================================================ */
+
+.guide-page-container {
+  color: #334155;
+  font-family: 'Pretendard', -apple-system, sans-serif;
+}
+
+/* 🌟 customs, fee-guide 페이지가 공통으로 쓰는 순차 페이드인 애니메이션.
+   membership/shipping-fee는 이 패턴을 쓰지 않아서 포함하지 않았습니다.
+   (참고: customs.tsx는 원래 로컬로 translateY(30px)/animate-4에 0.4s 지연을
+   썼는데, fee-guide.tsx의 5단계(0/0.2/0.4/0.6/0.8s, 40px) 버전과 완전히
+   같지는 않았습니다. 여기서는 더 체계적인 fee-guide 쪽 값을 기준으로
+   통일했고, customs의 animate-4 요소는 0.2s 정도 늦게 페이드인되도록
+   미세하게 바뀝니다 — 페이지 로드 시 한 번뿐인 연출이라 체감 차이는
+   거의 없습니다.)
+   🌟 @keyframes fadeInUp 자체는 app/globals.css로 옮겼습니다(app/page.tsx의
+   동일한 정의와 중복이었음). globals.css는 항상 로드되므로 이 파일을 import하는
+   가이드 페이지에서도 그대로 쓸 수 있습니다. */
+.animate-1 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-2 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards; }
+.animate-3 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards; }
+.animate-4 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards; }
+.animate-5 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.8s forwards; }
+
+/* 🌟 "라쿠텐" 등 쇼핑몰 페이지 제목 앞의 빨간 바(GlobalLayout.tsx의 redBar, 6x24px 둥근
+   모서리)와 같은 모양을 ::before로 재현. 페이지 JSX를 건드리지 않고 guide-title을 쓰는
+   5개 가이드 페이지 전체에 한 번에 적용됩니다. */
+.guide-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 24px;
+  font-weight: 900;
+  color: #0f172a;
+  margin-bottom: 12px;
+}
+.guide-title::before {
+  content: '';
+  display: inline-block;
+  flex-shrink: 0;
+  width: 6px;
+  height: 24px;
+  background-color: #ff4b2b;
+  border-radius: 10px;
+}
+
+.guide-desc {
+  font-size: 16px;
+  color: #64748b;
+  line-height: 1.6;
+  margin-bottom: 40px;
+  word-break: keep-all;
+}
+
+/* 이용약관/개인정보처리방침처럼 설명 바로 아래에 시행일자가 이어지는
+   문서형 페이지는 여백을 더 좁게 씁니다. guide-desc와 함께 사용하세요. */
+.guide-desc.guide-desc--tight {
+  margin-bottom: 20px;
+}
+
+.last-updated {
+  font-size: 13.5px;
+  color: #94a3b8;
+  text-align: right;
+  margin-bottom: 16px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* 약관/개인정보처리방침 등 문서형 페이지의 본문 카드 */
+.guide-doc-card {
+  background-color: #ffffff;
+  border-radius: 20px;
+  padding: 60px 50px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.02), 0 5px 15px rgba(0, 0, 0, 0.01);
+  border: 1px solid #f1f5f9;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.guide-section-block {
+  margin-bottom: 50px;
+}
+.guide-section-block:last-child {
+  margin-bottom: 0;
+}
+
+.guide-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 20px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+  letter-spacing: -0.3px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title-dot {
+  width: 5px;
+  height: 5px;
+  background-color: #d27377;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.doc-content {
+  font-size: 15px;
+  line-height: 1.85;
+  color: #4b5563;
+  word-break: keep-all;
+}
+.doc-content p { margin: 0 0 12px 0; }
+.doc-content ol { padding-left: 22px; margin: 0 0 16px 0; }
+.doc-content ul { list-style-type: none; padding-left: 20px; margin: 10px 0; }
+.doc-content li { margin-bottom: 10px; position: relative; }
+.doc-content ul li::before { content: '-'; position: absolute; left: -14px; color: #94a3b8; }
+
+.highlight-text {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+/* 구매대행/배송대행 신청방법 페이지의 스텝 리스트 */
+.step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  background-color: #f8fafc;
+  padding: 24px 30px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.step-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.03);
+  border-color: #cbd5e1;
+  background-color: #fff;
+}
+
+.step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background-color: #ff4b2b;
+  color: #fff;
+  font-weight: 900;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-size: 18px;
+  box-shadow: 0 4px 10px rgba(255, 75, 43, 0.2);
+}
+
+.step-content {
+  padding-top: 6px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+/* -------------------------------------------
+   📱 모바일 레이아웃 조정 (768px 이하 스마트폰)
+   768px = app/globals.css에 정리해 둔 사이트 전역 모바일 브레이크포인트 기준값
+   ------------------------------------------- */
+@media (max-width: 768px) {
+  .guide-title { font-size: 20px; gap: 10px; }
+  .guide-title::before { width: 5px; height: 20px; }
+  .guide-desc { font-size: 14px; margin-bottom: 30px; }
+  .guide-desc.guide-desc--tight { margin-bottom: 16px; }
+
+  .guide-doc-card { padding: 40px 24px; border-radius: 16px; }
+  .guide-section-block { margin-bottom: 40px; }
+  .guide-section-title { font-size: 16px; padding-bottom: 10px; }
+  .doc-content { font-size: 14px; line-height: 1.75; }
+
+  .step-list { gap: 12px; }
+  .step-item { padding: 18px 20px; gap: 16px; border-radius: 12px; }
+  .step-number { width: 30px; height: 30px; font-size: 15px; }
+  .step-content { padding-top: 3px; font-size: 15px; }
+}

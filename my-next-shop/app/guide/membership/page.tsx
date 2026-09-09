@@ -1,14 +1,15 @@
 "use client";
 import React from 'react';
 import GuideLayout from '../../components/GuideLayout';
+import { Crown, Diamond, Gift, Medal, Sparkle } from '@phosphor-icons/react';
 
 export default function MembershipPage() {
   // 등급 데이터 정의
   const membershipData = [
-    { grade: 'NEW', icon: '🟫', orders: '0건', discount: '0%', fee: '100엔', target: '모든 사이트', color: '#8b5cf6', bgColor: '#f8fafc' },
-    { grade: 'SILVER', icon: '🥈', orders: '1건', discount: '5%', fee: '100엔', target: '중고 사이트 (건당)', color: '#64748b', bgColor: '#f1f5f9' },
-    { grade: 'GOLD', icon: '🥇', orders: '5건', discount: '10%', fee: '200엔', target: '입찰/경매 (건당)', color: '#f59e0b', bgColor: '#fffbeb' },
-    { grade: 'DIAMOND', icon: '💎', orders: '15건', discount: '15%', fee: '+특별혜택', target: '최우수 고객', color: '#0ea5e9', bgColor: '#f0f9ff', highlight: true },
+    { grade: 'NEW', icon: <Sparkle weight="fill" />, orders: '0건', discount: '0%', fee: '100엔', target: '모든 사이트', color: '#8b5cf6', bgColor: '#f8fafc', gradient: 'linear-gradient(145deg, #a78bfa 0%, #7c3aed 100%)' },
+    { grade: 'SILVER', icon: <Medal weight="fill" />, orders: '1건', discount: '5%', fee: '100엔', target: '중고 사이트 (건당)', color: '#64748b', bgColor: '#f1f5f9', gradient: 'linear-gradient(145deg, #cbd5e1 0%, #64748b 100%)' },
+    { grade: 'GOLD', icon: <Crown weight="fill" />, orders: '5건', discount: '10%', fee: '200엔', target: '입찰/경매 (건당)', color: '#f59e0b', bgColor: '#fffbeb', gradient: 'linear-gradient(145deg, #fcd34d 0%, #d97706 100%)' },
+    { grade: 'DIAMOND', icon: <Diamond weight="fill" />, orders: '15건', discount: '15%', fee: '+특별혜택', target: '최우수 고객', color: '#0ea5e9', bgColor: '#f0f9ff', gradient: 'linear-gradient(145deg, #7dd3fc 0%, #0284c7 100%)', highlight: true },
   ];
 
   return (
@@ -18,9 +19,10 @@ export default function MembershipPage() {
         {/* 🌟 모바일 최적화 CSS */}
         <style jsx global>{`
           .membership-container {
-            max-width: 1100px;
+            max-width: 1180px;
             margin: 0 auto;
-            padding: 20px;
+            /* 🌟 헤더와의 간격 제거 (상단 패딩만 0으로) */
+            padding: 0 24px 56px;
             font-family: Pretendard, "Noto Sans KR", sans-serif;
             color: #334155;
           }
@@ -30,22 +32,48 @@ export default function MembershipPage() {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 20px;
-            margin-bottom: 60px;
+            margin-bottom: 36px;
           }
 
-          /* 헤더 섹션 */
+          /* 헤더 섹션 (PC: 왼쪽 사이드바와 높이를 맞춤) */
           .header-section {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            border-radius: 40px;
-            padding: 60px 50px;
-            margin-bottom: 60px;
+            background: linear-gradient(135deg, #111827 0%, #263449 100%);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 28px;
+            padding: 52px 56px;
+            margin-bottom: 32px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+            box-shadow: 0 24px 50px rgba(15, 23, 42, 0.16);
+            box-sizing: border-box;
+            min-height: var(--sidebar-desktop-h, 340px);
           }
+          .header-section::after { content: ''; position: absolute; width: 300px; height: 300px; right: -100px; top: -130px; border: 1px solid rgba(251,191,36,0.2); border-radius: 50%; box-shadow: 0 0 0 30px rgba(251,191,36,0.04), 0 0 0 60px rgba(251,191,36,0.025); }
+          .tier-card { min-height: 320px; border-radius: 20px !important; overflow: hidden; transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease; }
+          .tier-icon-badge {
+            width: 72px; height: 72px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 14px; position: relative;
+            box-shadow: 0 10px 22px -6px var(--tier-color, #94a3b8), inset 0 1px 1px rgba(255,255,255,0.5);
+          }
+          .tier-icon-badge::after {
+            content: ''; position: absolute; inset: 0; border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.35);
+          }
+          .tier-icon { font-size: 34px !important; line-height: 1; color: #fff !important; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15)); }
+          .tier-card:hover { transform: translateY(-6px); box-shadow: 0 18px 35px rgba(15,23,42,0.1) !important; }
+          .tier-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 4px; background: var(--tier-color, #94a3b8); }
+          .tier-card:nth-child(1) { --tier-color: #8b5cf6; }
+          .tier-card:nth-child(2) { --tier-color: #94a3b8; }
+          .tier-card:nth-child(3) { --tier-color: #f59e0b; }
+          .tier-card:nth-child(4) { --tier-color: #0ea5e9; }
+          .tier-card:nth-child(4) { background: linear-gradient(180deg, #f0f9ff 0%, #ffffff 48%) !important; border: 3px solid #0ea5e9 !important; box-shadow: 0 18px 40px rgba(14,165,233,0.2) !important; transform: translateY(-6px); z-index: 2; }
+          .tier-card:nth-child(4)::before { height: 6px; background: linear-gradient(90deg, #38bdf8, #2563eb); }
+          .diamond-badge { position: absolute; top: 14px; right: 14px; padding: 4px 8px; border-radius: 999px; background: #0ea5e9; color: #fff; font-size: 9px; font-weight: 900; letter-spacing: 0.08em; }
+          .biz-banner { border-radius: 20px; padding: 26px 32px; }
 
           /* 사업자 배너 */
           .biz-banner {
@@ -64,7 +92,8 @@ export default function MembershipPage() {
 
           /* 📱 모바일 대응 핵심 수정 (768px 이하) */
           @media (max-width: 768px) {
-            .membership-container { padding: 10px; }
+            /* 🌟 currentMenu(고정 바)와 카드 사이 여백 제거 */
+            .membership-container { padding: 0 12px 36px; }
             
             /* 🌟 한 줄에 2개씩 배치하여 크기를 줄임 */
             .membership-grid { 
@@ -72,19 +101,22 @@ export default function MembershipPage() {
               gap: 12px; 
             }
 
-            .header-section { 
-              padding: 30px 20px; 
-              flex-direction: column; 
-              text-align: center; 
+            .header-section {
+              padding: 30px 20px;
+              flex-direction: column;
+              text-align: center;
               border-radius: 24px;
-              margin-bottom: 40px;
+              margin-bottom: 28px;
+              min-height: 0; /* PC 전용 사이드바 높이 맞춤 해제 */
             }
             .header-section h2 { font-size: 24px !important; }
             .header-icon { font-size: 60px !important; margin-top: 15px; }
 
             /* 🌟 개별 카드 내부 요소 크기 축소 */
-            .tier-card { padding: 20px 10px !important; border-radius: 16px !important; }
-            .tier-icon { font-size: 30px !important; }
+            .tier-card { min-height: 250px; padding: 24px 10px !important; border-radius: 16px !important; }
+            .tier-card:nth-child(4) { transform: none; }
+            .tier-icon-badge { width: 52px; height: 52px; margin-bottom: 10px; }
+            .tier-icon { font-size: 24px !important; }
             .tier-name { font-size: 16px !important; }
             .tier-orders { font-size: 11px !important; }
             .tier-discount-label { font-size: 9px !important; }
@@ -122,7 +154,7 @@ export default function MembershipPage() {
               자주 이용하실수록 더욱 강력해지는 혜택을 경험해 보세요.
             </p>
           </div>
-          <div className="header-icon" style={{ fontSize: '100px' }}>🎁</div>
+          <div className="header-icon" style={{ color: '#fbbf24', fontSize: '100px', lineHeight: 1 }}><Gift size="1em" weight="duotone" /></div>
         </div>
 
         {/* 등급 카드 그리드 */}
@@ -134,10 +166,10 @@ export default function MembershipPage() {
               textAlign: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
               position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center'
             }}>
-              {tier.highlight && (
-                <div style={{ position: 'absolute', top: '-12px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#ff4b2b', color: '#fff', padding: '3px 12px', borderRadius: '10px', fontSize: '10px', fontWeight: '900', zIndex: 5 }}>BEST</div>
-              )}
-              <div className="tier-icon" style={{ fontSize: '40px', marginBottom: '10px' }}>{tier.icon}</div>
+              {tier.highlight && <span className="diamond-badge">TOP TIER</span>}
+              <div className="tier-icon-badge" style={{ background: tier.gradient, '--tier-color': tier.color } as React.CSSProperties}>
+                <div className="tier-icon">{tier.icon}</div>
+              </div>
               <h4 className="tier-name" style={{ fontSize: '20px', fontWeight: '900', color: tier.color, margin: '0 0 5px' }}>{tier.grade}</h4>
               <p className="tier-orders" style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '700', marginBottom: '15px' }}>주문 {tier.orders}</p>
               

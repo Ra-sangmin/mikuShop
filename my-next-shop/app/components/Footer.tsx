@@ -273,7 +273,7 @@ export default function Footer() {
               <span className="corporate-title">Japan Office</span>
               <div className="info-content">
                 <p><strong>상호</strong> (株)ASOBIBA (アソビバ)</p>
-                <p><strong>주소</strong> 〒123-0865 東京都足立区新田3-35-31</p>
+                <p><strong>주소</strong> 〒123-0865 東京都足立区新田3-35-31 1008号</p>
               </div>
             </div>
           </div>

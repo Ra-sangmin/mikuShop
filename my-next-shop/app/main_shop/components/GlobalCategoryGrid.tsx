@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import './global-shop-common.css';
 
 // --- 모바일 감지 커스텀 훅 ---
 function useIsMobile() {
@@ -72,9 +73,11 @@ export default function GlobalCategoryGrid({
     },
     gridContainer: { 
       display: 'grid', 
-      gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(160px, 1fr))',
+      gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(160px, 1fr))',
       gap: isMobile ? '8px' : '12px', 
-      animation: 'fadeIn 0.5s ease-in-out' 
+      animation: 'fadeIn 0.5s ease-in-out',
+      width: '100%',
+      minWidth: 0
     },
     messageText: { textAlign: 'center' as const, padding: '40px 0', color: '#9ca3af', fontSize: '14px', fontStyle: 'italic' as const },
     emptyText: { textAlign: 'center' as const, padding: '40px 0', color: '#d1d5db', fontSize: '14px' },
@@ -106,7 +109,6 @@ export default function GlobalCategoryGrid({
 
   if (isLoading) return (
     <div style={styles.loadingWrapper}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <div style={styles.spinner} />
     </div>
   );
@@ -191,7 +193,12 @@ function GlobalCategoryItem({
         backgroundColor: (isHovered && !isMobile) ? theme.bg : 'transparent', // 플랫폼 배경색 적용
         transition: 'all 0.2s ease', 
         display: 'flex', 
-        alignItems: 'center' 
+        alignItems: 'center',
+        minWidth: 0,
+        maxWidth: '100%',
+        overflow: 'hidden',
+        whiteSpace: 'nowrap',
+        textOverflow: 'ellipsis'
       }}
     >
       <span style={{ 

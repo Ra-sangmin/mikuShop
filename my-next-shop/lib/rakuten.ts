@@ -77,7 +77,8 @@ export async function rakutenBaseAPIOn(
           await delay(attempt * 1000);
           continue;
         }
-        throw new Error(`API Error - Status: ${response.status}`);
+        const errorBody = await response.text();
+        throw new Error(`API Error - Status: ${response.status} ${errorBody}`);
       }
 
       const data = await response.json();
@@ -86,7 +87,9 @@ export async function rakutenBaseAPIOn(
       return data;
     } catch (error) {
       lastRequestTime = Date.now();
-      break;
+      if (attempt >= retries - 1) throw error;
+      attempt++;
+      await delay(attempt * 500);
     }
   }
   return { Items: [], children: [], parents: [] };

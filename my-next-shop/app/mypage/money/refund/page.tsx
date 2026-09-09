@@ -10,7 +10,9 @@ import { useMikuAlert } from '@/app/context/MikuAlertContext'; // 🌟 미쿠짱
 // ==========================================
 const s = {
   // 공통 및 레이아웃
-  container: { maxWidth: '672px', margin: '0 auto', padding: '48px 16px', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif' },
+  // 🌟 padding-top을 0으로: GuideLayout이 헤더와 콘텐츠 패널 사이 간격을 이미 없앴는데,
+  // 이 컨테이너 자체의 위쪽 padding(48px)이 그 위에 또 여백을 만들고 있었음
+  container: { maxWidth: '672px', margin: '0 auto', padding: '0 16px 48px 16px', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif' },
   card: { backgroundColor: '#fff', borderRadius: '24px', padding: '40px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', border: '1px solid #e2e8f0' },
   title: { fontSize: '24px', fontWeight: '800', color: '#0f172a', marginBottom: '32px', textAlign: 'center' as const },
   formWrapper: { display: 'flex', flexDirection: 'column' as const, gap: '24px' },
@@ -51,7 +53,8 @@ const globalStyles = `
   .action-btn:hover:not(:disabled) { background-color: #1e293b !important; transform: translateY(-2px); box-shadow: 0 10px 20px rgba(15, 23, 42, 0.15) !important; }
 
   @media (max-width: 768px) {
-    .refund-container { padding: 20px 10px !important; }
+    /* 🌟 currentMenu(고정 바)와 카드 사이 여백 제거 */
+    .refund-container { padding: 0 10px !important; }
     .refund-card { padding: 24px 20px !important; border-radius: 20px !important; }
     .refund-card h2 { font-size: 20px !important; margin-bottom: 24px !important; }
     .balance-box { padding: 16px !important; }

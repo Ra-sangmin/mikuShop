@@ -16,12 +16,16 @@ export async function GET(request: Request) {
       const minPrice = searchParams.get('minPrice') || undefined;    //최소 가격
       const maxPrice = searchParams.get('maxPrice')|| undefined;    //최대 가격
 
-      const tailUrl = "ichibams/api/IchibaItem/Search/20220601";
+      const tailUrl = "ichibams/api/IchibaItem/Search/20260701";
 
       const itemData = await rakutenBaseAPIOn(tailUrl, genreId, page, sort,keyword,NGKeyword,minPrice,maxPrice);
+      const rawItems = Array.isArray(itemData?.Items) ? itemData.Items : [];
+      const items = rawItems
+        .map((entry: any) => entry?.Item ?? entry)
+        .filter((item: any) => item?.itemCode);
 
       return NextResponse.json({
-        items: itemData?.Items || [], 
+        items,
         page: itemData?.page || page, 
         pageCount: itemData?.pageCount || 0, 
       });

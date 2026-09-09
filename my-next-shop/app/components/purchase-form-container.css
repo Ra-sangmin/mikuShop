@@ -1,0 +1,42 @@
+/* ============================================================
+   PurchaseFormContainer가 렌더링하는 상품 신청 폼의 스타일입니다.
+   이 컴포넌트는 app/purchase/request, app/purchase/quote,
+   app/delivery/request 세 페이지가 공통으로 사용하며, 세 페이지 자체에는
+   CSS가 전혀 없고 이 컴포넌트 하나로 완전히 공유됩니다.
+
+   🌟 원래 PurchaseFormContainer.tsx 안에 <style>{...}</style>로 인라인되어
+   있던 것을 그대로 옮긴 것입니다. .premium-card/.premium-input 같은 이름이
+   app/payment/success, app/test-estimate 등 다른 무관한 페이지에도 보이지만,
+   그쪽은 각자 다른 padding/border-radius 값으로 독립적으로 정의한 것이라
+   여기 포함하지 않았습니다(실제 중복이 아님).
+   ============================================================ */
+
+.premium-container { animation: fadeIn 0.6s ease-out; }
+.premium-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); border: 1px solid #f0f0f0; overflow: hidden; margin-bottom: 24px; }
+.premium-input { width: 100%; padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; transition: all 0.2s ease; background: #f9fafb; box-sizing: border-box; }
+.premium-input:focus { background: #fff; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); }
+.premium-btn { padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; border: none; }
+.btn-dark { background: #1f2937; color: #fff; }
+.btn-primary { background: #6366f1; color: #fff; width: 100%; max-width: 300px; }
+.service-box { border: 1px solid #e5e7eb; padding: 14px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: all 0.2s ease; background-color: #fff; }
+.service-box:hover { border-color: #a5b4fc; background-color: #f8fafc; }
+.service-box.active { border-color: #6366f1; background-color: #eef2ff; }
+.custom-checkbox { width: 20px; height: 20px; border: 2px solid #d1d5db; border-radius: 5px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s ease; }
+.service-box.active .custom-checkbox { background-color: #6366f1; border-color: #6366f1; }
+
+/* 768px = app/globals.css에 정리해 둔 사이트 전역 모바일 브레이크포인트 기준값 */
+@media (max-width: 768px) {
+  .premium-container { padding: 15px 10px !important; }
+  .product-card-inner { flex-direction: column !important; gap: 20px !important; padding: 20px !important; }
+  .input-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+  .input-grid > div { grid-column: span 1 !important; }
+  .service-grid { grid-template-columns: 1fr !important; }
+  .total-card { flex-direction: column !important; align-items: stretch !important; padding: 16px 12px !important; gap: 8px !important; }
+  .total-item { flex: 0 0 auto !important; width: 100%; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; background: #fff; border-radius: 8px; }
+  .total-item p { margin: 0 !important; }
+  .total-item > span { font-size: 16px !important; }
+  .total-operator { display: none; }
+  .final-summary { width: 100% !important; min-width: 0 !important; box-sizing: border-box; margin: 8px 0 0 !important; padding: 16px 12px !important; }
+}
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }

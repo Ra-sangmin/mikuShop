@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import '../admin-common.css';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -111,10 +112,10 @@ export default function AdminDashboard() {
           { title: '배송 중', count: `${shippingCount}건`, color: '#10b981', icon: '🚚' },
           { title: '누적 정산액', count: `₩ ${totalSettlement.toLocaleString()}`, color: '#8b5cf6', icon: '💰' },
         ].map((card, idx) => (
-          <div key={idx} style={ds.statCard}>
+          <div key={idx} className="admin-container admin-flex-between">
             <div>
-              <div style={ds.statTitle}>{card.title}</div>
-              <div style={ds.statCount}>{card.count}</div>
+              <div className="admin-stat-title">{card.title}</div>
+              <div className="admin-stat-count">{card.count}</div>
             </div>
             <div style={{ ...ds.statIcon, backgroundColor: `${card.color}15` }}>
               {card.icon}
@@ -125,17 +126,17 @@ export default function AdminDashboard() {
 
       <div style={ds.flexGap}>
         {/* 🌟 최근 주문 목록 */}
-        <div style={ds.tableContainerMain}>
-          <div style={ds.tableHeader}>
-            <h2 style={ds.sectionTitle}>최근 주문 목록 (최신 5건)</h2>
-            <button 
+        <div className="admin-container" style={{ flex: 2 }}>
+          <div className="admin-flex-between" style={{ marginBottom: '20px' }}>
+            <h2 className="admin-title-font" style={{ margin: 0 }}>최근 주문 목록 (최신 5건)</h2>
+            <button
               onClick={() => router.push('/admin/orders')}
               style={ds.detailBtn}
             >
               자세히 보기 &gt;
             </button>
           </div>
-          <table style={ds.table}>
+          <table className="admin-table-simple">
             <thead>
               <tr style={ds.tableHeadRow}>
                 <th style={ds.th}>주문 ID</th>
@@ -149,7 +150,7 @@ export default function AdminDashboard() {
               {dbRecentOrders.length > 0 ? dbRecentOrders.map((order, idx) => {
                 const badge = getBadgeStyle(order.status);
                 return (
-                  <tr key={idx} style={ds.tableBodyRow}>
+                  <tr key={idx} className="admin-table-body-row">
                     <td style={ds.tdBold}>{order.id}</td>
                     <td style={ds.td}>{order.user}</td>
                     <td style={ds.tdEllipsis}>{order.product}</td>
@@ -166,16 +167,16 @@ export default function AdminDashboard() {
                   </tr>
                 );
               }) : (
-                <tr><td colSpan={5} style={ds.emptyTd}>최근 주문 내역이 없습니다.</td></tr>
+                <tr><td colSpan={5} className="admin-empty-td">최근 주문 내역이 없습니다.</td></tr>
               )}
             </tbody>
           </table>
         </div>
 
         {/* 🌟 배송 상태 목록 */}
-        <div style={ds.tableContainerSide}>
-          <h2 style={ds.sectionTitleMargin}>배송 상태 (배송 중)</h2>
-          <table style={ds.table}>
+        <div className="admin-container" style={{ flex: 1 }}>
+          <h2 className="admin-section-title">배송 상태 (배송 중)</h2>
+          <table className="admin-table-simple">
             <thead>
               <tr style={ds.tableHeadRow}>
                 <th style={ds.th}>주문 ID</th>
@@ -185,7 +186,7 @@ export default function AdminDashboard() {
             </thead>
             <tbody>
               {dbShippingOrders.length > 0 ? dbShippingOrders.map((ship, idx) => (
-                <tr key={idx} style={ds.tableBodyRow}>
+                <tr key={idx} className="admin-table-body-row">
                   <td style={ds.td}>{ship.id}</td>
                   <td style={ds.td}>{ship.user}</td>
                   <td style={ds.tdRight}>
@@ -193,7 +194,7 @@ export default function AdminDashboard() {
                   </td>
                 </tr>
               )) : (
-                <tr><td colSpan={3} style={ds.emptyTd}>국제배송 중인 내역이 없습니다.</td></tr>
+                <tr><td colSpan={3} className="admin-empty-td">국제배송 중인 내역이 없습니다.</td></tr>
               )}
             </tbody>
           </table>
@@ -221,29 +222,6 @@ const colors = {
   emptyText: '#94a3b8',
 };
 
-// 2. 믹스인 (자주 쓰이는 속성 조합)
-const mixins = {
-  flexBetween: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  } as React.CSSProperties,
-  
-  titleFont: {
-    fontSize: '18px',
-    fontWeight: '700',
-  } as React.CSSProperties,
-};
-
-// 3. 베이스 스타일 (공통 뼈대)
-const baseCard: React.CSSProperties = {
-  backgroundColor: colors.white,
-  borderRadius: '16px',
-  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-  border: `1px solid ${colors.border}`,
-  padding: '24px',
-};
-
 const baseTh: React.CSSProperties = { padding: '12px 8px' };
 const baseTd: React.CSSProperties = { padding: '16px 8px' };
 
@@ -268,21 +246,6 @@ const ds: Record<string, React.CSSProperties> = {
   },
   
   // 통계 카드
-  statCard: {
-    ...baseCard,
-    ...mixins.flexBetween,
-  },
-  statTitle: {
-    color: colors.textSub,
-    fontSize: '15px',
-    fontWeight: '500',
-    marginBottom: '8px',
-  },
-  statCount: {
-    color: colors.textMain,
-    fontSize: '28px',
-    fontWeight: '700',
-  },
   statIcon: {
     width: '50px',
     height: '50px',
@@ -292,23 +255,7 @@ const ds: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     fontSize: '24px',
   },
-  
-  // 테이블 컨테이너
-  tableContainerMain: { ...baseCard, flex: 2 },
-  tableContainerSide: { ...baseCard, flex: 1 },
-  
-  tableHeader: {
-    ...mixins.flexBetween,
-    marginBottom: '20px',
-  },
-  sectionTitle: {
-    ...mixins.titleFont,
-    margin: 0,
-  },
-  sectionTitleMargin: {
-    ...mixins.titleFont,
-    margin: '0 0 20px 0',
-  },
+
   detailBtn: {
     padding: '6px 12px',
     border: `1px solid ${colors.borderDark}`,
@@ -317,24 +264,15 @@ const ds: Record<string, React.CSSProperties> = {
     fontSize: '13px',
     cursor: 'pointer',
   },
-  
-  // 테이블 기본 설정
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    textAlign: 'left',
-  },
+
+  // 🌟 다른 admin 페이지들과 값이 달라(테두리색/배경 없음) 공용 .admin-table-head-row로
+  // 통일하지 않고 그대로 둡니다.
   tableHeadRow: {
     borderBottom: `2px solid ${colors.border}`,
     color: colors.textSub,
     fontSize: '14px',
   },
-  tableBodyRow: {
-    borderBottom: `1px solid ${colors.border}`,
-    fontSize: '14px',
-    color: colors.textDark,
-  },
-  
+
   // 테이블 셀 (TH)
   th: { ...baseTh },
   thCenter: { ...baseTh, textAlign: 'center' },
@@ -364,11 +302,5 @@ const ds: Record<string, React.CSSProperties> = {
     borderRadius: '6px',
     backgroundColor: colors.badgeBgInfo,
     color: colors.badgeTextInfo,
-  },
-  
-  emptyTd: {
-    padding: '30px',
-    textAlign: 'center',
-    color: colors.emptyText,
   },
 };

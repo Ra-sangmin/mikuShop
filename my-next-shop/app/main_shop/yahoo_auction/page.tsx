@@ -12,6 +12,7 @@ import { GlobalItem } from "@/app/main_shop/components/GlobalProductCard";
 // --- 🛠️ 유틸리티 ---
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
 import { getTranslatedText } from '@/lib/search-utils';
+import '@/app/main_shop/platform-pages-common.css';
 
 // 야후 옥션 전용 카테고리 인터페이스
 interface YahooAuctionCategory {
@@ -116,14 +117,37 @@ function YahooAuctionContent() {
 
   // 🚀 [수정] 야후 옥션 데이터를 Global 규격으로 완벽하게 변환!
   const mappedDisplayItems = useMemo((): GlobalItem[] => {
-    return displayItems.map(item => ({
+    const getRemainingSeconds = (timeLeft?: string) => {
+      const value = (timeLeft || '').trim();
+      const minuteMatch = value.match(/(\d+)\s*(?:分|분)/);
+      const secondMatch = value.match(/(\d+)\s*(?:秒|초)/);
+
+      if (!minuteMatch && !secondMatch) return null;
+
+      return (minuteMatch ? Number(minuteMatch[1]) * 60 : 0) +
+        (secondMatch ? Number(secondMatch[1]) : 0);
+    };
+
+    return displayItems
+      .filter(item => {
+        const timeLeft = (item.timeLeft || '').trim();
+        const isEnded = timeLeft === '終了' || timeLeft === '종료' ||
+          timeLeft.includes('終了') || timeLeft.includes('종료') ||
+          /남은 시간\s*0/.test(timeLeft) ||
+          /終了|落札|売り切れ|SOLD|sold|closed|終了しました|取引終了/i.test(item.name);
+        const isWithinOneMinute = currentFilters.sortOrder === 'endtime' &&
+          (getRemainingSeconds(item.timeLeft) ?? Number.POSITIVE_INFINITY) <= 60;
+
+        return item.status === 'on_sale' && !isEnded && !isWithinOneMinute;
+      })
+      .map(item => ({
       ...item,
       platform: 'yahoo_auction', // 🚨 기존에 'mercari'로 되어있던 치명적 버그 수정!
       status: item.status as 'on_sale' | 'sold_out',
       bidCount: item.bidCount,   // ✨ 입찰수 연결
       timeLeft: item.timeLeft,   // ✨ 남은 시간 연결
-    }));
-  }, [displayItems]);
+      }));
+  }, [displayItems, currentFilters.sortOrder]);
   
   const loadItems = async (catId: any, filters?: GlobalFilterState) => {
       // 1. 이전 요청 중단
@@ -340,10 +364,25 @@ function YahooAuctionContent() {
           setProductDetail(mappedData);
           setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
         } else {
-          throw new Error(result.error);
+          throw new Error(result.error || '상품 상세 정보를 불러오지 못했습니다.');
         }
       } catch (err: any) {
-        showAlert('상품 로딩에 실패하였습니다.');
+        const fallbackProduct: GlobalProduct = {
+          id: item.id,
+          platform: 'yahoo_auction',
+          name: item.name || '상품 상세 정보',
+          price: Number(item.price) || 0,
+          thumbnail: item.thumbnail || '',
+          images: item.thumbnail ? [item.thumbnail] : [],
+          description: '상세 정보를 불러오지 못했습니다. 원문 페이지에서 확인해 주세요.',
+          url: item.url || `https://auctions.yahoo.co.jp/jp/auction/${item.id}`,
+          status: item.status,
+          categories: [],
+          bidCount: item.bidCount,
+          timeLeft: item.timeLeft,
+        };
+        setProductDetail(fallbackProduct);
+        setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 100);
       } finally {
         setIsDetailLoading(false);
       }
@@ -376,10 +415,10 @@ function YahooAuctionContent() {
 export default function YahooAuctionPage() {
   return (
     <Suspense fallback={
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+      <div className="platform-loading-wrap">
         {/* ✨ 로딩 스피너 색상도 라쿠텐 레드(#bf0000)에서 야후 레드(#ff0033)로 맞춰주었습니다 */}
         <i className="fa fa-spinner fa-spin fa-2x" style={{ color: '#ff0033' }}></i>
-        <p style={{ marginTop: '15px', color: '#666' }}>야후 옥션 카테고리를 불러오는 중입니다...</p>
+        <p className="platform-loading-text">야후 옥션 카테고리를 불러오는 중입니다...</p>
       </div>
     }>
       <YahooAuctionContent />

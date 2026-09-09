@@ -25,6 +25,14 @@ export default function GlobalPagination({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [inputPage, setInputPage] = useState(currentPage);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     setInputPage(currentPage);
@@ -46,11 +54,12 @@ export default function GlobalPagination({
 
   // 5개 단위 페이지 그룹 계산
   const pages = useMemo(() => {
-    let startPage = Math.max(1, currentPage - 2);
-    let endPage = Math.min(pageCount, startPage + 4);
+    const visiblePageCount = isMobile ? 3 : 5;
+    let startPage = Math.max(1, currentPage - (isMobile ? 1 : 2));
+    let endPage = Math.min(pageCount, startPage + visiblePageCount - 1);
     
-    if (endPage - startPage < 4) {
-      startPage = Math.max(1, endPage - 4);
+    if (endPage - startPage < visiblePageCount - 1) {
+      startPage = Math.max(1, endPage - (visiblePageCount - 1));
     }
 
     const result = [];
@@ -58,12 +67,12 @@ export default function GlobalPagination({
       result.push(i);
     }
     return result;
-  }, [currentPage, pageCount]);
+  }, [currentPage, pageCount, isMobile]);
 
   const navButtonStyle = (disabled: boolean): React.CSSProperties => ({
-    minWidth: '52px',
-    height: '52px',
-    padding: '0 12px',
+    minWidth: isMobile ? '36px' : '52px',
+    height: isMobile ? '42px' : '52px',
+    padding: isMobile ? '0 6px' : '0 12px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -71,7 +80,7 @@ export default function GlobalPagination({
     border: 'none',
     backgroundColor: 'transparent',
     color: disabled ? '#e5e7eb' : '#4b5563',
-    fontSize: '15px',
+    fontSize: isMobile ? '12px' : '15px',
     fontWeight: '600',
     cursor: disabled ? 'default' : 'pointer',
     transition: 'all 0.2s ease',
@@ -84,19 +93,24 @@ export default function GlobalPagination({
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      gap: '24px',
-      marginTop: '60px',
+      gap: isMobile ? '12px' : '24px',
+      marginTop: isMobile ? '28px' : '60px',
+      width: '100%',
+      maxWidth: '100%',
+      boxSizing: 'border-box',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Pretendard", sans-serif'
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '30px', flexWrap: 'wrap', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '30px', flexWrap: 'wrap', justifyContent: 'center', maxWidth: '100%' }}>
         
         {/* 네비게이션 버튼 그룹 */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '6px',
+          gap: isMobile ? '2px' : '6px',
           backgroundColor: '#fff',
-          padding: '10px',
+          padding: isMobile ? '5px' : '10px',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
           borderRadius: '20px',
           boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.08)',
           border: '1px solid #f0f0f0'
@@ -106,21 +120,21 @@ export default function GlobalPagination({
             처음
           </button>
 
-          <button onClick={() => handlePageChange(currentPage - 5)} disabled={currentPage <= 5} style={{ ...navButtonStyle(currentPage <= 5), fontSize: '20px' }}>
+          <button onClick={() => handlePageChange(currentPage - 5)} disabled={currentPage <= 5} style={{ ...navButtonStyle(currentPage <= 5), fontSize: isMobile ? '16px' : '20px' }}>
             &lsaquo;
           </button>
 
-          <div style={{ display: 'flex', gap: '6px', margin: '0 10px' }}>
+          <div style={{ display: 'flex', gap: isMobile ? '2px' : '6px', margin: isMobile ? '0 2px' : '0 10px' }}>
             {pages.map((p) => (
               <button
                 key={p}
                 onClick={() => handlePageChange(p)}
                 style={{
-                  minWidth: '52px',
-                  height: '52px',
+                  minWidth: isMobile ? '36px' : '52px',
+                  height: isMobile ? '42px' : '52px',
                   borderRadius: '14px',
                   border: 'none',
-                  fontSize: '18px',
+                  fontSize: isMobile ? '14px' : '18px',
                   fontWeight: p === currentPage ? '700' : '500',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
@@ -134,7 +148,7 @@ export default function GlobalPagination({
             ))}
           </div>
 
-          <button onClick={() => handlePageChange(currentPage + 5)} disabled={currentPage > pageCount - 5} style={{ ...navButtonStyle(currentPage > pageCount - 5), fontSize: '20px' }}>
+          <button onClick={() => handlePageChange(currentPage + 5)} disabled={currentPage > pageCount - 5} style={{ ...navButtonStyle(currentPage > pageCount - 5), fontSize: isMobile ? '16px' : '20px' }}>
             &rsaquo;
           </button>
 
@@ -148,11 +162,11 @@ export default function GlobalPagination({
           display: 'flex', 
           alignItems: 'center', 
           backgroundColor: '#fff',
-          padding: '10px 20px',
+          padding: isMobile ? '5px 6px' : '10px 20px',
           borderRadius: '20px',
           border: '1px solid #f0f0f0',
           boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
-          gap: '15px'
+          gap: isMobile ? '5px' : '15px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input
@@ -161,28 +175,28 @@ export default function GlobalPagination({
               onChange={(e) => setInputPage(Number(e.target.value))}
               onKeyDown={(e) => e.key === 'Enter' && handlePageChange(inputPage)}
               style={{
-                width: '80px',
-                height: '46px',
+                width: isMobile ? '58px' : '80px',
+                height: isMobile ? '40px' : '46px',
                 border: '2px solid #eee',
                 borderRadius: '12px',
                 textAlign: 'center',
-                fontSize: '18px',
+                fontSize: isMobile ? '15px' : '18px',
                 fontWeight: '600',
                 outline: 'none'
               }}
             />
-            <span style={{ fontSize: '16px', color: '#999' }}>/ {pageCount.toLocaleString()}</span>
+            <span style={{ fontSize: isMobile ? '13px' : '16px', color: '#999' }}>/ {pageCount.toLocaleString()}</span>
           </div>
           <button
             onClick={() => handlePageChange(inputPage)}
             style={{
-              height: '46px',
-              padding: '0 25px',
+              height: isMobile ? '40px' : '46px',
+              padding: isMobile ? '0 14px' : '0 25px',
               backgroundColor: '#111',
               color: '#fff',
               border: 'none',
               borderRadius: '12px',
-              fontSize: '16px',
+              fontSize: isMobile ? '13px' : '16px',
               fontWeight: '600',
               cursor: 'pointer'
             }}

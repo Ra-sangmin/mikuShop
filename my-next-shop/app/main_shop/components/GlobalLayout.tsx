@@ -19,9 +19,10 @@ interface GlobalLayoutProps {
 const getStyles = (brandColor: string): Record<string, React.CSSProperties> => ({
   container: { display: 'flex', flexDirection: 'column', minHeight: '100vh' },
   header: {
-    position: 'sticky',
-    top: '71px', 
-    zIndex: 90, 
+    position: 'fixed',
+    top: '84px',
+    left: 0,
+    zIndex: 90,
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
     backdropFilter: 'blur(12px)',
     WebkitBackdropFilter: 'blur(12px)',
@@ -48,12 +49,12 @@ const getStyles = (brandColor: string): Record<string, React.CSSProperties> => (
     letterSpacing: '-1px', display: 'flex', alignItems: 'center', gap: '8px' 
   },
   subtitle: { fontSize: '14px', fontWeight: 500, color: '#999', letterSpacing: '0' },
-  translateBox: { 
-    minWidth: '160px', minHeight: '36px', backgroundColor: '#fff',
-    borderRadius: '8px', border: '1px solid #eee', padding: '2px 8px',
-    display: 'flex', alignItems: 'center', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)'
-  },
-  main: { flex: 1, width: '100%' }
+  // 🌟 예전엔 여기에 흰 배경/테두리/그림자가 있는 박스 스타일이 있었는데, 구글 번역
+  // 스크립트가 로드되기 전(또는 실패했을 때)엔 안이 빈 채로 그 테두리만 "네모 이미지"처럼
+  // 보였습니다. 번역 위젯 자체(일본어 상품명 → 한국어 번역)는 계속 쓰는 기능이라 컨테이너는
+  // 남겨두고, 위젯이 실제로 렌더링되기 전까지는 아무 것도 안 보이도록 박스 모양만 없앴습니다.
+  translateBox: { display: 'flex', alignItems: 'center' },
+  main: { flex: 1, width: '100%', paddingTop: '61px' }
 });
 
 export default function GlobalLayout({ 
@@ -92,36 +93,44 @@ export default function GlobalLayout({
         strategy="afterInteractive"
       />
 
+      {/* 🌟 구글 번역 위젯 CSS 4줄은 app/globals.css의 "Google Translate Fix" 섹션과
+          완전히 겹쳐서(2줄은 글자 그대로 동일, 2줄은 새로 추가) 그쪽으로 합쳤습니다.
+          globals.css는 항상 로드되므로 여기서 따로 다시 선언할 필요가 없습니다. */}
       <style>{`
-        .goog-te-banner-frame.skiptranslate { display: none !important; }
-        body { top: 0px !important; }
-        .goog-tooltip, .goog-tooltip:hover { display: none !important; }
-        .goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }
+        @media (max-width: 768px) {
+          .global-shop-header { top: 89px !important; }
+          .global-shop-main { padding-top: 51px !important; }
+          .global-shop-header-inner { padding: 10px 12px !important; gap: 8px; }
+          .global-shop-logo { min-width: 0; flex: 1; gap: 8px !important; margin-left: 36px; }
+          .global-shop-title { min-width: 0; white-space: nowrap; font-size: 20px !important; letter-spacing: -1.2px !important; gap: 5px !important; }
+          .global-shop-subtitle { min-width: 0; white-space: nowrap; font-size: 11px !important; }
+          .global-shop-translate { display: none !important; }
+        }
       `}</style>
 
       <div id="globalShoppingLayout" style={styles.container}>
         
-        <header style={styles.header}>
-          <div style={styles.headerInner}>
+        <header className="global-shop-header" style={styles.header}>
+          <div className="global-shop-header-inner" style={styles.headerInner}>
             
             {/* 동적 로고 영역 (수정됨) */}
-            <div style={styles.logoWrapper}>
+            <div className="global-shop-logo" style={styles.logoWrapper}>
               <div style={styles.redBar}></div>
-              <h2 style={styles.title}>
+              <h2 className="global-shop-title" style={styles.title}>
                 {/* 🌟 이제 한글 이름(MERCARI 대신 메루카리)이 메인 제목이 됩니다. */}
                 {platformName} 
                 {/* 🌟 이제 플랫폼 설명(공식 수집 대신 일본 최대 중고거래 사이트)이 서브 제목이 됩니다. */}
-                <span style={styles.subtitle}>| {platformDesc}</span>
+                <span className="global-shop-subtitle" style={styles.subtitle}>| {platformDesc}</span>
               </h2>
             </div>
             
             {/* 번역기 영역 */}
-            <div id="google_translate_element" style={styles.translateBox}></div>
+            <div id="google_translate_element" className="global-shop-translate" style={styles.translateBox}></div>
 
           </div>
         </header>
 
-        <main style={styles.main}>
+        <main className="global-shop-main" style={styles.main}>
           {children}
         </main>
       </div>

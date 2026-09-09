@@ -1,0 +1,26 @@
+/* ============================================================
+   app/main_shop 하위 개별 쇼핑몰 페이지(mercari, rakuten, yahoo_auction,
+   yahoo_shopping, amazon)의 page.tsx/layout.tsx를 정독해서 찾은 공통
+   스타일입니다. globals.css / main_shop/components/global-shop-common.css
+   어디에도 없던 것이라 새로 만들었습니다.
+
+   🌟 로딩 스피너 래퍼: rakuten, mercari, yahoo_auction 세 페이지의
+   "카테고리/상품 정보를 불러오는 중입니다..." 로딩 화면이 인라인
+   style={{...}} 객체로 글자 그대로 동일하게 3번 중복돼 있었습니다.
+   (yahoo_shopping은 텍스트만 있는 더 단순한 fallback이라 대상이 아니고,
+   amazon은 padding/fontSize 등 값 자체가 달라 별개로 판단해 포함하지
+   않았습니다.) 스피너 색상만 플랫폼별로 달라서 그건 계속 인라인으로 둡니다.
+   ============================================================ */
+
+.platform-loading-wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.platform-loading-text {
+  margin-top: 15px;
+  color: #666;
+}

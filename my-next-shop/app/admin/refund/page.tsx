@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import '../admin-common.css';
 
 export default function MoneyRequestManagement() {
   const [requests, setRequests] = useState<any[]>([]);
@@ -73,20 +74,20 @@ export default function MoneyRequestManagement() {
   };
 
   return (
-    <div style={mrs.container}>
-      <h2 style={mrs.sectionTitleMargin}>머니 신청 대기 및 처리 내역</h2>
-      
+    <div className="admin-container">
+      <h2 className="admin-section-title">머니 신청 대기 및 처리 내역</h2>
+
       <div style={mrs.tableWrapper}>
-        <table style={mrs.table}>
+        <table className="admin-table-simple">
           <thead>
-            <tr style={mrs.tableHeadRow}>
-              <th style={mrs.th}>일자</th>
-              <th style={mrs.th}>구분</th>
-              <th style={mrs.th}>신청자 (ID)</th>
-              <th style={mrs.thRight}>금액</th>
-              <th style={mrs.th}>상세 정보 (입금자/계좌)</th>
-              <th style={mrs.thCenter}>상태</th>
-              <th style={mrs.thCenter}>관리</th>
+            <tr className="admin-table-head-row">
+              <th className="admin-base-th">일자</th>
+              <th className="admin-base-th">구분</th>
+              <th className="admin-base-th">신청자 (ID)</th>
+              <th className="admin-base-th" style={{ textAlign: 'right' }}>금액</th>
+              <th className="admin-base-th">상세 정보 (입금자/계좌)</th>
+              <th className="admin-base-th" style={{ textAlign: 'center' }}>상태</th>
+              <th className="admin-base-th" style={{ textAlign: 'center' }}>관리</th>
             </tr>
           </thead>
           <tbody>
@@ -97,7 +98,7 @@ export default function MoneyRequestManagement() {
               const statusStyle = getStatusStyle(req.status);
 
               return (
-                <tr key={req.id} style={mrs.tableBodyRow}>
+                <tr key={req.id} className="admin-table-body-row">
                   <td style={mrs.td}>{new Date(req.createdAt).toLocaleString()}</td>
                   
                   {/* 구분 (충전/환불 뱃지) */}
@@ -181,57 +182,15 @@ const colors = {
   rejectedText: '#64748b',
 };
 
-const mixins = {
-  titleFont: {
-    fontSize: '18px',
-    fontWeight: '700',
-  } as React.CSSProperties,
-};
-
-const baseTh: React.CSSProperties = { padding: '16px 12px' };
 const baseTd: React.CSSProperties = { padding: '16px 12px' };
 
 const mrs: Record<string, React.CSSProperties> = {
-  // 컨테이너
-  container: {
-    backgroundColor: colors.white,
-    borderRadius: '16px',
-    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-    border: `1px solid ${colors.border}`,
-    padding: '24px',
-  },
-  sectionTitleMargin: {
-    ...mixins.titleFont,
-    margin: '0 0 20px 0',
-  },
-  
   // 테이블 구조
   tableWrapper: {
     width: '100%',
     overflowX: 'auto',
   },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    textAlign: 'left',
-  },
-  tableHeadRow: {
-    borderBottom: `2px solid ${colors.borderDark}`,
-    color: colors.textSub,
-    fontSize: '14px',
-    backgroundColor: colors.bgHead,
-  },
-  tableBodyRow: {
-    borderBottom: `1px solid ${colors.border}`,
-    fontSize: '14px',
-    color: colors.textDark,
-  },
 
-  // 테이블 셀 (TH)
-  th: { ...baseTh },
-  thCenter: { ...baseTh, textAlign: 'center' },
-  thRight: { ...baseTh, textAlign: 'right' },
-  
   // 테이블 셀 (TD)
   td: { ...baseTd },
   tdBold: { ...baseTd, fontWeight: '600' },

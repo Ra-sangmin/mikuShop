@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 // 🌟 글로벌 상수 및 라벨 임포트
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
+import '../admin-common.css';
 
 // 🌟 Enum 키를 기반으로 옵션 생성
 const statusOptions = Object.keys(ORDER_STATUS).filter(key => key !== 'ALL') as OrderStatus[];
@@ -369,27 +370,27 @@ export default function OrderManagement() {
   const renderedOrders = getRenderedOrders();
 
   return (
-    <div style={os.container}>
-      
+    <div className="admin-container">
+
       {/* 🌟 1. 상단 액션바 (필터 + 버튼들) */}
-      <div style={os.actionBar}>
+      <div className="admin-action-bar">
         <div style={os.filterGroup}>
-          <select 
+          <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            style={os.selectInput}
+            className="admin-select-input"
           >
             <option value="전체">전체 상태 ( 장바구니, 구매실패, 국제배송 제외 )</option>
             {statusOptions.map(key => (
               <option key={key} value={key}>{ORDER_STATUS_LABEL[key]}</option>
             ))}
           </select>
-          <input 
-            type="text" 
-            placeholder="주문번호(ID) 또는 주문자명 검색..." 
+          <input
+            type="text"
+            placeholder="주문번호(ID) 또는 주문자명 검색..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={os.searchInput}
+            className="admin-search-input"
           />
         </div>
 
@@ -397,10 +398,10 @@ export default function OrderManagement() {
           <button onClick={() => setShowDebug(!showDebug)} style={os.btnDebug}>
             🛠️ 디버그 {showDebug ? '끄기' : '켜기'}
           </button>
-          <button 
+          <button
             onClick={handleSaveChanges}
             disabled={changedOrderIds.size === 0 || isSaving}
-            style={changedOrderIds.size > 0 ? os.btnSaveActive : os.btnSaveDisabled}
+            className={changedOrderIds.size > 0 ? 'admin-btn-save-active' : 'admin-btn-save-disabled'}
           >
             {isSaving ? '저장 중...' : `변경사항 저장 (${changedOrderIds.size}건)`}
           </button>
@@ -409,7 +410,7 @@ export default function OrderManagement() {
 
       {/* 🌟 2. 테이블 영역 */}
       <div style={os.tableWrapper}>
-        <table style={os.table}>
+        <table className="admin-table-resizable">
           <colgroup>
             <col style={{ width: columnWidths.date }} />
             <col style={{ width: columnWidths.user }} />
@@ -423,88 +424,88 @@ export default function OrderManagement() {
             <col style={{ width: columnWidths.manage }} />
           </colgroup>
           <thead>
-            <tr style={os.tableHeadRow}>
+            <tr className="admin-table-head-row">
               {/* 날짜 / ID */}
-              <th style={os.thResizable}>
-                <div onMouseDown={(e) => onMouseDown('date', 'left', e)} style={os.resizeHandleLeft} onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
+              <th className="admin-th-resizable">
+                <div onMouseDown={(e) => onMouseDown('date', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
                 <div onClick={() => toggleSort('date')} style={{ cursor: 'pointer' }}>
                   주문일시 / ID
                   <span style={{ ...os.sortIcon, color: sortConfig.key === 'date' && sortConfig.direction !== 'default' ? colors.accent : colors.emptyText }}>
                     {sortConfig.key === 'date' && sortConfig.direction === 'asc' ? '▲' : sortConfig.key === 'date' && sortConfig.direction === 'desc' ? '▼' : '↕'}
                   </span>
                 </div>
-                <div onMouseDown={(e) => onMouseDown('date', 'right', e)} style={os.resizeHandleRight} onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
+                <div onMouseDown={(e) => onMouseDown('date', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
               </th>
 
               {/* 주문자 */}
-              <th style={os.thResizable}>
-                <div onMouseDown={(e) => onMouseDown('user', 'left', e)} style={os.resizeHandleLeft} onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
+              <th className="admin-th-resizable">
+                <div onMouseDown={(e) => onMouseDown('user', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
                 주문자
-                <div onMouseDown={(e) => onMouseDown('user', 'right', e)} style={os.resizeHandleRight} onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
+                <div onMouseDown={(e) => onMouseDown('user', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
               </th>
 
               {/* 수취인 주소 */}
-              <th style={os.thResizable}>
-                <div onMouseDown={(e) => onMouseDown('address', 'left', e)} style={os.resizeHandleLeft} onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
+              <th className="admin-th-resizable">
+                <div onMouseDown={(e) => onMouseDown('address', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
                 수취인 주소
-                <div onMouseDown={(e) => onMouseDown('address', 'right', e)} style={os.resizeHandleRight} onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
+                <div onMouseDown={(e) => onMouseDown('address', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
               </th>
-              
+
               {/* 포장 (조건부) */}
               {statusFilter === ORDER_STATUS.ARRIVED && (
-                <th style={{ ...os.thResizable, textAlign: 'center' }}>
-                  <div onMouseDown={(e) => onMouseDown('packing', 'left', e)} style={os.resizeHandleLeft} onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
+                <th className="admin-th-resizable" style={{ textAlign: 'center' }}>
+                  <div onMouseDown={(e) => onMouseDown('packing', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
                   포장
-                  <div onMouseDown={(e) => onMouseDown('packing', 'right', e)} style={os.resizeHandleRight} onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
+                  <div onMouseDown={(e) => onMouseDown('packing', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
                 </th>
               )}
-              
+
               {/* 상품 정보 */}
-              <th style={os.thResizable}>
-                <div onMouseDown={(e) => onMouseDown('product', 'left', e)} style={os.resizeHandleLeft} onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
+              <th className="admin-th-resizable">
+                <div onMouseDown={(e) => onMouseDown('product', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
                 상품 정보
-                <div onMouseDown={(e) => onMouseDown('product', 'right', e)} style={os.resizeHandleRight} onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
+                <div onMouseDown={(e) => onMouseDown('product', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
               </th>
-              
+
               {/* 요청/서비스 */}
-              <th style={os.thResizable}>
-                <div onMouseDown={(e) => onMouseDown('request', 'left', e)} style={os.resizeHandleLeft} onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
+              <th className="admin-th-resizable">
+                <div onMouseDown={(e) => onMouseDown('request', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
                 요청/서비스
-                <div onMouseDown={(e) => onMouseDown('request', 'right', e)} style={os.resizeHandleRight} onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
+                <div onMouseDown={(e) => onMouseDown('request', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
               </th>
-              
+
               {/* 가격 */}
-              <th style={{ ...os.thResizable, textAlign: 'right' }}>
-                <div onMouseDown={(e) => onMouseDown('price', 'left', e)} style={os.resizeHandleLeft} onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
+              <th className="admin-th-resizable" style={{ textAlign: 'right' }}>
+                <div onMouseDown={(e) => onMouseDown('price', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
                 상품가격 (₩)
-                <div onMouseDown={(e) => onMouseDown('price', 'right', e)} style={os.resizeHandleRight} onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
+                <div onMouseDown={(e) => onMouseDown('price', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
               </th>
-              
+
               {/* 🌟 3-2. 경매 상황 탭 전용 헤더 추가 */}
               {statusFilter === ORDER_STATUS.BIDDING && (
-                <th style={{ ...os.thResizable, textAlign: 'center' }}>
-                  <div onMouseDown={(e) => onMouseDown('bidStatus', 'left', e)} style={os.resizeHandleLeft} onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
+                <th className="admin-th-resizable" style={{ textAlign: 'center' }}>
+                  <div onMouseDown={(e) => onMouseDown('bidStatus', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
                   경매 상태
-                  <div onMouseDown={(e) => onMouseDown('bidStatus', 'right', e)} style={os.resizeHandleRight} onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
+                  <div onMouseDown={(e) => onMouseDown('bidStatus', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
                 </th>
               )}
               {/* 진행 상태 */}
-              <th style={{ ...os.thResizable, textAlign: 'center' }}>
-                <div onMouseDown={(e) => onMouseDown('status', 'left', e)} style={os.resizeHandleLeft} onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
+              <th className="admin-th-resizable" style={{ textAlign: 'center' }}>
+                <div onMouseDown={(e) => onMouseDown('status', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
                 <div onClick={() => toggleSort('status')} style={{ cursor: 'pointer' }}>
-                  진행 상태 (변경가능) 
+                  진행 상태 (변경가능)
                   <span style={{ ...os.sortIcon, color: sortConfig.key === 'status' && sortConfig.direction !== 'default' ? colors.accent : colors.emptyText }}>
                     {sortConfig.key === 'status' && sortConfig.direction === 'asc' ? '▲' : sortConfig.key === 'status' && sortConfig.direction === 'desc' ? '▼' : '↕'}
                   </span>
                 </div>
-                <div onMouseDown={(e) => onMouseDown('status', 'right', e)} style={os.resizeHandleRight} onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
+                <div onMouseDown={(e) => onMouseDown('status', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
               </th>
 
               {/* 관리 */}
               <th style={{ padding: '16px 12px', textAlign: 'center', position: 'relative' }}>
-                <div onMouseDown={(e) => onMouseDown('manage', 'left', e)} style={os.resizeHandleLeft} onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
+                <div onMouseDown={(e) => onMouseDown('manage', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
                 관리
-                <div onMouseDown={(e) => onMouseDown('manage', 'right', e)} style={os.resizeHandleRight} onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
+                <div onMouseDown={(e) => onMouseDown('manage', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
               </th>
             </tr>
           </thead>
@@ -525,9 +526,9 @@ export default function OrderManagement() {
               };
 
               return (
-                <tr key={order.id} style={{ ...os.tableBodyRow, backgroundColor: isChanged ? '#f0fdf4' : 'transparent' }}>
-                  <td style={os.td}>
-                    <div style={os.subText}>{order.date}</div>
+                <tr key={order.id} className="admin-table-body-row" style={{ backgroundColor: isChanged ? '#f0fdf4' : 'transparent' }}>
+                  <td className="admin-base-td">
+                    <div className="admin-sub-text">{order.date}</div>
                     <div style={{ fontWeight: '600', color: colors.textMain, marginBottom: '2px' }}>{order.id}</div>
                     {order.bundleId && (
                       <div style={{ fontSize: '11px', color: '#f97316', fontWeight: '700' }}>
@@ -535,8 +536,8 @@ export default function OrderManagement() {
                       </div>
                     )}
                   </td>
-                  <td style={{ ...os.td, fontWeight: '500' }}>{order.user}</td>
-                  <td style={{ ...os.td, fontSize: '13px' }}>
+                  <td className="admin-base-td" style={{ fontWeight: '500' }}>{order.user}</td>
+                  <td className="admin-base-td" style={{ fontSize: '13px' }}>
                     {order.address ? (
                       <>
                         <div style={{ fontWeight: '600', color: colors.textMain, marginBottom: '2px' }}>
@@ -557,7 +558,7 @@ export default function OrderManagement() {
                   </td>
                   
                   {statusFilter === ORDER_STATUS.ARRIVED && (
-                    <td style={{ ...os.td, textAlign: 'center' }}>
+                    <td className="admin-base-td" style={{ textAlign: 'center' }}>
                       <button
                         onClick={async () => {
                           if (confirm('이 주문에 대해 포장 요청을 하시겠습니까?')) {
@@ -585,7 +586,7 @@ export default function OrderManagement() {
                     </td>
                   )}
                   
-                  <td style={{ ...os.td, maxWidth: '300px' }}>
+                  <td className="admin-base-td" style={{ maxWidth: '300px' }}>
                     <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
                       <span style={os.sourceBadge}>{order.source}</span>
                       {order.productUrl && (
@@ -595,17 +596,17 @@ export default function OrderManagement() {
                     <div style={os.productTitle}>{order.product}</div>
                     <div style={{ fontSize: '12px', color: colors.textSub }}>옵션: {order.option}</div>
                   </td>
-                  
-                  <td style={os.td}>
+
+                  <td className="admin-base-td">
                     <div style={{ fontSize: '12px', marginBottom: '4px' }}><span style={{ fontWeight: '600' }}>요청:</span> {order.productRequest}</div>
                     <div style={{ fontSize: '12px', color: '#6366f1' }}><span style={{ fontWeight: '600' }}>서비스:</span> {order.serviceRequest}</div>
                   </td>
-                  
-                  <td style={{ ...os.td, textAlign: 'right', fontWeight: '700', color: colors.textMain }}>₩{order.krw}</td>
-                  
+
+                  <td className="admin-base-td" style={{ textAlign: 'right', fontWeight: '700', color: colors.textMain }}>₩{order.krw}</td>
+
                   {/* 🌟 경매 상황 탭 전용: 경매 상태 (셀렉트 박스 + 취소선 인디케이터) */}
                   {statusFilter === ORDER_STATUS.BIDDING && (
-                    <td style={{ ...os.td, textAlign: 'center' }}>
+                    <td className="admin-base-td" style={{ textAlign: 'center' }}>
                       
                       {/* 🌟 변경 전 경매 상태 (취소선) 표시 */}
                       {(isChanged && originalBidStatus !== order.bidStatus) && (
@@ -620,8 +621,8 @@ export default function OrderManagement() {
                       <select
                         value={order.bidStatus}
                         onChange={(e) => handleBidStatusChange(order.id, e.target.value)}
-                        style={{ 
-                          ...os.statusSelect,
+                        className="admin-status-select"
+                        style={{
                           backgroundColor: order.bidStatus === 'COMPLETED' ? '#d1fae5' : (order.bidStatus === 'ADDITIONAL' ? '#dbeafe' : '#fef3c7'),
                           color: order.bidStatus === 'COMPLETED' ? '#10b981' : (order.bidStatus === 'ADDITIONAL' ? '#3b82f6' : '#d97706'),
                           border: `1px solid ${order.bidStatus === 'COMPLETED' ? '#86efac' : (order.bidStatus === 'ADDITIONAL' ? '#93c5fd' : '#fde68a')}`,
@@ -634,7 +635,7 @@ export default function OrderManagement() {
                     </td>
                   )}
 
-                  <td style={{ ...os.td, textAlign: 'center' }}>
+                  <td className="admin-base-td" style={{ textAlign: 'center' }}>
                     {(isChanged && originalStatus !== order.status) && (
                       <div style={os.statusChangeIndicator}>
                         <span style={{ color: colors.emptyText, textDecoration: 'line-through' }}>
@@ -647,8 +648,8 @@ export default function OrderManagement() {
                     <select
                       value={order.status}
                       onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                      style={{ 
-                        ...os.statusSelect,
+                      className="admin-status-select"
+                      style={{
                         backgroundColor: statusStyle.bg,
                         color: statusStyle.text,
                         border: `1px solid ${statusStyle.border}`,
@@ -683,7 +684,7 @@ export default function OrderManagement() {
                   </td>
                   
                   <td style={{ padding: '16px 12px', textAlign: 'center' }}>
-                    <button style={os.btnDetail}>상세보기</button>
+                    <button className="admin-btn-detail">상세보기</button>
                   </td>
                 </tr>
               );
@@ -729,32 +730,7 @@ const colors = {
   bgHead: '#f8fafc',
 };
 
-const mixins = {
-  flexBetween: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  } as React.CSSProperties,
-};
-
-const baseTh: React.CSSProperties = { padding: '16px 12px' };
-const baseTd: React.CSSProperties = { padding: '16px 12px', borderRight: `1px solid ${colors.border}` };
-
 const os: Record<string, React.CSSProperties> = {
-  // 메인 컨테이너
-  container: {
-    backgroundColor: colors.white,
-    borderRadius: '16px',
-    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-    border: `1px solid ${colors.border}`,
-    padding: '24px',
-  },
-  
-  // 상단 액션바
-  actionBar: {
-    ...mixins.flexBetween,
-    marginBottom: '24px',
-  },
   filterGroup: {
     display: 'flex',
     gap: '12px',
@@ -763,23 +739,8 @@ const os: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: '12px',
   },
-  
+
   // 입력 폼
-  selectInput: {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: `1px solid ${colors.borderInput}`,
-    outline: 'none',
-    backgroundColor: colors.bgHead,
-    color: colors.textDark,
-  },
-  searchInput: {
-    padding: '10px 16px',
-    borderRadius: '8px',
-    border: `1px solid ${colors.borderInput}`,
-    outline: 'none',
-    width: '300px',
-  },
   paymentInput: {
     width: '100px', 
     padding: '4px 8px', 
@@ -800,27 +761,6 @@ const os: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     border: 'none',
   },
-  btnSaveDisabled: {
-    padding: '8px 16px',
-    backgroundColor: colors.borderDark,
-    color: colors.emptyText,
-    borderRadius: '8px',
-    fontWeight: '600',
-    border: 'none',
-    cursor: 'not-allowed',
-    transition: 'all 0.2s',
-  },
-  btnSaveActive: {
-    padding: '8px 16px',
-    backgroundColor: '#10b981',
-    color: colors.white,
-    borderRadius: '8px',
-    fontWeight: '600',
-    border: 'none',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.4)',
-  },
   btnPacking: {
     padding: '6px 12px',
     backgroundColor: colors.accent,
@@ -832,70 +772,14 @@ const os: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     transition: 'background-color 0.2s',
   },
-  btnDetail: {
-    padding: '6px 12px',
-    backgroundColor: colors.white,
-    border: `1px solid ${colors.borderInput}`,
-    borderRadius: '6px',
-    fontSize: '13px',
-    cursor: 'pointer',
-    fontWeight: '500',
-    color: colors.textDark,
-  },
-  
+
   // 테이블
   tableWrapper: {
     width: '100%',
     overflowX: 'auto',
   },
-  table: {
-    borderCollapse: 'collapse',
-    textAlign: 'left',
-    tableLayout: 'fixed',
-    border: `1px solid ${colors.borderDark}`,
-    width: 'max-content',
-  },
-  tableHeadRow: {
-    borderBottom: `2px solid ${colors.borderDark}`,
-    color: colors.textSub,
-    fontSize: '14px',
-    backgroundColor: colors.bgHead,
-  },
-  tableBodyRow: {
-    borderBottom: `1px solid ${colors.border}`,
-    fontSize: '14px',
-    color: colors.textDark,
-    transition: 'background-color 0.3s',
-  },
-  
-  // 테이블 셀 (TH/TD)
-  thResizable: {
-    ...baseTh,
-    userSelect: 'none',
-    position: 'relative',
-    borderRight: `1px solid ${colors.borderDark}`,
-  },
-  td: { ...baseTd },
-  
-  // 리사이즈 핸들러
-  resizeHandleLeft: {
-    position: 'absolute', left: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10
-  },
-  resizeHandleRight: {
-    position: 'absolute', right: 0, top: 0, bottom: 0, width: '8px', cursor: 'col-resize', backgroundColor: 'transparent', zIndex: 10
-  },
-  
+
   // 상태 변경 관련
-  statusSelect: {
-    padding: '6px 12px', 
-    borderRadius: '20px', 
-    fontSize: '13px', 
-    fontWeight: '600',
-    outline: 'none',
-    cursor: 'pointer',
-    textAlign: 'center',
-    appearance: 'auto',
-  },
   statusChangeIndicator: {
     fontSize: '11px',
     color: '#ef4444',
@@ -906,16 +790,11 @@ const os: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     gap: '4px',
   },
-  
+
   // 기타 디테일
   sortIcon: {
     marginLeft: '6px',
     fontSize: '12px',
-  },
-  subText: {
-    color: colors.emptyText,
-    fontSize: '12px',
-    marginBottom: '4px',
   },
   sourceBadge: {
     display: 'inline-block',

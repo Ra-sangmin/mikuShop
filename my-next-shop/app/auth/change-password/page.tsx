@@ -314,6 +314,11 @@ export default function ChangePasswordPage() {
             100% { transform: translateY(0px); }
           }
           .fade-in-up { animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+          /* 🌟 모바일: currentMenu(고정 바)와 카드 사이 여백 제거 */
+          @media (max-width: 768px) {
+            .login-page-wrapper { padding-top: 0 !important; }
+          }
         `}</style>
       </div>
     </GuideLayout>

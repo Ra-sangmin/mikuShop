@@ -1,16 +1,6 @@
 "use client";
 import { useRouter, usePathname } from 'next/navigation';
-
-const menuItems = [
-  { name: '대시보드', path: '/admin/dashboard' },
-  { name: '사용자 관리', path: '/admin/users' },
-  { name: '주문 관리', path: '/admin/orders' },
-  { name: '배송 현황', path: '/admin/delivery' },
-  { name: '정산 관리', path: '/admin/settlement' },
-  { name: '환불 정보', path: '/admin/refund' },
-  { name: '고객 센터', path: '/admin/cs' },
-  { name: '개발자 전용', path: '/admin/developer' },
-];
+import { ADMIN_MENU } from '@/app/admin/adminMenu';
 
 export default function AdminSidebar() {
   const router = useRouter();
@@ -24,7 +14,7 @@ export default function AdminSidebar() {
 
       <nav style={{ flex: 1, padding: '20px 0' }}>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {menuItems.map((item, idx) => {
+          {ADMIN_MENU.map((item, idx) => {
             const isActive = pathname === item.path;
             return (
               <li 

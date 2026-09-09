@@ -1,0 +1,19 @@
+/* ============================================================
+   app/main_shop/components 하위 컴포넌트들이 공통으로 쓰는 스타일입니다.
+   각 컴포넌트를 하나씩 정독하며 globals.css / 서로 간에 실제로 겹치는
+   부분만 찾아 이곳으로 옮겼고, 컴포넌트별 고유 스타일(예: GlobalProductCard의
+   .live-dot, GlobalProductDetailAuction의 .custom-bid-button 등)은 각
+   파일에 그대로 남아 있습니다.
+
+   🌟 @keyframes spin: GlobalCategoryGrid.tsx는
+   "@keyframes spin { to { transform: rotate(360deg); } }"로,
+   GlobalShoppingView.tsx는
+   "@keyframes spin { 0% {rotate(0deg)} 100% {rotate(360deg)} }"로 각자
+   따로 정의하고 있었는데, 문법만 다를 뿐 완전히 동일한 회전 애니메이션이라
+   여기 하나로 합쳤습니다.
+   ============================================================ */
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

@@ -63,6 +63,7 @@ interface GlobalSidebarProps {
   currentPath: { id: number, name: string }[];
   onNavigate: (id: number, name: string, index: number) => void;
   onSearch: (filters: GlobalFilterState) => void;
+  isDetailOpen?: boolean;
   // ✨ 정렬 옵션을 부모로부터 받을 수 있도록 추가
   sortOptions?: { id: string, label: string }[];
 }
@@ -77,12 +78,16 @@ const PLATFORM_THEMES: Record<ShoppingPlatform, { color: string; bg: string; lig
   default: { color: '#6366f1', bg: '#f5f3ff', light: '#f9fafb' }
 };
 
-export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: GlobalSidebarProps) {
+export function GlobalSidebar({ platform = 'mercari', onSearch, isDetailOpen = false, sortOptions }: GlobalSidebarProps) {
     
     const isMobile = useIsMobile(); 
   
     // 🚀 모바일 드로어(Drawer) 상태 관리
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+    useEffect(() => {
+      if (isDetailOpen) setIsDrawerOpen(false);
+    }, [isDetailOpen]);
   
     // 🚀 [핵심] 사이드바 내부에서 관리하는 필터 상태 (Source of Truth)
     const [filters, setFilters] = useState<GlobalFilterState>({
@@ -109,7 +114,14 @@ export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: G
     const touchStartY = useRef(0);
     const touchCurrentX = useRef(0);
     const touchCurrentY = useRef(0);
-  
+
+    // 🚀 [상세 검색 보기 탭] 드래그로 서서히 열기
+    const drawerRef = useRef<HTMLElement>(null);
+    const [isOpenDragging, setIsOpenDragging] = useState(false);
+    const [openDragX, setOpenDragX] = useState(0);
+    // 드래그 후 브라우저가 만들어내는 ghost click이 onClick 토글을 다시 꺼버리는 것을 방지
+    const suppressClickRef = useRef(false);
+
     const [openDropdownLevel, setOpenDropdownLevel] = useState<number | null>(null);
     const categoryAreaRef = useRef<HTMLDivElement>(null);
   
@@ -159,8 +171,39 @@ export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: G
       if (deltaX > 40 && deltaX > deltaY) {
         setIsDrawerOpen(true);
       }
+      // 의미 있는 움직임이 있었다면, 뒤이어 발생하는 ghost click을 무시하도록 표시
+      if (Math.abs(deltaX) > 8 || deltaY > 8) {
+        suppressClickRef.current = true;
+      }
+      setIsOpenDragging(false);
+      setOpenDragX(0);
     };
-  
+
+    // 🚀 탭을 오른쪽으로 드래그하면 패널이 그만큼 딸려나오고, 절반 이상 나오면 완전히 열림
+    const handleOpenDragStart = (e: React.TouchEvent) => {
+      handleTouchStart(e);
+      setIsOpenDragging(true);
+      setOpenDragX(0);
+    };
+
+    const handleOpenDragMove = (e: React.TouchEvent) => {
+      handleTouchMove(e);
+      const deltaX = e.touches[0].clientX - touchStartX.current;
+      const deltaY = Math.abs(e.touches[0].clientY - touchStartY.current);
+      if (deltaY > deltaX) return; // 세로 스크롤 의도로 판단되면 무시
+
+      const drawerWidth = drawerRef.current?.offsetWidth || 300;
+      const clamped = Math.min(Math.max(deltaX, 0), drawerWidth);
+      setOpenDragX(clamped);
+
+      if (clamped >= drawerWidth / 2) {
+        setIsDrawerOpen(true);
+        setIsOpenDragging(false);
+        setOpenDragX(0);
+        suppressClickRef.current = true;
+      }
+    };
+
     const handleTouchEndClose = () => {
       const deltaX = touchStartX.current - touchCurrentX.current;
       const deltaY = Math.abs(touchStartY.current - touchCurrentY.current);
@@ -248,53 +291,80 @@ export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: G
         <div 
           onClick={() => setIsDrawerOpen(false)} 
           style={{ 
-            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', 
+            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
             zIndex: 9998, opacity: isDrawerOpen ? 1 : 0, pointerEvents: isDrawerOpen ? 'auto' : 'none', transition: 'opacity 0.3s ease' 
           }} 
         />
       )}
 
-      {isMobile && !isDrawerOpen && (
-        <div
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEndOpen}
-          onClick={() => setIsDrawerOpen(true)}
-          style={{ 
-            position: 'fixed', left: 0, top: '80px', zIndex: 9998, display: 'flex', alignItems: 'center', cursor: 'pointer' 
-          }}
-        >
-          <div style={{
-            padding: '16px 8px', backgroundColor: 'white', color: '#ff007f', display: 'flex', alignItems: 'center', 
-            justifyContent: 'center', borderTopRightRadius: '16px', borderBottomRightRadius: '16px', 
-            boxShadow: '4px 0 12px rgba(0,0,0,0.15)', border: '1px solid #fce7f3', borderLeft: 'none', marginLeft: '-2px',
-          }}>
-            <span style={{ fontSize: '13px', fontWeight: '900', writingMode: 'vertical-rl', textOrientation: 'upright', letterSpacing: '4px' }}>
-              상세 검색 보기
-            </span>
-          </div>
-        </div>
-      )}
-
       {/* 🚀 사이드바 본체 (왼쪽 스와이프로 닫기 로직 적용) */}
-      <aside 
-        
+      <aside
+        ref={drawerRef}
         onTouchStart={isMobile ? handleTouchStart : undefined}
         onTouchMove={isMobile ? handleTouchMove : undefined}
         onTouchEnd={isMobile ? handleTouchEndClose : undefined}
         style={isMobile ? {
           position: 'fixed', top: 0, left: 0, bottom: 0, width: '85vw', maxWidth: '360px', zIndex: 9999,
-          transform: isDrawerOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+          transform: isDrawerOpen
+            ? 'translateX(0)'
+            : isOpenDragging
+              ? `translateX(calc(-100% + ${openDragX}px))`
+              : 'translateX(-100%)',
+          transition: isOpenDragging ? 'none' : 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
           display: 'flex', flexDirection: 'column', backgroundColor: 'white'
         } : {
           width: '390px', display: 'flex', flexDirection: 'column', gap: '16px'
         }}
       >
-        <div style={{ 
-          backgroundColor: 'white', border: isMobile ? 'none' : '1px solid #f3f4f6', 
-          borderRadius: isMobile ? '0 32px 32px 0' : '32px', 
-          boxShadow: isMobile ? '10px 0 30px rgba(0,0,0,0.2)' : '0 25px 50px -12px rgba(0, 0, 0, 0.1)', 
-          overflow: 'hidden', height: isMobile ? '100%' : 'auto', display: 'flex', flexDirection: 'column'
+        {/* 🚀 상세 검색 보기 ↔ 닫기 토글 탭 (사이드바 자식이라 드래그/오픈에 맞춰 함께 이동) */}
+        {isMobile && (
+          <div
+            onTouchStart={!isDrawerOpen ? handleOpenDragStart : undefined}
+            onTouchMove={!isDrawerOpen ? handleOpenDragMove : undefined}
+            onTouchEnd={!isDrawerOpen ? handleTouchEndOpen : undefined}
+            onClick={() => {
+              if (suppressClickRef.current) {
+                suppressClickRef.current = false;
+                return;
+              }
+              setIsDrawerOpen(!isDrawerOpen);
+            }}
+            style={{
+              position: 'absolute', left: '100%', top: '95px', zIndex: 10000,
+              display: 'flex', alignItems: 'center', cursor: 'pointer'
+            }}
+          >
+            <div style={{
+              padding: '16px 8px',
+              backgroundColor: isDrawerOpen ? '#111827' : 'white',
+              color: isDrawerOpen ? 'white' : '#ff007f',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderTopRightRadius: '16px', borderBottomRightRadius: '16px',
+              boxShadow: isDrawerOpen ? '4px 0 14px rgba(0,0,0,0.35)' : '4px 0 12px rgba(0,0,0,0.15)',
+              border: isDrawerOpen ? '1px solid rgba(255,255,255,0.25)' : '1px solid #fce7f3',
+              borderLeft: 'none', marginLeft: '0px',
+            }}>
+              <span style={{ fontSize: '13px', fontWeight: '900', writingMode: 'vertical-rl', textOrientation: 'upright', letterSpacing: isDrawerOpen ? '2px' : '4px' }}>
+                {isDrawerOpen ? '닫기 ✕' : '상세 검색 보기'}
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div style={{
+          // 🌟 데스크톱에서는 흰 배경/테두리/둥근 모서리를 이 카드가 아니라 바깥쪽
+          // GlobalShoppingView의 fixed/absolute <aside>가 직접 갖도록 옮겼습니다. 그 aside가
+          // 실제 스크롤 컨테이너이자 카드의 시각적 경계 역할을 동시에 하기 때문에, 스크롤 중
+          // sticky로 고정되는 "조건으로 검색하기" 버튼도 항상 그 rounded 경계 안에서만 보이고
+          // (overflow로 완전히 잘려서) 스크롤된 다른 항목이 둥근 모서리 틈으로 비쳐 보이는
+          // 문제가 생기지 않습니다. 이 카드 자체에 배경/테두리/radius를 주면 sticky 버튼이
+          // 카드 실제 하단이 아닌 위치에 떠 있을 때 그 radius가 어긋난 모서리를 만들어버립니다.
+          backgroundColor: isMobile ? 'white' : 'transparent',
+          border: isMobile ? 'none' : 'none',
+          borderRadius: isMobile ? '0 32px 32px 0' : '0',
+          boxShadow: isMobile ? '4px 0 16px rgba(0,0,0,0.25)' : 'none',
+          overflow: isMobile ? 'hidden' : 'visible',
+          height: isMobile ? '100%' : 'auto', display: 'flex', flexDirection: 'column',
         }}>
 
           {/* 🚀 상단 헤더 영역: 제목 및 닫기 버튼 */}
@@ -312,15 +382,24 @@ export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: G
 
           </div>
 
-          <div 
+          <div
             ref={sidebarRef}
+            className="miku-fancy-scrollbar"
             onMouseDown={!isMobile ? onSidebarDragStart : undefined}
             onMouseMove={!isMobile ? onSidebarDragMove : undefined}
             onMouseUp={!isMobile ? onSidebarDragEnd : undefined}
             onMouseLeave={!isMobile ? onSidebarDragEnd : undefined}
             style={{ 
-              display: 'flex', flexDirection: 'column', overflowY: 'auto', 
-              flex: 1, maxHeight: isMobile ? 'none' : '72vh', 
+              display: 'flex', flexDirection: 'column',
+              // 🌟 데스크톱에서는 이 안쪽 박스를 더 이상 자체 스크롤(overflowY:'auto' + maxHeight:'72vh')
+              // 컨테이너로 두지 않습니다. 이 영역이 스크롤 가능한 상태였기 때문에, 사용자가 사이드바
+              // 위에서 마우스 휠을 굴리면 브라우저가 (바깥의 sticky 사이드바 전체를 고정한 채) 이
+              // 안쪽 목록만 슬쩍 스크롤시켜서 "고정은 되어 있는데 스크롤하면 내용이 조금씩 밀린다"는
+              // 현상이 발생했습니다. overflow를 visible로 두면 안쪽 콘텐츠가 그냥 사이드바의 일부로
+              // 펼쳐지고, 스크롤은 오직 바깥 페이지 스크롤(및 그에 따른 position:sticky)만 담당하게
+              // 되어 완전히 고정된 것처럼 보입니다.
+              overflowY: isMobile ? 'auto' : 'visible', 
+              flex: 1, maxHeight: isMobile ? 'none' : 'none', 
               cursor: isSidebarDragging ? 'grabbing' : 'default',
               userSelect: isSidebarDragging ? 'none' : 'auto', scrollBehavior: isSidebarDragging ? 'auto' : 'smooth',
               paddingBottom: '20px' 
@@ -378,7 +457,7 @@ export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: G
                     <div
                       onClick={() => setIsColorOpen(!isColorOpen)}
                       style={{
-                        width: '100%', padding: isMobile ? '10px 14px' : '12px 16px', backgroundColor: '#f9fafb', borderRadius: '16px', fontSize: isMobile ? '12px' : '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', border: isColorOpen ? '1px solid #ff0038' : '1px solid transparent', boxSizing: 'border-box'
+                        width: '100%', padding: isMobile ? '10px 14px' : '6px 16px', backgroundColor: '#f9fafb', borderRadius: '16px', fontSize: isMobile ? '12px' : '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', border: isColorOpen ? '1px solid #ff0038' : '1px solid transparent', boxSizing: 'border-box'
                       }}
                     >
                       <div style={{ width: isMobile ? '16px' : '18px', height: isMobile ? '16px' : '18px', borderRadius: '50%', border: '1px solid #efefef', backgroundColor: COLOR_OPTIONS.find(c => c.name === (filters.colors[0] || '모두'))?.code || 'white' }} />
@@ -390,7 +469,7 @@ export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: G
                       <div 
                         ref={colorListRef}
                         onMouseDown={onDragStart} onMouseMove={onDragMove} onMouseUp={onDragEnd} onMouseLeave={onDragEnd}
-                        style={{ position: 'absolute', top: '55px', left: 0, width: '100%', backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '20px', boxShadow: '0 15px 35px rgba(0,0,0,0.2)', zIndex: 1000, maxHeight: '280px', overflowY: 'auto', padding: '12px 0', cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
+                        style={{ position: 'absolute', top: isMobile ? '55px' : '43px', left: 0, width: '100%', backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '20px', boxShadow: '0 15px 35px rgba(0,0,0,0.2)', zIndex: 1000, maxHeight: '280px', overflowY: 'auto', padding: '12px 0', cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
                       >
                         {COLOR_OPTIONS.map((c) => (
                           <div
@@ -417,7 +496,15 @@ export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: G
             </>)}
           </div>
 
-          <div style={{ padding: isMobile ? '16px' : '24px', borderTop: '1px solid #f9fafb', flexShrink: 0, backgroundColor: 'white' }}>
+          <div style={{
+            padding: isMobile ? '16px' : '24px', borderTop: '1px solid #f9fafb', flexShrink: 0, backgroundColor: 'white',
+            // 🌟 필터 항목이 많아 카드가 길어져도 "조건으로 검색하기" 버튼은 항상 화면에 보이도록
+            // 바깥 스크롤 컨테이너(aside) 하단에 고정합니다. 모서리는 일부러 각지게 둡니다—
+            // 스크롤 중에는 이 버튼이 카드의 실제 하단이 아니라 화면(뷰포트) 하단에 떠 있으므로,
+            // 여기에 radius를 주면 둥근 모서리 틈으로 스크롤된 다른 항목이 비쳐 보입니다.
+            // 실제 카드의 둥근 모서리는 바깥 aside의 overflow 클리핑이 전담합니다.
+            ...(isMobile ? {} : { position: 'sticky' as const, bottom: 0 }),
+          }}>
             <button 
               onClick={() => {
                 // 🚀 [중요] 부모에게 현재 필터 상태를 전송!
@@ -431,43 +518,6 @@ export function GlobalSidebar({ platform = 'mercari',onSearch , sortOptions }: G
           </div>
         </div>
 
-        {/* 🚀 [핵심 수정] 사이드바 우측에 붙어있는 닫기 버튼 */}
-        {isMobile && (
-          <div
-            onClick={() => setIsDrawerOpen(false)}
-            style={{
-              position: 'absolute',
-              left: '100%', // 사이드바 바로 오른쪽에 위치
-              top: '80px',
-              zIndex: 10000,
-              cursor: 'pointer',
-              display: isDrawerOpen ? 'flex' : 'none', // 열렸을 때만 표시
-            }}
-          >
-            <div style={{
-              padding: '16px 12px',
-              backgroundColor: '#111827', // 닫기 버튼은 시인성을 위해 어두운 색 권장
-              color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderTopRightRadius: '16px',
-              borderBottomRightRadius: '16px',
-              boxShadow: '4px 0 12px rgba(0,0,0,0.15)',
-            }}>
-              <span style={{ 
-                fontSize: '13px', 
-                fontWeight: '900', 
-                writingMode: 'vertical-rl', 
-                textOrientation: 'upright', 
-                letterSpacing: '2px' 
-              }}>
-                닫기 ✕
-              </span>
-            </div>
-          </div>
-        )}
-        
       </aside>
     </>
   );
@@ -503,7 +553,7 @@ function CustomInput({ label, value, onChange, placeholder, isMobile }: any) {
       <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#9ca3af', marginBottom: '6px', paddingLeft: '4px', textTransform: 'uppercase' }}>{label}</p>
       <input 
         type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        style={{ width: '100%', padding: isMobile ? '12px 14px' : '14px 16px', backgroundColor: '#f9fafb', border: '1px solid transparent', borderRadius: '16px', outline: 'none', fontSize: isMobile ? '12px' : '13px', boxSizing: 'border-box', transition: 'background-color 0.2s' }}
+        style={{ width: '100%', padding: isMobile ? '12px 14px' : '6px 16px', backgroundColor: '#f9fafb', border: '1px solid transparent', borderRadius: '16px', outline: 'none', fontSize: isMobile ? '12px' : '13px', boxSizing: 'border-box', transition: 'background-color 0.2s' }}
         onFocus={(e) => e.currentTarget.style.backgroundColor = 'white'}
         onBlur={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
       />
@@ -517,7 +567,7 @@ function PriceInput({ value, onChange, placeholder, isMobile }: any) {
       <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#d1d5db', fontWeight: 'bold', fontSize: '12px' }}>¥</span>
       <input 
         type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-        style={{ width: '100%', padding: isMobile ? '12px 12px 12px 28px' : '14px 12px 14px 30px', backgroundColor: '#f9fafb', border: 'none', borderRadius: '16px', outline: 'none', fontSize: isMobile ? '12px' : '13px', boxSizing: 'border-box' }}
+        style={{ width: '100%', padding: isMobile ? '12px 12px 12px 28px' : '6px 12px 6px 30px', backgroundColor: '#f9fafb', border: 'none', borderRadius: '16px', outline: 'none', fontSize: isMobile ? '12px' : '13px', boxSizing: 'border-box' }}
       />
     </div>
   );
@@ -533,7 +583,7 @@ function CapsuleGroup({ options, current, onChange, label, isMobile }: any) {
             key={opt} onClick={() => onChange(opt)}
             style={{
               fontSize: isMobile ? '13px' : '14px', fontWeight: 'bold',
-              padding: isMobile ? '8px 14px' : '10px 18px', borderRadius: '24px', border: 'none', cursor: 'pointer',
+              padding: isMobile ? '8px 14px' : '4px 18px', borderRadius: '24px', border: 'none', cursor: 'pointer',
               backgroundColor: current === opt ? '#ff0038' : '#f9fafb',
               color: current === opt ? 'white' : '#6b7280', transition: 'all 0.2s', transform: 'scale(1)',
             }}
@@ -584,14 +634,14 @@ function SimpleDropdown({ label, options, value, onSelect, placeholder, isMobile
       {label && <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#9ca3af', marginBottom: '6px', paddingLeft: '4px' }}>{label}</p>}
       <div
         onClick={() => setIsOpen(!isOpen)}
-        style={{ width: '100%', padding: isMobile ? '12px 14px' : '14px 16px', backgroundColor: '#f9fafb', borderRadius: '16px', fontSize: isMobile ? '13px' : '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: isOpen ? '1px solid #ff0038' : '1px solid transparent', boxSizing: 'border-box', transition: 'all 0.2s' }}
+        style={{ width: '100%', padding: isMobile ? '12px 14px' : '6px 16px', backgroundColor: '#f9fafb', borderRadius: '16px', fontSize: isMobile ? '13px' : '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: isOpen ? '1px solid #ff0038' : '1px solid transparent', boxSizing: 'border-box', transition: 'all 0.2s' }}
       >
         <span style={{ color: value && value !== '모두' ? '#111827' : '#9ca3af', fontWeight: value && value !== '모두' ? 600 : 400 }}>{value || placeholder}</span>
         <span style={{ color: '#d1d5db', fontSize: '10px' }}>{isOpen ? '▲' : '▼'}</span>
       </div>
       <div
         ref={listRef} onMouseDown={onDragStart} onMouseMove={onDragMove} onMouseUp={onDragEnd} onMouseLeave={onDragEnd}
-        style={{ display: isOpen ? 'block' : 'none', position: 'absolute', top: '75px', left: 0, width: '100%', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '20px', boxShadow: '0 15px 35px rgba(0,0,0,0.15)', zIndex: 110, maxHeight: '250px', overflowY: 'auto', padding: '8px 0', cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
+        style={{ display: isOpen ? 'block' : 'none', position: 'absolute', top: isMobile ? '75px' : '61px', left: 0, width: '100%', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '20px', boxShadow: '0 15px 35px rgba(0,0,0,0.15)', zIndex: 110, maxHeight: '250px', overflowY: 'auto', padding: '8px 0', cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
       >
         {options.map((opt: string) => (
           <div key={opt} onClick={() => { if (!isDragging) { onSelect(opt); setIsOpen(false); } }} style={{ padding: isMobile ? '10px 16px' : '12px 20px', fontSize: isMobile ? '13px' : '14px', cursor: 'pointer', color: value === opt ? '#ff0038' : '#4b5563', fontWeight: value === opt ? 'bold' : 'normal', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -621,14 +671,14 @@ function CategoryDropdown({ label, options, value, onSelect, placeholder, isOpen
       <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#9ca3af', marginBottom: '6px', paddingLeft: '4px' }}>{label}</p>
       <div
         onClick={onToggle} onMouseDown={(e) => e.stopPropagation()}
-        style={{ width: '100%', padding: isMobile ? '12px 14px' : '14px 16px', backgroundColor: '#f9fafb', borderRadius: '16px', fontSize: isMobile ? '12px' : '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: isOpen ? '1px solid #ff0038' : '1px solid transparent', boxSizing: 'border-box', transition: 'all 0.2s' }}
+        style={{ width: '100%', padding: isMobile ? '12px 14px' : '6px 16px', backgroundColor: '#f9fafb', borderRadius: '16px', fontSize: isMobile ? '12px' : '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: isOpen ? '1px solid #ff0038' : '1px solid transparent', boxSizing: 'border-box', transition: 'all 0.2s' }}
       >
         <span style={{ color: value ? '#111827' : '#9ca3af', fontWeight: value ? 600 : 400 }}>{currentLabel}</span>
         <span style={{ color: '#d1d5db', fontSize: '10px' }}>{isOpen ? '▲' : '▼'}</span>
       </div>
       <div
         ref={listRef} onMouseDown={onDragStart} onMouseMove={onDragMove} onMouseUp={onDragEnd} onMouseLeave={onDragEnd}
-        style={{ display: isOpen ? 'block' : 'none', position: 'absolute', top: '75px', left: 0, width: '100%', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '20px', boxShadow: '0 15px 35px rgba(0,0,0,0.15)', zIndex: 110, maxHeight: '250px', overflowY: 'auto', padding: '8px 0', cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
+        style={{ display: isOpen ? 'block' : 'none', position: 'absolute', top: isMobile ? '75px' : '61px', left: 0, width: '100%', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '20px', boxShadow: '0 15px 35px rgba(0,0,0,0.15)', zIndex: 110, maxHeight: '250px', overflowY: 'auto', padding: '8px 0', cursor: isDragging ? 'grabbing' : 'grab', userSelect: 'none' }}
       >
         {options.map((opt: any) => (
           <div key={opt.genreId} onClick={() => { if (!isDragging) onSelect(opt.genreId, opt.genreName); }} style={{ padding: isMobile ? '10px 16px' : '12px 20px', fontSize: '13px', cursor: 'pointer', color: value === opt.genreId.toString() ? '#ff0038' : '#4b5563', fontWeight: value === opt.genreId.toString() ? 'bold' : 'normal', display: 'flex', alignItems: 'center', gap: '8px' }}>

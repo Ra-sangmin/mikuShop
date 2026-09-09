@@ -13,6 +13,7 @@ import { GlobalItem } from "@/app/main_shop/components/GlobalProductCard";
 import { checkMercariCooldown, lastCallTimestamp } from "./mercariApi";
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
 import { getTranslatedText } from '@/lib/search-utils';
+import '@/app/main_shop/platform-pages-common.css';
 
 interface MercariCategory {
   genreId: number; 
@@ -469,9 +470,9 @@ function MercariCategoryContent() {
 export default function MercariCategoryPage() {
   return (
     <Suspense fallback={
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+      <div className="platform-loading-wrap">
         <i className="fa fa-spinner fa-spin fa-2x" style={{ color: '#ff0021' }}></i>
-        <p style={{ marginTop: '15px', color: '#666' }}>메르카리 정보를 불러오는 중입니다...</p>
+        <p className="platform-loading-text">메르카리 정보를 불러오는 중입니다...</p>
       </div>
     }>
       <MercariCategoryContent />

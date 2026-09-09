@@ -150,8 +150,7 @@ export default function HomePage() {
   };
 
   return (
-    <div style={styles.pageWrapper}>
-      <HomeGlobalStyles />
+    <div className="home-page-wrapper" style={styles.pageWrapper}>
 
       {/* 1. 프리미엄 Hero Banner Section */}
       <section 
@@ -219,8 +218,8 @@ export default function HomePage() {
       </section>
 
       {/* 2. Quick Service Icons */}
-      <section className="anim-item delay-1 align-container" style={{ marginTop: '80px', marginBottom: '80px' }}>
-        <h2 className="section-title">자주 사용하는 기능</h2>
+      <section className="quick-service-section anim-item delay-1 align-container" style={{ marginTop: '80px', marginBottom: '80px' }}>
+        <h2 className="home-section-title">자주 사용하는 기능</h2>
         <div className="quick-section">
             <QuickIcon href="/purchase/quote" label="견적문의" />
             <QuickIcon href="/purchase/request" label="구매대행신청" />
@@ -232,9 +231,9 @@ export default function HomePage() {
       </section>
 
       {/* 3. Frequently Visited Sites */}
-      <section className="anim-item delay-2" style={{ borderTop: '1px solid #f1f5f9', padding: '80px 0 100px 0', backgroundColor: '#fff' }}>
+      <section className="frequent-sites-section anim-item delay-2" style={{ borderTop: '1px solid #f1f5f9', padding: '80px 0 100px 0', backgroundColor: '#fff' }}>
         <div className="align-container" style={{ display: 'flex', flexDirection: 'column' }}>
-          <h2 className="section-title">자주 방문하는 사이트</h2>
+          <h2 className="home-section-title">자주 방문하는 사이트</h2>
           <div className="site-card-wrap">
               <SiteCard shopId="mercari" logoSrc="merukari_logo" name="메루카리" desc="일본 최대 중고거래 사이트" />
               <SiteCard shopId="rakuten" logoSrc="rakuten_logo" name="라쿠텐" desc="일본 대표 종합 쇼핑몰" />
@@ -246,8 +245,8 @@ export default function HomePage() {
       </section>
 
       {/* 4. Popular Sites */}
-      <section className="anim-item delay-3" style={styles.popularSection}>
-        <h2 className="section-title">일본 인기 쇼핑몰</h2>
+      <section className="popular-sites-section anim-item delay-3" style={styles.popularSection}>
+        <h2 className="home-section-title">일본 인기 쇼핑몰</h2>
         
         <div className="align-container" style={{ position: 'relative' }}> 
           
@@ -279,7 +278,7 @@ export default function HomePage() {
       </section>
 
       {/* 5. Bottom Info Section */}
-      <section className="anim-item delay-4" style={{ borderTop: '1px solid #f1f5f9', padding: '80px 0', backgroundColor: '#fff' }}>
+      <section className="bottom-info-section anim-item delay-4" style={{ borderTop: '1px solid #f1f5f9', padding: '80px 0', backgroundColor: '#fff' }}>
         <div className="align-container bottom-info-grid">
             <div className="bottom-info-box" style={styles.infoBox}>
                 <div style={styles.infoHeaderWrap}><i className="fa fa-headset" style={styles.infoIconCS}></i><span style={styles.infoTitle}>CUSTOMER CENTER</span></div>
@@ -325,7 +324,7 @@ function QuickIcon({ href, label }: any) {
     return (
         <Link href={href} className="quick-link" style={styles.quickLink} onDragStart={(e) => e.preventDefault()}>
             <div className="quick-icon-wrap">
-                <div className="icon-box quick-box"><img src={getImageSrc()} alt={label} style={styles.quickImg} draggable="false" /></div>
+                <div className="quick-icon-box quick-box"><img src={getImageSrc()} alt={label} style={styles.quickImg} draggable="false" /></div>
                 <span className="quick-label">{label}</span>
             </div>
         </Link>
@@ -377,315 +376,6 @@ function NoticeItem({ title, date }: any) {
             <span style={{ color: isHovered ? '#f97316' : '#cbd5e1', fontSize: '13px', fontWeight: '600', flexShrink: 0, transition: 'color 0.2s' }}>{date}</span>
         </div>
     );
-}
-
-// ==========================================
-// 🌟 전역 스타일 전용 컴포넌트 (프리미엄 전체 통합본)
-// ==========================================
-function HomeGlobalStyles() {
-  return (
-    <style jsx global>{`
-      /* -------------------------------------
-       * 1. 애니메이션 키프레임 
-       * ------------------------------------- */
-      @keyframes fadeInUp { 0% { opacity: 0; transform: translateY(40px); } 100% { opacity: 1; transform: translateY(0); } }
-      @keyframes pulseSoft { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
-      @keyframes floatPremium { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-12px) scale(1.01); } }
-      @keyframes pulseAura { 0% { transform: scale(0.9); opacity: 0.4; } 100% { transform: scale(1.1); opacity: 0.7; } }
-
-      /* 공통 애니메이션 클래스 */
-      .banner-text-anim { animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-
-      /* -------------------------------------
-       * 2. 섹션 공통 스타일 
-       * ------------------------------------- */
-      .section-title { font-family: 'Jua', sans-serif; font-size: 40px; color: #1e293b; text-align: center; margin-bottom: 40px; letter-spacing: -1px; }
-      .align-container { max-width: 1280px; width: 100%; margin: 0 auto; padding: 0 20px; }
-
-      /* -------------------------------------
-       * 3. 🌟 최고급 프리미엄 메인 배너 
-       * ------------------------------------- */
-      .hero-banner-wrap { height: 416px; position: relative; }
-      .banner-inner { display: flex; align-items: center; justify-content: space-between; height: 100%; position: relative; z-index: 2; width: 100%; }
-      
-      .bg-blur-circle { position: absolute; width: 600px; height: 600px; right: -10%; top: -20%; border-radius: 50%; filter: blur(80px); opacity: 0.4; z-index: 0; pointer-events: none; }
-
-      /* 🌟 강제 줄바꿈 방지 추가 */
-      .premium-hero-title { 
-        font-family: 'Jua', sans-serif; 
-        font-size: 58px; 
-        color: #1e293b; 
-        line-height: 1.25; 
-        margin-top: 25px; 
-        margin-bottom: 0; 
-        letter-spacing: -1.5px; 
-        text-shadow: 0 15px 30px rgba(0,0,0,0.04); 
-        white-space: nowrap; 
-      }
-
-      /* 🌟 white-space: nowrap 추가하여 줄바꿈 방지 */
-      .premium-badge { 
-        display: inline-flex; 
-        align-items: center; 
-        gap: 8px; 
-        padding: 8px 22px; 
-        background: rgba(255, 255, 255, 0.6); 
-        backdrop-filter: blur(10px); 
-        -webkit-backdrop-filter: blur(10px); 
-        border: 1px solid rgba(255, 255, 255, 0.9); 
-        box-shadow: 0 8px 20px rgba(0,0,0,0.03), inset 0 0 0 1px rgba(255,255,255,0.5); 
-        border-radius: 50px; 
-        font-weight: 800; 
-        font-size: 16px; 
-        color: #d27377; 
-        white-space: nowrap; 
-        flex-shrink: 0;
-      }
-      .badge-dot { width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 8px #d27377; }
-
-      .premium-image-area { position: relative; display: flex; align-items: center; justify-content: center; }
-      .image-aura { position: absolute; width: 280px; height: 280px; border-radius: 50%; filter: blur(50px); opacity: 0.6; z-index: 1; animation: pulseAura 4s ease-in-out infinite alternate; }
-      .premium-floating-img { 
-        height: 380px; 
-        width: auto;             
-        object-fit: contain;     
-        flex-shrink: 0;          
-        position: relative; 
-        z-index: 2; 
-        filter: drop-shadow(0 30px 40px rgba(0,0,0,0.15)); 
-        animation: floatPremium 4s ease-in-out infinite; 
-      }
-
-      .align-container.banner-inner {
-        display: flex;
-        justify-content: space-between; 
-        align-items: center;
-        width: 100%;             
-        max-width: 1200px;       
-        margin: 0 auto;
-        padding: 0 40px;         
-        box-sizing: border-box;
-      }
-
-      .premium-indicator-container {
-        position: absolute;
-        bottom: 25px; 
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 10;
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(8px);
-        padding: 3px 12px; 
-        border-radius: 30px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-      }
-      
-      .premium-indicator-container:hover {
-        background: rgba(255, 255, 255, 0.2);
-      }
-
-      .indicator-track {
-        position: relative;
-        width: 210px; 
-        height: 2px; 
-        display: flex;
-        align-items: center;
-      }
-
-      .track-segment {
-        flex: 1;
-        height: 100%;
-        border-right: 1px solid rgba(0, 0, 0, 0.03);
-      }
-      .track-segment:last-child { border-right: none; }
-
-      .sliding-active-bar {
-        position: absolute;
-        top: -0.5px;
-        height: 3px;
-        background: rgba(210, 115, 119, 0.45); 
-        border-radius: 10px;
-        transition: all 0.7s cubic-bezier(0.65, 0, 0.35, 1);
-        box-shadow: 0 0 8px rgba(210, 115, 119, 0.2);
-      }
-
-      .banner-item {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 40px;
-      }
-      .banner-text-area {
-        margin-left: 40px;
-      }
-      .banner-image-area {
-        margin-right: 40px; 
-      }
-
-      /* -------------------------------------
-       * 4. 퀵 아이콘 섹션 
-       * ------------------------------------- */
-      .quick-section { display: flex; justify-content: space-between; flex-wrap: wrap; margin-top: 60px; margin-bottom: 60px; }
-      .quick-link { display: block; text-decoration: none; width: 180px; }
-      .quick-icon-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; cursor: pointer; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-      .quick-box { width: 180px; height: 180px; border-radius: 40px; background-color: #fff; border: 1px solid #f1f5f9; box-shadow: 0 10px 25px rgba(0,0,0,0.03); display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; overflow: hidden; padding: 15px; }
-      .quick-label { font-size: 20px; font-weight: 900; color: #1e293b; letter-spacing: -0.5px; }
-
-      @media (hover: hover) {
-        .quick-icon-wrap:hover { transform: translateY(-10px); }
-        .quick-icon-wrap:hover .icon-box { box-shadow: 0 15px 30px rgba(210, 115, 119, 0.15) !important; border-color: #d27377 !important; }
-        .quick-icon-wrap:hover .icon-box img { animation: pulseSoft 1s infinite; }
-      }
-
-      /* -------------------------------------
-       * 5. 사이트 카드 섹션 
-       * ------------------------------------- */
-      .site-card-wrap { 
-        display: flex; 
-        justify-content: center; 
-        gap: 20px;              
-        flex-wrap: wrap; 
-        width: 100%; 
-      }
-      .site-card-link { display: block; text-decoration: none; width: 220px; flex-shrink: 1;}
-      .site-card-box { width: 100%; height: 100%; padding: 40px 20px; background-color: #fff; border-radius: 20px; border: 1px solid #f1f5f9; text-align: center; cursor: pointer; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; align-items: center; justify-content: flex-start; box-shadow: 0 10px 20px rgba(0,0,0,0.02); }
-      .site-logo-wrap { width: 100%; height: 128px; margin-bottom: 24px; display: flex; align-items: center; justify-content: center; }
-
-      @media (hover: hover) { .site-card-box:hover { transform: translateY(-12px); box-shadow: 0 25px 40px rgba(0, 0, 0, 0.08); border-color: #cbd5e1; } }
-
-      /* -------------------------------------
-       * 6. 인기 쇼핑몰 (소셜 스크롤 마스크 유지) 
-       * ------------------------------------- */
-      .social-wrap { display: flex; gap: 50px; overflow-x: auto; width: 100%; scrollbar-width: none; transition: mask-image 0.3s ease; padding: 40px 0; user-select: none; touch-action: pan-y; }
-      .social-wrap.is-start { mask-image: linear-gradient(to right, black 90%, transparent); -webkit-mask-image: linear-gradient(to right, black 90%, transparent); }
-      .social-wrap.is-end { mask-image: linear-gradient(to right, transparent, black 10%); -webkit-mask-image: linear-gradient(to right, transparent, black 10%); }
-      .social-wrap::-webkit-scrollbar { display: none; }
-      .social-link { display: block; text-decoration: none; flex-shrink: 0; }
-      .social-circle { width: 180px; height: 180px; border-radius: 40px; background-color: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 15px; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
-
-      .scroll-arrow-btn {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 45px;
-        height: 45px;
-        background: rgba(255, 255, 255, 0.8);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(210, 115, 119, 0.2);
-        border-radius: 50%;
-        color: #d27377;
-        font-size: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        z-index: 10;
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      }
-
-      .scroll-arrow-btn:hover {
-        background: #d27377;
-        color: #fff;
-        transform: translateY(-50%) scale(1.1);
-        box-shadow: 0 6px 20px rgba(210, 115, 119, 0.3);
-      }
-
-      .scroll-arrow-btn.left { left: -60px; }
-      .scroll-arrow-btn.right { right: -60px; }
-
-      .social-wrap.is-start ~ .scroll-arrow-btn.left { opacity: 0; visibility: hidden; pointer-events: none; }
-      .social-wrap.is-end ~ .scroll-arrow-btn.right { opacity: 0; visibility: hidden; pointer-events: none; }
-
-      /* -------------------------------------
-       * 7. 하단 3단 정보 섹션 
-       * ------------------------------------- */
-      .bottom-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; align-items: stretch; margin-top: 80px; margin-bottom: 80px; width: 100%; }
-
-      .is-start .arrow-left { display: none; }
-      .is-end .arrow-right { display: none; }
-
-      .scroll-container { transition: mask-image 0.2s ease; -webkit-mask-image: none; }
-      .mask-on-left { -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%); }
-      .mask-on-right { -webkit-mask-image: linear-gradient(to left, transparent 0%, black 10%); }
-      .mask-on-left.mask-on-right { -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%); }
-
-      @media (max-width: 1400px) {
-        .scroll-arrow-btn.left { left: -20px; }
-        .scroll-arrow-btn.right { right: -20px; }
-        .scroll-arrow-btn { background: rgba(255, 255, 255, 0.9); }
-      }
-        
-      /* -------------------------------------
-       * 📱 8. 모바일 대응 (반응형 최적화) 
-       * ------------------------------------- */
-      @media (max-width: 768px) {
-        .section-title { font-size: 24px; margin-bottom: 25px; }
-        
-        /* 배너 반응형 */
-        .hero-banner-wrap { height: 360px; } 
-        .premium-image-area {
-          transform: translateX(10px); 
-          justify-content: center;
-        }
-        
-        /* 🌟 제목 강제 줄바꿈 완전 방지 및 폰트 사이즈 살짝 조정 */
-        .premium-hero-title { 
-          font-size: 28px; 
-          margin-top: 15px; 
-          white-space: nowrap; 
-          word-break: keep-all; 
-        } 
-        
-        .premium-badge { font-size: 13px; padding: 6px 16px; white-space: nowrap; flex-shrink: 0; } 
-        
-        .premium-floating-img { height: 220px; }
-        .bg-blur-circle { width: 300px; height: 300px; }
-        .image-aura { width: 150px; height: 150px; }
-        .line-dot { width: 20px; }
-        .premium-indicator-container { 
-          bottom: 20px;
-          padding: 2px 8px;
-        }
-        .indicator-track { 
-          width: 135px; 
-          height: 1.5px; 
-        }
-        .sliding-active-bar { 
-          height: 2.5px; 
-          top: -0.5px;
-        }
-
-        /* 아이콘 그리드 반응형 */
-        .quick-section { justify-content: center; gap: 15px; margin: 30px auto; } 
-        .quick-link { width: calc(33.333% - 15px); } 
-        .quick-icon-wrap { width: 100%; gap: 10px; } 
-        .quick-box { width: 100%; height: 90px; border-radius: 20px; padding: 10px; } 
-        .quick-label { font-size: 13px; text-align: center; display: block; margin-top: 8px; }
-        
-        /* 사이트 카드 반응형 (모바일 2열 최적화) */
-        .site-card-wrap { justify-content: space-between; gap: 12px; padding: 0 10px; } 
-        .site-card-link { width: calc(50% - 6px); } 
-        .site-card-box { padding: 20px 10px; border-radius: 16px; } 
-        .site-logo-wrap { height: 60px; margin-bottom: 12px; }
-        
-        .site-card-box h3 { font-size: 15px !important; }
-        .site-card-box p { font-size: 12px !important; letter-spacing: -0.5px; }
-        
-        .scroll-arrow-btn { display: none; }
-
-        /* 스크롤 섹션 반응형 */
-        .social-wrap { gap: 15px; padding: 10px 0 30px 0; } 
-        .social-link { width: auto; display: block; } 
-        .social-circle { width: 110px !important; height: 90px !important; border-radius: 20px !important; padding: 10px !important; }
-        
-        /* 정보 박스 반응형 */
-        .bottom-info-grid { grid-template-columns: 1fr; gap: 20px; margin: 40px auto; } 
-        .bottom-info-box { padding: 30px 20px !important; }
-      }
-    `}</style>
-  );
 }
 
 // ==========================================

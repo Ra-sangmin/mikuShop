@@ -1,0 +1,198 @@
+/* ============================================================
+   app/admin 하위 CRUD 페이지들(cs, dashboard, delivery, orders, refund,
+   settlement, users, developer)이 각자 로컬 style 객체(ds/os/mrs/ss/us/css/devs)에
+   똑같이 반복해서 정의하고 있던 스타일을 정독 후 하나로 추출했습니다.
+   모든 파일의 colors 값(#0f172a, #64748b, #334155, #f1f5f9, #e2e8f0, #cbd5e1,
+   #3b82f6, #94a3b8, #f8fafc 등)이 동일한 것을 확인했기 때문에 안전하게 통일했습니다.
+   각 파일에만 있는 고유 뱃지 색상(예: refund의 chargeBg/refundBg)은 그대로
+   해당 파일의 로컬 style 객체에 남아 있습니다.
+   값이 미묘하게 다른 경우(예: refund/users의 td에는 border-right가 없음,
+   refund의 emptyTd padding이 40px, dashboard의 tableHeadRow에 배경색이 없음)는
+   시각적 변경을 피하기 위해 공용 클래스로 통일하지 않고 로컬 스타일로 남겨뒀습니다.
+   login/page.tsx, layout.tsx, AdminSidebar.tsx는 완전히 다른 디자인(로그인 화면,
+   다크 사이드바/헤더)이라 겹치는 스타일이 없어 이 파일을 참조하지 않습니다.
+   ============================================================ */
+
+.admin-flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-title-font {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.admin-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 20px 0;
+}
+
+.admin-stat-title {
+  color: #64748b;
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.admin-stat-count {
+  color: #0f172a;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+/* 카드형 컨테이너 (대시보드/목록 페이지 공통 래퍼) */
+.admin-container {
+  background-color: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  border: 1px solid #f1f5f9;
+  padding: 24px;
+}
+
+.admin-action-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.admin-select-input,
+.admin-search-input {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  outline: none;
+}
+.admin-select-input {
+  background-color: #f8fafc;
+  color: #334155;
+}
+.admin-search-input {
+  width: 300px;
+}
+
+.admin-btn-save-disabled {
+  padding: 8px 16px;
+  background-color: #e2e8f0;
+  color: #94a3b8;
+  border-radius: 8px;
+  font-weight: 600;
+  border: none;
+  cursor: not-allowed;
+  transition: all 0.2s;
+}
+
+.admin-btn-save-active {
+  padding: 8px 16px;
+  background-color: #10b981;
+  color: #fff;
+  border-radius: 8px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.4);
+}
+
+.admin-btn-detail {
+  padding: 6px 12px;
+  background-color: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+  color: #334155;
+}
+
+/* 단순 테이블 (cs/dashboard/refund/users) */
+.admin-table-simple {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+/* 열 리사이즈가 가능한 테이블 (delivery/orders/settlement) */
+.admin-table-resizable {
+  border-collapse: collapse;
+  text-align: left;
+  table-layout: fixed;
+  border: 1px solid #e2e8f0;
+  width: max-content;
+}
+
+.admin-table-head-row {
+  border-bottom: 2px solid #e2e8f0;
+  color: #64748b;
+  font-size: 14px;
+  background-color: #f8fafc;
+}
+
+.admin-table-body-row {
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+  color: #334155;
+  transition: background-color 0.3s;
+}
+
+/* 리사이즈 테이블의 th/td 기본 padding */
+.admin-base-th {
+  padding: 16px 12px;
+}
+.admin-base-td {
+  padding: 16px 12px;
+  border-right: 1px solid #f1f5f9;
+}
+.admin-th-resizable {
+  padding: 16px 12px;
+  user-select: none;
+  position: relative;
+  border-right: 1px solid #e2e8f0;
+}
+
+.admin-resize-handle-left {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  background-color: transparent;
+  z-index: 10;
+}
+.admin-resize-handle-right {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  background-color: transparent;
+  z-index: 10;
+}
+
+.admin-status-select {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  text-align: center;
+  appearance: auto;
+}
+
+.admin-sub-text {
+  color: #94a3b8;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.admin-empty-td {
+  padding: 30px;
+  text-align: center;
+  color: #94a3b8;
+}

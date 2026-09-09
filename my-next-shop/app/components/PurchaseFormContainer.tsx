@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 // 🌟 MikuAlertContext 임포트 경로 확인
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
 import { ORDER_TYPE, OrderType, ORDER_STATUS } from '@/src/types/order';
+import { Camera, PackageCheck, ImagePlus } from 'lucide-react';
+import './purchase-form-container.css';
 
 // 상품 1개의 초기 데이터 구조 정의
 type ProductForm = {
@@ -263,32 +265,6 @@ export default function PurchaseFormContainer({ type }: Props) {
 
   return (
     <>
-      <style>{`
-        .premium-container { animation: fadeIn 0.6s ease-out; }
-        .premium-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04); border: 1px solid #f0f0f0; overflow: hidden; margin-bottom: 24px; }
-        .premium-input { width: 100%; padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; outline: none; transition: all 0.2s ease; background: #f9fafb; box-sizing: border-box; }
-        .premium-input:focus { background: #fff; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); }
-        .premium-btn { padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; border: none; }
-        .btn-dark { background: #1f2937; color: #fff; }
-        .btn-primary { background: #6366f1; color: #fff; width: 100%; max-width: 300px; }
-        .service-box { border: 1px solid #e5e7eb; padding: 14px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: all 0.2s ease; background-color: #fff; }
-        .service-box:hover { border-color: #a5b4fc; background-color: #f8fafc; }
-        .service-box.active { border-color: #6366f1; background-color: #eef2ff; }
-        .custom-checkbox { width: 20px; height: 20px; border: 2px solid #d1d5db; border-radius: 5px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s ease; }
-        .service-box.active .custom-checkbox { background-color: #6366f1; border-color: #6366f1; }
-        @media (max-width: 768px) {
-          .premium-container { padding: 15px 10px !important; }
-          .product-card-inner { flex-direction: column !important; gap: 20px !important; padding: 20px !important; }
-          .input-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
-          .input-grid > div { grid-column: span 1 !important; }
-          .service-grid { grid-template-columns: 1fr !important; }
-          .total-card { flex-direction: column !important; padding: 24px 15px !important; gap: 15px !important; }
-          .total-divider { display: none; }
-          .final-summary { width: 100% !important; }
-        }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-      `}</style>
-
       <div className="premium-container" style={{ maxWidth: '900px', margin: '0 auto', padding: '30px 20px', fontFamily: '"Noto Sans KR", sans-serif' }}>
         
         <div className="premium-card" style={{ background: '#eff6ff', borderColor: '#bfdbfe' }}>
@@ -327,7 +303,10 @@ export default function PurchaseFormContainer({ type }: Props) {
                   {product.image ? (
                     <img src={product.image} alt="product" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                   ) : (
-                    <span style={{ fontSize: '12px', color: '#9ca3af' }}>📸 이미지 추가</span>
+                    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#9ca3af' }}>
+                      <ImagePlus size={20} strokeWidth={1.75} />
+                      이미지 추가
+                    </span>
                   )}
                 </div>
                 <input type="file" accept="image/*" style={{ display: 'none' }} ref={el => { fileInputRefs.current[index] = el }} onChange={(e) => {
@@ -382,8 +361,9 @@ export default function PurchaseFormContainer({ type }: Props) {
                       {product.photoService === 'apply' && <span style={{ color: '#fff', fontSize: '12px' }}>✓</span>}
                     </div>
                     <div>
-                      <div style={{ fontSize: '13px', fontWeight: '700', color: product.photoService === 'apply' ? '#4338ca' : '#374151' }}>
-                        📷 사진 검수
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '700', color: product.photoService === 'apply' ? '#4338ca' : '#374151' }}>
+                        <Camera size={14} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                        사진 검수
                       </div>
                       <div style={{ fontSize: '11px', color: '#6b7280' }}>현지 도착 후 촬영</div>
                     </div>
@@ -397,8 +377,9 @@ export default function PurchaseFormContainer({ type }: Props) {
                       {product.packingService === 'apply' && <span style={{ color: '#fff', fontSize: '12px' }}>✓</span>}
                     </div>
                     <div>
-                      <div style={{ fontSize: '13px', fontWeight: '700', color: product.packingService === 'apply' ? '#4338ca' : '#374151' }}>
-                        📦 포장 보완
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '700', color: product.packingService === 'apply' ? '#4338ca' : '#374151' }}>
+                        <PackageCheck size={14} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                        포장 보완
                       </div>
                       <div style={{ fontSize: '11px', color: '#6b7280' }}>안전한 재포장</div>
                     </div>
@@ -424,36 +405,36 @@ export default function PurchaseFormContainer({ type }: Props) {
             gap: '15px'
           }}>
             {/* 1. 총 상품 금액 */}
-            <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
+            <div className="total-item" style={{ textAlign: 'center', flex: '1 1 100px' }}>
               <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>총 상품 금액</p>
               <span style={{ fontSize: '18px', fontWeight: '800' }}><span translate="no">¥{totalProductPrice.toLocaleString()}</span></span>
             </div>
 
-            <div style={{ fontSize: '18px', color: '#cbd5e1' }}>+</div>
+            <div className="total-operator" style={{ fontSize: '18px', color: '#cbd5e1' }}>+</div>
 
             {/* 2. 일본내 배송료 */}
-            <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
+            <div className="total-item" style={{ textAlign: 'center', flex: '1 1 100px' }}>
               <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>일본내 배송료</p>
               <span style={{ fontSize: '18px', fontWeight: '800' }}><span translate="no">¥{totalDomesticShipping.toLocaleString()}</span></span>
             </div>
 
-            <div style={{ fontSize: '18px', color: '#cbd5e1' }}>+</div>
+            <div className="total-operator" style={{ fontSize: '18px', color: '#cbd5e1' }}>+</div>
 
             {/* 3. 송금 수수료 */}
-            <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
+            <div className="total-item" style={{ textAlign: 'center', flex: '1 1 100px' }}>
               <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>송금 수수료</p>
               <span style={{ fontSize: '18px', fontWeight: '800' }}><span translate="no">¥{totalTransferFee.toLocaleString()}</span></span>
             </div>
 
-            <div style={{ fontSize: '18px', color: '#cbd5e1' }}>+</div>
+            <div className="total-operator" style={{ fontSize: '18px', color: '#cbd5e1' }}>+</div>
 
             {/* 4. 대행 수수료 */}
-            <div style={{ textAlign: 'center', flex: '1 1 100px' }}>
+            <div className="total-item" style={{ textAlign: 'center', flex: '1 1 100px' }}>
               <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>대행 수수료</p>
               <span style={{ fontSize: '18px', fontWeight: '800' }}><span translate="no">¥{totalAgencyFee.toLocaleString()}</span></span>
             </div>
 
-            <div style={{ fontSize: '18px', color: '#cbd5e1' }}>=</div>
+            <div className="total-operator" style={{ fontSize: '18px', color: '#cbd5e1' }}>=</div>
 
             {/* 🌟 5. 최종 결과 박스 (정렬 보정) */}
             <div className="final-summary" style={{ 

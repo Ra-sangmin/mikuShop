@@ -16,16 +16,27 @@ export const ExchangeRateProvider = ({ children }: { children: React.ReactNode }
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // 🌟 예전엔 open.er-api.com(외부 무료 환율 API)을 직접 불러 썼는데, 그 값이
+    // app/test-estimate 페이지 및 app/api/estimate가 실제로 쓰는 네이버 금융
+    // 스크래핑 값(더 정확하다고 확인됨)과 달랐습니다. 사이트 전체가 같은 환율을
+    // 보도록 /api/estimate를 그대로 재사용합니다(계산용 라우트지만 salePrice/
+    // quantityCount를 0으로 보내면 순수 환율(data.exchangeRate)만 받아올 수 있음).
     async function fetchExchangeRate() {
       try {
         setLoading(true);
-        const res = await fetch('https://open.er-api.com/v6/latest/JPY');
+        const res = await fetch('/api/estimate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ salePrice: 0, quantityCount: 0 }),
+        });
         const data = await res.json();
-        
-        if (data && data.rates && data.rates.KRW) {
-          const rate = data.rates.KRW;
+
+        if (data && data.success && typeof data.data?.exchangeRate === 'number') {
+          const rate = data.data.exchangeRate;
           setExchangeRate(rate);
           console.log("🔥 [Global Context] Exchange Rate Sync Success! 1 JPY =", rate, "KRW");
+        } else {
+          throw new Error('invalid response');
         }
       } catch (err) {
         console.error("환율을 가져오는 데 실패했습니다.", err);

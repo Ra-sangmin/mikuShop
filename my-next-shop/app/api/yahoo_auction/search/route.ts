@@ -19,6 +19,12 @@ interface AuctionItem {
   timeLeft?: string;
   postage?: string;
   platform?: string;
+  rawStatus?: string;
+}
+
+function isAuctionClosed(item: Partial<AuctionItem>) {
+  const value = `${item.status || ''} ${item.rawStatus || ''} ${item.timeLeft || ''} ${item.name || ''}`;
+  return /終了|落札|売り切れ|SOLD|sold|closed|終了しました|取引終了/i.test(value);
 }
 
 if (!puppeteer.plugins || puppeteer.plugins.length === 0) {
@@ -287,6 +293,9 @@ async function extractItems(page: any, limit: number = 150): Promise<any[]> {
       const bidCount = el.querySelector('.Product__bid')?.textContent?.trim() || '0';
       const timeLeft = el.querySelector('.Product__time')?.textContent?.trim() || '';
       const postage = el.querySelector('.Product__postage')?.textContent?.trim() || '';
+      const productText = el.textContent?.trim() || '';
+      const productMarkup = el.innerHTML || '';
+      const hasClosedMarker = /終了|落札|売り切れ|SOLD|sold|closed|終了しました|取引終了/i.test(`${productText} ${productMarkup}`);
 
       return {
         id,
@@ -298,7 +307,7 @@ async function extractItems(page: any, limit: number = 150): Promise<any[]> {
         postage,
         url,
         platform: 'yahoo_auction',
-        status: timeLeft.includes('終了') ? 'sold_out' : 'on_sale'
+        status: timeLeft.includes('終了') || hasClosedMarker ? 'sold_out' : 'on_sale'
       };
     }).filter(item => item !== null && item.id !== '');
   }, limit).catch(() => []); // 🌟 evaluate의 두 번째 인자로 limit을 넘겨주어야 브라우저 안에서 인식합니다.
@@ -310,7 +319,21 @@ async function processAndSend(
   controller: ReadableStreamDefaultController,
   encoder: TextEncoder
   ) {
-    const filtered = newRawItems.filter(item => item.id && item.price > 0 && !sentItems.has(item.id));
+    const isEnded = (timeLeft?: string) => {
+      const normalized = (timeLeft || '').trim();
+      return normalized === '終了' || normalized === '종료' ||
+        normalized.includes('終了') || normalized.includes('종료') ||
+        /남은 시간\s*0/.test(normalized);
+    };
+
+    const filtered = newRawItems.filter(item =>
+      item.id &&
+      item.price > 0 &&
+      item.status === 'on_sale' &&
+        !isAuctionClosed(item) &&
+      !isEnded(item.timeLeft) &&
+      !sentItems.has(item.id)
+    );
     if (filtered.length === 0) return 0;
 
     const chunkSize = CHUNK_SIZE;
@@ -413,6 +436,7 @@ function attachApiListener(params: {
             thumbnail: item.thumbnails?.[0] || '',
             price: parseInt(item.price, 10),
             status: (item.status === 'on_sale' || item.status === 'trading') ? 'on_sale' : 'sold_out',
+            rawStatus: item.status,
             url: `https://jp.mercari.com/item/${item.id}`
           }));
 

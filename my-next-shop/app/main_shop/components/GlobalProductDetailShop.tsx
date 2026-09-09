@@ -2,8 +2,8 @@
 
 import { useState , useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
-import { FEE_POLICY } from "@/src/constants/feePolicy"; 
+import { useMikuAlert } from '@/app/context/MikuAlertContext';
+import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 import GlobalProductDetailBase from "./GlobalProductDetailBase";
 import { GlobalProduct } from "./GlobalProductDetail";
 import { getDetailStyles, DetailTheme } from "./GlobalProductDetail.styles";
@@ -15,8 +15,9 @@ interface Props {
 
 export default function GlobalProductDetailShop({ product, onClose }: Props) {
   const router = useRouter();
-  const { showAlert, showConfirm } = useMikuAlert(); 
-  const exchangeRate = FEE_POLICY.EXCHANGE_RATE || 9.5;
+  const { showAlert, showConfirm } = useMikuAlert();
+  // 🌟 고정값(FEE_POLICY.EXCHANGE_RATE=9.5) 대신 /api/estimate의 실제 환율을 참조합니다.
+  const { exchangeRate } = useExchangeRate();
   
   const [quantity, setQuantity] = useState(1);
   const [optionMemo, setOptionMemo] = useState("");

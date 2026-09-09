@@ -10,6 +10,7 @@ import { GlobalProduct } from "@/app/main_shop/components/GlobalProductDetail";
 
 // --- 🛠️ 유틸리티 ---
 import { getTranslatedText } from '@/lib/search-utils';
+import '@/app/main_shop/platform-pages-common.css';
 
 interface RakutenCategory {
   genreId: number; 
@@ -61,7 +62,7 @@ function RakutenContent() {
     };
 
     return {
-      id: item.itemId,
+      id: item.itemCode,
       platform: 'rakuten',
       name: item.itemName,
       price: item.itemPrice,
@@ -244,9 +245,9 @@ function RakutenContent() {
 export default function RakutenPage() {
   return (
     <Suspense fallback={
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+      <div className="platform-loading-wrap">
         <i className="fa fa-spinner fa-spin fa-2x" style={{ color: '#bf0000' }}></i>
-        <p style={{ marginTop: '15px', color: '#666' }}>라쿠텐 정보를 불러오는 중입니다...</p>
+        <p className="platform-loading-text">라쿠텐 정보를 불러오는 중입니다...</p>
       </div>
     }>
       <RakutenContent />

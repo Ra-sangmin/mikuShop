@@ -174,7 +174,11 @@ export default function Header() {
     <>
       <header className="miku-header-wrapper">
         <div className="miku-header-container">
-          <Link href="/" style={{ textDecoration: 'none' }}>
+          <Link
+            href="/"
+            style={{ textDecoration: 'none' }}
+            onClick={() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior })}
+          >
             <div style={styles.logoContainer}>
               <img src="/images/logo.png" alt="Miku Logo" style={styles.logoImgRefined} />
               <div style={styles.textStack}>
@@ -283,12 +287,22 @@ export default function Header() {
           background: rgba(255, 255, 255, 0.9);
           backdrop-filter: blur(12px);
           border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-          position: sticky; 
-          top: 0; 
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: auto !important;
+          width: 100vw;
+          max-width: 100vw;
+          transform: translate3d(0, 0, 0);
+          will-change: transform;
+          isolation: isolate;
           z-index: 1000; 
           transition: all 0.3s ease;
         }
-        
+
+        .miku-header-wrapper ~ main { padding-top: 84px; }
+        .miku-header-wrapper ~ main.main-extra-gap { padding-top: 100px; background-color: #f8fafc; }
+
         .miku-header-container { 
           display: flex; 
           align-items: center; 
@@ -535,6 +549,13 @@ export default function Header() {
           .miku-header-container { padding: 12px 20px; }
           .main-title { font-size: 32px; }
           .logo-text-stack { display: none; } /* 아주 좁은 화면에서는 문구 숨김 처리 */
+          .miku-header-wrapper ~ main {
+            width: 100vw;
+            max-width: 100vw;
+            padding-top: 89px;
+            box-sizing: border-box;
+          }
+          .miku-header-wrapper ~ main.main-extra-gap { padding-top: 105px; }
         }.main-title { font-size: 32px; }
         
       `}</style>

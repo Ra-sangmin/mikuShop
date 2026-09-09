@@ -8,6 +8,7 @@ import AddressForm from './components/AddressForm';
 import PaymentSummary from './components/PaymentSummary';
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
+import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 
 const STATUS_PRIORITY: Record<string, number> = {
   [ORDER_STATUS.CART]: 1,
@@ -54,7 +55,8 @@ function usePurchaseStatusLogic() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
-  const exchangeRate = 9.05;
+  // 🌟 고정값(9.05) 대신 /api/estimate의 실제 환율을 참조합니다.
+  const { exchangeRate } = useExchangeRate();
 
   const [phaseOrder, setPhaseOrder] = useState(['request', 'progress', 'warehouse', 'shipping']);
 
@@ -486,6 +488,7 @@ function MyPurchaseStatusContent() {
 
   const sliderRef = useRef<HTMLDivElement>(null);
   const historySectionRef = useRef<HTMLDivElement>(null);
+  const [scrollEdges, setScrollEdges] = useState({ left: false, right: false });
 
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [startX, setStartX] = useState(0);
@@ -493,6 +496,23 @@ function MyPurchaseStatusContent() {
   
   // 🌟 드래그 여부를 정밀하게 추적하는 상태
   const [isDragging, setIsDragging] = useState(false);
+
+  const updateScrollEdges = () => {
+    const slider = sliderRef.current;
+    if (!slider) return;
+
+    const edgeTolerance = 2;
+    setScrollEdges({
+      left: slider.scrollLeft > edgeTolerance,
+      right: slider.scrollLeft + slider.clientWidth < slider.scrollWidth - edgeTolerance,
+    });
+  };
+
+  useEffect(() => {
+    updateScrollEdges();
+    window.addEventListener('resize', updateScrollEdges);
+    return () => window.removeEventListener('resize', updateScrollEdges);
+  }, [shippingPhases.length, orders.length]);
 
   const startDragging = (e: React.MouseEvent<HTMLDivElement>) => {
     setIsMouseDown(true);
@@ -633,22 +653,33 @@ function MyPurchaseStatusContent() {
           <span className="btn-icon">📋</span> 전체 진행 내역 <span className="btn-count">{orders.length}</span>
         </button>
 
-        <div 
-          className={`pipeline-modules-wrapper ${isMouseDown ? 'is-dragging' : ''}`}
-          ref={sliderRef}
-          onMouseDown={startDragging}
-          onMouseLeave={stopDragging}
-          onMouseUp={stopDragging}
-          onMouseMove={onDrag}
-        >
-          {shippingPhases.map((phase) => (
-            <PhaseModule 
-              key={phase.id} 
-              phase={phase} 
-              activeTab={activeTab} 
-              onTabClick={handleTabChange} 
-            />
-          ))}
+        <div className="pipeline-slider-shell">
+          <div
+            className={`pipeline-fade pipeline-fade-left ${scrollEdges.left ? 'visible' : ''}`}
+            aria-hidden="true"
+          />
+          <div
+            className={`pipeline-fade pipeline-fade-right ${scrollEdges.right ? 'visible' : ''}`}
+            aria-hidden="true"
+          />
+          <div 
+            className={`pipeline-modules-wrapper ${isMouseDown ? 'is-dragging' : ''}`}
+            ref={sliderRef}
+            onMouseDown={startDragging}
+            onMouseLeave={stopDragging}
+            onMouseUp={stopDragging}
+            onMouseMove={onDrag}
+            onScroll={updateScrollEdges}
+          >
+            {shippingPhases.map((phase) => (
+              <PhaseModule 
+                key={phase.id} 
+                phase={phase} 
+                activeTab={activeTab} 
+                onTabClick={handleTabChange} 
+              />
+            ))}
+          </div>
         </div>
       </div>
 
@@ -766,14 +797,41 @@ function MyPurchaseStatusContent() {
         .miku-all-history-btn.active { background: #0f172a; border-color: #0f172a; color: #fff; }
         .miku-all-history-btn.active .btn-count { color: #fff; }
 
+        .pipeline-slider-shell {
+          position: relative;
+          min-width: 0;
+        }
+        .pipeline-fade {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          width: 42px;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.2s ease;
+          z-index: 4;
+        }
+        .pipeline-fade.visible { opacity: 1; }
+        .pipeline-fade-left {
+          left: 0;
+          background: linear-gradient(90deg, rgba(248,250,252,0.92), rgba(248,250,252,0));
+        }
+        .pipeline-fade-right {
+          right: 0;
+          background: linear-gradient(270deg, rgba(248,250,252,0.92), rgba(248,250,252,0));
+        }
+
         .pipeline-modules-wrapper {
           position: relative;
           display: flex; gap: 16px;
           overflow-x: auto; 
-          padding: 24px 24px 10px 5px; 
-          margin: -24px -24px -10px -5px;
+          padding: 24px 40px 10px 0;
+          margin: -24px 0 -10px 0;
           scrollbar-width: none; -webkit-overflow-scrolling: touch;
-          user-select: none; 
+          overscroll-behavior-x: contain;
+          scroll-behavior: smooth;
+          scroll-snap-type: x proximity;
+          user-select: none;
           cursor: grab;
         }
         .pipeline-modules-wrapper::-webkit-scrollbar { display: none; }
@@ -790,6 +848,7 @@ function MyPurchaseStatusContent() {
           transition: all 0.4s var(--smooth-easing);
           display: flex; flex-direction: column; gap: 16px;
           box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+          scroll-snap-align: start;
         }
         
         .pipeline-modules-wrapper.is-dragging .miku-phase-module { pointer-events: none; }
@@ -1015,7 +1074,7 @@ function MyPurchaseStatusContent() {
           }
           
           .miku-all-history-btn { width: 100%; justify-content: center; padding: 12px; font-size: 13px; }
-          .pipeline-modules-wrapper { margin: -16px -15px 0 -15px; padding: 16px 20px 10px 15px; }
+          .pipeline-modules-wrapper { margin: -16px 0 0 0; padding: 16px 20px 10px 0; }
           .miku-phase-module { min-width: 260px; padding: 14px; gap: 10px; }
           .phase-title { font-size: 14px; }
           .phase-total-badge { font-size: 11px; padding: 3px 8px; }

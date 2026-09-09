@@ -2,6 +2,22 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 
+const getAuctionRemainingSeconds = (timeLeft?: string) => {
+  const value = (timeLeft || '').trim();
+  const minuteMatch = value.match(/(\d+)\s*(?:分|분)/);
+  const secondMatch = value.match(/(\d+)\s*(?:秒|초)/);
+
+  if (!minuteMatch && !secondMatch) return null;
+
+  return (minuteMatch ? Number(minuteMatch[1]) * 60 : 0) +
+    (secondMatch ? Number(secondMatch[1]) : 0);
+};
+
+const isAuctionEnded = (timeLeft?: string) => {
+  const value = (timeLeft || '').trim();
+  return value === '終了' || value === '종료' || /(?:終了|종료|남은 시간)\s*0/.test(value);
+};
+
 export interface GlobalItem {
   id: string;
   platform: 'mercari' | 'rakuten' | 'amazon' | 'yahoo_auction';
@@ -53,22 +69,13 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
     }
 
     const tl = item.timeLeft;
-    if (tl.includes('日') || tl.includes('時間') || tl.includes('일') || tl.includes('시간')) {
+    const remainingSeconds = getAuctionRemainingSeconds(tl);
+    if (isAuctionEnded(tl)) {
+      setLocalSeconds(0);
+    } else if (tl.includes('日') || tl.includes('時間') || tl.includes('일') || tl.includes('시간')) {
       setLocalSeconds(null);
     } else {
-      let mins = 0;
-      let secs = 0;
-      const minMatch = tl.match(/(\d+)\s*(?:分|분)/);
-      const secMatch = tl.match(/(\d+)\s*(?:秒|초)/);
-      
-      if (minMatch) mins = parseInt(minMatch[1], 10);
-      if (secMatch) secs = parseInt(secMatch[1], 10);
-
-      if (mins > 0 || secs > 0) {
-        setLocalSeconds(mins * 60 + secs);
-      } else {
-        setLocalSeconds(null);
-      }
+      setLocalSeconds(remainingSeconds);
     }
   }, [item.timeLeft, item.platform]);
 
@@ -76,22 +83,21 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
   useEffect(() => {
     if (localSeconds === null) return;
 
-    const timer = setInterval(() => {
+    const timer = window.setInterval(() => {
       setLocalSeconds(prev => {
-        if (prev === null || prev <= 0) {
-          clearInterval(timer);
+        if (prev === null || prev <= 1) {
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => window.clearInterval(timer);
   }, [localSeconds !== null]);
 
   // 시간에 따른 5단계 상태 정의
   const timeStatus = useMemo(() => {
-    if (item.status === 'sold_out' || localSeconds === 0 || item.timeLeft === '종료' || item.timeLeft === '終了') {
+    if (item.status === 'sold_out' || localSeconds === 0 || isAuctionEnded(item.timeLeft)) {
       return 'ENDED'; 
     }
     if (localSeconds !== null) {
@@ -173,6 +179,10 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
   const styles = {
     card: {
       position: 'relative' as const, 
+      width: '100%',
+      minWidth: 0,
+      maxWidth: '100%',
+      boxSizing: 'border-box' as const,
       backgroundColor: 'white',
       border: '1px solid #f3f4f6',
       borderRadius: isMobile ? '16px' : '20px',
@@ -191,6 +201,9 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
     },
     imageContainer: {
       position: 'relative' as const,
+      width: '100%',
+      minWidth: 0,
+      boxSizing: 'border-box' as const,
       aspectRatio: '1/1',
       overflow: 'hidden',
       backgroundColor: '#f9fafb',
@@ -222,6 +235,10 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
       transform: 'rotate(-10deg)', 
     },
     infoArea: {
+      width: '100%',
+      minWidth: 0,
+      maxWidth: '100%',
+      boxSizing: 'border-box' as const,
       padding: isMobile ? '12px 10px' : '16px',
       display: 'flex',
       flexDirection: 'column' as const,
@@ -274,6 +291,10 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
       whiteSpace: 'nowrap' as const,
     }
   };
+
+  if (item.platform === 'yahoo_auction' && localSeconds === 0) {
+    return null;
+  }
 
   return (
     <div 

@@ -17,8 +17,11 @@ export const getDetailStyles = (isMobile: boolean, theme: DetailTheme): Record<s
       borderRadius: isMobile ? '24px' : '40px', 
       boxShadow: '0 20px 40px rgba(0,0,0,0.08)', 
       position: 'relative', 
-      width: '100%', 
-      boxSizing: 'border-box' 
+      width: '100%',
+      maxWidth: '100%',
+      minWidth: 0,
+      boxSizing: 'border-box',
+      overflowX: 'hidden'
     },
     
     originalLink: {
@@ -43,10 +46,10 @@ export const getDetailStyles = (isMobile: boolean, theme: DetailTheme): Record<s
     },
     CloseText: { position: 'absolute', right: '48px', fontSize: '13px', fontWeight: 600, color: '#9ca3af', letterSpacing: '0.05em' },
 
-    topSection: { display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '40px', marginBottom: '30px' },
+    topSection: { display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '40px', marginBottom: '30px', width: '100%', minWidth: 0, boxSizing: 'border-box' },
     
-    imageWrapper: { flex: isMobile ? 'none' : 1.1, display: 'flex', flexDirection: 'column', gap: '12px' },
-    mainImgBox: { aspectRatio: isMobile ? '4/3' : '1/1', backgroundColor: '#f9fafb', borderRadius: '20px', overflow: 'hidden', border: '1px solid #f3f4f6', position: 'relative' },
+    imageWrapper: { flex: isMobile ? 'none' : 1.1, display: 'flex', flexDirection: 'column', gap: '12px', width: isMobile ? '100%' : 'auto', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' },
+    mainImgBox: { aspectRatio: isMobile ? '4/3' : '1/1', width: '100%', maxWidth: '100%', backgroundColor: '#f9fafb', borderRadius: '20px', overflow: 'hidden', border: '1px solid #f3f4f6', position: 'relative', boxSizing: 'border-box' },
     mainImg: (isHovered: boolean): CSSProperties => ({ 
       width: '100%', height: '100%', objectFit: 'contain', transition: '0.5s', 
       transform: isHovered && !isMobile ? 'scale(1.05)' : 'scale(1)' 
@@ -60,9 +63,9 @@ export const getDetailStyles = (isMobile: boolean, theme: DetailTheme): Record<s
       border: `2px solid ${isActive ? theme.main : 'transparent'}`
     }),
 
-    infoWrapper: { flex: 1, display: 'flex', flexDirection: 'column' },
+    infoWrapper: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 },
     conditionBadge: { backgroundColor: `${theme.main}15`, color: theme.main, fontSize: '11px', fontWeight: 'bold', padding: '4px 12px', borderRadius: '999px', alignSelf: 'flex-start', marginBottom: '8px' },
-    title: { fontSize: isMobile ? '20px' : '26px', fontWeight: 800, color: '#111827', marginBottom: '16px', lineHeight: 1.4 },
+    title: { fontSize: isMobile ? '20px' : '26px', fontWeight: 800, color: '#111827', marginBottom: '16px', lineHeight: 1.4, overflowWrap: 'anywhere', wordBreak: 'break-word' },
     
     // 일반 쇼핑몰 가격 섹션
     priceContainer: { marginBottom: isMobile ? '20px' : '30px' },
@@ -82,6 +85,9 @@ export const getDetailStyles = (isMobile: boolean, theme: DetailTheme): Record<s
 
     // 🌟 [추가] 미쿠짱 AI 요약 박스 스타일
     aiBox: { 
+      width: '100%',
+      maxWidth: '100%',
+      boxSizing: 'border-box',
       padding: '20px', 
       backgroundColor: theme.light, 
       borderRadius: '20px', 
@@ -120,8 +126,8 @@ export const getDetailStyles = (isMobile: boolean, theme: DetailTheme): Record<s
     buyBtn: { backgroundColor: theme.main, color: 'white', fontWeight: 900, padding: '18px', borderRadius: '24px', border: 'none', cursor: 'pointer', fontSize: isMobile ? '16px' : '20px', boxShadow: `0 8px 20px ${theme.main}44`, marginTop: '10px' },
     smallBtn: { padding: '4px 10px', fontSize: '12px', border: '1px solid #ddd', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#666', marginLeft: '4px', display: 'inline-flex', alignItems: 'center' },
 
-    bottomSection: { marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '30px' },
-    calcBox: { padding: isMobile ? '24px' : '40px', backgroundColor: theme.light, borderRadius: '32px', border: `1px dashed ${theme.main}` },
+    bottomSection: { marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '30px', width: '100%', minWidth: 0, boxSizing: 'border-box' },
+    calcBox: { width: '100%', maxWidth: '100%', boxSizing: 'border-box', padding: isMobile ? '24px' : '40px', backgroundColor: theme.light, borderRadius: '32px', border: `1px dashed ${theme.main}` },
     calcHeader: { margin: '0 0 20px 0', color: theme.main, fontWeight: 900, textAlign: 'center', fontSize: isMobile ? '18px' : '26px' },
     calcGrid: { display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: isMobile ? '12px' : '20px' },
     calcItem: { textAlign: 'center', flex: isMobile ? '1 1 30%' : 'none' },
@@ -138,7 +144,7 @@ export const getDetailStyles = (isMobile: boolean, theme: DetailTheme): Record<s
     totalKrw: { color: '#ef4444', fontWeight: '800', fontSize: isMobile ? '18px' : '22px', margin: 0 },
     calcFooterNotice: { fontSize: isMobile ? '12px' : '15px', color: '#9ca3af', textAlign: 'center', marginTop: '20px' },
 
-    descBox: { padding: '30px', backgroundColor: '#f9fafb', borderRadius: '24px', border: '1px solid #f3f4f6' },
+    descBox: { width: '100%', maxWidth: '100%', boxSizing: 'border-box', padding: isMobile ? '20px 16px' : '30px', backgroundColor: '#f9fafb', borderRadius: '24px', border: '1px solid #f3f4f6', overflowWrap: 'anywhere' },
     descTitle: { margin: '0 0 16px 0', fontSize: '20px', fontWeight: 'bold' },
     descText: { lineHeight: '1.8', whiteSpace: 'pre-wrap', color: '#4b5563', fontSize: '15px' },
 

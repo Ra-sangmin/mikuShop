@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
-import { FEE_POLICY } from "@/src/constants/feePolicy"; 
+import { useMikuAlert } from '@/app/context/MikuAlertContext';
+import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 import GlobalProductDetailBase from "./GlobalProductDetailBase";
 import { GlobalProduct } from "./GlobalProductDetail";
 import { getDetailStyles, DetailTheme } from "./GlobalProductDetail.styles";
@@ -32,10 +32,11 @@ const InfoRow = ({ label, value, color }: { label: string; value: React.ReactNod
 
 export default function GlobalProductDetailAuction({ product, onClose }: Props) {
   const router = useRouter();
-  const { showAlert, showConfirm } = useMikuAlert(); 
-  const exchangeRate = FEE_POLICY.EXCHANGE_RATE || 9.5;
+  const { showAlert, showConfirm } = useMikuAlert();
+  // 🌟 고정값(FEE_POLICY.EXCHANGE_RATE=9.5) 대신 /api/estimate의 실제 환율을 참조합니다.
+  const { exchangeRate } = useExchangeRate();
   
-  const [livePrice, setLivePrice] = useState(product.price);
+  const [livePrice, setLivePrice] = useState(() => Number(product.price) || 0);
   const [liveBidCount, setLiveBidCount] = useState(product.bidCount || 0);
   const [liveTimeLeft, setLiveTimeLeft] = useState(product.timeLeft || '');
   const [localSeconds, setLocalSeconds] = useState<number | null>(null);
@@ -70,9 +71,9 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
         if (!res.ok) return;
         const result = await res.json();
         if (result.success && result.data) {
-          setLivePrice(result.data.price);
-          setLiveBidCount(result.data.bidCount);
-          setLiveTimeLeft(result.data.timeLeft);
+          setLivePrice(Number(result.data.price) || 0);
+          setLiveBidCount(Number(result.data.bidCount) || 0);
+          setLiveTimeLeft(result.data.timeLeft || '');
         }
       } catch (error) { console.error("실시간 업데이트 실패:", error); }
     };
@@ -316,7 +317,8 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
             }
 
             @media (max-width: 1100px) {
-              .auction-detail-grid { grid-template-columns: 1fr; gap: 15px; }
+              .auction-detail-grid { grid-template-columns: 1fr !important; gap: 15px !important; }
+              .auction-detail-section { width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden; }
             }
           `}</style>
           

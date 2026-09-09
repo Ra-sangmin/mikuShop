@@ -99,10 +99,10 @@ export default function DeliveryAddressPage() {
           <div className="card-grid">
             <section>
               <h4 style={sectionTitleStyle}>기본 지역 정보</h4>
-              <AddressItem label="우편번호" value="123-4567" />
+              <AddressItem label="우편번호" value="123-0865" />
               <AddressItem label="도도부현" value="東京都 (Tokyo)" />
-              <AddressItem label="구/군/시" value="港区 (Minato-ku)" />
-              <AddressItem label="상세주소 1" value="東麻布 1-2-3" />
+              <AddressItem label="구/군/시" value="足立区 (Adachi-ku)" />
+              <AddressItem label="상세주소 1" value="新田 3-35-31 1008号" />
             </section>
             
             <section>
