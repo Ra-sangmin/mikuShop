@@ -20,6 +20,15 @@ export default function PremiumEstimatePage() {
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isApplyingGlobal, setIsApplyingGlobal] = useState<boolean>(false);
+  // 🌟 모바일에서 "환율 및 마진 설정" 패널을 접었다 펼 수 있도록 하는 상태 (데스크톱에서는 CSS로 항상 펼쳐둡니다)
+  const [isRateSectionOpen, setIsRateSectionOpen] = useState<boolean>(true);
+
+  // 🌟 모바일(480px 이하)에서는 이 패널이 기본적으로 접힌 상태로 시작하도록 합니다.
+  useEffect(() => {
+    if (window.innerWidth <= 480) {
+      setIsRateSectionOpen(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetch('/api/estimate', {
@@ -66,7 +75,10 @@ export default function PremiumEstimatePage() {
       if (data.success) {
         const apiResult = data.data;
         setResultCount(apiResult.finalPriceWon);
-        setExchangeRate(apiResult.baseExchangeRate);
+        // 🌟 여기서 exchangeRate를 다시 설정하지 않습니다. 이 요청은 forceRefresh 없이 보내서
+        // Next.js fetch 캐시(revalidate: 300)로 예전 환율이 돌아올 수 있는데, 그 값으로
+        // 방금 "새로고침" 버튼이 정확히 받아온 최신 환율을 덮어써버리는 버그가 있었습니다.
+        // 환율 표시는 최초 로드와 새로고침 버튼(handleForceRefresh)에서만 갱신합니다.
       }
     };
 
@@ -132,21 +144,40 @@ export default function PremiumEstimatePage() {
       if (data.success) {
         setExchangeRate(data.data.baseExchangeRate);
         setResultCount(data.data.finalPriceWon);
+        // 🌟 추가 증가액도 DB(ExchangeRateConfig)에서 바뀌었을 수 있으므로, 새로고침 시 함께 재동기화합니다.
+        setRateBasisUnit(data.data.exchangeRateBasisUnit);
+        setAddRate(data.data.additionalRate * data.data.exchangeRateBasisUnit);
+        // 🌟 admin/layout.tsx 헤더의 "현재 환율" 표시도 즉시 갱신되도록 알려줍니다.
+        window.dispatchEvent(new Event('exchangeRateConfigUpdated'));
       }
     } finally {
       setTimeout(() => setIsRefreshing(false), 800);
     }
   };
 
-  // 🌟 TODO: 지금은 UI만 있는 자리표시자입니다. "추가 증가액"을 실제로 DB에 저장해서
-  // /api/estimate가 기본 addRate로 읽어 사이트 전체(견적문의/구매대행 신청 등) 계산에
-  // 반영하려면 FeeConfiguration에 새 FeeType을 추가하는 등 스키마 변경이 필요합니다
-  // (사용자가 이후 별도로 요청하면 그때 연결).
-  const handleApplyGlobally = () => {
+  const handleApplyGlobally = async () => {
     if (isApplyingGlobal) return;
     setIsApplyingGlobal(true);
-    alert(`추가 증가액 ${addRate}원을 전역 적용하는 기능은 아직 준비 중입니다.`);
-    setTimeout(() => setIsApplyingGlobal(false), 500);
+
+    try {
+      const res = await fetch('/api/estimate', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ additionalRate: addRate / rateBasisUnit })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`추가 증가액 ${addRate}원이 전역 적용되었습니다.`);
+        // 🌟 admin/layout.tsx 헤더의 "추가 증가액" 표시도 즉시 갱신되도록 알려줍니다.
+        window.dispatchEvent(new Event('exchangeRateConfigUpdated'));
+      } else {
+        alert(data.message || '전역 적용 중 오류가 발생했습니다.');
+      }
+    } catch (error) {
+      alert('전역 적용 중 오류가 발생했습니다.');
+    } finally {
+      setIsApplyingGlobal(false);
+    }
   };
 
   return (
@@ -161,21 +192,32 @@ export default function PremiumEstimatePage() {
           
           {/* ================= 1. 환율 및 마진 설정 ================= */}
           <div className="premium-card">
-            <h3 className="card-title admin-title-font">환율 및 마진 설정</h3>
-            <div className="input-group">
+            <h3
+              className="card-title admin-title-font collapsible-card-title"
+              onClick={() => setIsRateSectionOpen(open => !open)}
+            >
+              <span>환율 및 마진 설정 <span className="card-title-note">({rateBasisUnit}엔 기준)</span></span>
+              <svg className={`collapse-chevron ${isRateSectionOpen ? '' : 'closed'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </h3>
+
+            {!isRateSectionOpen && (
+              <div className="collapsed-final-rate">
+                최종 표시 환율 <span className="collapsed-final-rate-value">{(exchangeRate * rateBasisUnit + addRate).toFixed(2)}원</span>
+              </div>
+            )}
+
+            <div className={`input-group ${isRateSectionOpen ? '' : 'collapsed'}`}>
               <div className="input-row read-only-row admin-flex-between">
-                <span className="label"><span className="color-dot bg-rate"></span>현재 환율 ({rateBasisUnit}엔 기준)</span>
+                <span className="label"><span className="color-dot bg-rate"></span>현재 환율</span>
                 
-                <div 
-                  className="value-box highlight-rate refresh-box" 
+                <div
+                  className={`value-box highlight-rate refresh-box ${isRefreshing ? 'is-refreshing' : ''}`}
                   onClick={handleForceRefresh}
                   title="클릭하여 환율 즉시 새로고침"
                 >
                   {(exchangeRate * rateBasisUnit).toFixed(2)} <span className="unit">원</span>
-                  <svg className={`refresh-icon ${isRefreshing ? 'spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="23 4 23 10 17 10"></polyline>
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                  </svg>
                 </div>
 
               </div>
@@ -187,6 +229,13 @@ export default function PremiumEstimatePage() {
                 </div>
               </div>
 
+              <div className="input-row read-only-row admin-flex-between">
+                <span className="label"><span className="color-dot bg-final"></span>최종 표시 환율</span>
+                <div className="value-box highlight-final">
+                  {(exchangeRate * rateBasisUnit + addRate).toFixed(2)} <span className="unit">원</span>
+                </div>
+              </div>
+
               <div className="global-apply-divider" />
 
               <button
@@ -194,12 +243,13 @@ export default function PremiumEstimatePage() {
                 onClick={handleApplyGlobally}
                 disabled={isApplyingGlobal}
               >
-                전역 적용
-                <svg className="gear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3"></circle>
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                </svg>
+                추가 증가액 적용
               </button>
+              <p className="global-apply-warning">
+                ※ 이 버튼 클릭시 홈페이지 모든 유저가<br className="warning-break" />
+                <strong className="global-apply-warning-highlight">최종 표시 환율</strong><br className="warning-break" />
+                금액으로 표시됩니다.
+              </p>
             </div>
           </div>
 
@@ -256,48 +306,47 @@ export default function PremiumEstimatePage() {
 
           {/* ================= 3. 최종 견적 요약 ================= */}
           <div className="premium-card summary-card">
-            
+
             <div className="summary-header">
-              <h3 className="card-title admin-title-font">최종 견적 요약</h3>
-              <div className="pulse-indicator">실시간 환율 적용중</div>
-            </div>
-            
-            <div className="total-box">
-              
               <div className="label-tooltip-wrapper">
-                <span className="total-label">
+                <span className="total-label card-title-label">
                   최종 결제 예상액
                   <svg className="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                 </span>
-                
+
                 <div className="hover-formula-tooltip">
                   <span className="formula-label">적용된 계산 공식</span>
                   <div className="clean-formula-box">
                     <div className="math-formula">
                       <span className="bracket">(</span>
-                      <span className="c-rate" title="현재 환율">{exchangeRate}</span>
+                      <span className="c-rate" title="현재 환율">{exchangeRate.toFixed(4)}</span>
                       <span className="op">+</span>
-                      <span className="c-add" title="추가 증가액">{(addRate * 0.01).toFixed(2)}</span>
+                      <span className="c-add" title="추가 증가액">{parseFloat((addRate * 0.01).toFixed(4))}</span>
                       <span className="bracket">)</span>
-                      
+
                       <span className="multiply"> × </span>
-                      
-                      <span className="bracket">(</span>
-                      <span className="c-price" title="상품 가격">{salePrice.toLocaleString()}</span>
-                      <span className="op">+</span>
-                      <span className="c-pay" title="결제 수수료">{paymentFee}</span>
-                      <span className="op">+</span>
-                      <span className="c-tax" title="일내 배송료">{dailyTax}</span>
-                      <span className="op">+</span>
-                      <span className="c-agency" title="대행 수수료">{agencyFee}</span>
-                      <span className="bracket">)</span>
+
+                      <span className="formula-group-2">
+                        <span className="bracket">(</span>
+                        <span className="c-price" title="상품 가격">{salePrice.toLocaleString()}</span>
+                        <span className="op">+</span>
+                        <span className="c-pay" title="결제 수수료">{paymentFee}</span>
+                        <span className="op">+</span>
+                        <span className="c-tax" title="일내 배송료">{dailyTax}</span>
+                        <span className="op">+</span>
+                        <span className="c-agency" title="대행 수수료">{agencyFee}</span>
+                        <span className="bracket">)</span>
+                      </span>
                     </div>
                   </div>
                 </div>
               </div>
-              
-              <div 
-                className="clickable-amount" 
+            </div>
+
+            <div className="total-box">
+
+              <div
+                className="clickable-amount"
                 onClick={handleCopyAmount}
                 title="클릭하여 금액 복사하기"
               >
@@ -400,37 +449,55 @@ export default function PremiumEstimatePage() {
           border: none;
         }
 
-        .pulse-indicator {
-          font-size: 12px;
-          color: #34d399;
-          font-weight: 600;
-          background: rgba(52, 211, 153, 0.1);
-          padding: 4px 10px;
-          border-radius: 12px;
+        .card-title-note {
+          font-size: 13px;
+          font-weight: 500;
+          color: #64748b;
+        }
+
+        .collapsible-card-title {
           display: flex;
           align-items: center;
-          gap: 6px;
+          justify-content: space-between;
+          gap: 8px;
         }
 
-        .pulse-indicator::before {
-          content: '';
-          width: 6px;
-          height: 6px;
-          background: #34d399;
-          border-radius: 50%;
-          animation: pulse 1.5s infinite;
+        .collapse-chevron {
+          display: none;
+          width: 18px;
+          height: 18px;
+          color: #94a3b8;
+          flex-shrink: 0;
+          transition: transform 0.2s ease;
         }
 
-        @keyframes pulse {
-          0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.4); }
-          70% { box-shadow: 0 0 0 4px rgba(52, 211, 153, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+        .collapse-chevron.closed {
+          transform: rotate(-90deg);
+        }
+
+        .collapsed-final-rate {
+          display: none;
+          font-size: 12px;
+          color: #94a3b8;
+          padding-bottom: 4px;
+        }
+
+        .collapsed-final-rate-value {
+          color: #ef4444;
+          font-weight: 700;
         }
 
         .input-group {
           display: flex;
           flex-direction: column;
           gap: 16px;
+        }
+
+        /* 🌟 접기 기능은 모바일 전용입니다. 481px 이상에서는 state와 무관하게 항상 펼쳐진 상태를 강제합니다. */
+        @media (min-width: 481px) {
+          .input-group.collapsed {
+            display: flex !important;
+          }
         }
 
         /* display/justify-content/align-items는 admin-common.css의 .admin-flex-between을 재사용합니다 */
@@ -513,7 +580,7 @@ export default function PremiumEstimatePage() {
           font-weight: 600;
         }
 
-        .input-with-unit input.c-add { color: #c084fc; }
+        .input-with-unit input.c-add { color: #7c3aed; }
         .input-with-unit input.c-price { color: #fbbf24; }
         .input-with-unit input.c-pay { color: #f97316; }
         .input-with-unit input.c-tax { color: #f472b6; }
@@ -559,9 +626,23 @@ export default function PremiumEstimatePage() {
           transform: none;
         }
 
-        .gear-icon {
-          width: 18px;
-          height: 18px;
+        .global-apply-warning {
+          margin: 10px 0 0 0;
+          font-size: 12px;
+          color: #94a3b8;
+          text-align: center;
+        }
+
+        /* 🌟 데스크톱에서는 자연스럽게 줄바꿈되도록 두고, 좁은 모바일 화면에서만
+           줄이 매번 다른 위치에서 끊기지 않도록 강제로 3줄 레이아웃을 적용합니다. */
+        .warning-break {
+          display: none;
+        }
+
+        .global-apply-warning-highlight {
+          color: #ef4444;
+          font-weight: 900;
+          font-size: 17px;
         }
 
         .value-box {
@@ -584,40 +665,28 @@ export default function PremiumEstimatePage() {
         }
 
         .refresh-box:hover {
-          background: rgba(52, 211, 153, 0.2);
+          background: rgba(37, 99, 235, 0.2);
           transform: scale(1.02);
         }
 
-        .refresh-icon {
-          width: 14px;
-          height: 14px;
-          color: #34d399;
-          opacity: 0.5;
-          transition: opacity 0.2s;
-          flex-shrink: 0; 
+        .refresh-box.is-refreshing {
+          animation: refreshPulse 0.6s ease-in-out;
         }
 
-        .refresh-box:hover .refresh-icon {
-          opacity: 1;
-        }
-
-        .spin {
-          animation: spin 0.8s linear infinite;
-          opacity: 1;
-        }
-
-        @keyframes spin {
-          100% { transform: rotate(360deg); }
+        @keyframes refreshPulse {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.5); }
+          40% { transform: scale(1.06); box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
         }
 
         .bg-qty { background-color: #94a3b8; box-shadow: 0 0 8px rgba(148, 163, 184, 0.4); }
 
-        .c-rate { color: #34d399; }
-        .bg-rate { background-color: #34d399; box-shadow: 0 0 8px rgba(52, 211, 153, 0.4); }
-        .highlight-rate { color: #34d399; background: rgba(52, 211, 153, 0.1); }
+        .c-rate { color: #2563eb; }
+        .bg-rate { background-color: #2563eb; box-shadow: 0 0 8px rgba(37, 99, 235, 0.4); }
+        .highlight-rate { color: #2563eb; background: rgba(148, 163, 184, 0.1); }
 
-        .c-add { color: #c084fc; }
-        .bg-add { background-color: #c084fc; box-shadow: 0 0 8px rgba(192, 132, 252, 0.4); }
+        .c-add { color: #7c3aed; }
+        .bg-add { background-color: #7c3aed; box-shadow: 0 0 8px rgba(124, 58, 237, 0.4); }
 
         .c-price { color: #fbbf24; }
         .bg-price { background-color: #fbbf24; box-shadow: 0 0 8px rgba(251, 191, 36, 0.4); }
@@ -631,6 +700,10 @@ export default function PremiumEstimatePage() {
         .c-agency { color: #60a5fa; }
         .bg-agency { background-color: #60a5fa; box-shadow: 0 0 8px rgba(96, 165, 250, 0.4); }
         .highlight-agency { color: #60a5fa; background: rgba(96, 165, 250, 0.1); }
+
+        .c-final { color: #ef4444; }
+        .bg-final { background-color: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+        .highlight-final { color: #ef4444; background: rgba(148, 163, 184, 0.1); }
 
         .quantity-control {
           display: flex;
@@ -668,20 +741,23 @@ export default function PremiumEstimatePage() {
         .label-tooltip-wrapper {
           position: relative;
           display: flex;
-          justify-content: flex-end;
-          cursor: help; 
+          cursor: help;
           width: fit-content;
-          margin-left: auto;
         }
 
-        .total-label { 
-          font-size: 16px; 
-          color: #cbd5e1; 
-          font-weight: 600; 
-          margin-bottom: 12px; 
-          display: flex; 
-          align-items: center; 
+        .total-label {
+          font-size: 16px;
+          color: #cbd5e1;
+          font-weight: 600;
+          margin-bottom: 12px;
+          display: flex;
+          align-items: center;
           gap: 6px;
+        }
+
+        .card-title-label {
+          font-size: 18px;
+          margin-bottom: 0;
         }
 
         .info-icon {
@@ -699,7 +775,7 @@ export default function PremiumEstimatePage() {
         .hover-formula-tooltip {
           position: absolute;
           bottom: 100%;
-          right: 0;
+          left: 0;
           margin-bottom: 12px;
           width: 330px;
           background: #0f172a;
@@ -720,7 +796,7 @@ export default function PremiumEstimatePage() {
           content: '';
           position: absolute;
           top: 100%;
-          right: 30px;
+          left: 20px;
           border-width: 8px;
           border-style: solid;
           border-color: #334155 transparent transparent transparent;
@@ -759,6 +835,17 @@ export default function PremiumEstimatePage() {
         .bracket { color: #64748b; font-size: 20px; font-weight: 300; }
         .op { color: #64748b; font-size: 16px; font-weight: 600; margin: 0 2px; }
         .multiply { color: #94a3b8; font-size: 20px; font-weight: bold; margin: 0 4px; }
+
+        /* 🌟 두 번째 괄호 그룹을 하나의 flex 아이템으로 묶어서 항상 통째로 아래줄로 넘어가게 합니다
+           (개별 값이 따로따로 줄바꿈되며 괄호 중간이 끊기는 걸 방지). */
+        .formula-group-2 {
+          display: inline-flex;
+          flex-wrap: nowrap;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          flex-basis: 100%;
+        }
 
         .clickable-amount {
           display: inline-flex;
@@ -806,20 +893,42 @@ export default function PremiumEstimatePage() {
         }
 
         @media (max-width: 480px) {
+          .premium-calc-wrapper { padding: 32px 20px 16px; }
           .calc-container { padding: 0; }
-          .premium-card { padding: 20px 16px; border-radius: 16px; }
+          .calc-header { margin-bottom: 20px; }
+          .calc-flex-column { gap: 16px; }
+          .premium-card { padding: 20px 16px 12px; border-radius: 16px; }
+          .card-title { margin: 0 0 8px 0; }
+          .collapsible-card-title { cursor: pointer; }
+          .collapse-chevron { display: block; }
+          .input-group.collapsed { display: none; }
+          .collapsed-final-rate { display: block; }
           .label { font-size: 14px; }
-          
-          .bundled-group { margin: 0 -12px 8px -12px; padding: 16px 12px; }
+          .input-group { gap: 10px; }
+          .global-apply-divider { margin: 8px 0; }
+          .warning-break { display: block; }
+
+          .bundled-group { margin: 0 -12px 0 -12px; padding: 10px 12px; gap: 8px; }
+
+          .quantity-control { gap: 10px; padding: 4px; width: 110px; justify-content: center; }
+          .qty-btn { width: 26px; height: 26px; font-size: 15px; }
+          .qty-val { font-size: 14px; min-width: 20px; }
           
           .input-with-unit { width: 110px; min-width: 110px; padding: 0 12px; }
-          .value-box { min-width: 110px; padding: 0 12px; width: auto; }
-          .input-with-unit input { font-size: 15px; padding: 12px 0; }
+          .value-box { min-width: 110px; padding: 8px 12px; width: auto; font-size: 15px; }
+          .highlight-agency { background: rgba(148, 163, 184, 0.1); }
+          .input-with-unit input { font-size: 15px; padding: 8px 0; }
           .total-value { font-size: 36px; }
           .currency { font-size: 24px; }
-          .hover-formula-tooltip { right: -10px; width: 300px; }
-          .hover-formula-tooltip::after { right: 40px; }
-          .refresh-icon { opacity: 0.8; margin-left: 2px; }
+          .hover-formula-tooltip { left: -10px; width: 300px; }
+          .hover-formula-tooltip::after { left: 30px; }
+          .math-formula { font-size: 16px; }
+          .bracket { font-size: 17px; }
+          .op { font-size: 14px; }
+          .multiply { font-size: 17px; }
+          .summary-header { padding-bottom: 8px; margin-bottom: 8px; }
+          .total-box { padding-top: 0; }
+          .summary-card { padding-bottom: 6px; }
         }
       `}</style>
     </div>

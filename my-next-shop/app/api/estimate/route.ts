@@ -1,13 +1,34 @@
 import { NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
 
-// 🌟 추가 증가액 (임시 고정값. 추후 관리자 설정값으로 대체 예정)
-function getAdditionalRate() {
-  return 0;
+// 🌟 관리자가 DB 값을 언제든 바꿀 수 있고, 전역 변수 캐시는 그 변경을 놓치는 위험이 있어
+// 캐시 없이 매 요청마다 DB를 직접 조회합니다.
+async function loadExchangeRateConfig(): Promise<{ additionalRate: number; rateBasisUnit: number; currentExchangeRate: number }> {
+  const config = await prisma.exchangeRateConfig.findFirst();
+  return {
+    additionalRate: config?.additionalRate ?? 0,
+    rateBasisUnit: config?.rateBasisUnit ?? 100,
+    currentExchangeRate: config?.currentExchangeRate ?? 0,
+  };
 }
 
-// 🌟 현재 환율을 몇 엔 기준으로 다시 계산해서 보여줄지의 기준값 (임시 고정값. 추후 관리자 설정값으로 대체 예정)
-function getExchangeRateBasisUnit() {
-  return 100;
+// 🌟 추가 증가액 / 현재 환율 값이 실제로 바뀌는 곳은 여기 한 곳으로 모읍니다.
+async function updateExchangeRateConfig(data: { additionalRate?: number; currentExchangeRate?: number }) {
+  const config = await prisma.exchangeRateConfig.findFirst();
+
+  if (config) {
+    await prisma.exchangeRateConfig.update({
+      where: { id: config.id },
+      data,
+    });
+  } else {
+    await prisma.exchangeRateConfig.create({
+      data: {
+        additionalRate: data.additionalRate ?? 0,
+        currentExchangeRate: data.currentExchangeRate ?? 0,
+      },
+    });
+  }
 }
 
 // 🌟 forceRefresh가 true면 캐시를 무시하고 타임스탬프를 붙여 즉시 새로고침하며,
@@ -29,7 +50,14 @@ async function fetchNaverExchangeRate(forceRefresh: boolean): Promise<number> {
   const match = html.match(/<option\s+value="([\d.]+)"[^>]*>[^<]*JPY\s*<\/option>/i);
 
   if (match && match[1]) {
-    return parseFloat(match[1]);
+    const rate = parseFloat(match[1]);
+
+    // 🌟 forceRefresh로 즉시 새로고침한 경우에만 DB의 현재 환율(currentExchangeRate)도 갱신합니다.
+    if (forceRefresh) {
+      await updateExchangeRateConfig({ currentExchangeRate: rate });
+    }
+
+    return rate;
   }
   throw new Error("환율을 찾을 수 없습니다.");
 }
@@ -55,8 +83,15 @@ export async function POST(request: Request) {
       forceRefresh = false // 🌟 새로고침 강제 여부 파라미터 추가
     } = body;
 
-    const baseExchangeRate = await getBaseExchangeRate(forceRefresh);
-    const exchangeRate = baseExchangeRate + getAdditionalRate();
+    const { additionalRate, rateBasisUnit: exchangeRateBasisUnit, currentExchangeRate } = await loadExchangeRateConfig();
+
+    // 🌟 forceRefresh일 때만 네이버에서 실시간으로 새로 받아옵니다(그 값은 fetchNaverExchangeRate가 DB에 저장).
+    // forceRefresh가 아니면 매번 네이버를 다시 조회하지 않고, 마지막으로 새로고침해서 DB에 저장해둔
+    // currentExchangeRate를 그대로 씁니다. (DB에 아직 저장된 값이 없으면 최초 1회만 네이버에서 가져옵니다.)
+    const baseExchangeRate = (!forceRefresh && currentExchangeRate)
+      ? currentExchangeRate
+      : await getBaseExchangeRate(forceRefresh);
+    const exchangeRate = baseExchangeRate + additionalRate;
 
     let paymentFee = 0;
     if (salePrice > 0) {
@@ -80,8 +115,8 @@ export async function POST(request: Request) {
       success: true,
       data: {
         baseExchangeRate: baseExchangeRate,
-        additionalRate: getAdditionalRate(),
-        exchangeRateBasisUnit: getExchangeRateBasisUnit(),
+        additionalRate: additionalRate,
+        exchangeRateBasisUnit: exchangeRateBasisUnit,
         exchangeRate: exchangeRate,
         appliedRate: appliedRate,
         totalJpy,
@@ -97,7 +132,25 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("API Error:", error);
     return NextResponse.json(
-      { success: false, message: "견적 계산 중 오류가 발생했습니다." }, 
+      { success: false, message: "견적 계산 중 오류가 발생했습니다." },
+      { status: 500 }
+    );
+  }
+}
+
+// 🌟 admin/estimate의 "전역 적용" 버튼 - 추가 증가액(원 단위)을 DB(ExchangeRateConfig)에 저장합니다.
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { additionalRate } = body;
+
+    await updateExchangeRateConfig({ additionalRate });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("API Error:", error);
+    return NextResponse.json(
+      { success: false, message: "추가 증가액 저장 중 오류가 발생했습니다." },
       { status: 500 }
     );
   }
