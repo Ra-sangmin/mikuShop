@@ -172,17 +172,12 @@ export async function PUT(request: Request) {
 // 🌟 유니티 등에서 상품 계산 없이 현재 환율 정보만 빠르게 조회할 수 있는 GET 엔드포인트
 export async function GET() {
   try {
-    const { additionalRate, rateBasisUnit, currentExchangeRate } = await loadExchangeRateConfig();
+    const { additionalRate, rateBasisUnit } = await loadExchangeRateConfig();
 
-    // DB에 저장된 환율이 없으면 네이버에서 실시간으로 가져옴
-    let baseExchangeRate = currentExchangeRate;
-    let exchangeRateFetchFailed = false;
-
-    if (!baseExchangeRate) {
-      const result = await getBaseExchangeRate(false);
-      baseExchangeRate = result.rate;
-      exchangeRateFetchFailed = result.failed;
-    }
+    // 🌟 1. forceRefresh를 true로 주어 Next.js 캐시를 무시하고 네이버 실시간 값을 강제로 가져옵니다.
+    const result = await getBaseExchangeRate(true);
+    const baseExchangeRate = result.rate;
+    const exchangeRateFetchFailed = result.failed;
 
     // 1엔 기준 환율에 rateBasisUnit(예: 100엔)을 곱해 기준 단위 환율로 환산
     const finalDisplayRate = (baseExchangeRate + additionalRate) * rateBasisUnit;
@@ -196,7 +191,15 @@ export async function GET() {
         finalDisplayRate: Number(finalDisplayRate.toFixed(2)), // 최종 표시 환율 (원)
         exchangeRateFetchFailed: exchangeRateFetchFailed
       }
+    }, {
+      // 🌟 2. 브라우저나 CDN, Next.js 자체 라우트 캐시가 남지 않도록 응답 헤더에 캐시 방지 설정 추가
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-validate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
     });
+
   } catch (error) {
     console.error("API GET Error:", error);
     return NextResponse.json(
