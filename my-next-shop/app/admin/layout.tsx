@@ -58,15 +58,20 @@ export default function AdminLayout({
   }, [pathname]);
 
   useEffect(() => {
+    // 🌟 /admin/login 자신도 이 레이아웃 아래에 있어서, 로그인 페이지에서까지 이 체크가 돌면
+    // "원래 가려던 페이지"가 로그인 페이지 자신으로 덮어써지는 자기 자신 리다이렉트 버그가 생깁니다.
+    if (pathname === '/admin/login') return;
+
     const storedId = localStorage.getItem('admin_id');
     const storedName = localStorage.getItem('admin_name');
-    
+
     if (!storedId) {
-      router.push('/admin/login');
+      // 🌟 미들웨어와 동일하게, 원래 있던 페이지로 로그인 후 돌아갈 수 있도록 redirect 쿼리를 함께 넘깁니다.
+      router.push(`/admin/login?redirect=${encodeURIComponent(pathname)}`);
     } else if (storedName) {
       setAdminName(storedName);
     }
-  }, [router]);
+  }, [router, pathname]);
 
   const handleLogout = async () => {
     if (!confirm('로그아웃 하시겠습니까?')) return;
@@ -93,49 +98,67 @@ export default function AdminLayout({
       <main style={s.main}>
         {/* 2. 헤더 */}
         <header style={s.header} className="admin-header">
-          {/* 🌟 모바일에서만 보이는 사이드바 토글 버튼 */}
-          <button
-            className="admin-hamburger-btn"
-            onClick={() => setIsSidebarOpen(true)}
-            aria-label="메뉴 열기"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="6" x2="21" y2="6"></line>
-              <line x1="3" y1="12" x2="21" y2="12"></line>
-              <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-          </button>
-
-          <h1 style={s.title} className="admin-title">{currentTitle}</h1>
-
-          <div style={s.headerRight} className="admin-header-right">
-            {/* 최종 표시 환율 */}
-            <div style={s.finalRateCard} className="final-rate-card">
-              <span style={s.exchangeLabel} className="final-rate-label">최종 표시 환율</span>
-              <span style={s.exchangeValue}>
-                {rateBasisUnit}엔 = <strong style={s.finalRateValue}>{(exchangeRate * rateBasisUnit + additionalRate).toFixed(2)}원</strong>
-                <span style={s.finalRateFormula} className="final-rate-formula">
-                  (<span title="현재 환율" style={s.formulaCurrentRate}>{(exchangeRate * rateBasisUnit).toFixed(2)}</span>
-                  {' + '}
-                  <span title="추가 증가액" style={s.formulaAdditionalRate}>{additionalRate}</span>)
-                </span>
-              </span>
-            </div>
-
-            {/* 사용자 프로필 및 로그아웃 */}
-            <div style={s.profileCard}>
-              <div style={s.avatar}>
-                {adminName.charAt(0).toUpperCase()}
-              </div>
-              <span style={s.profileName} className="admin-profile-name">{adminName}</span>
+          <div className="admin-header-main-row">
+            <div className="admin-header-left">
+              {/* 🌟 모바일에서만 보이는 사이드바 토글 버튼 */}
               <button
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                style={s.logoutBtn}
+                className="admin-hamburger-btn"
+                onClick={() => setIsSidebarOpen(true)}
+                aria-label="메뉴 열기"
               >
-                {isLoggingOut ? '...' : '로그아웃'}
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <line x1="3" y1="12" x2="21" y2="12"></line>
+                  <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
               </button>
+
+              <h1 style={s.title} className="admin-title">{currentTitle}</h1>
             </div>
+
+            <div style={s.headerRight} className="admin-header-right">
+              {/* 최종 표시 환율 (데스크톱: 프로필 옆) */}
+              <div style={s.finalRateCard} className="final-rate-card desktop-final-rate">
+                <span style={s.exchangeLabel}>최종 표시 환율</span>
+                <span style={s.exchangeValue}>
+                  {rateBasisUnit}엔 = <strong style={s.finalRateValue}>{(exchangeRate * rateBasisUnit + additionalRate).toFixed(2)}원</strong>
+                  <span style={s.finalRateFormula}>
+                    (<span title="현재 환율" style={s.formulaCurrentRate}>{(exchangeRate * rateBasisUnit).toFixed(2)}</span>
+                    {' + '}
+                    <span title="추가 증가액" style={s.formulaAdditionalRate}>{additionalRate}</span>)
+                  </span>
+                </span>
+              </div>
+
+              {/* 사용자 프로필 및 로그아웃 */}
+              <div style={s.profileCard}>
+                <div style={s.avatar}>
+                  {adminName.charAt(0).toUpperCase()}
+                </div>
+                <span style={s.profileName} className="admin-profile-name">{adminName}</span>
+                <button
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  style={s.logoutBtn}
+                >
+                  {isLoggingOut ? '...' : '로그아웃'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 🌟 최종 표시 환율 (모바일 전용: 로그아웃 버튼 아래 별도 줄).
+              헤더 한 줄에 다 같이 넣으면 좁아서 라벨이 안 보이던 문제를 이 줄로 옮겨 해결합니다. */}
+          <div style={s.finalRateCard} className="final-rate-card mobile-final-rate">
+            <span style={s.exchangeLabel}>최종 표시 환율</span>
+            <span style={s.exchangeValue}>
+              {rateBasisUnit}엔 = <strong style={s.finalRateValue}>{(exchangeRate * rateBasisUnit + additionalRate).toFixed(2)}원</strong>
+              <span style={s.finalRateFormula}>
+                (<span title="현재 환율" style={s.formulaCurrentRate}>{(exchangeRate * rateBasisUnit).toFixed(2)}</span>
+                {' + '}
+                <span title="추가 증가액" style={s.formulaAdditionalRate}>{additionalRate}</span>)
+              </span>
+            </span>
           </div>
         </header>
 
@@ -154,8 +177,28 @@ export default function AdminLayout({
           color: #334155;
           cursor: pointer;
           padding: 4px;
-          margin-right: 12px;
+          margin-right: 0;
           flex-shrink: 0;
+        }
+
+        .admin-header-main-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+        }
+
+        /* 🌟 햄버거 버튼과 타이틀을 한 그룹으로 묶어서, space-between이 이 둘 사이가 아니라
+           이 그룹과 오른쪽 영역 사이에서만 여백을 분배하도록 합니다 (타이틀이 버튼에 붙어 보임). */
+        .admin-header-left {
+          display: flex;
+          align-items: center;
+        }
+
+        /* 🌟 로그아웃 버튼 아래 별도 줄 - 데스크톱에서는 숨기고, 모바일에서만 보여줍니다.
+           (finalRateCard에 인라인 style로 display:flex가 박혀있어서 !important로 덮어씁니다) */
+        .mobile-final-rate {
+          display: none !important;
         }
 
         @media (max-width: 768px) {
@@ -166,7 +209,9 @@ export default function AdminLayout({
           }
 
           .admin-header {
-            padding: 0 16px !important;
+            height: auto !important;
+            padding: 12px 16px !important;
+            gap: 8px;
           }
 
           .admin-title {
@@ -183,15 +228,17 @@ export default function AdminLayout({
           .final-rate-card {
             padding: 6px 10px !important;
           }
-        }
 
-        @media (max-width: 640px) {
-          .final-rate-formula {
-            display: none;
+          /* 🌟 헤더 한 줄에 다 넣으면 좁아서 라벨이 안 보이던 최종 표시 환율을,
+             모바일에서는 아래 별도 줄로 옮겨서 표시합니다. */
+          .desktop-final-rate {
+            display: none !important;
           }
 
-          .final-rate-label {
-            display: none;
+          .mobile-final-rate {
+            display: flex !important;
+            width: 100%;
+            justify-content: center;
           }
         }
 
@@ -225,8 +272,8 @@ const s: Record<string, React.CSSProperties> = {
     backgroundColor: '#fff',
     borderBottom: '1px solid #e2e8f0',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    justifyContent: 'center',
     padding: '0 30px',
     flexShrink: 0,
   },

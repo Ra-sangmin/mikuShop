@@ -34,8 +34,11 @@ export default function AdminLoginPage() {
       if (data.name) {
         localStorage.setItem('admin_name', data.name);
       }
-      
-      router.push('/admin/dashboard');
+
+      // 🌟 원래 접근하려던 admin 페이지가 있으면(미들웨어가 ?redirect=로 넘겨줌) 그곳으로,
+      // 없으면 기존처럼 대시보드로 이동합니다. 외부 URL로 리다이렉트되지 않도록 /admin 경로인지 검증합니다.
+      const redirectTo = new URLSearchParams(window.location.search).get('redirect');
+      router.push(redirectTo && redirectTo.startsWith('/admin') ? redirectTo : '/admin/dashboard');
     } else {
       // 401 에러 등이 올 경우 상세 메시지 처리 가능
       alert('로그인에 실패했습니다. 아이디와 비밀번호를 확인해주세요.');

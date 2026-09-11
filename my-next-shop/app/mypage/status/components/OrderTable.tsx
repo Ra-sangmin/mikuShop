@@ -19,6 +19,22 @@ const STATUS_PRIORITY: Record<string, number> = {
   [ORDER_STATUS.SHIPPING]: 11,
 };
 
+// 🌟 도로명 주소에서 "OO로/OO길"로 시작하는 부분부터 끝까지(도로명 + 번지수)만 추출 (confirmMsgs와 동일 로직)
+// 🌟 상품명이 너무 길면 50자까지만 보여주고 나머지는 ...으로 축약합니다.
+function truncateText(text: string, maxLength: number) {
+  if (!text) return '';
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function getLastRoadAddressPart(address?: string) {
+  const tokens = address?.trim().split(/\s+/) || [];
+  let roadTokenIndex = -1;
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (/(로|길)$/.test(tokens[i])) { roadTokenIndex = i; break; }
+  }
+  return roadTokenIndex >= 0 ? tokens.slice(roadTokenIndex).join(' ') : (tokens[tokens.length - 1] || '');
+}
+
 // =================================================================
 // 1. 비즈니스 로직 영역 (Business Logic Layer)
 // =================================================================
@@ -61,13 +77,13 @@ function useOrderTableLogic({ activeTab, fetchOrders }: any) {
 
   // 🚀 동적 테이블 컬럼 수 계산
   const getColSpanCount = useCallback(() => {
-    let count = 2; // 기본: 상품명, 가격
+    let count = activeTab === ORDER_STATUS.PAYMENT_REQ ? 1 : 2; // 기본: 상품명(+가격, 배송비 요청 탭은 가격 컬럼 없음)
     if (activeTab === 'ALL') count += 1; // 상태 (전체내역 전용)
     if ([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab)) count += 1; // 체크박스
     if ([ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(activeTab)) count += 1; // 수취인
     if (activeTab === 'BID_PENDING' || activeTab === 'BIDDING') count += 2; // 남은시간, 내 입찰금액
     if (activeTab === ORDER_STATUS.SHIPPING) count += 1; // 운송장
-    if (activeTab === ORDER_STATUS.PAYMENT_REQ) count += 1; // 배송비
+    if (activeTab === ORDER_STATUS.PAYMENT_REQ) count += 2; // 일본 내 배송비, 국제 배송비
     if ([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) count += 1; // 삭제버튼(휴지통)
     if (activeTab === 'BIDDING') count += 1; // 경매 상태
     return count;
@@ -141,6 +157,8 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
 
   const isAuctionTab = activeTab === 'BID_PENDING' || activeTab === 'BIDDING';
   const showBundleAndRecipientTabs = [ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING];
+  // 🌟 합포장(bundleId) 묶음을 한 행으로 합쳐서 보여주는 탭들 (배송비 요청/배송비 결제 완료/국제 배송)
+  const bundleGroupTabs = [ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING];
   const hasCheckbox = [ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab as any);
 
   // 상태값에 따른 테마 색상 반환 함수
@@ -187,10 +205,55 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     }
   };
 
-  const toggleCheck = (orderId: string) => {
-    if (selectedItems.includes(orderId)) setSelectedItems(selectedItems.filter((id: string) => id !== orderId));
-    else setSelectedItems([...selectedItems, orderId]);
+  // 🌟 합포장 묶음에서 어떤 상품들이 포함됐는지 펼쳐보기 위한 상태
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleExpand = (bundleId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(bundleId)) next.delete(bundleId); else next.add(bundleId);
+      return next;
+    });
   };
+
+  // 🌟 합포장(bundleId 공유) 묶음은 orderIds 배열로 한 번에 선택/해제합니다.
+  const toggleCheck = (orderIdOrIds: string | string[]) => {
+    const ids = Array.isArray(orderIdOrIds) ? orderIdOrIds : [orderIdOrIds];
+    const allSelected = ids.every((id: string) => selectedItems.includes(id));
+    if (allSelected) setSelectedItems(selectedItems.filter((id: string) => !ids.includes(id)));
+    else setSelectedItems([...selectedItems.filter((id: string) => !ids.includes(id)), ...ids]);
+  };
+
+  // 🌟 배송비 요청/배송비 결제 완료/국제 배송 탭에서는 같은 bundleId(합포장)로 묶인 주문들을 한 행으로 합쳐서 보여줍니다.
+  const displayItems = React.useMemo(() => {
+    if (!bundleGroupTabs.includes(activeTab)) return items;
+
+    const groups: Record<string, any[]> = {};
+    const singles: any[] = [];
+    items.forEach((item: any) => {
+      if (item.bundleId) {
+        (groups[item.bundleId] ||= []).push(item);
+      } else {
+        singles.push(item);
+      }
+    });
+
+    const grouped = Object.entries(groups).map(([bundleId, group]) => {
+      const first = group[0];
+      return {
+        ...first,
+        orderId: bundleId,
+        orderIds: group.map((g: any) => g.orderId),
+        productName: group.length > 1 ? `${first.productName} 외 ${group.length - 1}건` : first.productName,
+        productPrice: group.reduce((sum: number, g: any) => sum + (g.productPrice || 0), 0),
+        domesticShippingFee: group.reduce((sum: number, g: any) => sum + (g.domesticShippingFee || 0), 0),
+        secondPaymentAmount: group.reduce((sum: number, g: any) => sum + (g.secondPaymentAmount || 0), 0),
+        isGroup: group.length > 1,
+        bundleItems: group,
+      };
+    });
+
+    return [...grouped, ...singles];
+  }, [items, activeTab]);
 
   return (
     <div className="miku-ordertable-wrapper">
@@ -217,12 +280,13 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
               <th className="th-cell th-product">상품명</th>
               
               {isAuctionTab && <th className="th-cell th-time">남은 시간</th>}
-              <th className="th-cell th-price">{isAuctionTab ? '현재 최고가' : '상품 금액'}</th>
+              {activeTab !== ORDER_STATUS.PAYMENT_REQ && <th className="th-cell th-price">{isAuctionTab ? '현재 최고가' : '상품 금액'}</th>}
               {isAuctionTab && <th className="th-cell th-mybid">내 입찰금액</th>}
               
               {activeTab === 'BIDDING' && <th className="th-cell th-auction-status">경매 상태</th>}
               {showBundleAndRecipientTabs.includes(activeTab) && <th className="th-cell th-recipient">수취인</th>}
-              {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell th-shipping-fee">배송비(₩)</th>}
+              {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell th-domestic-fee">일본 내 배송비(₩)</th>}
+              {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell th-shipping-fee">국제 배송비(₩)</th>}
               {activeTab === ORDER_STATUS.SHIPPING && <th className="th-cell th-tracking">운송장 번호</th>}
               
               {/* 삭제 버튼용 빈 헤더를 맨 끝으로 배치 */}
@@ -233,25 +297,26 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           </thead>
 
           <tbody>
-            {items.length === 0 ? (
+            {displayItems.length === 0 ? (
               <tr><td colSpan={getColSpanCount()} className="empty-row">해당하는 상품이 없습니다.</td></tr>
             ) : (
-              items.map((item: any) => {
-                const isChecked = selectedItems.includes(item.orderId);
+              displayItems.map((item: any) => {
+                const ids: string[] = item.orderIds || [item.orderId];
+                const isChecked = ids.every((id: string) => selectedItems.includes(id));
                 const timeData = getAuctionTimeData(item.auctionEndDate);
 
                 return (
                   <React.Fragment key={item.orderId}>
                     {/* 🌟 행 전체에 onClick 이벤트 및 커서 클래스 적용 */}
-                    <tr 
+                    <tr
                       className={`tr-row ${isChecked ? 'selected' : ''} ${hasCheckbox ? 'clickable' : ''}`}
-                      onClick={() => { if (hasCheckbox) toggleCheck(item.orderId); }}
+                      onClick={() => { if (hasCheckbox) toggleCheck(ids); }}
                     >
                       {/* 체크박스 */}
                       {hasCheckbox && (
-                        <td className="td-cell">
+                        <td className="td-cell td-check">
                           {/* e.stopPropagation()으로 중복 클릭 방지 */}
-                          <div className={`custom-checkbox ${isChecked ? 'checked' : ''}`} onClick={(e) => { e.stopPropagation(); toggleCheck(item.orderId); }}>
+                          <div className={`custom-checkbox ${isChecked ? 'checked' : ''}`} onClick={(e) => { e.stopPropagation(); toggleCheck(ids); }}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                           </div>
                         </td>
@@ -266,8 +331,23 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                         </td>
                       )}
                       
-                      <td className="td-cell td-product">
-                        <div className="prod-name-box" title={item.productName}>{item.productName}</div>
+                      <td className={`td-cell td-product ${hasCheckbox ? 'with-checkbox' : ''}`}>
+                        <div className="prod-name-box" title={item.productName}>
+                          {item.isGroup && (
+                            <span className="bundle-group-badge">📦 합포장 {item.bundleItems.length}건</span>
+                          )}
+                          <span className="prod-name-text">{item.productName}</span>
+                          {item.isGroup && (
+                            <button
+                              className={`btn-bundle-toggle ${expandedGroups.has(item.orderId) ? 'open' : ''}`}
+                              onClick={(e) => { e.stopPropagation(); toggleExpand(item.orderId); }}
+                              title={expandedGroups.has(item.orderId) ? '접기' : '포함된 상품 보기'}
+                            >
+                              <span className="btn-bundle-toggle-label">{expandedGroups.has(item.orderId) ? '접기' : '모든 상품 보기'}</span>
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </button>
+                          )}
+                        </div>
                       </td>
 
                       {isAuctionTab && (
@@ -278,7 +358,9 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                         </td>
                       )}
 
-                      <td className="td-cell"><div className="price-val">¥ {(item.productPrice || 0).toLocaleString()}</div></td>
+                      {activeTab !== ORDER_STATUS.PAYMENT_REQ && (
+                        <td className="td-cell"><div className="price-val">¥ {(item.productPrice || 0).toLocaleString()}</div></td>
+                      )}
 
                       {isAuctionTab && (
                         <td className="td-cell"><div className="mybid-val">¥ {(item.myBidPrice || 0).toLocaleString()}</div></td>
@@ -294,7 +376,15 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                         </td>
                       )}
 
-                      {showBundleAndRecipientTabs.includes(activeTab) && <td className="td-cell">{item.address?.recipientName || '미지정'}</td>}
+                      {showBundleAndRecipientTabs.includes(activeTab) && (
+                        <td className="td-cell">
+                          {item.address?.recipientName || '미지정'}
+                          {item.address?.address && (
+                            <span className="recipient-address">({getLastRoadAddressPart(item.address.address)})</span>
+                          )}
+                        </td>
+                      )}
+                      {activeTab === ORDER_STATUS.PAYMENT_REQ && <td className="td-cell">₩ {(item.domesticShippingFee || 0).toLocaleString()}</td>}
                       {activeTab === ORDER_STATUS.PAYMENT_REQ && <td className="td-cell font-bold">₩ {(item.secondPaymentAmount || 0).toLocaleString()}</td>}
                       {activeTab === ORDER_STATUS.SHIPPING && <td className="td-cell">{item.trackingNo || '준비중'}</td>}
 
@@ -313,6 +403,26 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                         </td>
                       )}
                     </tr>
+
+                    {/* 🌟 합포장 묶음 펼치기: 포함된 상품명/상품가격 표시 */}
+                    {item.isGroup && expandedGroups.has(item.orderId) && (
+                      <tr className="tr-bundle-detail">
+                        <td className="td-cell td-bundle-detail" colSpan={getColSpanCount()}>
+                          <div className="bundle-detail-list">
+                            <div className="bundle-detail-header">
+                              <span className="bundle-detail-header-name">상품명</span>
+                              <span className="bundle-detail-header-price">상품 금액</span>
+                            </div>
+                            {item.bundleItems.map((sub: any) => (
+                              <div className="bundle-detail-row" key={sub.orderId}>
+                                <span className="bundle-detail-name" title={sub.productName}>{truncateText(sub.productName, 50)}</span>
+                                <span className="bundle-detail-price">¥ {(sub.productPrice || 0).toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   </React.Fragment>
                 );
               })
@@ -418,11 +528,17 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           min-width: 130px !important;
         }
 
-        .td-product { text-align: left; max-width: 250px; }
+        .th-check, .td-check { width: 55px; min-width: 55px; padding-left: 18px !important; padding-right: 15px !important; }
+        .td-check .custom-checkbox { margin: 0; }
+        .td-product { text-align: left; max-width: 250px; padding-left: 18px; }
+        .td-product.with-checkbox { padding-left: 0; }
         .prod-name-box {
+          display: flex; align-items: center; min-width: 0;
           font-weight: 700; color: #0f172a;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-          padding: 0 8px;
+          padding: 0;
+        }
+        .prod-name-text {
+          flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
 
         /* 🌟 커스텀 체크박스 */
@@ -462,6 +578,45 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         .badge-bid.default { background: #f1f5f9; color: #64748b; }
 
         .price-val { font-weight: 900; color: #0f172a; font-size: 15px; }
+        .recipient-address { display: block; margin-top: 2px; font-size: 12px; color: #94a3b8; }
+
+        .bundle-group-badge {
+          display: inline-flex; align-items: center; gap: 6px;
+          height: 24px; padding: 0 12px; margin-right: 8px; flex-shrink: 0;
+          border-radius: 999px; background: #f97316; color: #fff;
+          font-size: 12px; font-weight: 800; white-space: nowrap;
+        }
+        .btn-bundle-toggle {
+          display: inline-flex; align-items: center; gap: 4px;
+          height: 24px; padding: 0 8px; margin-left: 8px; flex-shrink: 0;
+          border: 1px solid #cbd5e1; background: #f1f5f9; border-radius: 6px; cursor: pointer;
+          color: #475569; font-size: 11px; font-weight: 700; white-space: nowrap;
+          transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        }
+        .btn-bundle-toggle svg { transition: transform 0.15s ease; }
+        .btn-bundle-toggle:hover { background: #e2e8f0; }
+        .btn-bundle-toggle.open { background: #fee2e2; border-color: #fda4af; color: #e11d48; }
+        .btn-bundle-toggle.open svg { transform: rotate(90deg); }
+
+        .tr-bundle-detail { background: #f8fafc; }
+        .td-bundle-detail { padding: 10px 20px !important; }
+        .bundle-detail-list { display: flex; flex-direction: column; gap: 6px; }
+        .bundle-detail-header {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 0 14px; font-size: 14px; font-weight: 700; color: #64748b;
+        }
+        .bundle-detail-header-name { text-align: left; }
+        .bundle-detail-header-price { flex-shrink: 0; margin-left: 12px; }
+        .bundle-detail-row {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 8px 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+        }
+        .bundle-detail-name {
+          font-size: 13px; color: #334155; flex: 1; min-width: 0;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          text-align: left;
+        }
+        .bundle-detail-price { font-size: 13px; font-weight: 800; color: #0f172a; flex-shrink: 0; margin-left: 12px; }
         .mybid-val { font-weight: 900; color: #3b82f6; font-size: 15px; }
         .font-bold { font-weight: 800; }
 

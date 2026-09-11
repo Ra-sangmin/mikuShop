@@ -31,10 +31,16 @@ export async function GET(req: NextRequest) {
     const $ = load(html);
 
     // --- 💰 기본 정보 파싱 ---
-    const currentPrice = $('.sc-1f0603b0-2').first().text().replace(/[^0-9]/g, '');
-    const bidCount = $('.sc-6162f90d-2').filter((_, el) => $(el).find('svg[aria-label="入札"]').length > 0).text().replace(/[^0-9]/g, '') || '0';
-    const timeLeft = $('.sc-6162f90d-2').filter((_, el) => $(el).find('svg[aria-label="時間"]').length > 0).find('span').first().text().trim();
-    const endSchedule = $('.sc-6162f90d-2').find('span[class*="gv-u-colorTextGray"]').text().trim();
+    // 🌟 야후 옥션이 styled-components 해시 클래스(.sc-...)를 걷어내고 유틸리티 클래스로
+    // 개편하면서 기존 선택자가 전부 매칭 0건이 되어, 현재가/입찰수/남은 시간이 항상
+    // 비어있는 값(0, "경매 종료")으로 표시되던 버그가 있었습니다. aria-label 아이콘
+    // 기준으로 가장 가까운 컨테이너를 찾는 방식으로 교체합니다(아이콘의 aria-label은
+    // 해시 클래스보다 훨씬 안정적으로 유지됩니다).
+    const currentPrice = $('.fs_3xlarge').first().text().replace(/[^0-9]/g, '');
+    const timeStack = $('svg[aria-label="時間"]').parent();
+    const bidCount = $('svg[aria-label="入札"]').parent().text().replace(/[^0-9]/g, '') || '0';
+    const timeLeft = timeStack.find('span').first().text().trim();
+    const endSchedule = timeStack.find('span[class*="colorTextGray"]').text().trim();
 
     // --- 📸 이미지 갤러리 ---
     const images: string[] = [];

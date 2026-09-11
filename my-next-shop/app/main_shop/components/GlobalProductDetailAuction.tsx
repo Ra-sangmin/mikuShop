@@ -56,6 +56,21 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
     return numericBid <= 20000 ? 2000 : Math.floor(numericBid * 0.1);
   }, [bidAmount]);
 
+  // 🌟 하단 "희망 입찰 기준 예상 결제 금액" 패널은 GlobalProductDetailBase의 currentPrice를 그대로 표시합니다.
+  // 사용자가 입력한 희망 입찰 금액을 그대로 반영하고, 아직 입력 전이면 현재가를 기본값으로 보여줍니다.
+  const estimateBasePrice = useMemo(() => {
+    const numericBid = parseInt(bidAmount, 10);
+    if (isNaN(numericBid) || numericBid <= 0) return livePrice;
+    return numericBid;
+  }, [bidAmount, livePrice]);
+
+  // 🌟 입력한 희망 입찰 금액이 현재 입찰가 이하이면 입력창을 빨간색으로 표시합니다.
+  const isBidTooLow = useMemo(() => {
+    const numericBid = parseInt(bidAmount, 10);
+    if (isNaN(numericBid) || numericBid <= 0) return false;
+    return numericBid <= livePrice;
+  }, [bidAmount, livePrice]);
+
   const theme = useMemo(() => ({
     main: '#ef4444', 
     light: '#fef2f2'
@@ -124,8 +139,8 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
     
     // 🌟 입력값 유효성 검사
     const numericBid = parseInt(bidAmount);
-    if (!numericBid || numericBid < livePrice) {
-      showAlert(`희망 입찰 금액은 현재가(¥${livePrice.toLocaleString()}) 이상이어야 합니다.`, "error");
+    if (!numericBid || numericBid <= livePrice) {
+      showAlert(`희망 입찰 금액은 현재가(¥${livePrice.toLocaleString()})보다 높아야 합니다.`, "error");
       return;
     }
 
@@ -134,11 +149,13 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId, 
-          platform: product.platform, 
+          userId,
+          platform: product.platform,
           productName: product.name,
-          productPrice: product.price,
-          productImageUrl: product.thumbnail, 
+          // 🌟 product.price(현재가)는 입찰이 0건인 경매의 경우 0일 수 있어, 서버의 필수값
+          // 검증(!productPrice)에 걸려버립니다. 항상 0보다 큰 값이 보장되는 희망 입찰 금액을 보냅니다.
+          productPrice: numericBid,
+          productImageUrl: product.thumbnail,
           productUrl: product.url,
           auctionEndDate: product.endSchedule, 
           status: "BID_PENDING",
@@ -288,10 +305,10 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
   }, [product, liveBidCount, livePrice]);
 
   return (
-    <GlobalProductDetailBase 
-      product={product} 
-      currentPrice={livePrice} 
-      quantity={1} 
+    <GlobalProductDetailBase
+      product={product}
+      currentPrice={estimateBasePrice}
+      quantity={1}
       isAuction={true}
       onClose={onClose}
       middleContent={renderMiddleContent} 
@@ -361,27 +378,33 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
             </label>
             
             {/* 희망 입찰 금액 입력창 */}
-            <input 
-              type="number" 
+            <input
+              type="number"
               placeholder={`최소 ${livePrice.toLocaleString()}엔 이상 입력`}
               value={bidAmount}
               onChange={(e) => setBidAmount(e.target.value)} // 🌟 타이핑할 때마다 상태 업데이트
-              style={{ 
-                width: '100%', 
-                padding: '16px', 
-                borderRadius: '12px', 
-                border: '1px solid #cbd5e1',
+              style={{
+                width: '100%',
+                padding: '16px',
+                borderRadius: '12px',
+                border: `1px solid ${isBidTooLow ? '#ef4444' : '#cbd5e1'}`,
                 backgroundColor: '#ffffff',
                 fontSize: '20px',
                 fontWeight: '800',
-                color: '#1e293b',
+                color: isBidTooLow ? '#ef4444' : '#1e293b',
                 boxSizing: 'border-box',
-                marginBottom: '16px',
+                marginBottom: isBidTooLow ? '8px' : '16px',
                 outline: 'none',
-                boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.02)',
-                transition: 'border-color 0.2s ease'
+                boxShadow: isBidTooLow ? '0 0 0 3px rgba(239, 68, 68, 0.1)' : 'inset 0 2px 6px rgba(0,0,0,0.02)',
+                transition: 'border-color 0.2s ease, color 0.2s ease'
               }}
             />
+
+            {isBidTooLow && (
+              <p style={{ margin: '0 0 16px', fontSize: '13px', fontWeight: '700', color: '#ef4444' }}>
+                현재 입찰가(¥{livePrice.toLocaleString()})보다 높은 금액을 입력해주세요.
+              </p>
+            )}
 
             <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, #e2e8f0, transparent)', marginBottom: '16px' }}></div>
 

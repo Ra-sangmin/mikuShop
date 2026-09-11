@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import DaumPostcode from 'react-daum-postcode';
 
 // =================================================================
@@ -120,6 +121,13 @@ export default function AddressForm(props: any) {
 
   const { selectedAddress } = props;
 
+  // 🌟 이 모달은 fixed + z-index로 화면 전체를 덮도록 만들었는데도, 페이지 하단의
+  // <footer>가 (DOM 구조상 같은 스택킹 컨텍스트에 있어야 함에도) 모달 중간을 뚫고
+  // 위에 그려지는 버그가 있었습니다. document.body에 직접 렌더링하는 포탈로
+  // 옮겨서 어떤 조상 요소의 영향도 받지 않도록 근본적으로 해결합니다.
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
+
   return (
     <div className="miku-addr-form-container anim-slide-up">
       
@@ -170,11 +178,11 @@ export default function AddressForm(props: any) {
         </div>
       </div>
 
-      {/* 🌟 새 배송지 추가 모달 (글래스모피즘 오버레이) */}
-      {showAddressForm && (
+      {/* 🌟 새 배송지 추가 모달 (글래스모피즘 오버레이) - document.body로 포탈 렌더링 */}
+      {isMounted && showAddressForm && createPortal(
         <div className="miku-addr-modal-overlay anim-fade-in">
           <div className="miku-addr-modal-content anim-slide-up-modal">
-            
+
             <div className="modal-header">
               <h3>새 배송지 추가</h3>
               <button className="close-btn" onClick={() => setShowAddressForm(false)}>✕</button>
@@ -184,7 +192,7 @@ export default function AddressForm(props: any) {
               <FormInputGroup label="수취인명(한글)" name="recipientName" value={addressForm.recipientName} onChange={handleFormChange} required />
               <FormInputGroup label="수취인명(영문)" name="recipientEnglishName" value={addressForm.recipientEnglishName} onChange={handleFormChange} />
               <FormInputGroup label="연락처" name="phone" value={addressForm.phone} onChange={handleFormChange} required />
-              
+
               <div className="miku-addr-input-group">
                 <label className="input-label">주소 <span className="req">*</span></label>
                 <div className="address-search-row">
@@ -209,11 +217,12 @@ export default function AddressForm(props: any) {
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* 🌟 우편번호 검색 모달 */}
-      {isOpenPostcode && (
+      {/* 🌟 우편번호 검색 모달 - 마찬가지로 document.body로 포탈 렌더링 */}
+      {isMounted && isOpenPostcode && createPortal(
         <div className="miku-addr-postcode-overlay anim-fade-in">
           <div className="postcode-content">
             <div className="postcode-header">
@@ -222,7 +231,8 @@ export default function AddressForm(props: any) {
             </div>
             <DaumPostcode onComplete={handleCompletePostcode} style={{ height: '400px', width: '100%' }} />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ================================================================= */}

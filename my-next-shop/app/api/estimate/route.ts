@@ -31,44 +31,50 @@ async function updateExchangeRateConfig(data: { additionalRate?: number; current
   }
 }
 
-// 🌟 forceRefresh가 true면 캐시를 무시하고 타임스탬프를 붙여 즉시 새로고침하며,
-// 네이버 금융에서 엔화 환율 HTML을 가져와 파싱하는 부분만 담당합니다.
+// 🌟 네이버가 finance.naver.com의 구(舊) HTML 페이지(.nhn)를 stock.naver.com으로
+// 리다이렉트하면서 <option value="..."> 형식의 옛 마크업이 사라져, 예전 정규식 파싱이
+// 항상 실패하고 조용히 9.05(=가짜 905원) 폴백값만 반환하던 문제가 있었습니다.
+// stock.naver.com이 실제로 호출하는 공개 JSON API를 직접 사용하도록 교체합니다.
 async function fetchNaverExchangeRate(forceRefresh: boolean): Promise<number> {
-  const timestamp = forceRefresh ? `&t=${Date.now()}` : '';
   const fetchOptions: RequestInit = forceRefresh
     ? { cache: 'no-store' }
     : { next: { revalidate: 300 } };
 
-  const response = await fetch(`https://finance.naver.com/marketindex/exchangeDetail.nhn?marketindexCd=FX_JPYKRW${timestamp}`, {
+  const response = await fetch('https://stock.naver.com/api/stockSecurity/exchange-rates/v2/market-index/FX_JPYKRW/latest', {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     },
     ...fetchOptions
   });
 
-  const html = await response.text();
-  const match = html.match(/<option\s+value="([\d.]+)"[^>]*>[^<]*JPY\s*<\/option>/i);
+  if (!response.ok) throw new Error(`네이버 환율 API 응답 오류: ${response.status}`);
 
-  if (match && match[1]) {
-    const rate = parseFloat(match[1]);
+  const data = await response.json();
+  const basis = parseFloat(data.currencyBasis) || 100;
+  const rate = parseFloat(data.saleBaseRate);
 
-    // 🌟 forceRefresh로 즉시 새로고침한 경우에만 DB의 현재 환율(currentExchangeRate)도 갱신합니다.
-    if (forceRefresh) {
-      await updateExchangeRateConfig({ currentExchangeRate: rate });
-    }
+  if (!rate || isNaN(rate)) throw new Error("환율 값을 찾을 수 없습니다.");
 
-    return rate;
+  // 🌟 API는 "100엔 기준" 매매기준율을 주므로, 이 프로젝트 전체가 쓰는 "1엔 기준" 단위로 환산합니다.
+  const baseRate = rate / basis;
+
+  // 🌟 forceRefresh로 즉시 새로고침한 경우에만 DB의 현재 환율(currentExchangeRate)도 갱신합니다.
+  if (forceRefresh) {
+    await updateExchangeRateConfig({ currentExchangeRate: baseRate });
   }
-  throw new Error("환율을 찾을 수 없습니다.");
+
+  return baseRate;
 }
 
-// 🌟 fetchNaverExchangeRate 실패 시 9.05로 대체하는, 순수 환율(가산액 미포함) 조회 함수
-async function getBaseExchangeRate(forceRefresh = false): Promise<number> {
+// 🌟 fetchNaverExchangeRate 실패 시 9.05로 대체하되, 실패 여부를 함께 반환해
+// 호출부(프론트엔드)가 "이건 진짜 환율이 아니라 임시값"이라고 표시할 수 있게 합니다.
+async function getBaseExchangeRate(forceRefresh = false): Promise<{ rate: number; failed: boolean }> {
   try {
-    return await fetchNaverExchangeRate(forceRefresh);
+    const rate = await fetchNaverExchangeRate(forceRefresh);
+    return { rate, failed: false };
   } catch (error) {
     console.error("환율 크롤링 에러:", error);
-    return 9.05;
+    return { rate: 9.05, failed: true };
   }
 }
 
@@ -88,9 +94,15 @@ export async function POST(request: Request) {
     // 🌟 forceRefresh일 때만 네이버에서 실시간으로 새로 받아옵니다(그 값은 fetchNaverExchangeRate가 DB에 저장).
     // forceRefresh가 아니면 매번 네이버를 다시 조회하지 않고, 마지막으로 새로고침해서 DB에 저장해둔
     // currentExchangeRate를 그대로 씁니다. (DB에 아직 저장된 값이 없으면 최초 1회만 네이버에서 가져옵니다.)
-    const baseExchangeRate = (!forceRefresh && currentExchangeRate)
-      ? currentExchangeRate
-      : await getBaseExchangeRate(forceRefresh);
+    let baseExchangeRate: number;
+    let exchangeRateFetchFailed = false;
+    if (!forceRefresh && currentExchangeRate) {
+      baseExchangeRate = currentExchangeRate;
+    } else {
+      const result = await getBaseExchangeRate(forceRefresh);
+      baseExchangeRate = result.rate;
+      exchangeRateFetchFailed = result.failed;
+    }
     const exchangeRate = baseExchangeRate + additionalRate;
 
     let paymentFee = 0;
@@ -115,6 +127,7 @@ export async function POST(request: Request) {
       success: true,
       data: {
         baseExchangeRate: baseExchangeRate,
+        exchangeRateFetchFailed: exchangeRateFetchFailed,
         additionalRate: additionalRate,
         exchangeRateBasisUnit: exchangeRateBasisUnit,
         exchangeRate: exchangeRate,

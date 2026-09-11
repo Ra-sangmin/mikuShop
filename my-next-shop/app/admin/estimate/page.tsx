@@ -5,6 +5,8 @@ import '../admin-common.css';
 
 export default function PremiumEstimatePage() {
   const [exchangeRate, setExchangeRate] = useState(0);
+  // 🌟 네이버에서 실시간 환율을 못 가져와 임시값(9.05)으로 대체됐는지 여부
+  const [exchangeRateFetchFailed, setExchangeRateFetchFailed] = useState(false);
   const [addRate, setAddRate] = useState<number>(0);
   // 🌟 "환율을 몇 엔 기준으로 다시 계산해서 보여줄지"의 기준값 (api/estimate의 getExchangeRateBasisUnit)
   const [rateBasisUnit, setRateBasisUnit] = useState<number>(100);
@@ -40,6 +42,7 @@ export default function PremiumEstimatePage() {
     .then(data => {
       if (data.success) {
         setExchangeRate(data.data.baseExchangeRate);
+        setExchangeRateFetchFailed(!!data.data.exchangeRateFetchFailed);
         setRateBasisUnit(data.data.exchangeRateBasisUnit);
         // 🌟 추가 증가액 기본값을 api/estimate의 getAdditionalRate 값(환율 단위)에
         // getExchangeRateBasisUnit 기준값을 곱해 "원" 단위로 환산해 초기화합니다.
@@ -143,6 +146,7 @@ export default function PremiumEstimatePage() {
       const data = await res.json();
       if (data.success) {
         setExchangeRate(data.data.baseExchangeRate);
+        setExchangeRateFetchFailed(!!data.data.exchangeRateFetchFailed);
         setResultCount(data.data.finalPriceWon);
         // 🌟 추가 증가액도 DB(ExchangeRateConfig)에서 바뀌었을 수 있으므로, 새로고침 시 함께 재동기화합니다.
         setRateBasisUnit(data.data.exchangeRateBasisUnit);
@@ -213,11 +217,15 @@ export default function PremiumEstimatePage() {
                 <span className="label"><span className="color-dot bg-rate"></span>현재 환율</span>
                 
                 <div
-                  className={`value-box highlight-rate refresh-box ${isRefreshing ? 'is-refreshing' : ''}`}
+                  className={`value-box highlight-rate refresh-box ${isRefreshing ? 'is-refreshing' : ''} ${exchangeRateFetchFailed ? 'fetch-failed' : ''}`}
                   onClick={handleForceRefresh}
-                  title="클릭하여 환율 즉시 새로고침"
+                  title={exchangeRateFetchFailed ? '환율 조회 실패 - 클릭하여 다시 시도' : '클릭하여 환율 즉시 새로고침'}
                 >
-                  {(exchangeRate * rateBasisUnit).toFixed(2)} <span className="unit">원</span>
+                  {exchangeRateFetchFailed ? (
+                    <span className="fetch-failed-text">⚠️ 환율 조회 실패 (임시값)</span>
+                  ) : (
+                    <>{(exchangeRate * rateBasisUnit).toFixed(2)} <span className="unit">원</span></>
+                  )}
                 </div>
 
               </div>
@@ -246,8 +254,10 @@ export default function PremiumEstimatePage() {
                 추가 증가액 적용
               </button>
               <p className="global-apply-warning">
-                ※ 이 버튼 클릭시 홈페이지 모든 유저가<br className="warning-break" />
-                <strong className="global-apply-warning-highlight">최종 표시 환율</strong><br className="warning-break" />
+                ※ 이 버튼 클릭시 홈페이지 모든 유저가{' '}
+                <br className="warning-break" />
+                <strong className="global-apply-warning-highlight">최종 표시 환율</strong>{' '}
+                <br className="warning-break" />
                 금액으로 표시됩니다.
               </p>
             </div>
@@ -684,6 +694,18 @@ export default function PremiumEstimatePage() {
         .c-rate { color: #2563eb; }
         .bg-rate { background-color: #2563eb; box-shadow: 0 0 8px rgba(37, 99, 235, 0.4); }
         .highlight-rate { color: #2563eb; background: rgba(148, 163, 184, 0.1); }
+
+        /* 🌟 네이버 환율 조회 실패 시(임시값 9.05 사용 중) 명확하게 경고 표시 */
+        .value-box.fetch-failed {
+          background: rgba(239, 68, 68, 0.12);
+          border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+        .fetch-failed-text {
+          color: #ef4444;
+          font-size: 13px;
+          font-weight: 800;
+          white-space: nowrap;
+        }
 
         .c-add { color: #7c3aed; }
         .bg-add { background-color: #7c3aed; box-shadow: 0 0 8px rgba(124, 58, 237, 0.4); }

@@ -11,22 +11,42 @@ interface PaymentSummaryProps {
     delivery: number;
     agency: number;
     deposit?: number;
+    domestic?: number;
   };
   totalPriceWon: number;
   exchangeRate: number;
   selectedItems: any[];
   handleUpdateStatus: (status: string) => void;
+  myMoney: number;
+  orders?: any[];
 }
 
 // =================================================================
 // 1. 비즈니스 로직 영역 (Business Logic Layer)
 // =================================================================
 function usePaymentSummaryLogic(props: PaymentSummaryProps) {
-  const { activeTab, totals, selectedItems, totalPriceWon } = props;
+  const { activeTab, totals, selectedItems, totalPriceWon, orders = [] } = props;
 
   const isPaymentRequest = activeTab === ORDER_STATUS.PAYMENT_REQ;
   const isBidPending = activeTab === ORDER_STATUS.BID_PENDING;
   const isSingleHighlightMode = isPaymentRequest || isBidPending;
+
+  // 🌟 배송비 요청 탭에서는 같은 bundleId(합포장)로 묶인 선택 항목을 1건으로 집계합니다.
+  const selectedCount = useMemo(() => {
+    if (!isPaymentRequest) return selectedItems.length;
+    const seenBundles = new Set<string>();
+    let count = 0;
+    selectedItems.forEach((id: string) => {
+      const order = orders.find((o: any) => o.orderId === id);
+      const bundleId = order?.bundleId;
+      if (bundleId) {
+        if (seenBundles.has(bundleId)) return;
+        seenBundles.add(bundleId);
+      }
+      count++;
+    });
+    return count;
+  }, [selectedItems, orders, isPaymentRequest]);
 
   const [feeSettings, setFeeSettings] = useState({ TRANSFER: 450, AGENCY: 100 });
 
@@ -52,14 +72,13 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
   const calculatedTotals = useMemo(() => {
     if (!isSingleHighlightMode && selectedItems.length > 0) {
       const itemCount = selectedItems.length;
-      
-      const deliveryTotal = selectedItems.reduce((sum: number, item: any) => 
-        sum + (Number(item.domesticShippingFee) || 0), 0
-      );
 
+      // 🌟 selectedItems는 선택된 주문의 id 문자열 배열이라 item.domesticShippingFee로 직접
+      // 읽으면 항상 undefined(→0)가 되는 버그가 있었습니다. 실제 주문 객체를 기준으로 이미
+      // 정확히 합산해둔 부모의 totals.delivery를 그대로 사용합니다.
       return {
         product: totals.product,
-        delivery: deliveryTotal,
+        delivery: totals.delivery,
         transfer: itemCount * feeSettings.TRANSFER,
         agency: itemCount * feeSettings.AGENCY
       };
@@ -74,9 +93,9 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
   };
 
   const getButtonText = () => {
-    if (isPaymentRequest) return `선택한 ${selectedItems.length}건 배송비 결제하기`;
+    if (isPaymentRequest) return `선택한 ${selectedCount}건 배송비 결제하기`;
     if (isBidPending) return `선택한 ${selectedItems.length}건 보증금 결제하기`;
-    
+
     // 일반 구매 장바구니일 경우
     return `선택한 ${selectedItems.length}건 결제하기`;
   };
@@ -89,6 +108,7 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
 
   return {
     isSingleHighlightMode,
+    isPaymentRequest,
     calculatedTotals,
     getHighlightTitle,
     getButtonText,
@@ -100,9 +120,9 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
 // 2. 화면 컴포넌트 영역 (View Layer)
 // =================================================================
 export default function PaymentSummary(props: PaymentSummaryProps) {
-  const { totalPriceWon, exchangeRate, selectedItems, handleUpdateStatus } = props;
-  const { 
-    isSingleHighlightMode, calculatedTotals, getHighlightTitle, getButtonText, getTargetStatus 
+  const { totalPriceWon, exchangeRate, selectedItems, handleUpdateStatus, myMoney } = props;
+  const {
+    isSingleHighlightMode, isPaymentRequest, calculatedTotals, getHighlightTitle, getButtonText, getTargetStatus
   } = usePaymentSummaryLogic(props);
 
   const hasItems = selectedItems.length > 0;
@@ -112,11 +132,36 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
       <div className="miku-payment-content-flex">
         
         {isSingleHighlightMode ? (
-          /* 🌟 단일 강조 박스 (고급형) */
-          <div className="single-highlight-box premium-dark-box">
-            <span className="highlight-title">{getHighlightTitle()}</span>
-            <span className="highlight-value">₩ {totalPriceWon.toLocaleString()}</span>
-          </div>
+          <>
+            {/* 🌟 배송비 요청 탭 전용: 일본 내 배송비 + 국제 배송비 = 청구된 총 배송비 공식 */}
+            {isPaymentRequest && (
+              <div className="fee-formula-box">
+                <div className="fee-formula-item">
+                  <span className="item-label">일본 내 배송비</span>
+                  <span className="item-val">¥ {(calculatedTotals.domestic || 0).toLocaleString()}</span>
+                </div>
+                <span className="fee-formula-symbol">+</span>
+                <div className="fee-formula-item">
+                  <span className="item-label">국제 배송비</span>
+                  <span className="item-val">¥ {calculatedTotals.product.toLocaleString()}</span>
+                </div>
+                <span className="fee-formula-symbol">=</span>
+                <div className="fee-formula-item">
+                  <span className="item-label">청구된 총 배송비</span>
+                  <span className="item-val">¥ {((calculatedTotals.domestic || 0) + calculatedTotals.product).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
+            {/* 🌟 단일 강조 박스 (고급형) */}
+            <div className="single-highlight-box premium-dark-box">
+              <span className="highlight-title">{getHighlightTitle()}</span>
+              <span className="highlight-value">₩ {totalPriceWon.toLocaleString()}</span>
+              <span className={`my-money-info ${myMoney < totalPriceWon ? 'insufficient' : ''}`}>
+                내 미쿠짱 머니 ₩ {myMoney.toLocaleString()}
+              </span>
+            </div>
+          </>
         ) : (
           /* 🌟 장바구니 요약 정보 그리드 (고급형) */
           <>
@@ -144,6 +189,9 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
                 <span className="total-label">최종 결제예상액 (원화)</span>
               </div>
               <span className="total-value">₩ {totalPriceWon.toLocaleString()}</span>
+              <span className={`my-money-info ${myMoney < totalPriceWon ? 'insufficient' : ''}`}>
+                내 미쿠짱 머니 ₩ {myMoney.toLocaleString()}
+              </span>
             </div>
           </>
         )}
@@ -193,7 +241,29 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           padding: 24px;
           box-sizing: border-box;
         }
-        
+
+        /* 🌟 배송비 요청 탭: 일본 내 배송비 + 국제 배송비 = 청구된 총 배송비 공식 */
+        .fee-formula-box {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 20px;
+          background: #fafafa;
+          border-radius: 20px;
+          border: 1px solid #f0f0f0;
+          padding: 24px;
+          box-sizing: border-box;
+        }
+        .fee-formula-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+        .fee-formula-symbol { font-size: 20px; font-weight: 800; color: #d4d4d8; }
+
         .detail-item {
           display: flex;
           flex-direction: column;
@@ -253,6 +323,17 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           backdrop-filter: blur(4px);
         }
         .total-value { font-size: 34px; font-weight: 900; color: #ffffff; letter-spacing: -1px; line-height: 1.1; }
+
+        /* 🌟 내 미쿠짱 머니 (잔액이 결제예상액보다 부족하면 붉게 강조) */
+        .my-money-info {
+          margin-top: 8px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #a1a1aa;
+        }
+        .my-money-info.insufficient {
+          color: #fb7185;
+        }
 
         .single-highlight-box {
           width: 100%;
@@ -346,6 +427,17 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           }
           .detail-item::after { display: none; } /* 모바일에서는 구분선 숨김 */
           .item-label { font-size: 12px; color: #64748b; font-weight: 600; }
+
+          .fee-formula-box {
+            padding: 16px 12px;
+            gap: 8px;
+            border-radius: 16px;
+            background: #f8fafc;
+            border: none;
+          }
+          .fee-formula-item .item-label { font-size: 11px; }
+          .fee-formula-item .item-val { font-size: 15px; }
+          .fee-formula-symbol { font-size: 14px; }
           .item-val { font-size: 16px; font-weight: 800; color: #0f172a; }
           
           /* 🌟 최종 결제액 박스: 최신 금융앱처럼 좌우 스플릿 배치 */

@@ -231,10 +231,13 @@ export default function GlobalProductDetailBase(props: BaseProps) {
 
       {/* 하단 계산기 및 설명 영역 */}
       <div className="bottomSection" style={styles.bottomSection}>
-        <div style={styles.calcBox}>
-          <h4 className="notranslate" style={styles.calcHeader}>💰 {isAuction ? '현재가 기준 예상 결제 금액' : '예상 결제 금액'}</h4>
+        {/* 🌟 브라우저 자동 번역(예: Chrome 번역)이 가격 텍스트 노드를 <font>로 감싸버리면
+            React가 이후 리렌더링에서 값을 갱신해도 화면에 반영되지 않는 문제가 있어,
+            실시간으로 바뀌는 금액 전체 영역을 notranslate로 감쌉니다. */}
+        <div className="notranslate" translate="no" style={styles.calcBox}>
+          <h4 className="notranslate" style={styles.calcHeader}>💰 {isAuction ? '희망 입찰 기준 예상 결제 금액' : '예상 결제 금액'}</h4>
           <div style={styles.calcGrid}>
-            <div style={styles.calcItem}><span style={styles.attrLabel}>{isAuction ? '현재 입찰가' : '상품가'}</span><p style={{ fontWeight: 'bold', fontSize: '20px' }}>¥{(currentPrice * quantity).toLocaleString()}</p></div>
+            <div style={styles.calcItem}><span style={styles.attrLabel}>{isAuction ? '희망 입찰금액' : '상품가'}</span><p style={{ fontWeight: 'bold', fontSize: '20px' }}>¥{(currentPrice * quantity).toLocaleString()}</p></div>
             <span style={styles.calcSymbol}>+</span>
             <div style={styles.calcItem}><span style={styles.attrLabel}>수수료</span><p style={{ fontWeight: 'bold', fontSize: '20px' }}>¥{(fees.TRANSFER + fees.AGENCY).toLocaleString()}</p></div>
             <span style={styles.calcEquals}>{isMobile ? '' : '='}</span>

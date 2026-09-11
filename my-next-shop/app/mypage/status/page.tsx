@@ -206,15 +206,30 @@ function usePurchaseStatusLogic() {
 
   // 하위 상태 아이템 생성 시 상세 설명(desc) 데이터 추가
   const shippingPhases = useMemo(() => {
-    const getCount = (statusKeys: string[]) => 
+    const getCount = (statusKeys: string[]) =>
       orders.filter(item => statusKeys.includes(item.status)).length;
 
-    const createSubItems = (statusKeys: string[]) => 
+    // 🌟 배송비 요청/배송비 결제 완료/국제 배송 단계에서는 같은 bundleId(합포장)로 묶인 주문을 1건으로 집계합니다.
+    const getBundleAwareCount = (statusKeys: string[]) => {
+      const matched = orders.filter(item => statusKeys.includes(item.status));
+      const seenBundles = new Set<string>();
+      let count = 0;
+      matched.forEach((item: any) => {
+        if (item.bundleId) {
+          if (seenBundles.has(item.bundleId)) return;
+          seenBundles.add(item.bundleId);
+        }
+        count++;
+      });
+      return count;
+    };
+
+    const createSubItems = (statusKeys: string[], bundleAware: boolean = false) =>
       statusKeys.map(key => ({
         key,
         name: ORDER_STATUS_LABEL[key as OrderStatus] || key,
-        count: orders.filter(item => item.status === key).length,
-        desc: STATUS_DESCRIPTIONS[key] || '' 
+        count: bundleAware ? getBundleAwareCount([key]) : orders.filter(item => item.status === key).length,
+        desc: STATUS_DESCRIPTIONS[key] || ''
       }));
 
     const phases = [
@@ -236,11 +251,11 @@ function usePurchaseStatusLogic() {
         totalCount: getCount([ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING]),
         subItems: createSubItems([ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING])
       },
-      { 
+      {
         id: 'shipping', title: '배송', theme: 'theme-orange', icon: '✈️',
         statuses: [ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING],
-        totalCount: getCount([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING]),
-        subItems: createSubItems([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING])
+        totalCount: getBundleAwareCount([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING]),
+        subItems: createSubItems([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING], true)
       }
     ];
 
@@ -275,7 +290,9 @@ function usePurchaseStatusLogic() {
     const selectedOrders = items.filter(item => selectedItems.map(String).includes(String(item.orderId)));
 
     return selectedOrders.reduce((acc, item) => {
-      const productP = Number(item.productPrice * item.productCount) || 0;
+      // 🌟 productCount가 0/누락이면 곱셈 결과가 통째로 0이 돼서 상품 금액이 사라지는 버그가 있었습니다.
+      // Prisma 스키마의 productCount 기본값(1)과 맞춰서, 값이 없을 때는 1개로 간주합니다.
+      const productP = (Number(item.productPrice) || 0) * (Number(item.productCount) || 1);
       const domesticS = Number(item.domesticShippingFee) || 0; 
       const transferF = Number(item.transferFee) || 0;
       const agencyF = Number(item.purchaseFee) || 0;
@@ -287,14 +304,16 @@ function usePurchaseStatusLogic() {
 
       if (activeTab === ORDER_STATUS.PAYMENT_REQ) {
         acc.product += secondP;
+        // 🌟 표시용 참고 항목: 청구 금액(product = 국제 배송비 합)에는 영향 없이, 일본 내 배송비만 별도로 집계합니다.
+        acc.domestic += domesticS;
       } else if (activeTab === ORDER_STATUS.BID_PENDING) {
         acc.deposit += depositAmt;
       } else {
         acc.product += productP;
         if (activeTab === ORDER_STATUS.CART) {
-          acc.transfer += (transferF || 450); 
-          acc.delivery += domesticS; 
-          acc.agency += (agencyF || 100); 
+          acc.transfer += (transferF || 450);
+          acc.delivery += domesticS;
+          acc.agency += (agencyF || 100);
         } else {
           acc.transfer += transferF;
           acc.delivery += domesticS;
@@ -302,16 +321,33 @@ function usePurchaseStatusLogic() {
         }
       }
       return acc;
-    }, { product: 0, transfer: 0, delivery: 0, agency: 0, deposit: 0 }); 
+    }, { product: 0, transfer: 0, delivery: 0, agency: 0, deposit: 0, domestic: 0 });
   }, [items, selectedItems, activeTab]);
 
   const totalPriceVal = activeTab === ORDER_STATUS.BID_PENDING 
     ? totals.deposit 
     : totals.product + totals.transfer + totals.delivery + totals.agency;
 
-  const totalPriceWon = activeTab === ORDER_STATUS.PAYMENT_REQ 
-    ? totalPriceVal 
-    : Math.floor(totalPriceVal * exchangeRate);
+  const rawWonBeforeRounding = totalPriceVal * exchangeRate;
+  const wonRoundedToInteger = Math.round(rawWonBeforeRounding);
+  const totalPriceWon = activeTab === ORDER_STATUS.PAYMENT_REQ
+    ? totalPriceVal
+    // 🌟 10원, 1원 단위는 올림해서 100원 단위로 맞춥니다 (화면 표시값과 실제 결제 차감액을 일치시킵니다).
+    : Math.ceil(wonRoundedToInteger / 100) * 100;
+
+  // 🌟 디버깅용 로그: 최종 결제예상액 계산식을 그대로 콘솔에 남깁니다.
+  useEffect(() => {
+    if (activeTab === ORDER_STATUS.PAYMENT_REQ) return;
+    console.log(
+      '[최종 결제예상액 계산]',
+      `totals=${JSON.stringify(totals)}`,
+      `totalPriceVal(${totals.product}+${totals.transfer}+${totals.delivery}+${totals.agency})=${totalPriceVal}`,
+      `exchangeRate=${exchangeRate}`,
+      `rawWonBeforeRounding(${totalPriceVal}*${exchangeRate})=${rawWonBeforeRounding}`,
+      `wonRoundedToInteger=${wonRoundedToInteger}`,
+      `totalPriceWon(ceil to 100)=${totalPriceWon}`
+    );
+  }, [totalPriceVal, exchangeRate, activeTab]);
 
   const handleDeleteOrder = async (orderId: string) => {
     const isConfirmed = await showConfirm("정말 이 상품을 장바구니에서 삭제하시겠습니까? 🗑️");
@@ -348,16 +384,33 @@ function usePurchaseStatusLogic() {
     if (selectedItems.length === 0) return showAlert('상품을 선택해주세요.', 'warning');
     if (newStatus === ORDER_STATUS.PREPARING && !selectedAddress) return showAlert('하단 수취인 주소 리스트에서 배송지를 먼저 선택해주세요.', 'warning');
 
-    const addressDisplayName = selectedAddress?.recipientName || '선택된 배송지';
-    
-    // 🌟 합포장/개별포장에 따라 안내 메세지 분기
+    // 🌟 도로명 주소에서 "OO로/OO길"로 시작하는 부분부터 끝까지(도로명 + 번지수)를 통째로 사용합니다.
+    const addressTokens = selectedAddress?.address?.trim().split(/\s+/) || [];
+    let roadTokenIndex = -1;
+    for (let i = addressTokens.length - 1; i >= 0; i--) {
+      if (/(로|길)$/.test(addressTokens[i])) { roadTokenIndex = i; break; }
+    }
+    const lastAddressPart = roadTokenIndex >= 0
+      ? addressTokens.slice(roadTokenIndex).join(' ')
+      : (addressTokens[addressTokens.length - 1] || '');
+
+    // 🌟 합포장/개별포장에 따라 안내 메세지 분기 (이름/주소/포장방식을 색으로 구분해 가독성 향상)
+    const packPrefix = isBundle ? '묶어서 배송' : '각각 ';
+    const packLabel = isBundle ? '(합포장)' : '개별 배송(포장)';
     const confirmMsgs: any = {
       [ORDER_STATUS.PAID]: '선택한 상품을 결제 하시겠습니까?',
-      [ORDER_STATUS.PREPARING]: isBundle 
-        ? `선택하신 ${selectedItems.length}건의 상품을\n${addressDisplayName}(으)로 묶어서 배송(합포장) 합니다.\n이대로 진행하시겠습니까?`
-        : `선택하신 ${selectedItems.length}건의 상품을\n${addressDisplayName}(으)로 각각 개별 배송(개별 포장) 합니다.\n이대로 진행하시겠습니까?`,
+      [ORDER_STATUS.PREPARING]: (
+        <>
+          선택하신 <span style={{ color: '#7c3aed', fontWeight: 900, textShadow: '0.4px 0 0 currentColor' }}>{selectedItems.length}건</span>의 상품을<br />
+          <span style={{ color: '#2563eb', fontWeight: 900, textShadow: '0.4px 0 0 currentColor' }}>{selectedAddress?.recipientName || '선택된 배송지'}</span>
+          {lastAddressPart && <span style={{ color: '#059669', fontWeight: 900, textShadow: '0.4px 0 0 currentColor' }}>({lastAddressPart})</span>}
+          (으)로 <br />
+          {packPrefix}<span style={{ color: '#e11d48', fontWeight: 900, textShadow: '0.4px 0 0 currentColor' }}>{packLabel}</span> 합니다.<br />
+          이대로 진행하시겠습니까?
+        </>
+      ),
       [ORDER_STATUS.PAYMENT_DONE]: '선택한 상품의 배송비 결제를 진행하시겠습니까?',
-      [ORDER_STATUS.BIDDING]: '선택한 상품의 보증금을 결제하고 입찰을 시작하시겠습니까?' 
+      [ORDER_STATUS.BIDDING]: '선택한 상품의 보증금을 결제하고 입찰을 시작하시겠습니까?'
     };
 
     const isConfirmed = await showConfirm(confirmMsgs[newStatus] || '상태를 변경하시겠습니까?');
@@ -382,13 +435,15 @@ function usePurchaseStatusLogic() {
       const addressUpdateData = newStatus === ORDER_STATUS.PREPARING && selectedAddress ? { address_id: selectedAddress.id } : {};
       
       // 🌟 개별포장(isBundle === false)일 경우 bundleId를 생성하지 않음
-      let updates = newStatus === ORDER_STATUS.PREPARING 
-        ? selectedItems.map(id => ({ 
-            id, 
-            status: newStatus, 
-            ...(isBundle ? { bundleId: 'B' + Date.now() } : {}), 
-            ...addressUpdateData 
-          })) 
+      // 🌟 map 내부에서 Date.now()를 호출하면 아이템마다 값이 달라질 수 있어, 묶음 전체가 같은 bundleId를 갖도록 미리 한 번만 생성합니다.
+      const bundleId = 'B' + Date.now();
+      let updates = newStatus === ORDER_STATUS.PREPARING
+        ? selectedItems.map(id => ({
+            id,
+            status: newStatus,
+            ...(isBundle ? { bundleId } : {}),
+            ...addressUpdateData
+          }))
         : selectedItems.map(id => ({ id, status: newStatus, ...(newStatus === ORDER_STATUS.BIDDING ? { bidStatus: 'PENDING' } : {}) }));
       
       try {
@@ -712,16 +767,25 @@ function MyPurchaseStatusContent() {
             </button>
           </div>
           {selectedItems.length < 2 && <p className="bundle-helper">* 합포장은 2개 이상의 상품을 선택해야 가능합니다.</p>}
+          <p className="address-change-warning">
+            <span className="address-change-warning-icon">⚠️</span>
+            <span>
+              <strong>배송비 결제 후에는 주소 변경이 어렵습니다.</strong><br />
+              결제 전 배송지를 꼭 확인해주세요.
+            </span>
+          </p>
           <AddressForm userData={userData} selectedItems={selectedItems} fetchOrders={fetchOrders} selectedAddress={selectedAddress} setSelectedAddress={setSelectedAddress} />
         </div>
       )}
 
       {(([ORDER_STATUS.CART, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS] as string[]).includes(activeTab)) && (
         <div className="anim-slide-up delay-3">
-          <PaymentSummary 
-            activeTab={activeTab} totals={totals} totalPriceWon={totalPriceWon} 
-            exchangeRate={exchangeRate} selectedItems={selectedItems} 
-            handleUpdateStatus={handleUpdateStatus} 
+          <PaymentSummary
+            activeTab={activeTab} totals={totals} totalPriceWon={totalPriceWon}
+            exchangeRate={exchangeRate} selectedItems={selectedItems}
+            handleUpdateStatus={handleUpdateStatus}
+            myMoney={userData?.cyberMoney || 0}
+            orders={orders}
           />
         </div>
       )}
@@ -1009,6 +1073,36 @@ function MyPurchaseStatusContent() {
         }
         
         .bundle-helper { margin: 0 0 32px 0; font-size: 13px; color: var(--color-red); font-weight: 600; text-align: right; }
+
+        .address-change-warning {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin: 0 0 32px 0;
+          padding: 16px 20px;
+          background: #fff1f2;
+          border: 1.5px solid #fda4af;
+          border-left: 5px solid #e11d48;
+          border-radius: 10px;
+          box-shadow: 0 2px 8px rgba(225, 29, 72, 0.08);
+          font-size: 16px;
+          font-weight: 600;
+          color: #9f1239;
+          text-align: left;
+          line-height: 1.6;
+        }
+
+        .address-change-warning-icon {
+          font-size: 26px;
+          line-height: 1;
+          flex-shrink: 0;
+          margin-top: -6px;
+        }
+
+        .address-change-warning strong {
+          color: #e11d48;
+          font-weight: 800;
+        }
 
         @media (max-width: 768px) {
           .miku-status-wrapper { padding: 0 12px 40px; box-sizing: border-box; width: 100%; overflow-x: hidden; }

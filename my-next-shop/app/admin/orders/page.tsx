@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 // 🌟 글로벌 상수 및 라벨 임포트
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
@@ -8,6 +8,9 @@ import '../admin-common.css';
 
 // 🌟 Enum 키를 기반으로 옵션 생성
 const statusOptions = Object.keys(ORDER_STATUS).filter(key => key !== 'ALL') as OrderStatus[];
+
+// 🌟 mypage/status와 동일하게 합포장(bundleId) 묶음을 한 행으로 표시하는 상태들
+const GROUPABLE_STATUSES = [ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING];
 
 // 🌟 가중치 로직
 const statusWeight: Record<string, number> = {
@@ -39,6 +42,8 @@ export default function OrderManagement() {
   const [changedOrderIds, setChangedOrderIds] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  // 🌟 합포장(bundleId) 그룹을 mypage/status처럼 한 행으로 펼쳐보기 위한 상태
+  const [expandedBundles, setExpandedBundles] = useState<Set<string>>(new Set());
 
   const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
 
@@ -63,8 +68,8 @@ export default function OrderManagement() {
     const cols = ['date', 'user', 'address'];
     if (statusFilter === ORDER_STATUS.ARRIVED) cols.push('packing');
     cols.push('product', 'request', 'price');
-    // 🌟 1-3. 경매 상황 탭일 때만 경매 상태 열이 보이도록 추가
-    if (statusFilter === ORDER_STATUS.BIDDING) cols.push('bidStatus');
+    // 🌟 1-3. 경매 상황 탭이거나, 전체 탭에서 경매 상황 주문을 함께 볼 때도 경매 상태 열이 보이도록 추가
+    if (statusFilter === ORDER_STATUS.BIDDING || statusFilter === '전체') cols.push('bidStatus');
     cols.push('status', 'manage');
     return cols;
   };
@@ -110,8 +115,9 @@ export default function OrderManagement() {
 
         if (data.success) {
           const tempOrders = data.orders.map((dbOrder: any) => ({
-            id: dbOrder.orderId, 
+            id: dbOrder.orderId,
             date: new Date(dbOrder.registeredAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+            registeredAt: dbOrder.registeredAt,
             user: dbOrder.user?.name || '알 수 없음',
             address: dbOrder.addressId ? (dbOrder.user?.addresses?.find((a: any) => a.id === dbOrder.addressId) || null) : null,
             addressId: dbOrder.addressId, 
@@ -119,7 +125,6 @@ export default function OrderManagement() {
             source: '기본구매처',
             product: dbOrder.productName,
             jpy: dbOrder.productPrice.toLocaleString(),
-            krw: Math.round(dbOrder.productPrice * 9.05).toLocaleString(),
             status: dbOrder.status,
             // 🌟 2-1. bidStatus 맵핑 추가
             bidStatus: dbOrder.bidStatus || 'PENDING',
@@ -222,23 +227,39 @@ export default function OrderManagement() {
       const trackingNo = prompt("송장번호를 입력해주세요:", currentOrder.trackingNo || '');
       if (trackingNo === null) return;
 
-      setOrders(orders.map(order => order.id === orderId ? { ...order, status: newStatus, trackingNo: trackingNo } : order));
-      setChangedOrderIds(prev => { const newSet = new Set(prev); newSet.add(orderId); return newSet; });
+      // 🌟 합포장 주문은 같은 송장번호로 그룹 전체를 함께 변경합니다.
+      const bundleIds = currentOrder.bundleId
+        ? orders.filter(o => o.bundleId === currentOrder.bundleId).map(o => o.id)
+        : [orderId];
+
+      setOrders(orders.map(order => bundleIds.includes(order.id) ? { ...order, status: newStatus, trackingNo: trackingNo } : order));
+      setChangedOrderIds(prev => {
+        const newSet = new Set(prev);
+        bundleIds.forEach(id => newSet.add(id));
+        return newSet;
+      });
       return;
     }
 
-    setOrders(orders.map(order => order.id === orderId ? { ...order, status: newStatus } : order));
-    
+    // 🌟 합포장 주문은 상태 변경 시 그룹 전체가 함께 이동해야 mypage/status의 합포장 표시가 깨지지 않습니다.
+    const bundleIds = currentOrder.bundleId
+      ? orders.filter(o => o.bundleId === currentOrder.bundleId).map(o => o.id)
+      : [orderId];
+
+    setOrders(orders.map(order => bundleIds.includes(order.id) ? { ...order, status: newStatus } : order));
+
     setChangedOrderIds(prev => {
       const newSet = new Set(prev);
-      const originalOrder = originalOrders.find(o => o.id === orderId);
-      const updatedOrder = orders.find(o => o.id === orderId);
-      
-      if (originalOrder?.status !== newStatus || originalOrder?.secondPaymentAmount !== updatedOrder?.secondPaymentAmount) {
-        newSet.add(orderId);
-      } else {
-        newSet.delete(orderId); 
-      }
+      bundleIds.forEach(id => {
+        const originalOrder = originalOrders.find(o => o.id === id);
+        const updatedOrder = orders.find(o => o.id === id);
+
+        if (originalOrder?.status !== newStatus || originalOrder?.secondPaymentAmount !== updatedOrder?.secondPaymentAmount) {
+          newSet.add(id);
+        } else {
+          newSet.delete(id);
+        }
+      });
       return newSet;
     });
   };
@@ -321,6 +342,9 @@ export default function OrderManagement() {
     switch(status) {
       case ORDER_STATUS.CART: return { bg: '#f8fafc', text: '#64748b', border: '#cbd5e1' };
       case ORDER_STATUS.FAILED: return { bg: '#fef2f2', text: '#ef4444', border: '#fca5a5' };
+      case ORDER_STATUS.BID_PENDING: return { bg: '#fdf4ff', text: '#c026d3', border: '#f0abfc' };
+      case ORDER_STATUS.BIDDING: return { bg: '#fffbeb', text: '#d97706', border: '#fcd34d' };
+      case ORDER_STATUS.BID_SUCCESS: return { bg: '#ecfdf5', text: '#059669', border: '#6ee7b7' };
       case ORDER_STATUS.PAID: return { bg: '#eff6ff', text: '#3b82f6', border: '#93c5fd' };
       case ORDER_STATUS.ARRIVED: return { bg: '#f0fdf4', text: '#22c55e', border: '#86efac' };
       case ORDER_STATUS.PREPARING: return { bg: '#f5f3ff', text: '#8b5cf6', border: '#c4b5fd' };
@@ -368,6 +392,68 @@ export default function OrderManagement() {
   };
 
   const renderedOrders = getRenderedOrders();
+
+  // 🌟 경매 상황 탭이거나, 전체 탭에서 경매 상황 주문의 경매 상태를 함께 관리할 수 있도록 열을 노출합니다.
+  const showBidStatusColumn = statusFilter === ORDER_STATUS.BIDDING || statusFilter === '전체';
+
+  // 🌟 배송비 요청/배송비 결제 완료/국제 배송 상태에서, 같은 bundleId(합포장)를 가진 주문들을 한 행으로 합쳐서 보여줍니다.
+  const toggleBundleExpand = (bundleId: string) => {
+    setExpandedBundles(prev => {
+      const next = new Set(prev);
+      if (next.has(bundleId)) next.delete(bundleId); else next.add(bundleId);
+      return next;
+    });
+  };
+
+  const getVisibleColumnCount = () => getVisibleColumns().length;
+
+  const displayOrders = (() => {
+    const groupsByBundle: Record<string, any[]> = {};
+    renderedOrders.forEach(order => {
+      if (order.bundleId && GROUPABLE_STATUSES.includes(order.status)) {
+        (groupsByBundle[order.bundleId] ||= []).push(order);
+      }
+    });
+
+    const seenBundles = new Set<string>();
+    const result: any[] = [];
+
+    renderedOrders.forEach(order => {
+      if (order.bundleId && GROUPABLE_STATUSES.includes(order.status)) {
+        if (seenBundles.has(order.bundleId)) return;
+        seenBundles.add(order.bundleId);
+
+        const group = groupsByBundle[order.bundleId];
+        if (group.length <= 1) {
+          result.push(order);
+          return;
+        }
+
+        // 🌟 2차 결제금액은 bundleItems[0](orders 배열 기준 최초 항목)에만 들어있으므로, 대표 행도 그 항목을 사용합니다.
+        const masterId = orders.filter(o => o.bundleId === order.bundleId)[0]?.id;
+        const representative = group.find(g => g.id === masterId) || group[0];
+        const totalJpy = group.reduce((sum, o) => sum + (parseInt(String(o.jpy).replace(/[^0-9]/g, '')) || 0), 0);
+        // 🌟 주문일시는 묶음 내 가장 이른 주문 기준으로 표시합니다.
+        const earliestOrder = group.reduce((earliest, o) =>
+          new Date(o.registeredAt).getTime() < new Date(earliest.registeredAt).getTime() ? o : earliest
+        , group[0]);
+
+        result.push({
+          ...representative,
+          product: `${representative.product} 외 ${group.length - 1}건`,
+          jpy: totalJpy.toLocaleString(),
+          date: earliestOrder.date,
+          registeredAt: earliestOrder.registeredAt,
+          isBundleGroup: true,
+          bundleItems: group,
+        });
+      } else {
+        result.push(order);
+      }
+    });
+
+    return result;
+  })();
 
   return (
     <div className="admin-container">
@@ -419,7 +505,7 @@ export default function OrderManagement() {
             <col style={{ width: columnWidths.product }} />
             <col style={{ width: columnWidths.request }} />
             <col style={{ width: columnWidths.price }} />
-            {statusFilter === ORDER_STATUS.BIDDING && <col style={{ width: columnWidths.bidStatus }} />}
+            {showBidStatusColumn && <col style={{ width: columnWidths.bidStatus }} />}
             <col style={{ width: columnWidths.status }} />
             <col style={{ width: columnWidths.manage }} />
           </colgroup>
@@ -477,12 +563,12 @@ export default function OrderManagement() {
               {/* 가격 */}
               <th className="admin-th-resizable" style={{ textAlign: 'right' }}>
                 <div onMouseDown={(e) => onMouseDown('price', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
-                상품가격 (₩)
+                상품가격 (¥)
                 <div onMouseDown={(e) => onMouseDown('price', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
               </th>
 
-              {/* 🌟 3-2. 경매 상황 탭 전용 헤더 추가 */}
-              {statusFilter === ORDER_STATUS.BIDDING && (
+              {/* 🌟 3-2. 경매 상황 탭, 또는 전체 탭에서 경매 상태 헤더 추가 */}
+              {showBidStatusColumn && (
                 <th className="admin-th-resizable" style={{ textAlign: 'center' }}>
                   <div onMouseDown={(e) => onMouseDown('bidStatus', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
                   경매 상태
@@ -511,7 +597,7 @@ export default function OrderManagement() {
           </thead>
           <tbody>
             {/* 🌟 경매 상태 영어 -> 한글 변환용 객체 */}
-            {renderedOrders.map((order) => {
+            {displayOrders.map((order) => {
               const statusStyle = getStatusColor(order.status);
               const isChanged = changedOrderIds.has(order.id);
               const originalStatus = originalOrders.find(o => o.id === order.id)?.status as OrderStatus;
@@ -526,12 +612,23 @@ export default function OrderManagement() {
               };
 
               return (
-                <tr key={order.id} className="admin-table-body-row" style={{ backgroundColor: isChanged ? '#f0fdf4' : 'transparent' }}>
-                  <td className="admin-base-td">
+                <React.Fragment key={order.id}>
+                <tr
+                  className="admin-table-body-row"
+                  style={{
+                    backgroundColor: isChanged ? '#f0fdf4' : (order.isBundleGroup ? '#fff7ed' : 'transparent'),
+                  }}
+                >
+                  <td className="admin-base-td" style={order.isBundleGroup ? os.bundleGroupIdCell : undefined}>
                     <div className="admin-sub-text">{order.date}</div>
-                    <div style={{ fontWeight: '600', color: colors.textMain, marginBottom: '2px' }}>{order.id}</div>
+                    {!order.isBundleGroup && (
+                      <div style={{ fontWeight: '600', color: colors.textMain, marginBottom: '2px' }}>{order.id}</div>
+                    )}
+                    {order.isBundleGroup && (
+                      <span style={os.bundleGroupBadge}>📦 합포장 {order.bundleItems.length}건</span>
+                    )}
                     {order.bundleId && (
-                      <div style={{ fontSize: '11px', color: '#f97316', fontWeight: '700' }}>
+                      <div style={{ fontSize: '11px', color: '#f97316', fontWeight: '700', marginTop: order.isBundleGroup ? '4px' : 0 }}>
                         <span style={{ color: colors.textSub, fontWeight: '400' }}>Bundle:</span> {order.bundleId}
                       </div>
                     )}
@@ -587,7 +684,18 @@ export default function OrderManagement() {
                   )}
                   
                   <td className="admin-base-td" style={{ maxWidth: '300px' }}>
-                    <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', gap: '4px', marginBottom: '4px', alignItems: 'center' }}>
+                      {order.isBundleGroup && (
+                        <button
+                          onClick={() => toggleBundleExpand(order.bundleId)}
+                          style={{
+                            ...os.btnBundleToggle,
+                            ...(expandedBundles.has(order.bundleId) ? os.btnBundleToggleOpen : {})
+                          }}
+                        >
+                          {expandedBundles.has(order.bundleId) ? '접기' : '모든 상품 보기'} ›
+                        </button>
+                      )}
                       <span style={os.sourceBadge}>{order.source}</span>
                       {order.productUrl && (
                         <a href={order.productUrl} target="_blank" rel="noopener noreferrer" style={os.urlLink}>[URL]</a>
@@ -602,36 +710,41 @@ export default function OrderManagement() {
                     <div style={{ fontSize: '12px', color: '#6366f1' }}><span style={{ fontWeight: '600' }}>서비스:</span> {order.serviceRequest}</div>
                   </td>
 
-                  <td className="admin-base-td" style={{ textAlign: 'right', fontWeight: '700', color: colors.textMain }}>₩{order.krw}</td>
+                  <td className="admin-base-td" style={{ textAlign: 'right', fontWeight: '700', color: colors.textMain }}>¥{order.jpy}</td>
 
-                  {/* 🌟 경매 상황 탭 전용: 경매 상태 (셀렉트 박스 + 취소선 인디케이터) */}
-                  {statusFilter === ORDER_STATUS.BIDDING && (
+                  {/* 🌟 경매 상황 탭, 또는 전체 탭에서 경매 상황 주문일 때: 경매 상태 (셀렉트 박스 + 취소선 인디케이터) */}
+                  {showBidStatusColumn && (
                     <td className="admin-base-td" style={{ textAlign: 'center' }}>
-                      
-                      {/* 🌟 변경 전 경매 상태 (취소선) 표시 */}
-                      {(isChanged && originalBidStatus !== order.bidStatus) && (
-                        <div style={os.statusChangeIndicator}>
-                          <span style={{ color: colors.emptyText, textDecoration: 'line-through' }}>
-                            {bidStatusLabels[originalBidStatus] || '상태 확인중'}
-                          </span>
-                          <span>➔</span>
-                        </div>
-                      )}
+                      {order.status === ORDER_STATUS.BIDDING ? (
+                        <>
+                          {/* 🌟 변경 전 경매 상태 (취소선) 표시 */}
+                          {(isChanged && originalBidStatus !== order.bidStatus) && (
+                            <div style={os.statusChangeIndicator}>
+                              <span style={{ color: colors.emptyText, textDecoration: 'line-through' }}>
+                                {bidStatusLabels[originalBidStatus] || '상태 확인중'}
+                              </span>
+                              <span>➔</span>
+                            </div>
+                          )}
 
-                      <select
-                        value={order.bidStatus}
-                        onChange={(e) => handleBidStatusChange(order.id, e.target.value)}
-                        className="admin-status-select"
-                        style={{
-                          backgroundColor: order.bidStatus === 'COMPLETED' ? '#d1fae5' : (order.bidStatus === 'ADDITIONAL' ? '#dbeafe' : '#fef3c7'),
-                          color: order.bidStatus === 'COMPLETED' ? '#10b981' : (order.bidStatus === 'ADDITIONAL' ? '#3b82f6' : '#d97706'),
-                          border: `1px solid ${order.bidStatus === 'COMPLETED' ? '#86efac' : (order.bidStatus === 'ADDITIONAL' ? '#93c5fd' : '#fde68a')}`,
-                        }}
-                      >
-                        <option value="PENDING" style={{ backgroundColor: colors.white, color: colors.textMain }}>입찰 대기중</option>
-                        <option value="ADDITIONAL" style={{ backgroundColor: colors.white, color: colors.textMain }}>추가 입찰 완료</option>
-                        <option value="COMPLETED" style={{ backgroundColor: colors.white, color: colors.textMain }}>입찰 완료</option>
-                      </select>
+                          <select
+                            value={order.bidStatus}
+                            onChange={(e) => handleBidStatusChange(order.id, e.target.value)}
+                            className="admin-status-select"
+                            style={{
+                              backgroundColor: order.bidStatus === 'COMPLETED' ? '#d1fae5' : (order.bidStatus === 'ADDITIONAL' ? '#dbeafe' : '#fef3c7'),
+                              color: order.bidStatus === 'COMPLETED' ? '#10b981' : (order.bidStatus === 'ADDITIONAL' ? '#3b82f6' : '#d97706'),
+                              border: `1px solid ${order.bidStatus === 'COMPLETED' ? '#86efac' : (order.bidStatus === 'ADDITIONAL' ? '#93c5fd' : '#fde68a')}`,
+                            }}
+                          >
+                            <option value="PENDING" style={{ backgroundColor: colors.white, color: colors.textMain }}>입찰 대기중</option>
+                            <option value="ADDITIONAL" style={{ backgroundColor: colors.white, color: colors.textMain }}>추가 입찰 완료</option>
+                            <option value="COMPLETED" style={{ backgroundColor: colors.white, color: colors.textMain }}>입찰 완료</option>
+                          </select>
+                        </>
+                      ) : (
+                        <span style={{ color: colors.emptyText }}>-</span>
+                      )}
                     </td>
                   )}
 
@@ -687,6 +800,31 @@ export default function OrderManagement() {
                     <button className="admin-btn-detail">상세보기</button>
                   </td>
                 </tr>
+
+                {/* 🌟 합포장 묶음 펼치기: 포함된 상품명/상품가격 표시 */}
+                {order.isBundleGroup && expandedBundles.has(order.bundleId) && (
+                  <tr>
+                    <td colSpan={getVisibleColumnCount()} style={os.bundleDetailCell}>
+                      <div style={os.bundleDetailList}>
+                        <div style={os.bundleDetailHeader}>
+                          <span style={os.bundleDetailHeaderDate}>주문일시</span>
+                          <span style={os.bundleDetailHeaderId}>주문 ID</span>
+                          <span style={os.bundleDetailHeaderName}>상품명</span>
+                          <span style={os.bundleDetailHeaderPrice}>가격</span>
+                        </div>
+                        {order.bundleItems.map((sub: any) => (
+                          <div key={sub.id} style={os.bundleDetailRow}>
+                            <span style={os.bundleDetailDate}>{sub.date}</span>
+                            <span style={os.bundleDetailId}>{sub.id}</span>
+                            <span style={os.bundleDetailName} title={sub.product}>{sub.product}</span>
+                            <span style={os.bundleDetailPrice}>¥{sub.jpy}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -760,6 +898,105 @@ const os: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     cursor: 'pointer',
     border: 'none',
+  },
+  btnBundleToggle: {
+    flexShrink: 0,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '2px',
+    height: '22px',
+    padding: '0 8px',
+    border: `1px solid ${colors.borderInput}`,
+    background: '#f1f5f9',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    color: colors.textDark,
+    fontSize: '11px',
+    fontWeight: '700',
+    whiteSpace: 'nowrap',
+  },
+  btnBundleToggleOpen: {
+    background: '#fee2e2',
+    borderColor: '#fda4af',
+    color: '#e11d48',
+  },
+  bundleGroupIdCell: {
+    borderLeft: '4px solid #f97316',
+  },
+  bundleGroupBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '2px 8px',
+    borderRadius: '999px',
+    background: '#f97316',
+    color: colors.white,
+    fontSize: '11px',
+    fontWeight: '800',
+  },
+  bundleDetailCell: {
+    padding: '10px 20px',
+    background: '#f8fafc',
+  },
+  bundleDetailList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  bundleDetailRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '8px 14px',
+    background: colors.white,
+    border: `1px solid ${colors.borderDark}`,
+    borderRadius: '8px',
+  },
+  bundleDetailHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0 14px',
+    fontSize: '11px',
+    fontWeight: '700',
+    color: colors.emptyText,
+  },
+  bundleDetailHeaderDate: { flexShrink: 0, width: '140px', marginRight: '10px' },
+  bundleDetailHeaderId: { flexShrink: 0, width: '160px', marginRight: '10px' },
+  bundleDetailHeaderName: { flex: 1, textAlign: 'left' },
+  bundleDetailHeaderPrice: { flexShrink: 0, marginLeft: '12px' },
+  bundleDetailDate: {
+    fontSize: '11px',
+    fontWeight: '500',
+    color: colors.emptyText,
+    flexShrink: 0,
+    width: '140px',
+    marginRight: '10px',
+  },
+  bundleDetailId: {
+    fontSize: '11px',
+    fontWeight: '600',
+    color: colors.textSub,
+    flexShrink: 0,
+    width: '160px',
+    marginRight: '10px',
+    fontFamily: 'monospace',
+  },
+  bundleDetailName: {
+    fontSize: '13px',
+    color: colors.textDark,
+    flex: 1,
+    minWidth: 0,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    textAlign: 'left',
+  },
+  bundleDetailPrice: {
+    fontSize: '13px',
+    fontWeight: '800',
+    color: colors.textMain,
+    flexShrink: 0,
+    marginLeft: '12px',
   },
   btnPacking: {
     padding: '6px 12px',
