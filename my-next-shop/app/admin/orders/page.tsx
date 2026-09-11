@@ -45,6 +45,11 @@ export default function OrderManagement() {
   // 🌟 합포장(bundleId) 그룹을 mypage/status처럼 한 행으로 펼쳐보기 위한 상태
   const [expandedBundles, setExpandedBundles] = useState<Set<string>>(new Set());
 
+  // 🌟 배송 준비중 -> 배송비 요청 전환 시, 국제 배송비/일본 내 배송비를 한 팝업에서 함께 입력받기 위한 상태
+  const [feeModal, setFeeModal] = useState<{ orderId: string; bundleId: string | null; count: number } | null>(null);
+  const [feeModalIntl, setFeeModalIntl] = useState('');
+  const [feeModalDomestic, setFeeModalDomestic] = useState('');
+
   const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
@@ -129,6 +134,7 @@ export default function OrderManagement() {
             // 🌟 2-1. bidStatus 맵핑 추가
             bidStatus: dbOrder.bidStatus || 'PENDING',
             secondPaymentAmount: dbOrder.secondPaymentAmount || 0,
+            domesticShippingFee: dbOrder.domesticShippingFee || 0,
             trackingNo: dbOrder.trackingNo || '',
             option: dbOrder.productOption || '-',
             productUrl: dbOrder.productUrl || '',
@@ -177,23 +183,11 @@ export default function OrderManagement() {
     if (newStatus === ORDER_STATUS.PAYMENT_REQ && currentOrder.bundleId) {
       const bundleItems = orders.filter(o => o.bundleId === currentOrder.bundleId);
       const originalAmount = bundleItems.reduce((sum, o) => sum + (o.secondPaymentAmount || 0), 0);
-      const amount = prompt(`합배송 그룹 전체에 대한 2차 결제 금액(₩)을 입력해주세요:\n(그룹 내 상품 수: ${bundleItems.length}개)`, originalAmount.toString());
-      if (amount === null) return;
+      const originalDomesticAmount = bundleItems.reduce((sum, o) => sum + (o.domesticShippingFee || 0), 0);
 
-      const numAmount = parseInt(amount.replace(/[^0-9]/g, '')) || 0;
-      setOrders(orders.map(order => {
-        if (order.bundleId === currentOrder.bundleId) {
-          const isFirstInBundle = bundleItems[0].id === order.id;
-          return { ...order, status: newStatus, secondPaymentAmount: isFirstInBundle ? numAmount : 0 };
-        }
-        return order;
-      }));
-
-      setChangedOrderIds(prev => {
-        const newSet = new Set(prev);
-        bundleItems.forEach(item => newSet.add(item.id));
-        return newSet;
-      });
+      setFeeModalIntl(originalAmount.toString());
+      setFeeModalDomestic(originalDomesticAmount.toString());
+      setFeeModal({ orderId, bundleId: currentOrder.bundleId, count: bundleItems.length });
       return;
     }
 
@@ -201,7 +195,7 @@ export default function OrderManagement() {
       const bundleItems = orders.filter(o => o.bundleId === currentOrder.bundleId);
       setOrders(orders.map(order => {
         if (order.bundleId === currentOrder.bundleId) {
-          return { ...order, status: newStatus, secondPaymentAmount: 0 };
+          return { ...order, status: newStatus, secondPaymentAmount: 0, domesticShippingFee: 0 };
         }
         return order;
       }));
@@ -214,12 +208,9 @@ export default function OrderManagement() {
     }
 
     if (newStatus === ORDER_STATUS.PAYMENT_REQ && currentOrder.status === ORDER_STATUS.PREPARING) {
-      const amount = prompt("2차 결제 금액(₩)을 입력해주세요:", currentOrder.secondPaymentAmount.toString());
-      if (amount === null) return;
-
-      const numAmount = parseInt(amount.replace(/[^0-9]/g, '')) || 0;
-      setOrders(orders.map(order => order.id === orderId ? { ...order, status: newStatus, secondPaymentAmount: numAmount } : order));
-      setChangedOrderIds(prev => { const newSet = new Set(prev); newSet.add(orderId); return newSet; });
+      setFeeModalIntl((currentOrder.secondPaymentAmount || 0).toString());
+      setFeeModalDomestic((currentOrder.domesticShippingFee || 0).toString());
+      setFeeModal({ orderId, bundleId: null, count: 1 });
       return;
     }
 
@@ -264,6 +255,43 @@ export default function OrderManagement() {
     });
   };
 
+  // 🌟 feeModal(국제 배송비 + 일본 내 배송비 입력 팝업)에서 확인을 눌렀을 때 실제 상태 변경을 적용합니다.
+  const confirmFeeModal = () => {
+    if (!feeModal) return;
+    const numAmount = parseInt(feeModalIntl.replace(/[^0-9]/g, '')) || 0;
+    const numDomesticAmount = parseInt(feeModalDomestic.replace(/[^0-9]/g, '')) || 0;
+
+    if (feeModal.bundleId) {
+      const bundleId = feeModal.bundleId;
+      const bundleItems = orders.filter(o => o.bundleId === bundleId);
+      setOrders(orders.map(order => {
+        if (order.bundleId === bundleId) {
+          const isFirstInBundle = bundleItems[0].id === order.id;
+          return {
+            ...order,
+            status: ORDER_STATUS.PAYMENT_REQ,
+            secondPaymentAmount: isFirstInBundle ? numAmount : 0,
+            domesticShippingFee: isFirstInBundle ? numDomesticAmount : 0
+          };
+        }
+        return order;
+      }));
+      setChangedOrderIds(prev => {
+        const newSet = new Set(prev);
+        bundleItems.forEach(item => newSet.add(item.id));
+        return newSet;
+      });
+    } else {
+      const orderId = feeModal.orderId;
+      setOrders(orders.map(order => order.id === orderId ? { ...order, status: ORDER_STATUS.PAYMENT_REQ, secondPaymentAmount: numAmount, domesticShippingFee: numDomesticAmount } : order));
+      setChangedOrderIds(prev => { const newSet = new Set(prev); newSet.add(orderId); return newSet; });
+    }
+
+    setFeeModal(null);
+  };
+
+  const cancelFeeModal = () => setFeeModal(null);
+
   const handleSecondPaymentChange = (orderId: string, value: string) => {
     const numValue = parseInt(value.replace(/[^0-9]/g, '')) || 0;
     setOrders(orders.map(order => order.id === orderId ? { ...order, secondPaymentAmount: numValue } : order));
@@ -272,6 +300,22 @@ export default function OrderManagement() {
       const newSet = new Set(prev);
       const originalOrder = originalOrders.find(o => o.id === orderId);
       if (originalOrder?.secondPaymentAmount !== numValue || originalOrder?.status !== orders.find(o => o.id === orderId)?.status) {
+        newSet.add(orderId);
+      } else {
+        newSet.delete(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleDomesticFeeChange = (orderId: string, value: string) => {
+    const numValue = parseInt(value.replace(/[^0-9]/g, '')) || 0;
+    setOrders(orders.map(order => order.id === orderId ? { ...order, domesticShippingFee: numValue } : order));
+
+    setChangedOrderIds(prev => {
+      const newSet = new Set(prev);
+      const originalOrder = originalOrders.find(o => o.id === orderId);
+      if (originalOrder?.domesticShippingFee !== numValue || originalOrder?.status !== orders.find(o => o.id === orderId)?.status) {
         newSet.add(orderId);
       } else {
         newSet.delete(orderId);
@@ -456,6 +500,7 @@ export default function OrderManagement() {
   })();
 
   return (
+    <>
     <div className="admin-container">
 
       {/* 🌟 1. 상단 액션바 (필터 + 버튼들) */}
@@ -777,9 +822,9 @@ export default function OrderManagement() {
 
                     {order.status === ORDER_STATUS.PAYMENT_REQ && (
                       <div style={{ marginTop: '10px' }}>
-                        <div style={{ fontSize: '11px', color: colors.textSub, marginBottom: '4px', fontWeight: '600' }}>2차 결제금액(₩)</div>
-                        <input 
-                          type="text" 
+                        <div style={{ fontSize: '11px', color: colors.textSub, marginBottom: '4px', fontWeight: '600' }}>국제 배송비(₩)</div>
+                        <input
+                          type="text"
                           value={order.secondPaymentAmount.toLocaleString()}
                           onChange={(e) => handleSecondPaymentChange(order.id, e.target.value)}
                           disabled={order.bundleId && orders.some(o => o.bundleId === order.bundleId && o.id !== order.id && o.secondPaymentAmount > 0)}
@@ -790,6 +835,22 @@ export default function OrderManagement() {
                           }}
                         />
                         {order.bundleId && orders.some(o => o.bundleId === order.bundleId && o.id !== order.id && o.secondPaymentAmount > 0) && (
+                          <div style={{ fontSize: '10px', color: colors.emptyText, marginTop: '2px' }}>합배송 금액이 다른 상품에 입력됨</div>
+                        )}
+
+                        <div style={{ fontSize: '11px', color: colors.textSub, margin: '8px 0 4px', fontWeight: '600' }}>현지 배송비(¥)</div>
+                        <input
+                          type="text"
+                          value={(order.domesticShippingFee || 0).toLocaleString()}
+                          onChange={(e) => handleDomesticFeeChange(order.id, e.target.value)}
+                          disabled={order.bundleId && orders.some(o => o.bundleId === order.bundleId && o.id !== order.id && o.domesticShippingFee > 0)}
+                          style={{
+                            ...os.paymentInput,
+                            backgroundColor: (order.bundleId && orders.some(o => o.bundleId === order.bundleId && o.id !== order.id && o.domesticShippingFee > 0)) ? colors.border : colors.white,
+                            cursor: (order.bundleId && orders.some(o => o.bundleId === order.bundleId && o.id !== order.id && o.domesticShippingFee > 0)) ? 'not-allowed' : 'text'
+                          }}
+                        />
+                        {order.bundleId && orders.some(o => o.bundleId === order.bundleId && o.id !== order.id && o.domesticShippingFee > 0) && (
                           <div style={{ fontSize: '10px', color: colors.emptyText, marginTop: '2px' }}>합배송 금액이 다른 상품에 입력됨</div>
                         )}
                       </div>
@@ -848,6 +909,43 @@ export default function OrderManagement() {
         </div>
       )}
     </div>
+
+    {/* 🌟 배송 준비중 -> 배송비 요청 전환: 국제 배송비 + 일본 내 배송비를 한 팝업에서 함께 입력 */}
+    {feeModal && (
+      <div style={os.feeModalOverlay}>
+        <div style={os.feeModalBox}>
+          <h3 style={os.feeModalTitle}>배송비 입력</h3>
+          <p style={os.feeModalDesc}>
+            {feeModal.bundleId
+              ? `합배송 그룹 전체에 적용됩니다. (그룹 내 상품 수: ${feeModal.count}개)`
+              : '이 주문에 적용됩니다.'}
+          </p>
+
+          <label style={os.feeModalLabel}>국제 배송비(₩)</label>
+          <input
+            type="text"
+            autoFocus
+            value={feeModalIntl}
+            onChange={(e) => setFeeModalIntl(e.target.value.replace(/[^0-9]/g, ''))}
+            style={os.feeModalInput}
+          />
+
+          <label style={os.feeModalLabel}>현지 배송비(¥)</label>
+          <input
+            type="text"
+            value={feeModalDomestic}
+            onChange={(e) => setFeeModalDomestic(e.target.value.replace(/[^0-9]/g, ''))}
+            style={os.feeModalInput}
+          />
+
+          <div style={os.feeModalButtonRow}>
+            <button onClick={cancelFeeModal} style={os.feeModalCancelBtn}>취소</button>
+            <button onClick={confirmFeeModal} style={os.feeModalConfirmBtn}>확인</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -878,14 +976,87 @@ const os: Record<string, React.CSSProperties> = {
     gap: '12px',
   },
 
+  // 🌟 배송비 입력 팝업 (feeModal)
+  feeModalOverlay: {
+    position: 'fixed',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  feeModalBox: {
+    width: '360px',
+    backgroundColor: colors.white,
+    borderRadius: '16px',
+    padding: '28px',
+    boxShadow: '0 20px 50px rgba(15, 23, 42, 0.25)',
+  },
+  feeModalTitle: {
+    fontSize: '18px',
+    fontWeight: 800,
+    color: colors.textMain,
+    margin: '0 0 8px',
+  },
+  feeModalDesc: {
+    fontSize: '13px',
+    color: colors.textSub,
+    margin: '0 0 20px',
+    lineHeight: 1.5,
+  },
+  feeModalLabel: {
+    display: 'block',
+    fontSize: '13px',
+    fontWeight: 700,
+    color: colors.textDark,
+    marginBottom: '6px',
+  },
+  feeModalInput: {
+    width: '100%',
+    padding: '10px 12px',
+    marginBottom: '18px',
+    borderRadius: '8px',
+    border: `1.5px solid ${colors.borderInput}`,
+    fontSize: '15px',
+    textAlign: 'right',
+    outline: 'none',
+    boxSizing: 'border-box',
+  },
+  feeModalButtonRow: {
+    display: 'flex',
+    gap: '10px',
+    marginTop: '8px',
+  },
+  feeModalCancelBtn: {
+    flex: 1,
+    padding: '12px',
+    borderRadius: '10px',
+    border: `1px solid ${colors.borderDark}`,
+    backgroundColor: colors.white,
+    color: colors.textSub,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+  feeModalConfirmBtn: {
+    flex: 1,
+    padding: '12px',
+    borderRadius: '10px',
+    border: 'none',
+    backgroundColor: colors.accent,
+    color: colors.white,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+
   // 입력 폼
   paymentInput: {
-    width: '100px', 
-    padding: '4px 8px', 
-    borderRadius: '4px', 
-    border: `1px solid ${colors.borderInput}`, 
-    fontSize: '12px', 
-    textAlign: 'right', 
+    width: '100px',
+    padding: '4px 8px',
+    borderRadius: '4px',
+    border: `1px solid ${colors.borderInput}`,
+    fontSize: '12px',
+    textAlign: 'right',
     outline: 'none',
   },
   

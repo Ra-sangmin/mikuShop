@@ -62,6 +62,10 @@ const alertStyles = `
   /* 🌟 Confirm 모드 여부에 따른 버튼 최대 너비 지정 */
   .miku-alert-btn-confirm.mode-confirm { max-width: 140px; }
   .miku-alert-btn-confirm.mode-alert { max-width: 200px; }
+  .miku-alert-btn-confirm:disabled {
+    opacity: 0.4; cursor: not-allowed; filter: grayscale(0.3);
+  }
+  .miku-alert-btn-confirm:disabled:hover { transform: none; }
 
   .miku-alert-btn-cancel {
     flex: 1; max-width: 140px; padding: 14px; 
@@ -113,6 +117,9 @@ type AlertType = 'success' | 'error' | 'warning';
 interface MikuAlertContextType {
   showAlert: (message: string, type?: AlertType) => void;
   showConfirm: (message: React.ReactNode) => Promise<boolean>;
+  // 🌟 showConfirm에 넘긴 커스텀 콘텐츠(예: 입찰 금액 입력 폼)가 자체 검증 상태에 따라
+  // "확인" 버튼을 비활성화할 수 있도록 노출하는 함수입니다.
+  setConfirmDisabled: (disabled: boolean) => void;
 }
 
 const MikuAlertContext = createContext<MikuAlertContextType | undefined>(undefined);
@@ -120,12 +127,14 @@ const MikuAlertContext = createContext<MikuAlertContextType | undefined>(undefin
 export function MikuAlertProvider({ children }: { children: ReactNode }) {
   const [alert, setAlert] = useState<{ message: React.ReactNode, type: AlertType, isConfirm?: boolean } | null>(null);
   const [confirmResolve, setConfirmResolve] = useState<((value: boolean) => void) | null>(null);
+  const [confirmDisabled, setConfirmDisabled] = useState(false);
 
   const showAlert = useCallback((message: string, type: AlertType = 'warning') => {
     setAlert({ message, type });
   }, []);
 
   const showConfirm = useCallback((message: string): Promise<boolean> => {
+    setConfirmDisabled(false);
     return new Promise((resolve) => {
       setAlert({ message, type: 'warning', isConfirm: true });
       setConfirmResolve(() => resolve);
@@ -138,17 +147,19 @@ export function MikuAlertProvider({ children }: { children: ReactNode }) {
       setConfirmResolve(null);
     }
     setAlert(null);
+    setConfirmDisabled(false);
   }, [confirmResolve]);
 
   return (
-    <MikuAlertContext.Provider value={{ showAlert, showConfirm }}>
+    <MikuAlertContext.Provider value={{ showAlert, showConfirm, setConfirmDisabled }}>
       {children}
       {alert && (
-        <MikuAlertComponent 
-          message={alert.message} 
-          type={alert.type} 
+        <MikuAlertComponent
+          message={alert.message}
+          type={alert.type}
           isConfirm={alert.isConfirm}
-          onClose={(res: boolean) => closeAlert(res)} 
+          confirmDisabled={confirmDisabled}
+          onClose={(res: boolean) => closeAlert(res)}
         />
       )}
     </MikuAlertContext.Provider>
@@ -170,10 +181,11 @@ interface MikuAlertComponentProps {
   message: React.ReactNode;
   type: AlertType;
   isConfirm?: boolean;
+  confirmDisabled?: boolean;
   onClose: (result: boolean) => void;
 }
 
-function MikuAlertComponent({ message, type, isConfirm, onClose }: MikuAlertComponentProps) {
+function MikuAlertComponent({ message, type, isConfirm, confirmDisabled, onClose }: MikuAlertComponentProps) {
   // 일반 Alert일 경우 5초 뒤 자동 닫기 (Confirm은 자동 닫기 방지)
   useEffect(() => {
     if (isConfirm) return;
@@ -202,9 +214,10 @@ function MikuAlertComponent({ message, type, isConfirm, onClose }: MikuAlertComp
 
           <div className="miku-alert-btn-group">
             {/* 타입 및 모드에 따른 클래스명 추가 (인라인 스타일 완전 대체) */}
-            <button 
+            <button
               className={`miku-alert-btn-confirm ${type} ${isConfirm ? 'mode-confirm' : 'mode-alert'}`}
-              onClick={() => onClose(true)} 
+              onClick={() => onClose(true)}
+              disabled={!!confirmDisabled}
             >
               확인
             </button>

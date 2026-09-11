@@ -71,11 +71,22 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
 
   const calculatedTotals = useMemo(() => {
     if (!isSingleHighlightMode && selectedItems.length > 0) {
-      const itemCount = selectedItems.length;
-
       // 🌟 selectedItems는 선택된 주문의 id 문자열 배열이라 item.domesticShippingFee로 직접
       // 읽으면 항상 undefined(→0)가 되는 버그가 있었습니다. 실제 주문 객체를 기준으로 이미
       // 정확히 합산해둔 부모의 totals.delivery를 그대로 사용합니다.
+
+      // 🌟 구매 요청(CART), 경매 낙찰 성공(BID_SUCCESS) 탭은 부모(status/page.tsx)가
+      // admin/estimate와 동일한 계산식으로 이미 정확히 합산해둔 totals.transfer/totals.agency를 그대로 사용합니다.
+      if (activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.BID_SUCCESS) {
+        return {
+          product: totals.product,
+          delivery: totals.delivery,
+          transfer: totals.transfer,
+          agency: totals.agency
+        };
+      }
+
+      const itemCount = selectedItems.length;
       return {
         product: totals.product,
         delivery: totals.delivery,
@@ -84,7 +95,7 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
       };
     }
     return totals;
-  }, [selectedItems, totals, isSingleHighlightMode, feeSettings]);
+  }, [selectedItems, totals, isSingleHighlightMode, feeSettings, activeTab]);
 
   const getHighlightTitle = () => {
     if (isPaymentRequest) return '청구된 총 배송비';
@@ -120,14 +131,23 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
 // 2. 화면 컴포넌트 영역 (View Layer)
 // =================================================================
 export default function PaymentSummary(props: PaymentSummaryProps) {
-  const { totalPriceWon, exchangeRate, selectedItems, handleUpdateStatus, myMoney } = props;
+  const { activeTab, totalPriceWon, exchangeRate, selectedItems, handleUpdateStatus, myMoney } = props;
   const {
     isSingleHighlightMode, isPaymentRequest, calculatedTotals, getHighlightTitle, getButtonText, getTargetStatus
   } = usePaymentSummaryLogic(props);
 
   const hasItems = selectedItems.length > 0;
+  // 🌟 구매 요청(CART)과 경매 낙찰 성공(BID_SUCCESS) 탭은 계산식/안내 문구를 동일하게 표시합니다.
+  const activeTabIsCart = activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.BID_SUCCESS;
 
   return (
+    <>
+    {activeTabIsCart && (
+      <p className="domestic-fee-notice">
+        <span className="domestic-fee-notice-icon">⚠️</span>
+        <span>현지 배송료 발생시 <strong>국제 배송비</strong>에 합산됩니다.</span>
+      </p>
+    )}
     <div className="miku-premium-payment-wrapper anim-slide-up">
       <div className="miku-payment-content-flex">
         
@@ -137,24 +157,18 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
             {isPaymentRequest && (
               <div className="fee-formula-box">
                 <div className="fee-formula-item">
-                  <span className="item-label">일본 내 배송비</span>
-                  <span className="item-val">¥ {(calculatedTotals.domestic || 0).toLocaleString()}</span>
+                  <span className="item-label">현지 배송비</span>
+                  <span className="item-val">₩ {(calculatedTotals.domestic || 0).toLocaleString()}</span>
                 </div>
-                <span className="fee-formula-symbol">+</span>
                 <div className="fee-formula-item">
                   <span className="item-label">국제 배송비</span>
-                  <span className="item-val">¥ {calculatedTotals.product.toLocaleString()}</span>
-                </div>
-                <span className="fee-formula-symbol">=</span>
-                <div className="fee-formula-item">
-                  <span className="item-label">청구된 총 배송비</span>
-                  <span className="item-val">¥ {((calculatedTotals.domestic || 0) + calculatedTotals.product).toLocaleString()}</span>
+                  <span className="item-val">₩ {calculatedTotals.product.toLocaleString()}</span>
                 </div>
               </div>
             )}
 
             {/* 🌟 단일 강조 박스 (고급형) */}
-            <div className="single-highlight-box premium-dark-box">
+            <div className={`single-highlight-box premium-dark-box ${isPaymentRequest ? 'paired' : ''}`}>
               <span className="highlight-title">{getHighlightTitle()}</span>
               <span className="highlight-value">₩ {totalPriceWon.toLocaleString()}</span>
               <span className={`my-money-info ${myMoney < totalPriceWon ? 'insufficient' : ''}`}>
@@ -165,17 +179,19 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
         ) : (
           /* 🌟 장바구니 요약 정보 그리드 (고급형) */
           <>
-            <div className="detail-grid">
+            <div className={`detail-grid ${activeTabIsCart ? 'three-cols' : ''}`}>
               <div className="detail-item">
                 <span className="item-label">상품 가격</span>
                 <span className="item-val">¥ {calculatedTotals.product.toLocaleString()}</span>
               </div>
+              {!activeTabIsCart && (
+                <div className="detail-item">
+                  <span className="item-label">일본내 배송료</span>
+                  <span className="item-val">¥ {calculatedTotals.delivery.toLocaleString()}</span>
+                </div>
+              )}
               <div className="detail-item">
-                <span className="item-label">일본내 배송료</span>
-                <span className="item-val">¥ {calculatedTotals.delivery.toLocaleString()}</span>
-              </div>
-              <div className="detail-item">
-                <span className="item-label">송금 수수료</span>
+                <span className="item-label">결제 수수료</span>
                 <span className="item-val">¥ {calculatedTotals.transfer.toLocaleString()}</span>
               </div>
               <div className="detail-item">
@@ -241,14 +257,49 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           padding: 24px;
           box-sizing: border-box;
         }
+        /* 🌟 구매요청 탭: 일본내 배송료 항목이 빠져 3개 항목만 표시됩니다. */
+        .detail-grid.three-cols {
+          grid-template-columns: repeat(3, 1fr);
+        }
+
+        /* 🌟 구매요청 탭 전용 안내 문구 (현지 배송료는 국제 배송비에 합산) */
+        .domestic-fee-notice {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin: 24px 0 8px;
+          padding: 16px 20px;
+          background: #fff7ed;
+          border: 1.5px solid #fdba74;
+          border-left: 5px solid #ea580c;
+          border-radius: 10px;
+          box-shadow: 0 2px 8px rgba(234, 88, 12, 0.08);
+          font-size: 15px;
+          font-weight: 600;
+          color: #9a3412;
+          line-height: 1.6;
+        }
+        /* 🌟 카드(.miku-premium-payment-wrapper)의 margin-top:40px와 마진이 겹쳐(collapse)
+           문구의 margin-bottom을 줄여도 간격이 그대로였던 문제를 해결합니다. */
+        .domestic-fee-notice + .miku-premium-payment-wrapper {
+          margin-top: 8px;
+        }
+        .domestic-fee-notice-icon {
+          font-size: 22px;
+          line-height: 1;
+          flex-shrink: 0;
+        }
+        .domestic-fee-notice strong {
+          color: #ea580c;
+          font-weight: 800;
+        }
 
         /* 🌟 배송비 요청 탭: 일본 내 배송비 + 국제 배송비 = 청구된 총 배송비 공식 */
         .fee-formula-box {
           flex: 1;
-          display: flex;
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
           align-items: center;
-          justify-content: center;
-          gap: 20px;
           background: #fafafa;
           border-radius: 20px;
           border: 1px solid #f0f0f0;
@@ -261,8 +312,18 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           align-items: center;
           justify-content: center;
           gap: 8px;
+          position: relative; /* 고급형 구분선 배치를 위한 기준점 */
         }
-        .fee-formula-symbol { font-size: 20px; font-weight: 800; color: #d4d4d8; }
+        /* 🌟 detail-item과 동일한 그라데이션 구분선 효과 */
+        .fee-formula-item:not(:last-child)::after {
+          content: '';
+          position: absolute;
+          right: 0;
+          top: 15%;
+          height: 70%;
+          width: 1px;
+          background: linear-gradient(to bottom, rgba(229, 231, 235, 0) 0%, rgba(161, 161, 170, 0.4) 50%, rgba(229, 231, 235, 0) 100%);
+        }
 
         .detail-item {
           display: flex;
@@ -346,6 +407,20 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           gap: 10px;
           box-sizing: border-box;
         }
+        /* 🌟 배송비 요청 탭: 왼쪽에 fee-formula-box가 함께 있을 때는 total-box와 동일한 너비/패딩/폰트 크기로 맞춰
+           두 박스의 세로 높이가 완전히 일치하도록 합니다. */
+        .single-highlight-box.paired {
+          width: 340px;
+          flex-shrink: 0;
+          padding: 24px 28px;
+          gap: 0; /* my-money-info의 margin-top:8px와 중복 적용되어 total-box보다 커지는 문제 방지 */
+        }
+        .single-highlight-box.paired .highlight-title {
+          margin-bottom: 8px; /* total-text-group의 margin-bottom과 동일한 간격 */
+        }
+        .single-highlight-box.paired .highlight-value {
+          font-size: 34px;
+        }
         .highlight-title { font-size: 15px; font-weight: 600; color: #a1a1aa; } /* total-label과 동일한 톤 */
         .highlight-value { font-size: 40px; font-weight: 900; color: #ffffff; letter-spacing: -1px; line-height: 1; }
 
@@ -398,11 +473,14 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
            📱 모바일 반응형 처리 (초압축 & 고급화 유지)
            ============================================================= */
         @media (max-width: 768px) {
-          .miku-premium-payment-wrapper { 
-            padding: 20px 16px; 
-            margin-top: 16px; 
-            border-radius: 20px; 
-            box-shadow: 0 4px 24px rgba(0,0,0,0.06); 
+          .miku-premium-payment-wrapper {
+            padding: 20px 16px;
+            margin-top: 16px;
+            border-radius: 20px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+          }
+          .domestic-fee-notice + .miku-premium-payment-wrapper {
+            margin-top: 8px;
           }
           
           .miku-payment-content-flex { 
@@ -437,7 +515,7 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           }
           .fee-formula-item .item-label { font-size: 11px; }
           .fee-formula-item .item-val { font-size: 15px; }
-          .fee-formula-symbol { font-size: 14px; }
+          .fee-formula-item::after { display: none; } /* 모바일에서는 구분선 숨김 */
           .item-val { font-size: 16px; font-weight: 800; color: #0f172a; }
           
           /* 🌟 최종 결제액 박스: 최신 금융앱처럼 좌우 스플릿 배치 */
@@ -461,12 +539,13 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           .total-value { font-size: 26px; }
           
           /* 🌟 단일 강조 박스: 모바일에서도 total-box와 똑같이 가로 스플릿 배치 */
-          .single-highlight-box { 
-            padding: 24px 20px; 
-            border-radius: 16px; 
+          .single-highlight-box {
+            width: 100%;
+            padding: 24px 20px;
+            border-radius: 16px;
             flex-direction: row; /* 세로 -> 가로 배치로 변경 */
-            justify-content: space-between; 
-            align-items: center; 
+            justify-content: space-between;
+            align-items: center;
             text-align: right;
             gap: 0;
           }
@@ -483,5 +562,6 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
         }
       `}</style>
     </div>
+    </>
   );
 }

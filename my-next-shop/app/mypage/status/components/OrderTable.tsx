@@ -100,7 +100,8 @@ function useOrderTableLogic({ activeTab, fetchOrders }: any) {
 // =================================================================
 
 // 🌟 입찰 금액 입력 프리미엄 모달 콘텐츠
-const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string) => void }) => {
+const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { item: any, myMoney: number, exchangeRate: number, onChange: (val: string) => void }) => {
+  const { setConfirmDisabled } = useMikuAlert();
   const [amount, setAmount] = useState("");
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -110,17 +111,24 @@ const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string
 
   const originalBid = item.myBidPrice || 0;
   const parsedAmount = parseInt(amount) || 0;
-  const totalMyBid = originalBid + parsedAmount;
+  // 🌟 다른 화면(PaymentSummary)과 동일하게 반올림 후 100원 단위로 올림 처리
+  const bidAmountWon = parsedAmount > 0 ? Math.ceil(Math.round(parsedAmount * exchangeRate) / 100) * 100 : 0;
+  const isInsufficient = parsedAmount > 0 && bidAmountWon > myMoney;
+
+  // 🌟 희망 입찰 금액(원화 환산)이 보유 미쿠짱 머니보다 많으면 "확인" 버튼을 눌러도 진행되지 않게 막습니다.
+  useEffect(() => {
+    setConfirmDisabled(isInsufficient);
+  }, [isInsufficient, setConfirmDisabled]);
 
   return (
     <div className="miku-bid-modal notranslate" translate="no">
       <p className="prod-name-title">{item.productName}</p>
-      
+
       <div className="info-row">
         <span className="label">현재 최고가</span>
         <span className="val highlight">¥ {item.productPrice?.toLocaleString()}</span>
       </div>
-      
+
       <div className="info-row my-bid-row">
         <span className="label">내 입찰 금액</span>
         <div className="bid-calc">
@@ -128,7 +136,7 @@ const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string
             <>
               <span className="old-bid">¥ {originalBid.toLocaleString()}</span>
               <span className="arrow">→</span>
-              <span className="new-bid">¥ {totalMyBid.toLocaleString()}</span>
+              <span className="new-bid">¥ {parsedAmount.toLocaleString()}</span>
             </>
           ) : (
             <span className="new-bid">¥ {originalBid.toLocaleString()}</span>
@@ -137,19 +145,32 @@ const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string
       </div>
 
       <div className="input-container">
-        <label>추가 입찰 금액 (¥)</label>
-        <input 
-          type="number" placeholder="추가할 금액 입력"
+        <label>희망 입찰 금액(최종) (¥)</label>
+        <input
+          type="number" placeholder="희망 입찰 금액(최종) 입력"
           value={amount} onChange={handleInputChange}
-          className="premium-input"
+          className={`premium-input ${isInsufficient ? 'insufficient' : ''}`}
         />
+        <div className="bid-my-money-info">
+          내 미쿠짱 머니 ₩ {myMoney.toLocaleString()}
+        </div>
+        {parsedAmount > 0 && (
+          <div className="bid-krw-info">
+            희망 입찰 금액 (원화 환산) ₩ {bidAmountWon.toLocaleString()}
+          </div>
+        )}
+        {isInsufficient && (
+          <div className="bid-insufficient-warning">
+            ⚠️ 미쿠짱 머니가 부족합니다
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 // 🌟 메인 테이블 컴포넌트
-export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete }: any) {
+export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete, myMoney = 0, exchangeRate = 0 }: any) {
   const { 
     isMobile, showConfirm, showAlert, 
     getAuctionTimeData, getColSpanCount 
@@ -174,20 +195,34 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
   // 입찰 처리 로직
   const handleBidClick = async (item: any) => {
     let finalAmount = "";
-    const isConfirmed = await showConfirm(<BidInputContent item={item} onChange={(val) => { finalAmount = val; }} />);
+    const isConfirmed = await showConfirm(<BidInputContent item={item} myMoney={myMoney} exchangeRate={exchangeRate} onChange={(val) => { finalAmount = val; }} />);
 
     if (isConfirmed) {
-      const amount = parseInt(finalAmount);
-      if (!amount || amount <= 0) return showAlert("올바른 금액을 입력해주세요.", "error");
+      // 🌟 입력값은 이제 "추가할 금액"이 아니라 "희망 입찰 금액(최종)"입니다.
+      const finalBidAmount = parseInt(finalAmount);
+      const currentHighest = item.productPrice || 0;
+      if (!finalBidAmount || finalBidAmount <= currentHighest) {
+        return showAlert("현재 최고가보다 높은 금액을 입력해주세요.", "error");
+      }
 
-      const deposit = amount <= 20000 ? 2000 : Math.floor(amount * 0.1);
+      // 🌟 확인 버튼은 비활성화로 막혀있지만, 만약을 대비해 제출 시점에도 한 번 더 검증합니다.
+      const finalBidAmountWon = Math.ceil(Math.round(finalBidAmount * exchangeRate) / 100) * 100;
+      if (finalBidAmountWon > myMoney) {
+        return showAlert("미쿠짱 머니가 부족합니다.", "error");
+      }
+
+      // 서버는 myBidPrice에 더해지는(increment) 값을 받으므로, 기존 입찰가와의 차액을 계산해서 보냅니다.
+      const originalBid = item.myBidPrice || 0;
+      const amount = finalBidAmount - originalBid;
+
+      const deposit = finalBidAmount <= 20000 ? 2000 : Math.floor(finalBidAmount * 0.1);
 
       try {
         const res = await fetch('/api/orders/bid', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderId: item.orderId, amount, deposit })
         });
-        
+
         if (res.ok) {
           await fetch('/api/orders', {
             method: 'PUT',
@@ -195,7 +230,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
             body: JSON.stringify({ updates: [{ id: item.orderId, bidStatus: 'PENDING' }] })
           });
 
-          showAlert(`¥${amount.toLocaleString()} 추가 입찰 완료!`, 'success');
+          showAlert(`¥${finalBidAmount.toLocaleString()} 입찰 완료!`, 'success');
           fetchOrders();
         } else {
           const errorData = await res.json();
@@ -285,7 +320,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
               
               {activeTab === 'BIDDING' && <th className="th-cell th-auction-status">경매 상태</th>}
               {showBundleAndRecipientTabs.includes(activeTab) && <th className="th-cell th-recipient">수취인</th>}
-              {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell th-domestic-fee">일본 내 배송비(₩)</th>}
+              {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell th-domestic-fee">현지 배송비(₩)</th>}
               {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell th-shipping-fee">국제 배송비(₩)</th>}
               {activeTab === ORDER_STATUS.SHIPPING && <th className="th-cell th-tracking">운송장 번호</th>}
               
@@ -683,6 +718,14 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           transition: all 0.2s; background: #ffffff;
         }
         .premium-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
+        .bid-my-money-info { margin-top: 10px; font-size: 12px; font-weight: 700; color: #64748b; text-align: right; }
+        .bid-krw-info { margin-top: 4px; font-size: 12px; font-weight: 700; color: #3b82f6; text-align: right; }
+        .premium-input.insufficient { color: #ef4444; }
+        .bid-insufficient-warning {
+          margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+          background: #fef2f2; border: 1.5px solid #fecaca;
+          color: #b91c1c; font-size: 13px; font-weight: 800; text-align: center;
+        }
 
         /* 애니메이션 */
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }

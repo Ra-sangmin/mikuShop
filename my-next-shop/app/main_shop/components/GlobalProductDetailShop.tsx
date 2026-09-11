@@ -7,11 +7,21 @@ import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 import GlobalProductDetailBase from "./GlobalProductDetailBase";
 import { GlobalProduct } from "./GlobalProductDetail";
 import { getDetailStyles, DetailTheme } from "./GlobalProductDetail.styles";
+import { getDisplayedName, extractProductFeatures } from "./aiSummaryUtils";
 
 interface Props {
   product: GlobalProduct;
   onClose?: () => void;
 }
+
+// 🌟 rakuten처럼 "상점명"이 뚜렷한 플랫폼도 있고, 메루카리처럼 개인 판매자라 shopName이
+// 비어있기 쉬운 플랫폼도 있어, shopName이 없을 때 보여줄 플랫폼별 대체 이름입니다.
+const PLATFORM_FALLBACK_NAME: Record<string, string> = {
+  rakuten: 'Rakuten',
+  mercari: '메루카리',
+  yahoo_shopping: '야후 쇼핑',
+  amazon: 'Amazon',
+};
 
 export default function GlobalProductDetailShop({ product, onClose }: Props) {
   const router = useRouter();
@@ -21,6 +31,8 @@ export default function GlobalProductDetailShop({ product, onClose }: Props) {
   
   const [quantity, setQuantity] = useState(1);
   const [optionMemo, setOptionMemo] = useState("");
+  // 🌟 "이 상품의 특징" 아코디언 펼침 상태 (상세정보를 열었을 때는 기본값으로 접혀 있습니다)
+  const [isFeatureOpen, setIsFeatureOpen] = useState(false);
 
   const [isMobile, setIsMobile] = useState(false);
   const theme = useMemo(() => {
@@ -59,64 +71,73 @@ export default function GlobalProductDetailShop({ product, onClose }: Props) {
 
   // 🌟 [추가] 깜빡임 방지 및 디자인 복구된 AI 요약 로직
   const renderedAiSummary = useMemo(() => {
-    const displayedName = product.name.length > 50 ? product.name.substring(0, 50) + "..." : product.name;
+    const displayedName = getDisplayedName(product.name);
+    const productFeatures = extractProductFeatures(product.description);
 
     return (
       <div style={styles.aiBox}>
-        <div className="notranslate" translate="no" style={styles.aiHeader}>
-          ✨ 미쿠짱 AI 간단 요약
+        <div style={styles.aiHeaderRow}>
+          <div className="notranslate" translate="no" style={styles.aiHeaderLeft}>
+            <span style={styles.aiIconChip}>
+              <svg width={isMobile ? "16" : "18"} height={isMobile ? "16" : "18"} viewBox="0 0 24 24" fill="white">
+                <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5Z" />
+              </svg>
+            </span>
+            <span style={styles.aiHeaderTitle}>미쿠짱 AI 간단 요약</span>
+          </div>
+          <span style={styles.aiBadge}>AI</span>
         </div>
 
-        <div style={{ fontSize: isMobile ? '15px' : '17px', color: '#4b5563', lineHeight: '1.8' }}>
-          {product.platform === 'rakuten' ? (
-            /* --- 1. 라쿠텐 전용 요약 --- */
-            <>
-              해당 상품은 <span style={{ fontWeight: '800', color: '#111827' }}>{product.shopName || 'Rakuten'}</span> 상점에서 판매되는<br/>
-              <span style={{ 
-                fontWeight: '800', 
-                color: theme.main, 
-                textDecoration: 'underline', 
-                textUnderlineOffset: '4px',
-                textDecorationColor: `${theme.main}44` 
-              }}>{displayedName}</span> 입니다.
-            </>
-          ) : (
-            /* --- 2. 메루카리 및 타 플랫폼 요약 --- */
-            <>
-              <div style={{ display: 'block', width: '100%', marginBottom: '4px' }}>
-                해당 상품은 <span style={{ fontWeight: 'bold' }}>{product.condition || '중고'}</span> 
-                <span className="notranslate" translate="no"> 상태의</span>
-              </div>
-              <div style={{ display: 'block', width: '100%', marginBottom: '4px' }}>
-                <span style={{ 
-                  color: '#1f2937', 
-                  fontWeight: '800', 
-                  fontSize: isMobile ? '17px' : '19px', 
-                  textDecoration: 'underline', 
-                  textUnderlineOffset: '4px',
-                  textDecorationColor: `${theme.main}44`
-                }}>{displayedName}</span>입니다.
-              </div>
-              <div style={{ display: 'block', width: '100%' }}>
-                <span style={{ fontWeight: 'bold' }}>{product.size || 'FREE'}</span>
-                <span className="notranslate" translate="no" style={{ marginLeft: '4px' }}>사이즈이며,</span>
-              </div>
-            </>
-          )}
+        <div style={{ fontSize: isMobile ? '15px' : '17px', color: '#475569', lineHeight: '1.85' }}>
+          {/* 🌟 rakuten과 동일한 한 문장 요약 형식을 모든 플랫폼(메루카리/야후쇼핑/아마존 등)에 통일 적용합니다. */}
+          <span style={{ fontWeight: '800', color: '#111827' }}>
+            {product.shopName || PLATFORM_FALLBACK_NAME[product.platform] || product.platform}
+          </span>에서{' '}
+          <span className="notranslate" translate="no" style={{ fontWeight: '800', color: theme.main }}>
+            ¥{(product.price * quantity).toLocaleString()}
+          </span>{' '}에 판매되는{' '}
+          <span style={{
+            fontWeight: '800',
+            color: theme.main,
+            textDecoration: 'underline',
+            textUnderlineOffset: '4px',
+            textDecorationColor: `${theme.main}44`
+          }}>{displayedName}</span>{' '}입니다.
 
-          {/* 공통 가격 표시 부분 */}
-          <div style={{ display: 'block', marginTop: '10px', borderTop: `1px dashed ${theme.main}33`, paddingTop: '8px' }}>
-            <span translate="no" className="notranslate" style={{ color: theme.main, fontWeight: '900', fontSize: isMobile ? '18px' : '20px' }}>
-              ¥{(product.price * quantity).toLocaleString()}
-            </span>
-            <span className="notranslate" translate="no" style={{ marginLeft: '4px', fontWeight: 'bold' }}>
-              가격으로 등록되었습니다.
-            </span>
-          </div>
+          {/* 🌟 상품 상세 설명에서 뽑아낸 이 상품만의 특징들 (접었다 펼 수 있음, 기본값은 접힘) */}
+          {productFeatures.length > 0 && (
+            <div style={styles.aiFeatureBlock}>
+              <button
+                type="button"
+                onClick={() => setIsFeatureOpen(prev => !prev)}
+                style={styles.aiFeatureToggle}
+                aria-expanded={isFeatureOpen}
+              >
+                <span style={styles.aiFeatureLabel}>이 상품의 특징</span>
+                <svg
+                  width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke={theme.main} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ transform: isFeatureOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease', flexShrink: 0 }}
+                >
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              {isFeatureOpen && (
+                <ul style={styles.aiFeatureList}>
+                  {productFeatures.map((feature, idx) => (
+                    <li key={idx} style={styles.aiFeatureText}>
+                      <span style={styles.aiFeatureBullet}>•</span>
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
-  }, [product, quantity, isMobile, theme, styles]);
+  }, [product, quantity, isMobile, theme, styles, isFeatureOpen]);
 
   return (
     <GlobalProductDetailBase 
@@ -130,14 +151,15 @@ export default function GlobalProductDetailShop({ product, onClose }: Props) {
       {({ styles, isMobile, theme }) => (
         <>
           <div style={styles.priceContainer}>
+            <span style={styles.priceLabel}>판매 가격</span>
             <span className="notranslate" style={styles.priceTag}>¥{(product.price * quantity).toLocaleString()}</span>
-            <span className="notranslate" style={styles.priceKrw}>약 {(product.price * quantity * exchangeRate).toLocaleString()}원</span>
+            <span className="notranslate" style={styles.priceKrw}>약 {(Math.round(product.price * quantity * exchangeRate / 100) * 100).toLocaleString()}원</span>
           </div>
 
           {product.platform === 'mercari' ? (
             <div style={styles.mercariAttrContainer}>
               <div style={styles.attrRow}><span style={styles.attrLabel}>사이즈</span><span style={styles.attrValue}>{product.size || 'FREE'}</span></div>
-              <div style={styles.attrRow}><span style={styles.attrLabel}>배송비 부담</span><span style={styles.attrValue}>{product.shippingPayer}</span></div>
+              <div style={{ ...styles.attrRow, borderBottom: 'none' }}><span style={styles.attrLabel}>배송비 부담</span><span style={styles.attrValue}>{product.shippingPayer}</span></div>
             </div>
           ) : (
             <div style={styles.rakutenTable}>

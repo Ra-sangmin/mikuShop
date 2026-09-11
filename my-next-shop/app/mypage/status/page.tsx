@@ -85,17 +85,16 @@ function usePurchaseStatusLogic() {
   
     const originalBid = item.myBidPrice || 0;
     const parsedAmount = parseInt(amount) || 0;
-    const totalMyBid = originalBid + parsedAmount;
-  
+
     return (
       <div className="miku-bid-modal notranslate" translate="no">
         <p className="prod-name-title">{item.productName}</p>
-        
+
         <div className="info-row">
           <span className="label">현재 최고가</span>
           <span className="val highlight">¥ {item.productPrice?.toLocaleString()}</span>
         </div>
-        
+
         <div className="info-row my-bid-row">
           <span className="label">내 입찰 금액</span>
           <div className="bid-calc">
@@ -103,18 +102,18 @@ function usePurchaseStatusLogic() {
               <>
                 <span className="old-bid">¥ {originalBid.toLocaleString()}</span>
                 <span className="arrow">→</span>
-                <span className="new-bid">¥ {totalMyBid.toLocaleString()}</span>
+                <span className="new-bid">¥ {parsedAmount.toLocaleString()}</span>
               </>
             ) : (
               <span className="new-bid">¥ {originalBid.toLocaleString()}</span>
             )}
           </div>
         </div>
-  
+
         <div className="input-container">
-          <label>추가 입찰 금액 (¥)</label>
-          <input 
-            type="number" placeholder="추가할 금액 입력"
+          <label>희망 입찰 금액(최종) (¥)</label>
+          <input
+            type="number" placeholder="희망 입찰 금액(최종) 입력"
             value={amount} onChange={handleInputChange}
             className="premium-input"
           />
@@ -129,17 +128,25 @@ function usePurchaseStatusLogic() {
     const isConfirmed = await showConfirm(<BidInputContent item={item} onChange={(val) => { finalAmount = val; }} />);
 
     if (isConfirmed) {
-      const amount = parseInt(finalAmount);
-      if (!amount || amount <= 0) return showAlert("올바른 금액을 입력해주세요.", "error");
+      // 🌟 입력값은 이제 "추가할 금액"이 아니라 "희망 입찰 금액(최종)"입니다.
+      const finalBidAmount = parseInt(finalAmount);
+      const currentHighest = item.productPrice || 0;
+      if (!finalBidAmount || finalBidAmount <= currentHighest) {
+        return showAlert("현재 최고가보다 높은 금액을 입력해주세요.", "error");
+      }
 
-      const deposit = amount <= 20000 ? 2000 : Math.floor(amount * 0.1);
+      // 서버는 myBidPrice에 더해지는(increment) 값을 받으므로, 기존 입찰가와의 차액을 계산해서 보냅니다.
+      const originalBid = item.myBidPrice || 0;
+      const amount = finalBidAmount - originalBid;
+
+      const deposit = finalBidAmount <= 20000 ? 2000 : Math.floor(finalBidAmount * 0.1);
 
       try {
         const res = await fetch('/api/orders/bid', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderId: item.orderId, amount, deposit })
         });
-        
+
         if (res.ok) {
           // 추가 입찰이 성공하면 상태를 다시 '입찰 대기중(PENDING)'으로 즉시 변경
           await fetch('/api/orders', {
@@ -148,7 +155,7 @@ function usePurchaseStatusLogic() {
             body: JSON.stringify({ updates: [{ id: item.orderId, bidStatus: 'PENDING' }] })
           });
 
-          showAlert(`¥${amount.toLocaleString()} 추가 입찰 완료!`, 'success');
+          showAlert(`¥${finalBidAmount.toLocaleString()} 입찰 완료!`, 'success');
           fetchOrders();
         } else {
           const errorData = await res.json();
@@ -310,10 +317,16 @@ function usePurchaseStatusLogic() {
         acc.deposit += depositAmt;
       } else {
         acc.product += productP;
-        if (activeTab === ORDER_STATUS.CART) {
-          acc.transfer += (transferF || 450);
+        // 🌟 구매 요청(CART), 경매 낙찰 성공(BID_SUCCESS) 탭은 admin/estimate와 동일한 계산식을 적용합니다.
+        if (activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.BID_SUCCESS) {
+          // 🌟 admin/estimate와 동일한 계산식: 결제 수수료는 상품 총액(30,000엔) 기준,
+          // 대행 수수료는 수량(4개) 기준으로 구간별 정액 부과합니다.
+          const itemQuantity = Number(item.productCount) || 1;
+          const tieredPaymentFee = productP > 0 ? (productP < 30000 ? 220 : 330) : 0;
+          const tieredAgencyFee = itemQuantity > 0 ? (itemQuantity < 4 ? 300 : itemQuantity * 100) : 0;
+          acc.transfer += tieredPaymentFee;
           acc.delivery += domesticS;
-          acc.agency += (agencyF || 100);
+          acc.agency += tieredAgencyFee;
         } else {
           acc.transfer += transferF;
           acc.delivery += domesticS;
@@ -739,11 +752,12 @@ function MyPurchaseStatusContent() {
       </div>
 
       <div className="anim-slide-up delay-2">
-        <OrderTable 
-          items={items} orders={orders} activeTab={activeTab} 
-          selectedItems={selectedItems} setSelectedItems={setSelectedItems} 
-          fetchOrders={fetchOrders} selectedAddress={selectedAddress} 
-          onIndividualPacking={handleIndividualPacking} onDelete={handleDeleteOrder} 
+        <OrderTable
+          items={items} orders={orders} activeTab={activeTab}
+          selectedItems={selectedItems} setSelectedItems={setSelectedItems}
+          fetchOrders={fetchOrders} selectedAddress={selectedAddress}
+          onIndividualPacking={handleIndividualPacking} onDelete={handleDeleteOrder}
+          myMoney={userData?.cyberMoney || 0} exchangeRate={exchangeRate}
         />
        </div>
       

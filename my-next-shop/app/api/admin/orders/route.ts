@@ -115,6 +115,9 @@ export async function PUT(request: Request) {
         if (order.secondPaymentAmount !== undefined) {
           updateData.secondPaymentAmount = order.secondPaymentAmount;
         }
+        if (order.domesticShippingFee !== undefined) {
+          updateData.domesticShippingFee = order.domesticShippingFee;
+        }
         if (order.bundleId !== undefined) {
           updateData.bundleId = order.bundleId;
         }

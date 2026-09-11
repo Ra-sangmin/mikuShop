@@ -257,7 +257,10 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
             {/* 상품 상세 */}
             {props.selectedProduct && (
               <div style={{ marginBottom: '40px' }}>
-                <GlobalProductDetail product={props.selectedProduct} onClose={props.onCloseDetail} />
+                {/* 🌟 key를 지정해 다른 상품 클릭 시 컴포넌트를 완전히 새로 마운트합니다.
+                    key가 없으면 같은 자리에서 props만 갱신되는데, 그 과정에서 이전 상품의
+                    요약 텍스트(useMemo/텍스트 노드)가 잠깐 겹쳐 보이는 문제가 있었습니다. */}
+                <GlobalProductDetail key={props.selectedProduct.id} product={props.selectedProduct} onClose={props.onCloseDetail} />
               </div>
             )}
 

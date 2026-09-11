@@ -197,10 +197,10 @@ function MercariCategoryContent() {
     setIsStreaming(false);
     setIsBottomLoaderAllowed(false);
 
-    // 🚀 [수정] 2초 후에만 로딩 상태를 true로 변경합니다.
+    // 🚀 [수정] 0.5초 후에만 로딩 상태를 true로 변경합니다.
     loadingTimerRef.current = setTimeout(() => {
       setIsItemLoading(true);
-      console.log("⏳ 1.5초가 지나 로딩바를 표시합니다.");
+      console.log("⏳ 0.5초가 지나 로딩바를 표시합니다.");
 
       // 표시된 직후, 2.5초 타이머를 새로 하나 더 돌려서 무조건 끕니다.
       loadingTimerRef.current = setTimeout(() => {
@@ -209,7 +209,7 @@ function MercariCategoryContent() {
         console.log("⏳ 표시 후 3.0초가 지나 로딩바를 강제로 숨깁니다.");
       }, 3000);
 
-    }, 2000);
+    }, 500);
 
     const targetId = Number(catId);
     const params = GetParams(targetId, filters);

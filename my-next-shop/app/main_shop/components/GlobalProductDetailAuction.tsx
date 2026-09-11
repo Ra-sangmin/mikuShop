@@ -7,6 +7,7 @@ import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 import GlobalProductDetailBase from "./GlobalProductDetailBase";
 import { GlobalProduct } from "./GlobalProductDetail";
 import { getDetailStyles, DetailTheme } from "./GlobalProductDetail.styles";
+import { getDisplayedName, extractProductFeatures } from "./aiSummaryUtils";
 
 interface Props {
   product: GlobalProduct;
@@ -41,6 +42,8 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
   const [liveTimeLeft, setLiveTimeLeft] = useState(product.timeLeft || '');
   const [localSeconds, setLocalSeconds] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  // 🌟 "이 상품의 특징" 아코디언 펼침 상태 (상세정보를 열었을 때는 기본값으로 접혀 있습니다)
+  const [isFeatureOpen, setIsFeatureOpen] = useState(false);
 
   // 사용자가 입력한 희망 입찰 금액
   const [bidAmount, setBidAmount] = useState<string>("");
@@ -193,46 +196,73 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
   };
 
   const renderedAiSummary = useMemo(() => {
-    const displayedName = product.name.length > 50 ? product.name.substring(0, 50) + "..." : product.name;
+    const displayedName = getDisplayedName(product.name);
+    const productFeatures = extractProductFeatures(product.description);
+
     return (
       <div style={styles.aiBox}>
-        <div className="notranslate" translate="no" style={styles.aiHeader}>
-          ✨ 미쿠짱 AI 간단 요약
-        </div>
-        <div style={{ fontSize: isMobile ? '15px' : '17px', color: '#4b5563', lineHeight: '1.8' }}>
-            <div style={{ display: 'block', width: '100%', marginBottom: '4px' }}>
-              해당 상품은 <span style={{ fontWeight: 'bold' }}>{product.condition || '중고'}</span> 
-              <span className="notranslate" translate="no"> 상태의</span> 
-            </div>
-            <div style={{ display: 'block', width: '100%', marginBottom: '6px' }}>
-              <span style={{ 
-                color: '#111827', fontWeight: '800', fontSize: isMobile ? '17px' : '19px', 
-                textDecoration: 'underline', textUnderlineOffset: '4px' 
-              }}>
-                {displayedName}
-              </span>
-              입니다.
-            </div>
-          <div style={{ display: 'block', marginTop: '10px' }}>
-            <span translate="no" className="notranslate" style={{ color: theme.main, fontWeight: '900', fontSize: isMobile ? '18px' : '22px' }}>
-              ¥{livePrice.toLocaleString()}
+        {/* 🌟 rakuten/mercari/yahoo_shopping과 동일한 헤더(아이콘 칩 + 배지)로 통일합니다. */}
+        <div style={styles.aiHeaderRow}>
+          <div className="notranslate" translate="no" style={styles.aiHeaderLeft}>
+            <span style={styles.aiIconChip}>
+              <svg width={isMobile ? "16" : "18"} height={isMobile ? "16" : "18"} viewBox="0 0 24 24" fill="white">
+                <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5Z" />
+              </svg>
             </span>
-            <span className="notranslate" translate="no" style={{ marginLeft: '4px', fontWeight: 'bold' }}>
-              현재가로 입찰이 진행 중입니다.
-            </span>
+            <span style={styles.aiHeaderTitle}>미쿠짱 AI 간단 요약</span>
           </div>
-          {product.aiSummary && (
-            <div style={{ 
-              marginTop: '12px', paddingTop: '10px', borderTop: `1px dashed ${theme.main}44`,
-              fontSize: '14px', color: '#6b7280', lineHeight: '1.6'
-            }}>
-              {product.aiSummary}
+          <span style={styles.aiBadge}>AI</span>
+        </div>
+
+        <div style={{ fontSize: isMobile ? '15px' : '17px', color: '#475569', lineHeight: '1.85' }}>
+          {/* 🌟 rakuten과 동일한 한 문장 요약 형식 ("{판매자}에서 ¥{가격}에 판매되는 {이름} 입니다")을
+              경매 상황에 맞게 적용합니다 (판매되는 → 입찰 중인). */}
+          <span style={{ fontWeight: '800', color: '#111827' }}>{product.seller || '야후 옥션'}</span>에서{' '}
+          <span className="notranslate" translate="no" style={{ fontWeight: '800', color: theme.main }}>
+            ¥{livePrice.toLocaleString()}
+          </span>{' '}에 입찰 중인{' '}
+          <span style={{
+            fontWeight: '800',
+            color: theme.main,
+            textDecoration: 'underline',
+            textUnderlineOffset: '4px',
+            textDecorationColor: `${theme.main}44`
+          }}>{displayedName}</span>{' '}입니다.
+
+          {/* 🌟 상품 상세 설명에서 뽑아낸 이 상품만의 특징들 (접었다 펼 수 있음, 기본값은 접힘) */}
+          {productFeatures.length > 0 && (
+            <div style={styles.aiFeatureBlock}>
+              <button
+                type="button"
+                onClick={() => setIsFeatureOpen(prev => !prev)}
+                style={styles.aiFeatureToggle}
+                aria-expanded={isFeatureOpen}
+              >
+                <span style={styles.aiFeatureLabel}>이 상품의 특징</span>
+                <svg
+                  width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke={theme.main} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ transform: isFeatureOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease', flexShrink: 0 }}
+                >
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              {isFeatureOpen && (
+                <ul style={styles.aiFeatureList}>
+                  {productFeatures.map((feature, idx) => (
+                    <li key={idx} style={styles.aiFeatureText}>
+                      <span style={styles.aiFeatureBullet}>•</span>
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </div>
       </div>
     );
-  }, [product, livePrice, isMobile, theme, styles]);
+  }, [product, livePrice, isMobile, theme, styles, isFeatureOpen]);
 
   const renderMiddleContent = useCallback(() => {
     const sellerDisplay = (product.sellerUrl && product.seller && product.seller !== "-") ? (

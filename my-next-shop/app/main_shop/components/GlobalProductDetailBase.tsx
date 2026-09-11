@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { feeManager } from "@/src/models/FeeManager";
 import { useExchangeRate } from "@/app/context/ExchangeRateContext";
 import { getDetailStyles, DetailTheme } from "./GlobalProductDetail.styles";
 import { GlobalProduct } from "./GlobalProductDetail"; // 타입 임포트
@@ -32,8 +31,7 @@ export default function GlobalProductDetailBase(props: BaseProps) {
   const [currentImg, setCurrentImg] = useState(product.thumbnail);
   const [isHovered, setIsHovered] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [fees, setFees] = useState(feeManager.getFees());
-  
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isDrag, setIsDrag] = useState(false);
   const [startX, setStartX] = useState(0);
@@ -66,20 +64,51 @@ export default function GlobalProductDetailBase(props: BaseProps) {
   const renderedDescription = useMemo(() => {
     if (!product.description) return null;
 
+    // 🌟 쇼핑몰마다 스크래핑 원문의 구분 기호가 제각각입니다 (■, ※, ●, 【표제】 등을 구분자로
+    // 쓰거나 실제 개행 대신 리터럴 "<br>" 텍스트를 그대로 남기는 경우도 있음). 공통 규칙은
+    // "이 기호들이 원래는 새 줄/새 항목의 시작"이라는 점이라, <br>은 개행으로 바꾸고 이 기호들
+    // 앞에도 개행을 삽입해 한 덩어리로 붙어있던 텍스트를 항목별로 나눕니다.
+    const normalizedDescription = !isAuction
+      ? product.description
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/([■※●◆▶►]|【)/g, '\n$1')
+      : product.description;
+
+    const descriptionSegments = !isAuction
+      ? normalizedDescription.split('\n').map(s => s.trim()).filter(Boolean)
+      : [];
+
     return (
       <div style={styles.descBox}>
-        <h4 style={styles.descTitle}>상품 상세 설명</h4>
+        <h4 style={styles.descTitle}><span style={styles.descTitleBar} />상품 상세 설명</h4>
         {isAuction ? (
-          <div 
-            style={styles.descText} 
-            dangerouslySetInnerHTML={{ __html: product.description }} 
+          <div
+            style={styles.descText}
+            dangerouslySetInnerHTML={{ __html: product.description }}
           />
+        ) : descriptionSegments.length > 1 ? (
+          <div style={styles.descList}>
+            {descriptionSegments.map((segment, idx) => {
+              // 【표제】 또는 ■※●◆▶► 같은 선행 기호를 강조색으로 분리해서 보여줍니다.
+              const match = segment.match(/^(【[^】]*】|[■※●◆▶►])\s*([\s\S]*)$/);
+              return (
+                <p key={idx} style={styles.descListItem}>
+                  {match ? (
+                    <>
+                      <span style={styles.descBullet}>{match[1]}</span>
+                      {match[2]}
+                    </>
+                  ) : segment}
+                </p>
+              );
+            })}
+          </div>
         ) : (
-          <p style={styles.descText}>{product.description}</p>
+          <p style={styles.descText}>{normalizedDescription}</p>
         )}
       </div>
     );
-  }, [product.description, isAuction, styles.descBox, styles.descTitle, styles.descText]);
+  }, [product.description, isAuction, styles.descBox, styles.descTitle, styles.descText, styles.descList, styles.descListItem, styles.descBullet]);
 
   const handleOpenOriginal = () => {
     if (!product.url) return;
@@ -94,19 +123,23 @@ export default function GlobalProductDetailBase(props: BaseProps) {
   }, []);
 
   useEffect(() => {
-    if (!feeManager.getIsLoaded()) feeManager.loadFees().then(setFees);
-    else setFees(feeManager.getFees());
-  }, []);
-
-  useEffect(() => {
     setCurrentImg(product.thumbnail);
     if (scrollRef.current) scrollRef.current.scrollLeft = 0; 
   }, [product.id, product.thumbnail]);
 
+  // 🌟 admin/estimate와 동일한 계산식: 결제 수수료는 상품 총액(30,000엔) 기준,
+  // 대행 수수료는 수량(4개) 기준으로 구간별 정액 부과합니다.
+  const { paymentFee, agencyFee } = useMemo(() => {
+    const itemTotalPrice = currentPrice * quantity;
+    const tieredPaymentFee = itemTotalPrice > 0 ? (itemTotalPrice < 30000 ? 220 : 330) : 0;
+    const tieredAgencyFee = quantity > 0 ? (quantity < 4 ? 300 : quantity * 100) : 0;
+    return { paymentFee: tieredPaymentFee, agencyFee: tieredAgencyFee };
+  }, [currentPrice, quantity]);
+
   const { totalPriceJpy, totalPriceKrw } = useMemo(() => {
-    const jpySum = (currentPrice * quantity) + (fees.TRANSFER || 0) + (fees.AGENCY || 0);
-    return { totalPriceJpy: jpySum, totalPriceKrw: Math.floor(jpySum * exchangeRate) };
-  }, [currentPrice, quantity, fees, exchangeRate]);
+    const jpySum = (currentPrice * quantity) + paymentFee + agencyFee;
+    return { totalPriceJpy: jpySum, totalPriceKrw: Math.round(jpySum * exchangeRate / 100) * 100 };
+  }, [currentPrice, quantity, paymentFee, agencyFee, exchangeRate]);
 
   return (
     <div id="global-detail-view" style={styles.container}>
@@ -152,6 +185,30 @@ export default function GlobalProductDetailBase(props: BaseProps) {
             overflow: hidden !important;
             touch-action: pan-y !important;
           }
+
+          #global-detail-view .calc-item::after {
+            display: none;
+          }
+        }
+
+        #global-detail-view input:focus,
+        #global-detail-view textarea:focus {
+          border-color: ${theme.main} !important;
+          box-shadow: 0 0 0 3px ${theme.main}1a;
+        }
+
+        /* 🌟 예상 결제 금액 항목 구분선 (mypage/status 계산식 박스와 동일한 그라데이션 효과) */
+        #global-detail-view .calc-item {
+          position: relative;
+        }
+        #global-detail-view .calc-item:not(:last-child)::after {
+          content: '';
+          position: absolute;
+          right: 0;
+          top: 15%;
+          height: 70%;
+          width: 1px;
+          background: linear-gradient(to bottom, rgba(229, 231, 235, 0) 0%, rgba(161, 161, 170, 0.4) 50%, rgba(229, 231, 235, 0) 100%);
         }
       `}</style>
       {onClose && (
@@ -222,9 +279,11 @@ export default function GlobalProductDetailBase(props: BaseProps) {
         </div>
       </div>
 
-      {/* 🌟 [핵심 추가] 파란색 선으로 표시하신 위치! (전체 너비 사용) */}
+      {/* 🌟 [핵심 추가] 파란색 선으로 표시하신 위치! (전체 너비 사용)
+          🌟 아래 bottomSection과 가로 폭을 맞추기 위해 여기서 별도 좌우 패딩을 주지 않습니다
+          (container 자체의 패딩만으로 다른 섹션들과 동일한 폭이 됩니다). */}
       {middleContent && (
-        <div style={{ width: '100%', padding: isMobile ? '0 15px' : '0 30px' }}>
+        <div style={{ width: '100%' }}>
           {middleContent({ styles, isMobile, theme })}
         </div>
       )}
@@ -235,12 +294,21 @@ export default function GlobalProductDetailBase(props: BaseProps) {
             React가 이후 리렌더링에서 값을 갱신해도 화면에 반영되지 않는 문제가 있어,
             실시간으로 바뀌는 금액 전체 영역을 notranslate로 감쌉니다. */}
         <div className="notranslate" translate="no" style={styles.calcBox}>
-          <h4 className="notranslate" style={styles.calcHeader}>💰 {isAuction ? '희망 입찰 기준 예상 결제 금액' : '예상 결제 금액'}</h4>
           <div style={styles.calcGrid}>
-            <div style={styles.calcItem}><span style={styles.attrLabel}>{isAuction ? '희망 입찰금액' : '상품가'}</span><p style={{ fontWeight: 'bold', fontSize: '20px' }}>¥{(currentPrice * quantity).toLocaleString()}</p></div>
-            <span style={styles.calcSymbol}>+</span>
-            <div style={styles.calcItem}><span style={styles.attrLabel}>수수료</span><p style={{ fontWeight: 'bold', fontSize: '20px' }}>¥{(fees.TRANSFER + fees.AGENCY).toLocaleString()}</p></div>
-            <span style={styles.calcEquals}>{isMobile ? '' : '='}</span>
+            <div className="calc-items-box" style={styles.calcItemsBox}>
+              <div className="calc-item" style={styles.calcItem}>
+                <span style={styles.calcItemLabel}>{isAuction ? '희망 입찰금액' : '상품가'}</span>
+                <p style={styles.calcItemVal}>¥{(currentPrice * quantity).toLocaleString()}</p>
+              </div>
+              <div className="calc-item" style={styles.calcItem}>
+                <span style={styles.calcItemLabel}>결제 수수료</span>
+                <p style={styles.calcItemVal}>¥{paymentFee.toLocaleString()}</p>
+              </div>
+              <div className="calc-item" style={styles.calcItem}>
+                <span style={styles.calcItemLabel}>대행 수수료</span>
+                <p style={styles.calcItemVal}>¥{agencyFee.toLocaleString()}</p>
+              </div>
+            </div>
             <div style={styles.totalSumBox}>
               <span style={styles.totalLabel}>최종 합계</span>
               <p style={styles.totalJpy}>¥{totalPriceJpy.toLocaleString()}</p>
@@ -251,21 +319,19 @@ export default function GlobalProductDetailBase(props: BaseProps) {
         </div>
 
         {/* 🌟 [수정] 아래처럼 메모이제이션된 변수를 렌더링하도록 바꿉니다. */}
-        <div style={styles.descBox}>
-          <div style={styles.cautionBox}>
-            <div style={styles.cautionTitle}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                <line x1="12" y1="9" x2="12" y2="13"></line>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-              </svg> 
-              {isAuction ? '경매 주의사항' : '주의사항'}
-            </div>
-            <div style={styles.cautionMainText}>
-              {isAuction ? '입찰 후 취소는 절대 불가하며, 판매자 사정에 의해 조기 종료되거나 입찰이 취소될 수 있습니다.' : '번역 서비스 특성상 오번역에 대한 책임은 지지 않습니다.'}
-            </div>
-          </div>
-          
+        <div style={styles.descSectionWrapper}>
+          {isAuction ? (
+            <p style={styles.translationNotice}>
+              <span style={styles.translationNoticeIcon}>⚠️</span>
+              <span>경매 주의사항: 입찰 후 취소는 절대 불가하며, 판매자 사정에 의해 조기 종료되거나 입찰이 취소될 수 있습니다.</span>
+            </p>
+          ) : (
+            <p style={styles.translationNotice}>
+              <span style={styles.translationNoticeIcon}>⚠️</span>
+              <span>번역 서비스 특성상 오번역에 대한 책임은 지지 않습니다.</span>
+            </p>
+          )}
+
           {/* 🌟 기존 설명 코드를 싹 지우고 아래 한 줄로 대체! */}
           {renderedDescription}
         </div>
