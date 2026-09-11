@@ -168,3 +168,40 @@ export async function PUT(request: Request) {
     );
   }
 }
+
+// 🌟 유니티 등에서 상품 계산 없이 현재 환율 정보만 빠르게 조회할 수 있는 GET 엔드포인트
+export async function GET() {
+  try {
+    const { additionalRate, rateBasisUnit, currentExchangeRate } = await loadExchangeRateConfig();
+
+    // DB에 저장된 환율이 없으면 네이버에서 실시간으로 가져옴
+    let baseExchangeRate = currentExchangeRate;
+    let exchangeRateFetchFailed = false;
+
+    if (!baseExchangeRate) {
+      const result = await getBaseExchangeRate(false);
+      baseExchangeRate = result.rate;
+      exchangeRateFetchFailed = result.failed;
+    }
+
+    // 1엔 기준 환율에 rateBasisUnit(예: 100엔)을 곱해 기준 단위 환율로 환산
+    const finalDisplayRate = (baseExchangeRate + additionalRate) * rateBasisUnit;
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        baseExchangeRate: baseExchangeRate,          // 1엔 기준 기본 환율
+        additionalRate: additionalRate,              // 추가 증가액
+        rateBasisUnit: rateBasisUnit,                // 기준 단위 (예: 100엔)
+        finalDisplayRate: Number(finalDisplayRate.toFixed(2)), // 최종 표시 환율 (원)
+        exchangeRateFetchFailed: exchangeRateFetchFailed
+      }
+    });
+  } catch (error) {
+    console.error("API GET Error:", error);
+    return NextResponse.json(
+      { success: false, message: "환율 정보를 가져오는 중 오류가 발생했습니다." },
+      { status: 500 }
+    );
+  }
+}
