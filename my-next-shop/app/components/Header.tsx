@@ -16,17 +16,25 @@ import { useMikuAlert } from '@/app/context/MikuAlertContext';
 // 1. 스타일 정의 (Styles Object) - 레이아웃 및 디자인 토큰
 // =================================================================
 const styles: Record<string, any> = {
-  logoContainer: { 
-    display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px', padding: '5px 0', flexShrink: 0 
+  logoContainer: {
+    display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px', padding: '5px 0', flexShrink: 0
   },
-  logoImgRefined: { height: '55px', width: 'auto', objectFit: 'contain' },
-  textStack: { display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0px' },
+  logoImgRefined: {
+    height: '66px', width: 'auto', objectFit: 'contain',
+    filter: 'drop-shadow(0 3px 8px rgba(206, 140, 131, 0.35))'
+  },
+  textStack: { display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '2px' },
   mainTitle: {
     fontFamily: '"Jua", sans-serif', fontSize: '32px', fontWeight: 'bold',
-    color: '#ce8c83', lineHeight: '1', margin: 0
+    color: '#ce8c83', lineHeight: '1', margin: 0,
+    letterSpacing: '1.5px', textShadow: '1px 1px 0px rgba(206, 140, 131, 0.25)'
   },
-  subTitle: { 
-    fontFamily: '"Jua", sans-serif', fontSize: '14px', color: '#ce8c83', margin: 0, whiteSpace: 'nowrap'
+  subTitle: {
+    fontFamily: '"Pretendard", "Noto Sans KR", sans-serif', fontSize: '12.5px', fontWeight: 700,
+    color: '#9a4a44', margin: 0, whiteSpace: 'nowrap',
+    display: 'flex', alignItems: 'center', gap: '5px', letterSpacing: '-0.1px',
+    background: 'linear-gradient(135deg, #fff6f5 0%, #ffece9 100%)',
+    border: '1px solid #fbdad6', borderRadius: '20px', padding: '4px 11px 4px 8px', width: 'fit-content'
   },
   navItemLi: { position: 'relative', cursor: 'pointer', padding: '20px 0' },
   iconBox: { 
@@ -183,7 +191,10 @@ export default function Header() {
               <img src="/images/logo.png" alt="Miku Logo" style={styles.logoImgRefined} />
               <div style={styles.textStack}>
                 <div style={styles.mainTitle}>미쿠짱</div>
-                <div style={styles.subTitle}>구매대행 14년 노하우로 믿을수 있는</div>
+                <div style={styles.subTitle}>
+                  <ShieldCheck size={13} weight="fill" color="#e0574c" />
+                  <span>구매대행 <strong style={{ color: '#e0574c', fontWeight: 800 }}>14년</strong> 노하우로 믿을 수 있는</span>
+                </div>
               </div>
             </div>
           </Link>
@@ -301,7 +312,10 @@ export default function Header() {
         }
 
         .miku-header-wrapper ~ main { padding-top: 84px; }
-        .miku-header-wrapper ~ main.main-extra-gap { padding-top: 100px; background-color: #f8fafc; }
+        /* 🌟 이 값(120px)은 실측 헤더 높이(약 100.5px, 데스크탑 기준)보다 커야 헤더에
+           가려지지 않습니다. GuideLayout.tsx의 SIDEBAR_TOP 상수와 반드시 같은 값으로
+           맞춰주세요 — 다르면 사이드바와 본문 콘텐츠의 상단 여백이 서로 어긋납니다. */
+        .miku-header-wrapper ~ main.main-extra-gap { padding-top: 120px; background-color: #f8fafc; }
 
         .miku-header-container { 
           display: flex; 
@@ -347,59 +361,70 @@ export default function Header() {
         }
 
         /* 🌟 데스크탑 네비게이션 */
-        .miku-desktop-nav { 
-          display: flex; 
-          align-items: center; 
-          gap: 28px; 
-          list-style: none; 
-          margin: 0; 
-          padding: 0; 
+        .miku-desktop-nav {
+          display: flex;
+          align-items: center;
+          gap: 0px;
+          list-style: none;
+          margin: 0;
+          padding: 0;
         }
 
         .auth-separator {
           width: 1px;
-          height: 16px;
-          background-color: #cbd5e1;
-          margin: 0 4px;
+          height: 20px;
+          background: linear-gradient(to bottom, transparent 0%, #e2e8f0 50%, transparent 100%);
+          margin: 0 10px;
         }
 
         .nav-login-btn {
-          font-size: 16px;
-          font-weight: 800;
-          color: #475569;
+          font-size: 14.5px;
+          font-weight: 700;
+          letter-spacing: -0.1px;
+          color: #ffffff;
           text-decoration: none;
-          padding: 8px 16px;
-          border-radius: 10px;
-          transition: all 0.2s;
+          padding: 10px 24px;
+          border-radius: 100px;
+          background: linear-gradient(135deg, #e3868a 0%, #d27377 100%);
+          box-shadow: 0 8px 18px -6px rgba(210, 115, 119, 0.5);
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .nav-login-btn:hover { background: #f8fafc; color: #0f172a; }
+        .nav-login-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 24px -6px rgba(210, 115, 119, 0.6);
+          filter: brightness(1.04);
+        }
 
-        /* 🌟 네비게이션 아이템 (Hover 시 밑줄 애니메이션) */
+        /* 🌟 네비게이션 아이템 (Hover 시 그라데이션 필 하이라이트) */
         .miku-nav-item { position: relative; padding: 20px 0; cursor: pointer; }
-        .nav-label { 
-          font-size: 17px; 
-          font-weight: 800; 
-          color: #334155; 
-          display: flex; 
-          align-items: center; 
-          gap: 6px; 
-          transition: color 0.3s;
-          letter-spacing: -0.5px;
+        .nav-label {
+          font-family: 'Pretendard', "Noto Sans KR", sans-serif;
+          font-size: 17px;
+          font-weight: 600;
+          color: #1e293b;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 9px 12px;
+          border-radius: 100px;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          letter-spacing: -0.2px;
+          white-space: nowrap;
+          -webkit-font-smoothing: antialiased;
+          text-rendering: optimizeLegibility;
         }
-        .nav-label::after {
-          content: ''; position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
-          width: 0; height: 3px; background: linear-gradient(135deg, #e3868a 0%, #d27377 100%);
-          border-radius: 4px; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
+
         .arrow-icon { display: flex; color: #cbd5e1; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 
-        .miku-nav-item:hover .nav-label { color: #d27377; }
-        .miku-nav-item:hover .nav-label::after { width: 100%; }
+        .miku-nav-item:hover .nav-label {
+          color: #b5615f;
+          background: linear-gradient(135deg, #fff6f5 0%, #ffece9 100%);
+          box-shadow: 0 4px 14px -6px rgba(210, 115, 119, 0.3);
+        }
         .miku-nav-item:hover .arrow-icon { transform: rotate(180deg); color: #d27377; }
 
         /* 🌟 드롭다운 메뉴 (순수 CSS 호버 렌더링으로 변경) */
-        .miku-dropdown-ul { 
+        .miku-dropdown-ul {
           position: absolute; top: 100%; left: 50%; transform: translate(-50%, 15px);
           visibility: hidden; opacity: 0;
           list-style: none; padding: 0; margin: 0; z-index: 1000;
@@ -411,11 +436,20 @@ export default function Header() {
 
         .dropdown-inner {
           background-color: #ffffff;
-          border: 1px solid rgba(226, 232, 240, 0.8);
-          border-radius: 20px;
-          padding: 12px 8px;
-          min-width: 240px;
-          box-shadow: 0 20px 40px -10px rgba(0,0,0,0.1);
+          border: 1px solid rgba(226, 232, 240, 0.7);
+          border-radius: 22px;
+          padding: 14px 10px;
+          min-width: 248px;
+          box-shadow: 0 24px 48px -14px rgba(15, 23, 42, 0.16);
+          position: relative;
+          overflow: hidden;
+        }
+        .dropdown-inner::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 3px;
+          background: linear-gradient(90deg, #e3868a 0%, #d27377 50%, #e3868a 100%);
         }
 
         .dropdown-pointer { 
@@ -432,21 +466,23 @@ export default function Header() {
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
-        .icon-box { 
-          width: 38px; height: 38px; border-radius: 12px; 
-          background: #f8fafc; display: flex; align-items: center; justify-content: center; 
-          flex-shrink: 0; transition: all 0.3s ease; border: 1px solid #f1f5f9;
+        .icon-box {
+          width: 38px; height: 38px; border-radius: 12px;
+          background: linear-gradient(135deg, #fdf2f1 0%, #fce8e6 100%);
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border: 1px solid #fbe2df;
         }
-        .item-text { font-weight: 700; font-size: 15px; color: #475569; letter-spacing: -0.3px; transition: color 0.2s; }
-        
+        .item-text { font-weight: 600; font-size: 14.5px; color: #475569; letter-spacing: -0.15px; transition: color 0.2s; }
+
         .dropdown-link:hover { background-color: #fff8f6; transform: translateX(4px); }
         .dropdown-link:hover .item-text { color: #d27377; }
         .dropdown-link:hover .icon-box {
+          background: linear-gradient(135deg, #e3868a 0%, #d27377 100%);
           border-color: transparent;
-          box-shadow: 0 4px 10px rgba(210, 115, 119, 0.3);
-          transform: scale(1.05);
+          box-shadow: 0 6px 16px -4px rgba(210, 115, 119, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+          transform: scale(1.08) rotate(-4deg);
         }
-        .dropdown-link:hover .icon-box svg { color: white !important; }
+        .dropdown-link:hover .icon-box svg { fill: #ffffff !important; }
 
         /* 🌟 모바일 햄버거 버튼 */
         .mobile-menu-btn { 
@@ -535,11 +571,19 @@ export default function Header() {
         }
         .miku-sidebar-overlay.open { opacity: 1; visibility: visible; }
 
-        /* 🌟 반응형 브레이크포인트 강화 (1200px -> 1350px로 시점 변경) */
+        /* 🌟 반응형 브레이크포인트 강화 (해상도가 좁아질수록 두 줄로 줄바꿈되지 않도록
+           단계적으로 폰트 크기/간격을 줄여갑니다) */
+        @media (max-width: 1500px) {
+          .miku-header-container { gap: 20px; }
+          .miku-desktop-nav { gap: 0; }
+          .nav-label { font-size: 16px; padding: 9px 10px; }
+        }
+
         @media (max-width: 1350px) {
-          .miku-header-container { padding: 8px 20px; gap: 16px; }
-          .miku-desktop-nav { gap: 14px; }
-          .nav-label { font-size: 15px; }
+          .miku-header-container { padding: 8px 20px; gap: 14px; }
+          .miku-desktop-nav { gap: 0; }
+          .nav-label { font-size: 14px; padding: 8px 8px; letter-spacing: -0.3px; }
+          .nav-login-btn { padding: 9px 18px; font-size: 13.5px; }
           .logo-text-stack { max-width: 140px; } /* 좁아지면 문구 영역 더 축소 */
         }
 
@@ -555,7 +599,10 @@ export default function Header() {
             padding-top: 89px;
             box-sizing: border-box;
           }
-          .miku-header-wrapper ~ main.main-extra-gap { padding-top: 105px; }
+          /* 🌟 데스크탑과 동일하게 120px로 맞춰야 GuideLayout.tsx의 SIDEBAR_TOP(120)과
+             일치합니다 — 예전 105px 값이 남아있어 폭이 좁아지면 사이드바와 본문 콘텐츠의
+             상단 위치가 서로 어긋나 보이는 버그가 있었습니다. */
+          .miku-header-wrapper ~ main.main-extra-gap { padding-top: 120px; }
         }.main-title { font-size: 32px; }
         
       `}</style>

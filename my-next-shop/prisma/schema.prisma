@@ -326,3 +326,39 @@ model Translation {
 
   @@index([jp]) // 검색 성능을 위한 인덱스 추가
 }
+
+// 🌟 상품 상세 정보를 열람할 때마다 조회수를 누적해, "실시간 인기 상품" 랜딩 섹션에 활용합니다.
+// platform 필드를 넣어둬서 나중에 mercari/yahoo_shopping 등 다른 쇼핑몰로도 확장할 수 있게 했습니다.
+model ProductPopularity {
+  id           Int      @id @default(autoincrement())
+  platform     String                        // 'rakuten' | 'mercari' | ...
+  itemId       String                        // 플랫폼별 상품 고유 ID (예: 라쿠텐 itemCode)
+  name         String   @db.Text             // 최근 조회 시점의 상품명 (표시용 캐시)
+  price        Int      @default(0)
+  thumbnail    String?  @db.Text
+  url          String   @db.Text
+  shopName     String?
+  viewCount    Int      @default(1)
+  lastViewedAt DateTime @updatedAt
+  createdAt    DateTime @default(now())
+
+  @@unique([platform, itemId])
+  @@index([platform, viewCount])
+  @@map("ProductPopularity")
+}
+
+// 🌟 카테고리를 클릭할 때마다 조회수를 누적해, 야후 옥션처럼 "메인 화면에 뜰 만한 상품"이
+// 없는 플랫폼에서 실시간 인기 상품 소스 카테고리를 실제 사용자 행동 기반으로 고를 때 씁니다.
+model CategoryPopularity {
+  id            Int      @id @default(autoincrement())
+  platform      String                        // 'yahoo_auction' | ...
+  genreId       Int                           // 플랫폼별 카테고리 고유 ID
+  genreName     String?                       // 최근 클릭 시점의 카테고리 이름 (표시/디버깅용 캐시)
+  clickCount    Int      @default(1)
+  lastClickedAt DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  @@unique([platform, genreId])
+  @@index([platform, clickCount])
+  @@map("CategoryPopularity")
+}

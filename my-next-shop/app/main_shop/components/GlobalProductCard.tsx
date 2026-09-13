@@ -35,9 +35,13 @@ export interface GlobalItem {
 interface GlobalProductCardProps {
   item: GlobalItem;
   onClick: (id: string) => void;
+  // 🌟 'compact': 관심등록 버튼을 숨기고 이미지/여백/글자 크기를 줄인 더 작은 카드로 표시합니다.
+  // (예: 홈 화면의 "실시간 인기 상품" 섹션). 기본값은 기존과 동일한 'default'입니다.
+  variant?: 'default' | 'compact';
 }
 
-export default function GlobalProductCard({ item, onClick }: GlobalProductCardProps) {
+export default function GlobalProductCard({ item, onClick, variant = 'default' }: GlobalProductCardProps) {
+  const isCompact = variant === 'compact';
   const [isHovered, setIsHovered] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -185,7 +189,7 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
       boxSizing: 'border-box' as const,
       backgroundColor: 'white',
       border: '1px solid #f3f4f6',
-      borderRadius: isMobile ? '16px' : '20px',
+      borderRadius: isCompact ? '14px' : (isMobile ? '16px' : '20px'),
       overflow: 'hidden',
       cursor: 'pointer',
       transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -204,7 +208,7 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
       width: '100%',
       minWidth: 0,
       boxSizing: 'border-box' as const,
-      aspectRatio: '1/1',
+      aspectRatio: isCompact ? '16/10' : '1/1',
       overflow: 'hidden',
       backgroundColor: '#f9fafb',
     },
@@ -239,15 +243,15 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
       minWidth: 0,
       maxWidth: '100%',
       boxSizing: 'border-box' as const,
-      padding: isMobile ? '12px 10px' : '16px',
+      padding: isCompact ? (isMobile ? '8px' : '10px 12px') : (isMobile ? '12px 10px' : '16px'),
       display: 'flex',
       flexDirection: 'column' as const,
       flex: 1,
-      gap: isMobile ? '8px' : '12px',
-      opacity: item.status === 'sold_out' ? 0.6 : 1, 
+      gap: isCompact ? '6px' : (isMobile ? '8px' : '12px'),
+      opacity: item.status === 'sold_out' ? 0.6 : 1,
     },
     title: {
-      fontSize: isMobile ? '12px' : '13px',
+      fontSize: isCompact ? '12px' : (isMobile ? '12px' : '13px'),
       color: isHovered && !isMobile ? themeColor : '#374151',
       lineHeight: '1.4',
       margin: '0',
@@ -256,7 +260,7 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
       WebkitBoxOrient: 'vertical' as const,
       overflow: 'hidden',
       textOverflow: 'ellipsis',
-      height: isMobile ? '34px' : '36px',
+      height: isCompact ? '32px' : (isMobile ? '34px' : '36px'),
       transition: 'color 0.3s ease',
       fontWeight: 500,
     },
@@ -267,7 +271,7 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
       marginTop: 'auto',
     },
     price: {
-      fontSize: isMobile ? '15px' : '18px',
+      fontSize: isCompact ? '14px' : (isMobile ? '15px' : '18px'),
       fontWeight: 900,
       color: item.status === 'sold_out' ? '#9ca3af' : '#111827',
       textDecoration: item.status === 'sold_out' ? 'line-through' : 'none',
@@ -347,27 +351,29 @@ export default function GlobalProductCard({ item, onClick }: GlobalProductCardPr
               {item.price ? item.price.toLocaleString() : '0'}
             </span>
             
-            <button 
-              onClick={(e) => { 
-                e.stopPropagation(); 
-                alert("관심상품에 등록되었습니다. ✨"); 
-              }}
-              onMouseOver={(e) => {
-                if (isMobile) return;
-                e.currentTarget.style.color = themeColor;
-                e.currentTarget.style.borderColor = themeColor + '80';
-                e.currentTarget.style.backgroundColor = themeColor + '05';
-              }}
-              onMouseOut={(e) => {
-                if (isMobile) return;
-                e.currentTarget.style.color = '#9ca3af';
-                e.currentTarget.style.borderColor = '#e5e7eb';
-                e.currentTarget.style.backgroundColor = 'white';
-              }}
-              style={styles.wishButton}
-            >
-              ★ 관심등록
-            </button>
+            {!isCompact && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  alert("관심상품에 등록되었습니다. ✨");
+                }}
+                onMouseOver={(e) => {
+                  if (isMobile) return;
+                  e.currentTarget.style.color = themeColor;
+                  e.currentTarget.style.borderColor = themeColor + '80';
+                  e.currentTarget.style.backgroundColor = themeColor + '05';
+                }}
+                onMouseOut={(e) => {
+                  if (isMobile) return;
+                  e.currentTarget.style.color = '#9ca3af';
+                  e.currentTarget.style.borderColor = '#e5e7eb';
+                  e.currentTarget.style.backgroundColor = 'white';
+                }}
+                style={styles.wishButton}
+              >
+                ★ 관심등록
+              </button>
+            )}
           </div>
           
         </div>

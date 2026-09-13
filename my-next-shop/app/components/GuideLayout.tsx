@@ -131,7 +131,10 @@ function useGuideLayoutLogic(type?: string) {
   // 같은 페이지에서는 우연히 범위가 넉넉해 문제가 드러나지 않았을 뿐입니다).
   // main_shop의 GlobalShoppingView 사이드바를 고칠 때 썼던 것과 동일한 패턴으로,
   // 뷰포트 기준 fixed로 항상 고정하고 Footer 근처에서만 absolute로 전환합니다.
-  const SIDEBAR_TOP = 100;
+  // 🌟 Header.tsx의 `.miku-header-wrapper ~ main.main-extra-gap` padding-top과
+  // 반드시 같은 값이어야 합니다. 이 값이 다르면 사이드바(fixed, top으로 직접 고정)와
+  // 본문 콘텐츠(main의 padding-top으로 밀려남)의 상단 위치가 서로 어긋나 보입니다.
+  const SIDEBAR_TOP = 120;
   const FOOTER_MARGIN = 24;
   const [sidebarLeft, setSidebarLeft] = useState<number | null>(null);
   const [sidebarPin, setSidebarPin] = useState<{ mode: 'fixed' | 'absolute'; top: number }>({ mode: 'fixed', top: SIDEBAR_TOP });

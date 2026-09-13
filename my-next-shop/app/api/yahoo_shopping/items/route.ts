@@ -38,7 +38,11 @@ export async function GET(request: Request) {
 
   // 4. API 파라미터 조립
   API_URL.searchParams.append('appid', appId);
-  API_URL.searchParams.append('genre_category_id', genreId);
+  // 🌟 genreId가 '0'이면 "카테고리 상관없이 전체 검색"을 의미하므로, genre_category_id
+  // 파라미터 자체를 생략합니다 (야후 쇼핑 API는 이 파라미터가 없으면 전체 카테고리에서 검색).
+  if (genreId && genreId !== '0') {
+    API_URL.searchParams.append('genre_category_id', genreId);
+  }
   API_URL.searchParams.append('results', resultsPerPage.toString());
   API_URL.searchParams.append('start', startPosition.toString());
   API_URL.searchParams.append('sort', sort);

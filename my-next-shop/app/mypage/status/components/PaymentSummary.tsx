@@ -144,7 +144,13 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
     <>
     {activeTabIsCart && (
       <p className="domestic-fee-notice">
-        <span className="domestic-fee-notice-icon">⚠️</span>
+        <span className="domestic-fee-notice-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        </span>
         <span>현지 배송료 발생시 <strong>국제 배송비</strong>에 합산됩니다.</span>
       </p>
     )}
@@ -285,9 +291,16 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           margin-top: 8px;
         }
         .domestic-fee-notice-icon {
-          font-size: 22px;
-          line-height: 1;
+          width: 32px;
+          height: 32px;
           flex-shrink: 0;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #ffffff;
+          background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+          box-shadow: 0 6px 14px -5px rgba(234, 88, 12, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.35);
         }
         .domestic-fee-notice strong {
           color: #ea580c;

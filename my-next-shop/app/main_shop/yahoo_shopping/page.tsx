@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 // --- 📦 공용 글로벌 컴포넌트 ---
 import GlobalShoppingView from "@/app/main_shop/components/GlobalShoppingView";
 import { GlobalFilterState } from "@/app/main_shop/components/GlobalSidebar";
 import { GlobalProduct } from "@/app/main_shop/components/GlobalProductDetail";
+import { useGlobalSearch } from "@/app/main_shop/components/GlobalSearchContext";
 
 // --- 🛠️ 유틸리티 ---
 import { getTranslatedText } from '@/lib/search-utils';
@@ -35,6 +36,9 @@ function YahooContent() {
   const [items, setItems] = useState<GlobalProduct[]>([]);
 
   const [productDetail, setProductDetail] = useState<GlobalProduct | null>(null);
+
+  // 🌟 실시간 인기 상품 (홈 화면 카테고리 아래에 노출)
+  const [popularProducts, setPopularProducts] = useState<GlobalProduct[]>([]);
 
   const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 1 });
 
@@ -73,7 +77,9 @@ function YahooContent() {
     
     const params = new URLSearchParams({});
 
-    if (genreId !== 0) params.append("genreId", genreId.toString());
+    // 🌟 genreId를 항상 명시적으로 보냅니다. 0은 "카테고리 상관없이 전체 검색"을 뜻하며,
+    // 이 값을 생략하면 백엔드 기본값(1)으로 대체되어 전체 검색이 아니게 됩니다.
+    params.append("genreId", genreId.toString());
 
     if (!filters) return params;
 
@@ -137,6 +143,42 @@ function YahooContent() {
     loadItems(genreId, updatedFilters);
   };
 
+  // 🌟 헤더 통합검색: 현재 선택된 카테고리와 상관없이 야후 쇼핑 전체에서 키워드로 검색합니다.
+  const { searchRequest } = useGlobalSearch();
+  const handledSearchTokenRef = useRef(0);
+  useEffect(() => {
+    if (!searchRequest || searchRequest.token === handledSearchTokenRef.current) return;
+    handledSearchTokenRef.current = searchRequest.token;
+
+    (async () => {
+      const translatedKeyword = await getTranslatedText(searchRequest.keyword);
+      const updatedFilters = { ...currentFilters, keyword: translatedKeyword, page: 1 };
+      setCurrentFilters(updatedFilters);
+      setPageInfo(prev => ({ ...prev, page: 1 }));
+      loadItems(0, updatedFilters); // genreId=0: 전체 카테고리 대상 검색
+    })();
+  }, [searchRequest]);
+
+  // 🚀 [로직 5] 상품 상세 정보 로드
+  const loadProductDetail = (item: any) => {
+    setProductDetail(item);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // 🌟 "실시간 인기 상품" 집계용 조회수 기록 (fire-and-forget, 실패해도 상세보기는 그대로 동작)
+    fetch('/api/yahoo_shopping/trackView', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        itemId: item.id,
+        name: item.name,
+        price: item.price,
+        thumbnail: item.thumbnail,
+        url: item.url,
+        shopName: item.shopName,
+      }),
+    }).catch(() => {});
+  };
+
   // 🚀 [로직 4] 카테고리 로드 및 초기 페칭
   useEffect(() => {
     const fetchData = async () => {
@@ -187,12 +229,45 @@ function YahooContent() {
     fetchData();
   }, [genreId]);
 
+  // 🚀 [로직 6] 실시간 인기 상품 로드 (홈 화면 진입 시 한 번만 조회)
+  useEffect(() => {
+    const fetchPopular = async () => {
+      try {
+        const res = await fetch('/api/yahoo_shopping/popular?limit=100');
+        const result = await res.json();
+        if (result.success) {
+          const mapped: GlobalProduct[] = (result.data || []).map((row: any) => ({
+            id: row.itemId,
+            platform: 'yahoo_shopping',
+            name: row.name,
+            price: row.price,
+            description: '',
+            images: row.thumbnail ? [row.thumbnail] : [],
+            thumbnail: row.thumbnail || '',
+            condition: '',
+            size: '',
+            categories: [],
+            url: row.url,
+            shopUrl: row.url,
+            status: 'on_sale',
+            shopName: row.shopName || undefined,
+          }));
+          setPopularProducts(mapped);
+        }
+      } catch (e) {
+        console.error('인기 상품 로드 실패', e);
+      }
+    };
+    fetchPopular();
+  }, []);
+
   return (
     <GlobalShoppingView
       platform="yahoo_shopping"
       path={path}
       categories={categories}
       items={items}
+      popularProducts={popularProducts}
       pageInfo={pageInfo}
       selectedProduct={productDetail}
       sortOptions={YahooSortOptions}
@@ -201,7 +276,7 @@ function YahooContent() {
       isLeaf={isLeaf}
       onNavigate={updateNavigation}
       onSearch={OnSearch}
-      onCardClick={(item) => { setProductDetail(item); window.scrollTo(0,0); }}
+      onCardClick={loadProductDetail}
       onCloseDetail={() => setProductDetail(null)}
       onPageChange={(p) => loadItems(genreId, { ...currentFilters, page: p })}
     />

@@ -61,10 +61,10 @@ const MikuLoadingOverlay = ({ message, isMobile }: { message: string; isMobile: 
       </div>
 
     </div>
-    
+
     {/* 🚀 하단 텍스트 영역도 1.5배 수준으로 확대 */}
     <div style={{ marginTop: '76px', textAlign: 'center' }}>
-      <p style={{ 
+      <p style={{
         fontWeight: 'bold', fontSize: isMobile ? '20px' : '28px',
         background: 'linear-gradient(90deg, #1f2937 0%, #ff007f 50%, #1f2937 100%)',
         backgroundSize: '200% auto', color: 'transparent', WebkitBackgroundClip: 'text', animation: 'shimmerText 2.5s linear infinite',
@@ -75,12 +75,58 @@ const MikuLoadingOverlay = ({ message, isMobile }: { message: string; isMobile: 
   </div>
 );
 
+// --- [보조 컴포넌트] 하단 로딩 바 ---
+// 🌟 검색 스트리밍(핑크, #ff007f)과 실시간 인기 상품 로딩(오렌지, #ea580c) 양쪽에서 재사용하는
+// 카드형 로딩 표시입니다. 이전엔 플레인한 흰 배경 + 점선 테두리 + 기본 FontAwesome 스피너였는데,
+// 은은한 그라데이션 카드 + 이중 링 스피너(글로우 포함) + 셰이머 텍스트 + 알약형 카운트 배지로
+// 다듬었습니다. color만 바꿔주면 어디서든 같은 톤으로 재사용됩니다.
+const PremiumBottomLoader = ({ color, message, count }: { color: string; message: string; count: number }) => (
+  <div style={{
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    gap: '16px', padding: '36px 24px', marginTop: '20px', width: '100%',
+    background: `linear-gradient(180deg, #ffffff 0%, ${color}0d 100%)`,
+    borderRadius: '24px', border: `1px solid ${color}26`,
+    boxShadow: `0 14px 32px ${color}14`,
+    boxSizing: 'border-box',
+  }}>
+    <div style={{ position: 'relative', width: '40px', height: '40px', color }}>
+      <div style={{
+        position: 'absolute', inset: 0, borderRadius: '50%',
+        border: '3px solid rgba(0,0,0,0.06)', borderTopColor: 'currentColor',
+        boxShadow: '0 0 12px -2px currentColor',
+        animation: 'spin 0.85s cubic-bezier(0.6,0.05,0.4,0.95) infinite',
+      }} />
+    </div>
+    <div style={{ textAlign: 'center' }}>
+      <p className="notranslate" style={{
+        fontSize: '15px', fontWeight: 800, margin: '0 0 10px', letterSpacing: '-0.2px',
+        background: `linear-gradient(90deg, #374151 0%, ${color} 50%, #374151 100%)`,
+        backgroundSize: '200% auto', color: 'transparent', WebkitBackgroundClip: 'text', backgroundClip: 'text',
+        animation: 'loaderShimmerText 2.6s linear infinite',
+      }}>
+        {message}
+      </p>
+      <span className="notranslate" style={{
+        display: 'inline-flex', alignItems: 'center', gap: '6px',
+        padding: '5px 14px', borderRadius: '999px', fontSize: '13px', fontWeight: 900,
+        color, background: `${color}14`, border: `1px solid ${color}2e`,
+      }}>
+        {count}개 수집됨
+      </span>
+    </div>
+  </div>
+);
+
 interface GlobalShoppingViewProps {
   platform: 'rakuten' | 'mercari' | 'amazon' | 'yahoo_auction' | 'yahoo_shopping';
   // 데이터
   path: { id: number; name: string }[];
   categories: any[];
   items: any[];
+  // 🌟 홈 화면(카테고리 아래)에 노출할 실시간 인기 상품 목록 (선택적, 검색 결과가 없을 때만 표시)
+  popularProducts?: any[];
+  // 🌟 인기 상품을 크롤링/조회하는 중인지 여부 (로딩이 오래 걸리는 플랫폼에서 안내 문구 표시용)
+  isPopularLoading?: boolean;
   pageInfo: { page: number; pageCount: number };
   selectedProduct: GlobalProduct | null;
   // 상태
@@ -179,6 +225,10 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
 
   const styles = useMemo(() => getCommonStyles(isMobile, props.platform), [isMobile, props.platform]);
 
+  // 🌟 카테고리를 선택하면(breadcrumb path가 생기면) 홈 화면이 아니므로, 그 사이 아이템이
+  // 아직 로딩중이거나 결과가 0개여도 "실시간 인기 상품" 섹션이 다시 끼어들지 않게 합니다.
+  const isHomeScreen = props.path.length === 0;
+
   return (
     <div style={styles.pageWrapper}>
       {/* 🚀 [수정 1] 전체 화면 로딩은 '아이템이 아예 없을 때'만 나오게 변경 */}
@@ -276,6 +326,55 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
               />
             </div>
 
+            {/* 🌟 인기 상품을 아직 가져오는 중일 때 (메루카리처럼 크롤링에 시간이 걸리는 플랫폼용 안내) */}
+            {isHomeScreen && props.items.length === 0 && props.isPopularLoading && (!props.popularProducts || props.popularProducts.length === 0) && (
+              <PremiumBottomLoader
+                color="#ea580c"
+                message="미쿠짱이 열심히 인기 상품을 가져오고 있어요"
+                count={props.popularProducts?.length || 0}
+              />
+            )}
+
+            {/* 🌟 실시간 인기 상품: 검색/카테고리 결과가 없는 홈 화면일 때만, 조회수 상위 상품을 보여줍니다. */}
+            {isHomeScreen && props.items.length === 0 && props.popularProducts && props.popularProducts.length > 0 && (
+              <div style={{ ...styles.card, marginTop: isMobile ? '20px' : '30px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+                  <span style={{
+                    width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
+                    background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                    boxShadow: '0 4px 12px rgba(234, 88, 12, 0.35), inset 0 1px 1px rgba(255,255,255,0.35)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                      <path d="M13.5 2c.4 2.7-1 4.2-2.3 5.6C10 8.9 8.8 10.2 8.8 12.5a3.2 3.2 0 0 0 6.4 0c0-.8-.2-1.4-.5-1.9.7 1 .5 2.3-.3 2.9-.9.7-1.7-.2-1.2-1.1.6-1 .1-1.9-.4-2.6-.2 1-.8 1.7-1.4 2.4-.6.7-1 1.4-1 2.3a2 2 0 0 0 4 0c0-.5-.1-.9-.3-1.3.9.6 1.5 1.7 1.5 2.9a4.6 4.6 0 0 1-9.2 0c0-3.4 2-5.1 3.6-6.7C11.3 6.3 12.6 5 12.4 2.6c.4.1.8.3 1.1.4z" />
+                    </svg>
+                  </span>
+                  <h3 style={{ fontSize: '18px', fontWeight: 900, color: '#1f2937', margin: 0, letterSpacing: '-0.3px' }}>
+                    실시간 인기 상품
+                  </h3>
+                </div>
+                <div style={{
+                  ...styles.itemGrid,
+                  gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(170px, 1fr))',
+                  gap: isMobile ? '10px' : '16px',
+                }}>
+                  {props.popularProducts.map((item: any, idx: number) => (
+                    <GlobalProductCard key={item.id || idx} item={item} onClick={() => props.onCardClick(item)} variant="compact" />
+                  ))}
+                </div>
+
+                {/* 🌟 카테고리 1위 등 일부는 이미 떴지만, 뒤이어 추천 섹션/나머지 카테고리를
+                    아직 가져오는 중일 때 맨 아래에 하단 로딩 바를 띄웁니다. */}
+                {props.isPopularLoading && (
+                  <PremiumBottomLoader
+                    color="#ea580c"
+                    message="미쿠짱이 열심히 다음 상품을 가져오고 있어요"
+                    count={props.popularProducts.length}
+                  />
+                )}
+              </div>
+            )}
+
             {/* 상품 리스트 섹션 */}
             {props.items.length > 0 && (
               <div style={{ marginTop: isMobile ? '8px' : '20px', display: 'flex', flexDirection: 'column' }}>
@@ -332,21 +431,11 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
 
             {/* 4. 하단 로딩 바 (최하단에 배치) */}
             {props.isStreaming && props.isBottomLoaderAllowed && (
-              <div style={styles.bottomLoader}>
-                <div style={styles.spinnerIcon}>
-                  <i className="fa fa-spinner fa-spin fa-2x"></i>
-                </div>
-                <p style={styles.loaderText} className="notranslate">
-                  미쿠짱이 열심히 다음 상품을 가져오고 있어요... ( 
-                  
-                  {/* 🚀 숫자를 한 번 더 span으로 감싸고 클래스를 줍니다. */}
-                  <span className="notranslate" style={{ fontWeight: 900, color: '#ff007f' }}>
-                    {props.items.length}
-                  </span> 
-                  
-                  개 수집됨 )
-                </p>
-              </div>
+              <PremiumBottomLoader
+                color="#ff007f"
+                message="미쿠짱이 열심히 다음 상품을 가져오고 있어요"
+                count={props.items.length}
+              />
             )}
 
 
@@ -379,28 +468,5 @@ const getCommonStyles = (isMobile: boolean, platform: string) => ({
   card: { backgroundColor: 'white', borderRadius: '24px', padding: isMobile ? '20px' : '32px', border: '1px solid #e5e7eb', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' as const, overflow: 'hidden' as const },
   itemGrid: { display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(250px, 1fr))', gap: isMobile ? '12px' : '20px', width: '100%', minWidth: 0 },
   crawlBtn: (isRunning: boolean) => ({ padding: '10px 20px', borderRadius: '12px', border: 'none', backgroundColor: isRunning ? '#9ca3af' : '#ff007f', color: 'white', fontWeight: 'bold' as const, cursor: 'pointer' }),
-  // 🚀 [추가] 하단 로딩 바 스타일
-  bottomLoader: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '40px 0',
-    marginTop: '20px',
-    backgroundColor: 'white',
-    borderRadius: '24px',
-    border: '1px dashed #ff007f', // 핑크색 점선으로 강조
-    width: '100%'
-  },
-  spinnerIcon: {
-    color: '#ff007f',
-    marginBottom: '12px',
-    animation: 'spin 1s linear infinite'
-  },
-  loaderText: {
-    fontSize: '15px',
-    fontWeight: 'bold' as const,
-    color: '#1f2937',
-    margin: 0
-  },
+  // 🚀 하단 로딩 바는 이제 PremiumBottomLoader 컴포넌트가 자체 스타일로 렌더링합니다.
 });

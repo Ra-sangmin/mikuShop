@@ -7,6 +7,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import GlobalShoppingView from "@/app/main_shop/components/GlobalShoppingView";
 import { GlobalFilterState } from "@/app/main_shop/components/GlobalSidebar";
 import { GlobalProduct } from "@/app/main_shop/components/GlobalProductDetail";
+import { useGlobalSearch } from "@/app/main_shop/components/GlobalSearchContext";
 
 // --- 🛠️ 유틸리티 ---
 import { getTranslatedText } from '@/lib/search-utils';
@@ -50,6 +51,9 @@ function RakutenContent() {
 
   // 상품 상세
   const [productDetail, setProductDetail] = useState<GlobalProduct | null>(null);
+
+  // 🌟 실시간 인기 상품 (홈 화면 카테고리 아래에 노출)
+  const [popularProducts, setPopularProducts] = useState<GlobalProduct[]>([]);
 
   // page
   const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 100 });
@@ -109,8 +113,11 @@ function RakutenContent() {
     const targetId = Number(catId);
     const params = GetParams(targetId, filters);
     const queryString = params.toString();
-    
-    if (genreId !== '0') {
+
+    // 🌟 원래는 URL의 genreId만 봤는데, 그러면 헤더 통합검색(홈에서 카테고리 상관없이
+    // 전체 검색, catId=0)을 호출해도 홈 화면 URL(genreId='0')에 막혀 아무 것도 안 불러왔습니다.
+    // 실제로 요청받은 catId(targetId) 기준으로 판단하되, 키워드가 있으면 전체(0)여도 진행합니다.
+    if (targetId !== 0 || filters?.keyword) {
       const itemRes = await fetch(`/api/rakuten/items?${queryString.toString()}`);
       const itemData = await itemRes.json();
 
@@ -148,15 +155,45 @@ function RakutenContent() {
         excludeKeyword: translatedExcludeKeyword 
       };
 
-      setCurrentFilters(updatedFilters); 
-      
+      setCurrentFilters(updatedFilters);
+
       loadItems(Number(genreId), updatedFilters);
   };
+
+  // 🌟 헤더 통합검색: 현재 선택된 카테고리와 상관없이 라쿠텐 전체에서 키워드로 검색합니다.
+  const { searchRequest } = useGlobalSearch();
+  const handledSearchTokenRef = useRef(0);
+  useEffect(() => {
+    if (!searchRequest || searchRequest.token === handledSearchTokenRef.current) return;
+    handledSearchTokenRef.current = searchRequest.token;
+
+    (async () => {
+      const translatedKeyword = await getTranslatedText(searchRequest.keyword);
+      const updatedFilters = { ...currentFilters, keyword: translatedKeyword, page: 1 };
+      setCurrentFilters(updatedFilters);
+      setPageInfo(prev => ({ ...prev, page: 1 }));
+      loadItems(0, updatedFilters); // genreId=0: 전체 카테고리 대상 검색
+    })();
+  }, [searchRequest]);
 
   // 🚀 [로직 5] 상품 상세 정보 로드
   const loadProductDetail = async (item: any) => {
     setProductDetail(item);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // 🌟 "실시간 인기 상품" 집계용 조회수 기록 (fire-and-forget, 실패해도 상세보기는 그대로 동작)
+    fetch('/api/rakuten/trackView', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        itemId: item.id,
+        name: item.name,
+        price: item.price,
+        thumbnail: item.thumbnail,
+        url: item.url,
+        shopName: item.shopName,
+      }),
+    }).catch(() => {});
   };
 
     // 🚀 [로직 2] 네비게이션 함수
@@ -214,11 +251,43 @@ function RakutenContent() {
         }
       } catch (e) { 
         console.error("Data Load Error", e); 
-      } finally { 
+      } finally {
       }
     }
     fetchData();
   }, [genreId]);
+
+  // 🚀 [로직 6] 실시간 인기 상품 로드 (홈 화면 진입 시 한 번만 조회)
+  useEffect(() => {
+    const fetchPopular = async () => {
+      try {
+        const res = await fetch('/api/rakuten/popular?limit=100');
+        const result = await res.json();
+        if (result.success) {
+          const mapped: GlobalProduct[] = (result.data || []).map((row: any) => ({
+            id: row.itemId,
+            platform: 'rakuten',
+            name: row.name,
+            price: row.price,
+            description: '',
+            images: row.thumbnail ? [row.thumbnail] : [],
+            thumbnail: row.thumbnail || '',
+            condition: '',
+            size: '',
+            categories: [],
+            url: row.url,
+            shopUrl: row.url,
+            status: 'on_sale',
+            shopName: row.shopName || undefined,
+          }));
+          setPopularProducts(mapped);
+        }
+      } catch (e) {
+        console.error('인기 상품 로드 실패', e);
+      }
+    };
+    fetchPopular();
+  }, []);
 
   return (
     <GlobalShoppingView 
@@ -226,6 +295,7 @@ function RakutenContent() {
       path={path}
       categories={categories}
       items={items}
+      popularProducts={popularProducts}
       pageInfo={pageInfo}
       selectedProduct={productDetail}
       sortOptions={RakutenSortOptions}

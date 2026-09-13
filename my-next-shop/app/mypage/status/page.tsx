@@ -9,6 +9,7 @@ import PaymentSummary from './components/PaymentSummary';
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
+import { calculateTieredPaymentFee, calculateTieredAgencyFee } from '@/src/utils/feeCalculator';
 
 const STATUS_PRIORITY: Record<string, number> = {
   [ORDER_STATUS.CART]: 1,
@@ -319,14 +320,12 @@ function usePurchaseStatusLogic() {
         acc.product += productP;
         // 🌟 구매 요청(CART), 경매 낙찰 성공(BID_SUCCESS) 탭은 admin/estimate와 동일한 계산식을 적용합니다.
         if (activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.BID_SUCCESS) {
-          // 🌟 admin/estimate와 동일한 계산식: 결제 수수료는 상품 총액(30,000엔) 기준,
-          // 대행 수수료는 수량(4개) 기준으로 구간별 정액 부과합니다.
+          // 🌟 purchase/quote(PurchaseFormContainer)와 공유하는 계산식: 결제 수수료는
+          // 상품 총액(30,000엔) 기준, 대행 수수료는 수량(4개) 기준으로 구간별 정액 부과합니다.
           const itemQuantity = Number(item.productCount) || 1;
-          const tieredPaymentFee = productP > 0 ? (productP < 30000 ? 220 : 330) : 0;
-          const tieredAgencyFee = itemQuantity > 0 ? (itemQuantity < 4 ? 300 : itemQuantity * 100) : 0;
-          acc.transfer += tieredPaymentFee;
+          acc.transfer += calculateTieredPaymentFee(productP);
           acc.delivery += domesticS;
-          acc.agency += tieredAgencyFee;
+          acc.agency += calculateTieredAgencyFee(itemQuantity);
         } else {
           acc.transfer += transferF;
           acc.delivery += domesticS;
@@ -782,7 +781,13 @@ function MyPurchaseStatusContent() {
           </div>
           {selectedItems.length < 2 && <p className="bundle-helper">* 합포장은 2개 이상의 상품을 선택해야 가능합니다.</p>}
           <p className="address-change-warning">
-            <span className="address-change-warning-icon">⚠️</span>
+            <span className="address-change-warning-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </span>
             <span>
               <strong>배송비 결제 후에는 주소 변경이 어렵습니다.</strong><br />
               결제 전 배송지를 꼭 확인해주세요.
@@ -1107,10 +1112,16 @@ function MyPurchaseStatusContent() {
         }
 
         .address-change-warning-icon {
-          font-size: 26px;
-          line-height: 1;
+          width: 34px;
+          height: 34px;
           flex-shrink: 0;
-          margin-top: -6px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #ffffff;
+          background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
+          box-shadow: 0 6px 14px -5px rgba(225, 29, 72, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.35);
         }
 
         .address-change-warning strong {

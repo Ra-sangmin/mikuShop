@@ -31,6 +31,20 @@ function isEndedTimeLeft(timeLeft?: string) {
     /남은 시간\s*0/.test(normalized);
 }
 
+// 🌟 [버그 수정] GlobalProductCard.tsx는 timeLeft가 분/초·시간·일 형식 중 어느 것과도 매칭되지
+// 않으면 "이유 불문" 종료(ENDED)로 표시합니다(fallback). 그런데 서버 필터는 "終了/종료" 같은
+// 명시적 종료 문구만 걸러내고 있어서, timeLeft가 비어있거나 알 수 없는 형식인 상품은 서버에서는
+// 통과됐다가 화면에서만 "종료" 배지로 뜨는 불일치가 있었습니다. 화면에 뜰 배지와 동일한 기준으로
+// "정상적으로 인식 가능한 남은 시간 형식"인지 확인해, 그렇지 않으면 아예 목록에서 제외합니다.
+function hasRecognizableTimeLeft(timeLeft?: string): boolean {
+  const value = (timeLeft || '').trim();
+  if (!value) return false;
+  if (/\d+\s*(?:分|분|秒|초)/.test(value)) return true; // 카운트다운(분/초) 형식
+  if (value.includes('時間') || value.includes('시간')) return true; // 시간 단위
+  if (value.includes('日') || value.includes('일')) return true; // 일 단위
+  return false;
+}
+
 // 🚀 [속도 개선] 같은 검색 결과를 매번 처음부터 다시 스크래핑하지 않도록
 // 짧은 TTL(60초)로 서버 메모리에 캐싱합니다.
 const searchCache = createTtlCache<AuctionItem[]>(60_000, 50);
@@ -39,11 +53,14 @@ export async function GET(req: NextRequest) {
   const { signal } = req;
   const { searchParams } = new URL(req.url);
   const categoryId = searchParams.get('category_id');
+  const keyword = searchParams.get('keyword');
   const startTime = performance.now();
 
   console.log(`categoryId =  ${categoryId}`);
 
-  if (categoryId === '0') {
+  // 🌟 카테고리가 없을 땐(전체=0) 원래 빈 목록을 돌려줬지만, 헤더 통합검색처럼 키워드가
+  // 있는 "카테고리 상관없이 전체 검색" 요청은 예외로 허용합니다.
+  if ((!categoryId || categoryId === '0') && !keyword) {
     return new Response(createCachedSearchStream<AuctionItem>([]), { headers: { 'Content-Type': 'application/x-ndjson' } });
   }
 
@@ -81,7 +98,8 @@ export async function GET(req: NextRequest) {
       item.price > 0 &&
       item.status === 'on_sale' &&
       !isAuctionClosed(item) &&
-      !isEndedTimeLeft(item.timeLeft),
+      !isEndedTimeLeft(item.timeLeft) &&
+      hasRecognizableTimeLeft(item.timeLeft),
     getItemId: item => item.id,
     // 🌟 야후 옥션은 메루카리식 SPA 검색 API가 없어 API 스니핑이 애초에 매칭될 일이 없으므로
     // (실제로 한 번도 매칭되지 않던 죽은 코드였습니다) apiListener는 생략합니다.
@@ -148,7 +166,16 @@ function generateYahooTargetUrl(searchParams: URLSearchParams): string {
 
   params.set('b', String((parseInt(page) - 1) * 50 + 1)); // 시작 번호 (1, 51, 101...)
 
-  let url = `https://auctions.yahoo.co.jp/category/list/${categoryId}/?${params.toString()}`;
+  // 🌟 "카테고리 상관없이 전체 검색"(헤더 통합검색)일 땐 /category/list/0/ 이 그냥 홈으로
+  // 리다이렉트되어 아무 것도 못 가져오므로, 야후 옥션의 실제 전체 검색 엔드포인트를 씁니다.
+  const isGlobalSearch = (categoryId === '0') && Boolean(keyword);
+  let url: string;
+  if (isGlobalSearch) {
+    params.set('va', keyword);
+    url = `https://auctions.yahoo.co.jp/search/search?${params.toString()}`;
+  } else {
+    url = `https://auctions.yahoo.co.jp/category/list/${categoryId}/?${params.toString()}`;
+  }
 
   console.log(`🔍 [URL 생성] ${url}`);
 

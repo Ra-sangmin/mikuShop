@@ -8,6 +8,7 @@ import GlobalShoppingView from "@/app/main_shop/components/GlobalShoppingView";
 import { GlobalFilterState } from "@/app/main_shop/components/GlobalSidebar";
 import { GlobalProduct } from "@/app/main_shop/components/GlobalProductDetail";
 import { GlobalItem } from "@/app/main_shop/components/GlobalProductCard";
+import { useGlobalSearch } from "@/app/main_shop/components/GlobalSearchContext";
 
 // --- 🛠️ 유틸리티 ---
 import { checkMercariCooldown, lastCallTimestamp } from "./mercariApi";
@@ -69,7 +70,12 @@ function MercariCategoryContent() {
   // 상품 상세
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [productDetail, setProductDetail] = useState<GlobalProduct | null>(null);
-  
+
+  // 🌟 실시간 인기 상품 (메루카리 홈 화면에 지금 노출 중인 추천 상품, 홈 진입 시 한 번만 조회)
+  const [popularProducts, setPopularProducts] = useState<GlobalProduct[]>([]);
+  // 🌟 홈 화면 크롤링이라 시간이 좀 걸려서, 로딩 중임을 알려주는 안내 문구용 상태
+  const [isPopularLoading, setIsPopularLoading] = useState(false);
+
   // page
   const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 100 });
 
@@ -338,10 +344,26 @@ function MercariCategoryContent() {
       // 3. 부모 상태 업데이트
       setCurrentFilters(updatedFilters); 
 
-      // 4. 데이터 로드 호출 
+      // 4. 데이터 로드 호출
       // (이 함수 안에서 미쿠짱 로딩 팝업과 스트리밍이 시작됩니다!)
       loadItems(genreId, updatedFilters);
   };
+
+  // 🌟 헤더 통합검색: 현재 선택된 카테고리와 상관없이 메루카리 전체에서 키워드로 검색합니다.
+  const { searchRequest } = useGlobalSearch();
+  const handledSearchTokenRef = useRef(0);
+  useEffect(() => {
+    if (!searchRequest || searchRequest.token === handledSearchTokenRef.current) return;
+    handledSearchTokenRef.current = searchRequest.token;
+
+    (async () => {
+      const translatedKeyword = await getTranslatedText(searchRequest.keyword);
+      const updatedFilters = { ...currentFilters, keyword: translatedKeyword };
+      delete (updatedFilters as any).page; // 새 검색이니 페이지 토큰은 초기화
+      setCurrentFilters(updatedFilters);
+      loadItems(0, updatedFilters); // category_id 없이(0): 전체 카테고리 대상 검색
+    })();
+  }, [searchRequest]);
 
   // 🚀 [로직 5] 상품 상세 정보 로드
   const loadProductDetail = async (item: GlobalItem) => {
@@ -401,6 +423,13 @@ function MercariCategoryContent() {
 
     router.push(`/main_shop/mercari?cat=${id}`);
 
+    // 🌟 "실시간 인기 상품"이 참고할 카테고리 클릭수 집계 (fire-and-forget, 실패해도 이동은 그대로 동작)
+    fetch('/api/mercari/trackCategoryClick', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ genreId: id, genreName: name }),
+    }).catch(() => {});
+
     // 🚀 홈이 아닐 때만 아이템 수집을 즉시 시작합니다!
     // activeFilters는 부모가 들고 있는 현재 필터 상태입니다.
     loadItems(id, currentFilters);
@@ -442,12 +471,90 @@ function MercariCategoryContent() {
     fetchData();
   }, [genreId]);
 
+  // 🚀 [로직 7] 실시간 인기 상품 로드 (홈 화면 진입 시 한 번만 조회)
+  // 🌟 [속도 개선] 전부 모일 때까지 기다리지 않고, 백엔드가 ndjson으로 몇 개씩 흘려보내는
+  // 즉시 화면에 반영합니다 (검색 스트리밍과 동일한 청크 파싱 방식).
+  // 🌟 [버그 수정] 개발 모드의 React StrictMode는 useEffect를 일부러 두 번 실행하는데,
+  // 정리(cleanup) 없이 그냥 두면 두 인스턴스가 각자 스트림을 읽으며 같은 popularProducts에
+  // 계속 append하다가 똑같은 상품이 두 번씩 쌓여 "동일 key" 에러가 났습니다. 이전 요청을
+  // AbortController로 취소하고, 취소된 인스턴스는 상태 갱신도 멈추게 합니다.
+  useEffect(() => {
+    const controller = new AbortController();
+    let ignore = false;
+
+    const mapRow = (row: any): GlobalProduct => ({
+      id: row.id,
+      platform: 'mercari',
+      name: row.name,
+      price: row.price,
+      description: '',
+      images: row.thumbnail ? [row.thumbnail] : [],
+      thumbnail: row.thumbnail || '',
+      condition: '',
+      size: '',
+      categories: [],
+      url: row.url,
+      shopUrl: row.url,
+      status: row.status,
+    });
+
+    const fetchPopular = async () => {
+      setIsPopularLoading(true);
+      setPopularProducts([]); // 🌟 새 요청 시작 시 이전 누적분을 비웁니다 (중복 방지)
+      try {
+        const res = await fetch('/api/mercari/popular', { signal: controller.signal });
+        if (!res.body) throw new Error("ReadableStream not supported");
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done || ignore) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.trim() || ignore) continue;
+            try {
+              const result = JSON.parse(line);
+              if (result.success && result.data?.length) {
+                // 🌟 [버그 수정] 여기서 로딩 상태를 꺼버리면 1단계(카테고리 1위) 첫 청크가
+                // 도착하는 순간 영영 꺼진 채로 남아, 뒤이은 추천 섹션/카테고리 2~10위 단계의
+                // 하단 로딩 바가 다시는 뜨지 않았습니다. 전체 스트림이 끝날 때(finally)만 꺼서,
+                // 100개를 다 모으거나 모든 단계가 끝날 때까지 계속 보이게 합니다.
+                setPopularProducts(prev => [...prev, ...result.data.map(mapRow)]);
+              }
+            } catch (e) {
+              console.error("인기 상품 JSON 파싱 에러:", e);
+            }
+          }
+        }
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') console.error('인기 상품 로드 실패', e);
+      } finally {
+        if (!ignore) setIsPopularLoading(false);
+      }
+    };
+    fetchPopular();
+
+    return () => {
+      ignore = true;
+      controller.abort();
+    };
+  }, []);
+
   return (
-    <GlobalShoppingView 
+    <GlobalShoppingView
       platform="mercari"
       path={path}
       categories={categories}
       items={mappedDisplayItems}
+      popularProducts={popularProducts}
+      isPopularLoading={isPopularLoading}
       pageInfo={pageInfo}
       selectedProduct={productDetail}
       sortOptions={MercariSortOptions}

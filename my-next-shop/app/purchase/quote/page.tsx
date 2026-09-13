@@ -42,7 +42,7 @@ export default function QuotePage() {
 
   return (
     <GuideLayout title="견적문의" type={PAGE_TYPE} hideSidebar={true}>
-      <PurchaseFormContainer type={PAGE_TYPE}/>
+      <PurchaseFormContainer type={PAGE_TYPE} hideDomesticShippingFee/>
     </GuideLayout>
   );
 }

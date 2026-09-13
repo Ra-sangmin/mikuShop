@@ -35,6 +35,10 @@ export interface SearchStreamOptions<TItem> {
   maxItems?: number;
   minWaitCount?: number;
   chunkSize?: number;
+  /** (선택) 뷰포트 크기 재정의. 기본값은 검색 라우트들이 원래 쓰던 1280x1080입니다.
+   *  화면을 작게 잡으면 첫 화면에 렌더링되는 상품 수 자체가 줄어, "일단 몇 개만 빠르게"
+   *  가져올 때 더 빨리 끝납니다. */
+  viewport?: { width: number; height: number };
 }
 
 export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): ReadableStream<Uint8Array> {
@@ -46,6 +50,7 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
     maxItems = DEFAULT_MAX_ITEMS,
     minWaitCount = DEFAULT_MIN_WAIT_COUNT,
     chunkSize = DEFAULT_CHUNK_SIZE,
+    viewport = { width: 1280, height: 1080 },
   } = options;
 
   const encoder = new TextEncoder();
@@ -60,16 +65,31 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
       let page: any = null;
 
       const processAndSend = async (rawItems: TItem[]): Promise<number> => {
+        // 🌟 [버그 수정] 아래 apiListener 핸들러는 `await response.json()`으로 넘어가기 전에만
+        // isStreamClosed를 확인합니다. 그 await 도중에 메인 흐름(특히 maxAttempts:0처럼 아주
+        // 빨리 끝나는 경우)이 먼저 끝나 controller.close()를 호출해버리면, json 디코딩이 끝난
+        // 뒤 여기로 들어와 이미 닫힌 controller에 enqueue를 시도해 "Controller is already
+        // closed" 에러로 죽었습니다. 매 시점마다 다시 확인해 조용히 무시합니다.
+        if (state.isStreamClosed) return 0;
+
         const filtered = rawItems.filter(item => isValidItem(item) && !sentItems.has(getItemId(item)));
         if (filtered.length === 0) return 0;
 
         for (let i = 0; i < filtered.length; i += chunkSize) {
+          if (state.isStreamClosed) break;
+
           const dataChunk = filtered.slice(i, i + chunkSize);
           dataChunk.forEach(item => sentItems.add(getItemId(item)));
           collectedItems.push(...dataChunk);
 
-          controller.enqueue(encoder.encode(JSON.stringify({ success: true, data: dataChunk }) + '\n'));
-          controller.enqueue(encoder.encode(' '.repeat(1024) + '\n')); // 브라우저 렌더링 독촉
+          try {
+            controller.enqueue(encoder.encode(JSON.stringify({ success: true, data: dataChunk }) + '\n'));
+            controller.enqueue(encoder.encode(' '.repeat(1024) + '\n')); // 브라우저 렌더링 독촉
+          } catch (e) {
+            // 🌟 마지막 방어선: 그 사이 컨트롤러가 닫혔다면 조용히 중단합니다.
+            state.isStreamClosed = true;
+            break;
+          }
           await new Promise(r => setTimeout(r, 10)); // 렌더링 틈 주기
         }
         return filtered.length;
@@ -83,8 +103,9 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
 
       try {
         // [1] 페이지 초기화 및 (선택적) API 리스너 부착
-        // 🌟 원래 검색 라우트들이 명시적으로 1280x1080 뷰포트를 썼으므로 동일하게 맞춥니다.
-        page = await createPage({ viewport: { width: 1280, height: 1080 } });
+        // 🌟 원래 검색 라우트들이 명시적으로 1280x1080 뷰포트를 썼으므로 기본값을 그렇게
+        // 맞추되, 호출하는 쪽에서 더 작은 뷰포트를 넘기면 그걸 씁니다.
+        page = await createPage({ viewport });
 
         if (apiListener) {
           page.on('response', async (response: any) => {

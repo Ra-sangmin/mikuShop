@@ -42,7 +42,7 @@ export default function PurchaseRequestPage() {
 
   return (
     <GuideLayout title="구매대행 신청" type={PAGE_TYPE} hideSidebar={true}>
-      <PurchaseFormContainer type={PAGE_TYPE}/>
+      <PurchaseFormContainer type={PAGE_TYPE} hideDomesticShippingFee/>
     </GuideLayout>
   );
 }

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Script from 'next/script';
+import { GlobalSearchProvider, useGlobalSearch } from './GlobalSearchContext';
 
 // ==========================================
 // 🌟 Props 타입 정의 (구조 변경)
@@ -49,6 +50,19 @@ const getStyles = (brandColor: string): Record<string, React.CSSProperties> => (
     letterSpacing: '-1px', display: 'flex', alignItems: 'center', gap: '8px' 
   },
   subtitle: { fontSize: '14px', fontWeight: 500, color: '#999', letterSpacing: '0' },
+  // 🌟 제목 오른쪽에 붙는 통합 검색창 (카테고리 상관없이 사이트 전체 검색)
+  headerRight: { display: 'flex', alignItems: 'center', gap: '16px' },
+  searchForm: { display: 'flex', alignItems: 'center', width: '260px' },
+  searchInput: {
+    flex: 1, height: '38px', padding: '0 14px', borderRadius: '19px 0 0 19px',
+    border: `1.5px solid ${brandColor}`, borderRight: 'none', outline: 'none',
+    fontSize: '14px', color: '#1a1a1a', minWidth: 0,
+  },
+  searchButton: {
+    height: '38px', width: '44px', borderRadius: '0 19px 19px 0', border: 'none',
+    backgroundColor: brandColor, color: 'white', cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
   // 🌟 예전엔 여기에 흰 배경/테두리/그림자가 있는 박스 스타일이 있었는데, 구글 번역
   // 스크립트가 로드되기 전(또는 실패했을 때)엔 안이 빈 채로 그 테두리만 "네모 이미지"처럼
   // 보였습니다. 번역 위젯 자체(일본어 상품명 → 한국어 번역)는 계속 쓰는 기능이라 컨테이너는
@@ -87,7 +101,7 @@ export default function GlobalLayout({
   }, []);
 
   return (
-    <>
+    <GlobalSearchProvider>
       <Script
         src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"
         strategy="afterInteractive"
@@ -105,6 +119,7 @@ export default function GlobalLayout({
           .global-shop-title { min-width: 0; white-space: nowrap; font-size: 20px !important; letter-spacing: -1.2px !important; gap: 5px !important; }
           .global-shop-subtitle { min-width: 0; white-space: nowrap; font-size: 11px !important; }
           .global-shop-translate { display: none !important; }
+          .global-shop-search-form { width: 150px !important; }
         }
       `}</style>
 
@@ -124,8 +139,11 @@ export default function GlobalLayout({
               </h2>
             </div>
             
-            {/* 번역기 영역 */}
-            <div id="google_translate_element" className="global-shop-translate" style={styles.translateBox}></div>
+            {/* 🌟 제목 오른쪽 영역: 통합 검색창 + 번역기 */}
+            <div style={styles.headerRight}>
+              <HeaderSearchBox styles={styles} />
+              <div id="google_translate_element" className="global-shop-translate" style={styles.translateBox}></div>
+            </div>
 
           </div>
         </header>
@@ -134,6 +152,37 @@ export default function GlobalLayout({
           {children}
         </main>
       </div>
-    </>
+    </GlobalSearchProvider>
+  );
+}
+
+// 🌟 카테고리 상관없이 사이트 전체를 검색하는 헤더 검색창.
+// 위 GlobalLayout이 GlobalSearchProvider로 header+main(children)을 함께 감싸고 있어서,
+// 여기서 requestGlobalSearch를 호출하면 children으로 렌더링되는 각 플랫폼 page.tsx가
+// useGlobalSearch()로 그 제출을 구독해 검색을 실행합니다.
+function HeaderSearchBox({ styles }: { styles: Record<string, React.CSSProperties> }) {
+  const { requestGlobalSearch } = useGlobalSearch();
+  const [keyword, setKeyword] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = keyword.trim();
+    if (!trimmed) return;
+    requestGlobalSearch(trimmed);
+  };
+
+  return (
+    <form className="global-shop-search-form" style={styles.searchForm} onSubmit={handleSubmit}>
+      <input
+        type="text"
+        value={keyword}
+        onChange={(e) => setKeyword(e.target.value)}
+        placeholder="상품 검색"
+        style={styles.searchInput}
+      />
+      <button type="submit" style={styles.searchButton} aria-label="검색">
+        <i className="fa fa-search" style={{ fontSize: '13px' }}></i>
+      </button>
+    </form>
   );
 }
