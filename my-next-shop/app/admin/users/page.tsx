@@ -9,14 +9,27 @@ export default function UserManagement() {
   const [isLoading, setIsLoading] = useState(true);
   
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({ level: '', cyberMoney: 0 });
+  const [editForm, setEditForm] = useState({ membershipGrade: 0, cyberMoney: 0 });
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const levels = ['일반회원', '브론즈', '실버', '골드', '다이아몬드', 'VIP'];
+  const [grades, setGrades] = useState<{ id: number, name: string }[]>([]);
 
   useEffect(() => {
     fetchUsers();
+    fetchGrades();
   }, []);
+
+  const fetchGrades = async () => {
+    try {
+      const res = await fetch('/api/membership-grades');
+      const data = await res.json();
+      if (data.success) {
+        setGrades(data.grades);
+      }
+    } catch (error) {
+      console.error("등급 목록 가져오기 실패:", error);
+    }
+  };
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -42,7 +55,7 @@ export default function UserManagement() {
   const startEditing = (user: any) => {
     setEditingUserId(user.id);
     setEditForm({
-      level: user.level,
+      membershipGrade: user.membershipGrade,
       cyberMoney: user.cyberMoney
     });
   };
@@ -55,7 +68,7 @@ export default function UserManagement() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
-          level: editForm.level,
+          membershipGrade: editForm.membershipGrade,
           cyberMoney: editForm.cyberMoney
         }),
       });
@@ -117,16 +130,16 @@ export default function UserManagement() {
                   {/* 등급 */}
                   <td style={us.td}>
                     {editingUserId === user.id ? (
-                      <select 
-                        value={editForm.level}
-                        onChange={(e) => setEditForm({ ...editForm, level: e.target.value })}
+                      <select
+                        value={editForm.membershipGrade}
+                        onChange={(e) => setEditForm({ ...editForm, membershipGrade: parseInt(e.target.value) })}
                         style={us.selectInput}
                       >
-                        {levels.map(lv => <option key={lv} value={lv}>{lv}</option>)}
+                        {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                       </select>
                     ) : (
                       <span style={us.levelBadge}>
-                        {user.level}
+                        {user.grade?.name}
                       </span>
                     )}
                   </td>

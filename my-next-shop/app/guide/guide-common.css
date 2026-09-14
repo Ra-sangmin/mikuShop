@@ -35,26 +35,50 @@
 .animate-4 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards; }
 .animate-5 { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.8s forwards; }
 
-/* 🌟 "라쿠텐" 등 쇼핑몰 페이지 제목 앞의 빨간 바(GlobalLayout.tsx의 redBar, 6x24px 둥근
-   모서리)와 같은 모양을 ::before로 재현. 페이지 JSX를 건드리지 않고 guide-title을 쓰는
-   5개 가이드 페이지 전체에 한 번에 적용됩니다. */
+/* 🌟 mypage(나의 회원 정보/전체 진행 현황 등)와 동일한 타이틀 스타일: 굵은 텍스트 +
+   그라데이션 아이콘 뱃지. purchase-method/delivery-method/faq/terms/privacy 5개
+   가이드 페이지 전체에 한 번에 적용됩니다. */
 .guide-title {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 24px;
+  gap: 10px;
+  font-size: 20px;
   font-weight: 900;
   color: #0f172a;
-  margin-bottom: 12px;
+  letter-spacing: -0.4px;
+  margin-bottom: 16px;
 }
-.guide-title::before {
-  content: '';
-  display: inline-block;
+.guide-title-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
   flex-shrink: 0;
-  width: 6px;
-  height: 24px;
-  background-color: #ff4b2b;
-  border-radius: 10px;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+  box-shadow: 0 6px 14px -5px rgba(234, 88, 12, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+}
+
+/* 🌟 mypage의 .miku-status-panel/.miku-address-panel과 동일한 배경 패널.
+   여러 카드(step-item/faq-item)가 따로 떠 보이던 문제를 하나로 묶어 해결합니다. */
+.guide-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 28px;
+  background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+  border: 1px solid rgba(226, 232, 240, 0.7);
+  border-radius: 24px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 14px 34px -14px rgba(15, 23, 42, 0.10);
+}
+.guide-panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #fb923c 0%, #ea580c 50%, #fb923c 100%);
 }
 
 .guide-desc {
@@ -80,6 +104,22 @@
   letter-spacing: 0.5px;
 }
 
+/* 이용약관/개인정보처리방침: 타이틀과 시행일자를 한 줄에 배치 */
+.guide-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+.guide-title-row .guide-title {
+  margin-bottom: 0;
+}
+.guide-title-row .last-updated {
+  margin-bottom: 0;
+}
+
 /* 약관/개인정보처리방침 등 문서형 페이지의 본문 카드 */
 .guide-doc-card {
   background-color: #ffffff;
@@ -90,6 +130,15 @@
   width: 100%;
   box-sizing: border-box;
   position: relative;
+  overflow: hidden;
+}
+/* 🌟 .guide-panel과 동일한 상단 액센트 바로 통일감을 줍니다 */
+.guide-doc-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #fb923c 0%, #ea580c 50%, #fb923c 100%);
 }
 
 .guide-section-block {
@@ -191,11 +240,12 @@
    768px = app/globals.css에 정리해 둔 사이트 전역 모바일 브레이크포인트 기준값
    ------------------------------------------- */
 @media (max-width: 768px) {
-  .guide-title { font-size: 20px; gap: 10px; }
-  .guide-title::before { width: 5px; height: 20px; }
+  .guide-title { font-size: 16px; gap: 8px; }
+  .guide-title-icon { width: 24px; height: 24px; border-radius: 8px; font-size: 11px; }
   .guide-desc { font-size: 14px; margin-bottom: 30px; }
   .guide-desc.guide-desc--tight { margin-bottom: 16px; }
 
+  .guide-panel { padding: 16px; border-radius: 16px; }
   .guide-doc-card { padding: 40px 24px; border-radius: 16px; }
   .guide-section-block { margin-bottom: 40px; }
   .guide-section-title { font-size: 16px; padding-bottom: 10px; }

@@ -83,7 +83,7 @@ const handler = NextAuth({
               email: userEmail,
               name: user.name || `${safeProvider} 사용자`,
               password: "", // SNS 로그인이므로 비밀번호는 비워둠
-              level: "일반회원",
+              membershipGrade: 0,
               cyberMoney: 0,
             },
           });

@@ -15,8 +15,9 @@ export async function GET(request: Request) {
     const user = await prisma.user.findUnique({
       where: { id: parseInt(userId) },
       include: {
-        orders: true, 
-        addresses: true
+        orders: true,
+        addresses: true,
+        grade: true
       }
     });
 
@@ -24,7 +25,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '유저를 찾을 수 없습니다.' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, user });
+    // 🌟 비밀번호 해시는 클라이언트에 내려보내지 않고, SNS 가입 여부만 별도 플래그로 제공합니다.
+    // (SNS 로그인 유저는 회원가입 시 password가 빈 문자열로 저장됨 - [...nextauth]/route.ts 참고)
+    const { password, ...safeUser } = user;
+    return NextResponse.json({ success: true, user: { ...safeUser, isSnsUser: !password } });
   } catch (error) {
     console.error("User GET Error:", error);
     return NextResponse.json({ error: 'DB 조회 실패' }, { status: 500 });
@@ -104,7 +108,7 @@ export async function POST(request: Request) {
         email,
         password: hashedPassword, // 평문이 아닌 해싱된 값을 저장!
         name,
-        level: '일반회원',
+        membershipGrade: 0,
         cyberMoney: 0
       }
     });

@@ -7,9 +7,9 @@ export default function DeliveryMethodPage() {
   return (
     <GuideLayout title="배송대행 신청방법" type="guide">
       <div className="guide-page-container">
-        <h2 className="guide-title">배송대행 이용 프로세스</h2>
-        <p className="guide-desc">미쿠짱의 쉽고 빠른 배송대행 서비스 이용 절차를 상세히 안내해 드립니다.</p>
+        <h2 className="guide-title">배송대행 이용 프로세스 <span className="guide-title-icon"><i className="fa fa-truck-fast"></i></span></h2>
 
+        <div className="guide-panel">
         <ul className="step-list">
           <li className="step-item">
             <div className="step-number">1</div>
@@ -32,6 +32,7 @@ export default function DeliveryMethodPage() {
             <div className="step-content">국제 배송 및 수령</div>
           </li>
         </ul>
+        </div>
       </div>
     </GuideLayout>
   );

@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import GlobalProductDetail from '@/app/main_shop/components/GlobalProductDetail';
 import { useExchangeRate } from '../context/ExchangeRateContext';
 import GuideLayout from '../components/GuideLayout';
+import '../guide/guide-common.css';
 
 // =================================================================
 // 1. 비즈니스 로직 영역 (Business Logic Layer)
@@ -171,9 +173,13 @@ export default function WishlistPage() {
   } = useWishlistLogic();
 
   return (
-    <GuideLayout title="관심물품보기" type="mypage">
+    <GuideLayout title="관심 상품 목록" type="mypage">
+      <div style={{ maxWidth: '1040px', margin: '0 auto', padding: '0 20px' }}>
+        <h2 className="guide-title">관심 상품 목록 <span className="guide-title-icon"><i className="fa fa-heart"></i></span></h2>
+
+        <div className="guide-panel">
       <div className="miku-wish-wrapper">
-        
+
         {/* 상세 보기 오버레이 */}
         <div ref={detailRef} className="miku-wish-detail-anchor">
           {selectedItem && (
@@ -184,23 +190,24 @@ export default function WishlistPage() {
           )}
         </div>
 
-        {/* 상단 헤더 - 환율 정보 */}
-        <div className="miku-wish-header anim-slide-up">
-          <div className="miku-wish-rate-pill">
-            <span className="icon">💱</span>
-            <span>환율: 100엔 = <b>{exchangeRate.toFixed(2)}</b>원</span>
-          </div>
-        </div>
-
         {/* 🌟 상품 리스트 및 빈 화면 영역 */}
         <div className="miku-wish-list">
           {wishlist.length === 0 ? (
             <div className="miku-wish-empty anim-slide-up">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-              </svg>
+              <div className="miku-wish-empty-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                </svg>
+              </div>
               <h2>관심상품이 없습니다</h2>
               <p>마음에 드는 상품을 찾아 하트를 눌러보세요.</p>
+              <Link href="/" className="miku-wish-empty-cta">
+                쇼핑하러 가기
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+              </Link>
             </div>
           ) : (
             currentItems.map((item, index) => (
@@ -245,6 +252,8 @@ export default function WishlistPage() {
           </div>
         )}
       </div>
+        </div>
+      </div>
 
       {/* ================================================================= */}
       {/* 3. 디자인 영역 (CSS Layer) */}
@@ -261,47 +270,52 @@ export default function WishlistPage() {
           box-sizing: border-box;
         }
 
-        /* 환율 헤더 */
-        .miku-wish-header {
-          display: flex;
-          justify-content: flex-end;
-          margin-bottom: 24px;
-          width: 100%;
-        }
-        .miku-wish-rate-pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          background: #f8fafc;
-          padding: 12px 20px;
-          border-radius: 100px;
-          border: 1px solid rgba(226, 232, 240, 0.8);
-          font-size: 14px;
-          color: #475569;
-          box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
-          box-sizing: border-box;
-        }
-        .miku-wish-rate-pill .icon { font-size: 16px; }
-        .miku-wish-rate-pill b { color: #0ea5e9; font-weight: 800; }
-
         /* 🌟 빈 화면 (Empty State - 레이아웃 복구 완벽 처리) */
         .miku-wish-empty {
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 80px 20px;
+          padding: 90px 20px;
           text-align: center;
-          background-color: #ffffff;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
           border-radius: 24px;
-          border: 1px dashed #cbd5e1;
+          border: 1px solid rgba(226, 232, 240, 0.8);
+          box-shadow: 0 10px 40px rgba(0,0,0,0.03);
           color: #64748b;
           width: 100%;
           box-sizing: border-box;
         }
-        .miku-wish-empty svg { width: 48px; height: 48px; color: #cbd5e1; margin-bottom: 16px; }
+        .miku-wish-empty-icon {
+          width: 88px;
+          height: 88px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 20px;
+          background: linear-gradient(135deg, rgba(129, 140, 248, 0.12) 0%, rgba(79, 70, 229, 0.12) 100%);
+        }
+        .miku-wish-empty-icon svg { width: 36px; height: 36px; color: #6366f1; }
         .miku-wish-empty h2 { font-size: 20px; font-weight: 800; color: #0f172a; margin: 0 0 8px 0; }
-        .miku-wish-empty p { font-size: 15px; margin: 0; }
+        .miku-wish-empty p { font-size: 15px; margin: 0 0 28px 0; }
+        .miku-wish-empty-cta {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 13px 26px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
+          color: #ffffff;
+          font-weight: 700;
+          font-size: 14px;
+          text-decoration: none;
+          box-shadow: 0 12px 24px -10px rgba(79, 70, 229, 0.55);
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .miku-wish-empty-cta svg { width: 15px; height: 15px; transition: transform 0.25s ease; }
+        .miku-wish-empty-cta:hover { transform: translateY(-2px); box-shadow: 0 16px 28px -10px rgba(79, 70, 229, 0.65); }
+        .miku-wish-empty-cta:hover svg { transform: translateX(3px); }
 
         /* 리스트 영역 */
         .miku-wish-list {
@@ -560,9 +574,6 @@ export default function WishlistPage() {
            📱 모바일 반응형 처리 (JS 개입 없이 CSS로 완벽 제어)
            ============================================================= */
         @media (max-width: 768px) {
-          .miku-wish-header { justify-content: center; }
-          .miku-wish-rate-pill { width: 100%; justify-content: center; }
-          
           .miku-wish-item-row { gap: 12px; }
           
           .miku-wish-card { flex-direction: column; }

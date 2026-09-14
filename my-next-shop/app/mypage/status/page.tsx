@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, Suspense, useMemo, useRef, useCallback } from 'react';
 import GuideLayout from '../../components/GuideLayout';
+import NoticePanel from '../../components/NoticePanel';
 import { useSearchParams, useRouter } from 'next/navigation';
 import OrderTable from './components/OrderTable';
 import AddressForm from './components/AddressForm';
@@ -9,7 +10,34 @@ import PaymentSummary from './components/PaymentSummary';
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
-import { calculateTieredPaymentFee, calculateTieredAgencyFee } from '@/src/utils/feeCalculator';
+import { calculateTieredPaymentFee, calculateTieredAgencyFee, DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule } from '@/src/utils/feeCalculator';
+
+// 🌟 "현재 진행중인 현황" = 국제 배송(도착 완료 전 단계)을 제외한 나머지 모든 주문
+const isProgressStatus = (status: string) => status !== ORDER_STATUS.SHIPPING;
+
+// 🌟 같은 bundleId(합포장)로 묶인 주문들을 1건으로 집계합니다.
+const countBundleAware = (list: any[]) => {
+  const seenBundles = new Set<string>();
+  let count = 0;
+  list.forEach((item: any) => {
+    if (item.bundleId) {
+      if (seenBundles.has(item.bundleId)) return;
+      seenBundles.add(item.bundleId);
+    }
+    count++;
+  });
+  return count;
+};
+
+// 🌟 도로명 주소에서 "OO로/OO길"로 시작하는 부분부터 끝까지(도로명 + 번지수)만 추출합니다.
+function getLastRoadAddressPart(address?: string) {
+  const tokens = address?.trim().split(/\s+/) || [];
+  let roadTokenIndex = -1;
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (/(로|길)$/.test(tokens[i])) { roadTokenIndex = i; break; }
+  }
+  return roadTokenIndex >= 0 ? tokens.slice(roadTokenIndex).join(' ') : (tokens[tokens.length - 1] || '');
+}
 
 const STATUS_PRIORITY: Record<string, number> = {
   [ORDER_STATUS.CART]: 1,
@@ -50,7 +78,18 @@ function usePurchaseStatusLogic() {
   const hasAlerted = useRef(false);
 
   const [isAuthChecking, setIsAuthChecking] = useState(true);
-  const [activeTab, setActiveTab] = useState<string>(ORDER_STATUS.ALL);
+  const [activeTab, setActiveTabRaw] = useState<string>(ORDER_STATUS.ALL);
+  // 🌟 "진행중인 목록만 보기" 필터(전체/요청/진행중/창고/배송 패널 공용 표시 옵션). 기본값은 활성화(ON)이며,
+  // 스위치를 직접 끄거나 "전체 내역 보기"를 클릭했을 때만 꺼집니다. 개별 상태 탭(경매 낙찰 성공 등)으로
+  // 이동해도 이 스위치 자체는 그대로 유지됩니다(실제 필터링은 activeTab===ALL일 때만 적용됨).
+  const [progressFilterActive, setProgressFilterActive] = useState(true);
+  // 🌟 "전체" 패널의 "전체 내역 보기"가 실제로 선택(클릭)됐는지 여부.
+  // progressFilterActive와 별도로 관리해서, 토글을 그냥 껐을 때는 자동으로 선택 표시되지 않게 합니다.
+  const [allViewSelected, setAllViewSelected] = useState(false);
+  const setActiveTab = useCallback((value: string) => {
+    setAllViewSelected(false);
+    setActiveTabRaw(value);
+  }, []);
   const [userData, setUserData] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,6 +99,23 @@ function usePurchaseStatusLogic() {
   const { exchangeRate } = useExchangeRate();
 
   const [phaseOrder, setPhaseOrder] = useState(['request', 'progress', 'warehouse', 'shipping']);
+
+  // 🌟 결제/대행 수수료 구간 변수를 DB(order_fee_rules)에서 받아옵니다. 응답 전에는
+  // feeCalculator.ts의 기본값(DB 시드값과 동일)을 그대로 써서 화면이 비어 보이지 않습니다.
+  const [paymentFeeRule, setPaymentFeeRule] = useState<OrderFeeRule>(DEFAULT_PAYMENT_FEE_RULE);
+  const [agencyFeeRule, setAgencyFeeRule] = useState<OrderFeeRule>(DEFAULT_AGENCY_FEE_RULE);
+  useEffect(() => {
+    fetch('/api/order-fee-rules')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success || !Array.isArray(data.rules)) return;
+        const payment = data.rules.find((r: any) => r.feeType === 'PAYMENT');
+        if (payment) setPaymentFeeRule(payment);
+        const agency = data.rules.find((r: any) => r.feeType === 'AGENCY');
+        if (agency) setAgencyFeeRule(agency);
+      })
+      .catch(() => {});
+  }, []);
 
   // 로그인 상태 확인
   useEffect(() => {
@@ -214,12 +270,16 @@ function usePurchaseStatusLogic() {
 
   // 하위 상태 아이템 생성 시 상세 설명(desc) 데이터 추가
   const shippingPhases = useMemo(() => {
+    // 🌟 "진행중인 목록만 보기"가 켜져 있으면 요청/진행중/창고/배송 모듈 전체가
+    // 국제 배송(SHIPPING)을 제외한 주문만 기준으로 집계되도록 기준 목록을 바꿔치기합니다.
+    const baseOrders = progressFilterActive ? orders.filter(o => isProgressStatus(o.status)) : orders;
+
     const getCount = (statusKeys: string[]) =>
-      orders.filter(item => statusKeys.includes(item.status)).length;
+      baseOrders.filter(item => statusKeys.includes(item.status)).length;
 
     // 🌟 배송비 요청/배송비 결제 완료/국제 배송 단계에서는 같은 bundleId(합포장)로 묶인 주문을 1건으로 집계합니다.
     const getBundleAwareCount = (statusKeys: string[]) => {
-      const matched = orders.filter(item => statusKeys.includes(item.status));
+      const matched = baseOrders.filter(item => statusKeys.includes(item.status));
       const seenBundles = new Set<string>();
       let count = 0;
       matched.forEach((item: any) => {
@@ -232,38 +292,42 @@ function usePurchaseStatusLogic() {
       return count;
     };
 
+    // 🌟 "진행중인 목록만 보기"가 켜져 있을 때는 0건인 하위 항목(예: 경매 요청)은 목록에서 숨깁니다.
     const createSubItems = (statusKeys: string[], bundleAware: boolean = false) =>
-      statusKeys.map(key => ({
-        key,
-        name: ORDER_STATUS_LABEL[key as OrderStatus] || key,
-        count: bundleAware ? getBundleAwareCount([key]) : orders.filter(item => item.status === key).length,
-        desc: STATUS_DESCRIPTIONS[key] || ''
-      }));
+      statusKeys
+        .map(key => ({
+          key,
+          name: ORDER_STATUS_LABEL[key as OrderStatus] || key,
+          count: bundleAware ? getBundleAwareCount([key]) : baseOrders.filter(item => item.status === key).length,
+          desc: STATUS_DESCRIPTIONS[key] || ''
+        }))
+        .filter(item => !progressFilterActive || item.count > 0);
 
     const phases = [
-      { 
-        id: 'request', title: '요청', theme: 'theme-blue', icon: '📝',
+      {
+        id: 'request', title: '요청', theme: 'theme-blue', icon: 'fa-cart-shopping',
         statuses: [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING],
         totalCount: getCount([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING]),
         subItems: createSubItems([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING])
       },
-      { 
-        id: 'progress', title: '진행 중', theme: 'theme-purple', icon: '⏳',
+      {
+        id: 'progress', title: '진행 중', theme: 'theme-purple', icon: 'fa-hourglass-half',
         statuses: [ORDER_STATUS.BIDDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.PAID, ORDER_STATUS.FAILED],
         totalCount: getCount([ORDER_STATUS.BIDDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.PAID, ORDER_STATUS.FAILED]),
         subItems: createSubItems([ORDER_STATUS.BIDDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.PAID, ORDER_STATUS.FAILED])
       },
-      { 
-        id: 'warehouse', title: '창고', theme: 'theme-green', icon: '🏢',
+      {
+        // 🌟 배송 준비중(PREPARING)부터는 합포장(bundleId)으로 묶일 수 있으므로 창고 패널도 합포장 묶음 기준으로 집계합니다.
+        id: 'warehouse', title: '창고', theme: 'theme-green', icon: 'fa-warehouse',
         statuses: [ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING],
-        totalCount: getCount([ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING]),
-        subItems: createSubItems([ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING])
+        totalCount: getBundleAwareCount([ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING]),
+        subItems: createSubItems([ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING], true)
       },
       {
-        id: 'shipping', title: '배송', theme: 'theme-orange', icon: '✈️',
-        statuses: [ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING],
-        totalCount: getBundleAwareCount([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING]),
-        subItems: createSubItems([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING], true)
+        id: 'shipping', title: '배송 준비', theme: 'theme-rose', icon: 'fa-truck',
+        statuses: [ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE],
+        totalCount: getBundleAwareCount([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE]),
+        subItems: createSubItems([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE], true)
       }
     ];
 
@@ -271,12 +335,13 @@ function usePurchaseStatusLogic() {
       const phase = phases.find(p => p.id === id);
       return { ...phase! };
     });
-  }, [orders, phaseOrder]);
+  }, [orders, phaseOrder, progressFilterActive]);
 
   const items = useMemo(() => {
-    // 1. 탭 필터링 (전체가 아니면 상태값으로 필터링)
-    const filtered = activeTab === ORDER_STATUS.ALL 
-      ? [...orders] 
+    // 1. 탭 필터링. 전체 탭(전체 내역 보기)은 "진행중인 목록만 보기" 토글과 무관하게 항상 국제 배송(SHIPPING)을
+    // 제외하고 보여줍니다(국제 배송은 하단의 "국제 배송 현황" 패널에서 별도로 확인). 개별 상태 탭은 그 상태만 보여줍니다.
+    const filtered = activeTab === ORDER_STATUS.ALL
+      ? orders.filter(item => isProgressStatus(item.status))
       : orders.filter(item => item.status === activeTab);
 
     // 2. 🌟 어떤 탭이든 상관없이 항상 우선순위 및 id 기준 정렬 적용
@@ -323,9 +388,9 @@ function usePurchaseStatusLogic() {
           // 🌟 purchase/quote(PurchaseFormContainer)와 공유하는 계산식: 결제 수수료는
           // 상품 총액(30,000엔) 기준, 대행 수수료는 수량(4개) 기준으로 구간별 정액 부과합니다.
           const itemQuantity = Number(item.productCount) || 1;
-          acc.transfer += calculateTieredPaymentFee(productP);
+          acc.transfer += calculateTieredPaymentFee(productP, paymentFeeRule);
           acc.delivery += domesticS;
-          acc.agency += calculateTieredAgencyFee(itemQuantity);
+          acc.agency += calculateTieredAgencyFee(itemQuantity, agencyFeeRule);
         } else {
           acc.transfer += transferF;
           acc.delivery += domesticS;
@@ -334,7 +399,7 @@ function usePurchaseStatusLogic() {
       }
       return acc;
     }, { product: 0, transfer: 0, delivery: 0, agency: 0, deposit: 0, domestic: 0 });
-  }, [items, selectedItems, activeTab]);
+  }, [items, selectedItems, activeTab, paymentFeeRule, agencyFeeRule]);
 
   const totalPriceVal = activeTab === ORDER_STATUS.BID_PENDING 
     ? totals.deposit 
@@ -478,10 +543,11 @@ function usePurchaseStatusLogic() {
     }
   };
 
-  return { 
+  return {
     isAuthChecking, isLoading, shippingPhases, activeTab, setActiveTab, items, orders, userData,
     selectedItems, setSelectedItems, selectedAddress, setSelectedAddress, exchangeRate,
-    totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus
+    totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus,
+    progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected
   };
 }
 
@@ -511,29 +577,32 @@ const SubStatusChip = ({ item, isActive, onClick }: { item: any, isActive: boole
 
 const PhaseModule = ({ phase, activeTab, onTabClick }: { phase: any, activeTab: string, onTabClick: (key: string) => void }) => {
   const isPhaseActive = (phase.statuses as string[]).includes(activeTab);
+  // 🌟 하위 항목이 1개뿐일 때(예: 진행중인 목록만 보기로 나머지가 숨겨진 경우)는
+  // 모듈 가로 폭을 넓게 유지할 이유가 없어 컴팩트하게 줄입니다.
+  const isCompact = phase.subItems.length <= 1;
 
   return (
-    <div 
+    <div
       data-phase={phase.id}
-      className={`miku-phase-module ${phase.theme} ${isPhaseActive ? 'phase-active' : ''}`}
+      className={`miku-phase-module ${phase.theme} ${isPhaseActive ? 'phase-active' : ''} ${isCompact ? 'phase-compact' : ''}`}
     >
       <div className="phase-header">
         <div className="phase-title-group">
-          <span className="phase-icon">{phase.icon}</span>
+          <span className="phase-icon"><i className={`fa ${phase.icon}`}></i></span>
           <h3 className="phase-title">{phase.title}</h3>
         </div>
         <div className="phase-total-badge">
           합계 <span className="total-count">{phase.totalCount}</span>
         </div>
       </div>
-      
-      <div className="phase-body">
+
+      <div className={`phase-body ${isCompact ? 'phase-body-single' : ''}`}>
         {phase.subItems.map((item: any) => (
-          <SubStatusChip 
-            key={item.key} 
-            item={item} 
-            isActive={activeTab === item.key} 
-            onClick={() => onTabClick(item.key)} 
+          <SubStatusChip
+            key={item.key}
+            item={item}
+            isActive={activeTab === item.key}
+            onClick={() => onTabClick(item.key)}
           />
         ))}
       </div>
@@ -547,14 +616,14 @@ const PhaseModule = ({ phase, activeTab, onTabClick }: { phase: any, activeTab: 
 
 
 function MyPurchaseStatusContent() {
-  const { 
+  const {
     isAuthChecking, isLoading, shippingPhases, activeTab, setActiveTab, items, orders, userData,
     selectedItems, setSelectedItems, selectedAddress, setSelectedAddress, exchangeRate,
-    totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus
+    totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus,
+    progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected
   } = usePurchaseStatusLogic();
 
   const sliderRef = useRef<HTMLDivElement>(null);
-  const historySectionRef = useRef<HTMLDivElement>(null);
   const [scrollEdges, setScrollEdges] = useState({ left: false, right: false });
 
   const [isMouseDown, setIsMouseDown] = useState(false);
@@ -638,25 +707,72 @@ function MyPurchaseStatusContent() {
           });
         }
       }
-    }, 50); 
+    }, 50);
   };
 
-  // 상단 알림 카드 전용 클릭 핸들러 (오프셋 스크롤 적용)
-  const handleActionCardClick = (key: string) => {
-    handleTabChange(key);
+  // 🌟 "현재 진행중인 현황 보기": 전체(ALL) 탭의 공용 테이블 렌더링을 그대로 재사용하면서,
+  // 진행 중 단계(경매 상황/낙찰 성공/상품 결제 완료/실패)에 속한 주문만 골라서 보여줍니다.
+  const handleShowProgressOverview = () => {
+    if (isDragging) return;
+    handleTabChange(ORDER_STATUS.ALL);
+    setProgressFilterActive(true);
+  };
 
-    // 2. 전체 진행 내역 영역(historySectionRef)으로 화면을 부드럽게 세로 스크롤
-    if (historySectionRef.current) {
-      const headerOffset = 100; // 상단 고정 헤더 여백 고려
-      const elementPosition = historySectionRef.current.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+  // 🌟 "전체 내역 보기"를 실제로 클릭했을 때만 선택 표시를 켭니다.
+  // "진행중인 목록만 보기" 토글 상태는 건드리지 않고 그대로 존중합니다(토글이 켜져 있으면 계속 필터된 목록을 보여줌).
+  // 토글을 그냥 껐을 때는 자동으로 선택 표시되지 않습니다.
+  const handleShowAllOverview = () => {
+    if (isDragging) return;
+    handleTabChange(ORDER_STATUS.ALL);
+    setAllViewSelected(true);
+  };
 
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth'
-      });
+  // 🌟 "진행중인 목록만 보기" 토글 스위치 전용 핸들러.
+  const handleToggleProgressFilter = () => {
+    if (isDragging) return;
+    if (progressFilterActive) {
+      handleTabChange(ORDER_STATUS.ALL);
+      setProgressFilterActive(false);
+    } else {
+      handleShowProgressOverview();
     }
   };
+
+
+  // 🌟 "전체" 카드의 합계/전체 내역 보기 숫자도 합포장 묶음을 1건으로 집계합니다.
+  // "전체 내역 보기"는 토글 상태와 무관하게 항상 국제 배송을 제외하므로, 실제 테이블 개수와 일치시킵니다.
+  const totalCount = useMemo(
+    () => countBundleAware(orders.filter((o: any) => isProgressStatus(o.status))),
+    [orders]
+  );
+
+  // 🌟 "국제 배송 현황" 패널: 국제 배송(SHIPPING) 상태 주문을 합포장 묶음 기준으로 정리하고,
+  // 각 배송의 물류 단계(deliveryStatus)를 함께 보여줍니다.
+  const internationalShipments = useMemo(() => {
+    const shippingOrders = orders.filter((o: any) => o.status === ORDER_STATUS.SHIPPING);
+    const seenBundles = new Set<string>();
+    const result: any[] = [];
+    shippingOrders.forEach((o: any) => {
+      if (o.bundleId) {
+        if (seenBundles.has(o.bundleId)) return;
+        seenBundles.add(o.bundleId);
+        const group = shippingOrders.filter((g: any) => g.bundleId === o.bundleId);
+        const first = group[0];
+        result.push({
+          ...first,
+          orderIds: group.map((g: any) => g.orderId),
+          // 🌟 상품명만 말줄임(...) 대상이 되도록 "외 N건" 접미사는 별도로 분리해서 보관합니다.
+          // (한 문자열로 합치면 ...으로 잘릴 때 "외 N건"까지 함께 사라지는 문제가 있었습니다)
+          productName: first.productName,
+          isGroup: group.length > 1,
+          bundleItems: group,
+        });
+      } else {
+        result.push(o);
+      }
+    });
+    return result;
+  }, [orders]);
 
   const actionRequiredItems = useMemo(() => {
     if (!orders || orders.length === 0) return [];
@@ -686,9 +802,13 @@ function MyPurchaseStatusContent() {
     <div className="miku-status-wrapper">
       
       {actionRequiredItems.length > 0 && (
+        <>
+        <div className="miku-status-section-header anim-slide-up">
+          <h2>결제 및 요청 대기 <span className="section-icon-badge badge-amber"><i className="fa fa-credit-card"></i></span></h2>
+        </div>
         <div className="miku-action-required-container anim-slide-up">
           <div className="container-header">
-            <span className="header-icon">🚨</span>
+            <span className="header-icon"><i className="fa fa-triangle-exclamation"></i></span>
             <h2 className="header-title">고객님의 확인 및 처리가 필요한 항목이 있습니다</h2>
           </div>
           <div className="action-cards-grid">
@@ -696,7 +816,7 @@ function MyPurchaseStatusContent() {
               <div 
                 key={item.key} 
                 className={`miku-action-card ${item.type}`} 
-                onClick={() => handleActionCardClick(item.key)}
+                onClick={() => handleTabChange(item.key)}
               >
                 <div className="card-info">
                   <span className="card-badge">{ORDER_STATUS_LABEL[item.key as OrderStatus]}</span>
@@ -708,17 +828,24 @@ function MyPurchaseStatusContent() {
             ))}
           </div>
         </div>
+        </>
       )}
 
-      {/* 🌟 여기에 스크롤 타겟이 될 historySectionRef 연결 */}
-      <div className="miku-unified-pipeline-container anim-slide-up delay-1" ref={historySectionRef}>
-        
-        <button 
-          className={`miku-all-history-btn ${activeTab === ORDER_STATUS.ALL ? 'active' : ''}`}
-          onClick={() => handleTabChange(ORDER_STATUS.ALL)}
+      <div className="miku-status-section-header anim-slide-up delay-1">
+        <h2>전체 진행 현황 <span className="section-icon-badge badge-blue"><i className="fa fa-chart-line"></i></span></h2>
+        <button
+          type="button"
+          className={`progress-only-toggle ${progressFilterActive ? 'on' : ''}`}
+          onClick={handleToggleProgressFilter}
+          aria-pressed={progressFilterActive}
         >
-          <span className="btn-icon">📋</span> 전체 진행 내역 <span className="btn-count">{orders.length}</span>
+          <span className="toggle-label">진행중인 목록만 보기</span>
+          <span className="toggle-track"><span className="toggle-thumb"></span></span>
         </button>
+      </div>
+
+      <div className="miku-progress-panel">
+      <div className="miku-unified-pipeline-container anim-slide-up delay-1">
 
         <div className="pipeline-slider-shell">
           <div
@@ -729,6 +856,12 @@ function MyPurchaseStatusContent() {
             className={`pipeline-fade pipeline-fade-right ${scrollEdges.right ? 'visible' : ''}`}
             aria-hidden="true"
           />
+          <span className={`pipeline-arrow pipeline-arrow-left ${scrollEdges.left ? 'visible' : ''}`} aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </span>
+          <span className={`pipeline-arrow pipeline-arrow-right ${scrollEdges.right ? 'visible' : ''}`} aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </span>
           <div 
             className={`pipeline-modules-wrapper ${isMouseDown ? 'is-dragging' : ''}`}
             ref={sliderRef}
@@ -738,12 +871,43 @@ function MyPurchaseStatusContent() {
             onMouseMove={onDrag}
             onScroll={updateScrollEdges}
           >
+            <div
+              data-phase="all"
+              className={`miku-phase-module theme-slate phase-compact ${activeTab === ORDER_STATUS.ALL ? 'phase-active' : ''}`}
+            >
+              <div className="phase-header">
+                <div className="phase-title-group">
+                  <span className="phase-icon"><i className="fa fa-layer-group"></i></span>
+                  <h3 className="phase-title">전체</h3>
+                </div>
+                <div className="phase-total-badge">
+                  합계 <span className="total-count">{totalCount}</span>
+                </div>
+              </div>
+
+              <div className="phase-body phase-body-single">
+                <button
+                  type="button"
+                  className={`miku-sub-status-chip ${allViewSelected ? 'active' : ''} ${totalCount > 0 ? 'has-count' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); handleShowAllOverview(); }}
+                >
+                  <span className="status-name">전체 내역 보기</span>
+                  <span className="status-count">{totalCount}</span>
+                  <div className="miku-tooltip">전체 진행 내역 가져오기</div>
+                </button>
+              </div>
+
+              <div className="phase-connector">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M9 18l6-6-6-6"/></svg>
+              </div>
+            </div>
+
             {shippingPhases.map((phase) => (
-              <PhaseModule 
-                key={phase.id} 
-                phase={phase} 
-                activeTab={activeTab} 
-                onTabClick={handleTabChange} 
+              <PhaseModule
+                key={phase.id}
+                phase={phase}
+                activeTab={activeTab}
+                onTabClick={handleTabChange}
               />
             ))}
           </div>
@@ -756,6 +920,7 @@ function MyPurchaseStatusContent() {
           selectedItems={selectedItems} setSelectedItems={setSelectedItems}
           fetchOrders={fetchOrders} selectedAddress={selectedAddress}
           onIndividualPacking={handleIndividualPacking} onDelete={handleDeleteOrder}
+          onStatusClick={handleTabChange}
           myMoney={userData?.cyberMoney || 0} exchangeRate={exchangeRate}
         />
        </div>
@@ -780,19 +945,10 @@ function MyPurchaseStatusContent() {
             </button>
           </div>
           {selectedItems.length < 2 && <p className="bundle-helper">* 합포장은 2개 이상의 상품을 선택해야 가능합니다.</p>}
-          <p className="address-change-warning">
-            <span className="address-change-warning-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-            </span>
-            <span>
-              <strong>배송비 결제 후에는 주소 변경이 어렵습니다.</strong><br />
-              결제 전 배송지를 꼭 확인해주세요.
-            </span>
-          </p>
+          <NoticePanel tone="rose" className="address-change-warning">
+            <strong>배송비 결제 후에는 주소 변경이 어렵습니다.</strong><br />
+            결제 전 배송지를 꼭 확인해주세요.
+          </NoticePanel>
           <AddressForm userData={userData} selectedItems={selectedItems} fetchOrders={fetchOrders} selectedAddress={selectedAddress} setSelectedAddress={setSelectedAddress} />
         </div>
       )}
@@ -808,6 +964,61 @@ function MyPurchaseStatusContent() {
           />
         </div>
       )}
+      </div>
+
+      <div className="miku-status-section-header anim-slide-up delay-3">
+        <h2>국제 배송 현황 <span className="section-icon-badge badge-amber"><i className="fa fa-plane"></i></span></h2>
+      </div>
+
+      <div className="miku-shipment-panel">
+        <div className="table-container anim-slide-up delay-3">
+          <table className="premium-table">
+            <thead>
+              <tr>
+                <th className="th-cell th-product">상품명</th>
+                <th className="th-cell th-recipient">주소</th>
+                <th className="th-cell th-tracking">운송장 번호</th>
+              </tr>
+            </thead>
+            <tbody>
+              {internationalShipments.length === 0 ? (
+                <tr><td colSpan={3} className="empty-row">현재 국제 배송 중인 상품이 없습니다.</td></tr>
+              ) : (
+                internationalShipments.map((shipment: any) => (
+                  <tr
+                    key={shipment.orderId}
+                    className="tr-row clickable"
+                    onClick={() => handleTabChange(ORDER_STATUS.SHIPPING)}
+                  >
+                    <td className="td-cell td-product">
+                      <div className="prod-name-box" title={shipment.productName}>
+                        {shipment.isGroup && (
+                          <span className="bundle-group-badge">📦 합포장 {shipment.bundleItems.length}건</span>
+                        )}
+                        <span className="prod-name-text">{shipment.productName}</span>
+                        {shipment.isGroup && (
+                          <span className="prod-name-suffix">&nbsp;외 {shipment.bundleItems.length - 1}건</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="td-cell td-shipment-recipient">
+                      {shipment.address?.recipientName || '미지정'}
+                      {shipment.address?.address && (
+                        <span className="recipient-address">({getLastRoadAddressPart(shipment.address.address)})</span>
+                      )}
+                    </td>
+                    <td className="td-cell td-shipment-tracking">
+                      <button type="button" className="btn-shipment-inquiry" onClick={(e) => e.stopPropagation()}>
+                        {shipment.trackingNo || '준비중'}
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* ================================================================= */}
       {/* 3. 디자인 영역 (CSS Layer) */}
@@ -819,7 +1030,13 @@ function MyPurchaseStatusContent() {
           --color-purple: #8b5cf6;
           --color-green: #10b981;
           --color-orange: #f97316;
+          --color-rose: #e11d48;
           --color-red: #ef4444;
+          --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.04), 0 14px 34px -14px rgba(15, 23, 42, 0.10);
+          --shadow-elevated: 0 6px 16px -4px rgba(15, 23, 42, 0.08), 0 24px 48px -16px rgba(15, 23, 42, 0.14);
+          /* 🌟 파이프라인 카드 전용의 매우 은은한 그림자 (기본/호버/활성 모두 동일하게 사용) */
+          --shadow-module: 0 1px 3px -1px rgba(15, 23, 42, 0.06), 0 3px 8px -4px rgba(15, 23, 42, 0.06);
+          --border-subtle: rgba(226, 232, 240, 0.7);
         }
 
         .miku-status-wrapper {
@@ -829,35 +1046,142 @@ function MyPurchaseStatusContent() {
           padding-bottom: 60px;
         }
 
-        .miku-action-required-container {
-          background: #fff; border: 1px solid rgba(226, 232, 240, 0.7); border-radius: 20px;
-          padding: 24px; margin-bottom: 32px; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.03);
-          border-left: 5px solid var(--color-red);
+        .miku-status-section-header {
+          margin-bottom: 16px;
+          display: flex; align-items: center; justify-content: space-between;
+          gap: 12px; flex-wrap: wrap;
         }
-        .container-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-        .header-icon { font-size: 24px; }
+        .miku-status-section-header h2 {
+          font-size: 20px; font-weight: 900; color: #0f172a; margin: 0;
+          display: flex; align-items: center; gap: 10px; letter-spacing: -0.4px;
+        }
+        .progress-only-toggle {
+          background: none; border: none; padding: 0; cursor: pointer;
+          display: flex; align-items: center; gap: 10px;
+        }
+        .progress-only-toggle .toggle-label {
+          font-size: 13px; font-weight: 700; color: #64748b; transition: color 0.2s;
+        }
+        .progress-only-toggle.on .toggle-label { color: #0f172a; }
+        .progress-only-toggle .toggle-track {
+          position: relative; width: 44px; height: 24px; border-radius: 999px;
+          background: #cbd5e1; flex-shrink: 0; transition: background 0.25s var(--smooth-easing);
+        }
+        .progress-only-toggle.on .toggle-track {
+          background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+        }
+        .progress-only-toggle .toggle-thumb {
+          position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
+          background: #fff; box-shadow: 0 2px 4px rgba(15, 23, 42, 0.25);
+          transition: transform 0.25s var(--smooth-easing);
+        }
+        .progress-only-toggle.on .toggle-thumb { transform: translateX(20px); }
+        .miku-status-section-header .section-icon-badge {
+          width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0; color: #fff;
+          display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
+        }
+        .miku-status-section-header .section-icon-badge.badge-amber {
+          background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+          box-shadow: 0 6px 14px -5px rgba(234, 88, 12, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+        }
+        .miku-status-section-header .section-icon-badge.badge-blue {
+          background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+          box-shadow: 0 6px 14px -5px rgba(37, 99, 235, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+        }
+
+        /* 🌟 국제 배송 현황 패널 */
+        .miku-shipment-panel {
+          background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+          border: 1px solid var(--border-subtle); border-radius: 24px;
+          padding: 28px; margin-bottom: 32px; box-shadow: var(--shadow-soft);
+          position: relative; overflow: hidden;
+        }
+        .miku-shipment-panel::before {
+          content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+          background: linear-gradient(90deg, #fb923c 0%, #ea580c 50%, #fb923c 100%);
+        }
+        .miku-shipment-panel .table-container { margin-bottom: 0; }
+        /* 🌟 상품명 칸은 주소/운송장 번호를 제외한 나머지 영역을 모두 차지합니다.
+           table-layout: fixed로 각 칸의 폭을 실제 크기로 고정해서, 글자수로 미리 자르지 않고도
+           칸 폭보다 텍스트가 클 때만 CSS 말줄임(...)으로 정확히 줄어들도록 합니다. */
+        .miku-shipment-panel .premium-table { table-layout: fixed; min-width: 0; }
+        .miku-shipment-panel .td-product { max-width: none; width: auto; }
+        /* 🌟 "외 N건"은 항상 보이도록 줄어들지 않게(flex-shrink:0) 고정하고, 상품명 쪽만 ...으로 줄입니다. */
+        .miku-shipment-panel .prod-name-suffix { flex-shrink: 0; white-space: nowrap; color: #64748b; font-weight: 700; }
+        .miku-shipment-panel .th-recipient,
+        .miku-shipment-panel .td-shipment-recipient { width: 100px; text-align: center; padding-right: 4px !important; }
+        .miku-shipment-panel .th-tracking,
+        .miku-shipment-panel .td-shipment-tracking { width: 90px; text-align: center; padding-left: 4px !important; }
+        /* 🌟 운송장 번호 자체를 버튼화해서 클릭 시 배송 조회가 가능하도록 합니다. */
+        .btn-shipment-inquiry {
+          padding: 7px 14px; border-radius: 8px; border: 1px solid #cbd5e1;
+          background: #f8fafc; color: #334155; font-size: 12px; font-weight: 700;
+          cursor: pointer; white-space: nowrap; transition: all 0.2s var(--smooth-easing);
+          text-align: center;
+        }
+        .btn-shipment-inquiry:hover { background: #f1f5f9; border-color: #94a3b8; color: #0f172a; }
+
+        /* 🌟 "전체 진행 현황" 하위의 파이프라인/테이블/결제요약을 하나의 패널처럼 감싸는 배경 */
+        .miku-progress-panel {
+          background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+          border: 1px solid var(--border-subtle); border-radius: 24px;
+          padding: 28px; margin-bottom: 32px; box-shadow: var(--shadow-soft);
+          position: relative; overflow: hidden;
+        }
+        .miku-progress-panel::before {
+          content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+          background: linear-gradient(90deg, #60a5fa 0%, #2563eb 50%, #60a5fa 100%);
+        }
+        .miku-progress-panel .miku-unified-pipeline-container { margin-bottom: 28px; }
+
+        .miku-action-required-container {
+          background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+          border: 1px solid var(--border-subtle); border-radius: 24px;
+          padding: 26px 28px; margin-bottom: 32px; box-shadow: var(--shadow-soft);
+          position: relative; overflow: hidden;
+        }
+        .miku-action-required-container::before {
+          content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+          background: linear-gradient(90deg, #fb923c 0%, #ef4444 50%, #fb923c 100%);
+        }
+        .container-header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+        .header-icon {
+          width: 42px; height: 42px; border-radius: 14px; flex-shrink: 0; color: #fff;
+          display: flex; align-items: center; justify-content: center; font-size: 16px;
+          background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+          box-shadow: 0 8px 18px -6px rgba(234, 88, 12, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+        }
         .header-title { font-size: 18px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.5px; }
 
-        .action-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+        .action-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; align-items: start; }
         .miku-action-card {
-          background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px;
+          background: #ffffff; border: 1px solid var(--border-subtle); border-radius: 14px; padding: 14px 16px 12px;
           cursor: pointer; transition: all 0.3s var(--smooth-easing);
-          display: flex; flex-direction: column; justify-content: space-between; gap: 16px;
+          display: flex; flex-direction: column; justify-content: flex-start; gap: 4px;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
         }
-        .miku-action-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.05); background: #fff; border-color: #cbd5e1; }
-        .miku-action-card.payment { border-left: 4px solid var(--color-purple); }
-        .miku-action-card.alert { border-left: 4px solid var(--color-red); background: #fff1f2; }
+        .miku-action-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-elevated); background: #fff; border-color: rgba(148, 163, 184, 0.45); }
+        .miku-action-card.payment { border-left: 3px solid var(--color-purple); }
+        .miku-action-card.alert { border-left: 3px solid var(--color-red); background: linear-gradient(180deg, #fff5f5 0%, #fff1f2 100%); }
         .miku-action-card.alert:hover { border-color: #fecdd3; }
-        .miku-action-card.action { border-left: 4px solid var(--color-green); }
+        .miku-action-card.action { border-left: 3px solid var(--color-green); }
 
-        .card-badge { display: inline-block; padding: 3px 8px; background: #e2e8f0; border-radius: 6px; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 8px; }
+        .card-badge { display: inline-block; padding: 2px 7px; background: #e2e8f0; border-radius: 6px; font-size: 10px; font-weight: 700; color: #475569; line-height: 1.3; margin-bottom: 3px; }
         .miku-action-card.alert .card-badge { background: #ffe4e6; color: var(--color-red); }
-        .card-title { font-size: 16px; font-weight: 700; margin: 0 0 6px 0; color: #1e293b; display: flex; align-items: center; gap: 8px; }
-        .card-count { font-size: 20px; font-weight: 900; color: var(--color-purple); }
+        .card-title { font-size: 14px; font-weight: 700; line-height: 1.2; margin: 0; color: #1e293b; display: flex; align-items: center; gap: 6px; }
+        .card-count { font-size: 16px; font-weight: 900; line-height: 1.2; color: var(--color-purple); }
         .miku-action-card.alert .card-count { color: var(--color-red); }
         .miku-action-card.action .card-count { color: var(--color-green); }
-        .card-desc { font-size: 13px; color: #64748b; margin: 0; line-height: 1.4; word-break: keep-all; }
-        .card-action-btn { background: none; border: none; padding: 0; color: #1e293b; font-size: 13px; font-weight: 700; cursor: pointer; transition: color 0.2s; text-align: left; }
+        .card-desc {
+          font-size: 12px; color: #64748b; margin: 0; line-height: 1.35; word-break: keep-all;
+          max-height: 0; opacity: 0; overflow: hidden;
+          transition: max-height 0.3s var(--smooth-easing), opacity 0.25s ease, margin-top 0.3s var(--smooth-easing);
+        }
+        .miku-action-card:hover .card-desc { max-height: 48px; opacity: 1; margin-top: 4px; }
+        .card-action-btn {
+          background: none; border: none; padding: 0; color: #1e293b; font-size: 12px; font-weight: 700; line-height: 1.2;
+          cursor: pointer; transition: color 0.2s; text-align: right; white-space: nowrap;
+        }
         .miku-action-card:hover .card-action-btn { color: var(--color-purple); }
         .miku-action-card.alert:hover .card-action-btn { color: var(--color-red); }
 
@@ -869,16 +1193,6 @@ function MyPurchaseStatusContent() {
           scroll-margin-top: 80px; 
         }
 
-        .miku-all-history-btn {
-          background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
-          padding: 16px 24px; font-size: 15px; font-weight: 700; color: #475569;
-          cursor: pointer; transition: all 0.3s var(--smooth-easing);
-          display: flex; align-items: center; gap: 10px; width: fit-content;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.02);
-        }
-        .miku-all-history-btn:hover { border-color: #cbd5e1; background: #f8fafc; color: #0f172a; }
-        .miku-all-history-btn.active { background: #0f172a; border-color: #0f172a; color: #fff; }
-        .miku-all-history-btn.active .btn-count { color: #fff; }
 
         .pipeline-slider-shell {
           position: relative;
@@ -904,11 +1218,34 @@ function MyPurchaseStatusContent() {
           background: linear-gradient(270deg, rgba(248,250,252,0.92), rgba(248,250,252,0));
         }
 
+        /* 🌟 좌/우로 더 스크롤할 수 있을 때만 나타나는 방향 화살표. 카드와 겹치지 않도록
+           패널 바깥쪽 여백(패딩) 안에, 슬라이더 영역 밖으로 배치합니다. */
+        .pipeline-arrow {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 22px; height: 22px;
+          border-radius: 50%;
+          background: #ffffff;
+          border: 1px solid var(--border-subtle);
+          box-shadow: var(--shadow-module);
+          display: flex; align-items: center; justify-content: center;
+          color: #64748b;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.2s ease;
+          z-index: 5;
+        }
+        .pipeline-arrow.visible { opacity: 1; }
+        .pipeline-arrow svg { width: 12px; height: 12px; }
+        .pipeline-arrow-left { left: -14px; }
+        .pipeline-arrow-right { right: -14px; }
+
         .pipeline-modules-wrapper {
           position: relative;
           display: flex; gap: 16px;
-          overflow-x: auto; 
-          padding: 24px 40px 10px 0;
+          overflow-x: auto;
+          padding: 24px 0 10px 0;
           margin: -24px 0 -10px 0;
           scrollbar-width: none; -webkit-overflow-scrolling: touch;
           overscroll-behavior-x: contain;
@@ -924,38 +1261,44 @@ function MyPurchaseStatusContent() {
         }
 
         .miku-phase-module {
-          flex: 1; min-width: 320px; 
-          background: #fff; border: 1px solid rgba(226, 232, 240, 0.8);
-          border-radius: 20px; padding: 20px;
+          flex: 1; min-width: 320px;
+          background: linear-gradient(180deg, #ffffff 0%, #fcfdfe 100%); border: 1px solid var(--border-subtle);
+          border-radius: 22px; padding: 20px;
           position: relative;
           transition: all 0.4s var(--smooth-easing);
           display: flex; flex-direction: column; gap: 16px;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+          box-shadow: var(--shadow-module);
           scroll-snap-align: start;
         }
-        
+
         .pipeline-modules-wrapper.is-dragging .miku-phase-module { pointer-events: none; }
-        .miku-phase-module:hover { box-shadow: 0 10px 25px rgba(0,0,0,0.05); border-color: #cbd5e1; }
-        .miku-phase-module.phase-active { border-color: #94a3b8; border-width: 1.5px; box-shadow: 0 10px 30px -5px rgba(0,0,0,0.08); }
+        .miku-phase-module:hover { box-shadow: var(--shadow-module); border-color: #cbd5e1; transform: translateY(-2px); }
+        .miku-phase-module.phase-active { border-color: #94a3b8; border-width: 1.5px; box-shadow: var(--shadow-module); }
+        /* 🌟 하위 항목이 1개뿐인 모듈(예: 진행중인 목록만 보기)은 넓게 늘어나지 않도록 폭을 줄입니다. */
+        .miku-phase-module.phase-compact { flex: 0 0 auto; min-width: 220px; }
 
         .phase-header { display: flex; justify-content: space-between; align-items: center; }
         .phase-title-group { display: flex; align-items: center; gap: 8px; }
 
-        .phase-icon { font-size: 20px; }
+        .phase-icon {
+          width: 34px; height: 34px; border-radius: 12px; flex-shrink: 0; color: #fff;
+          display: flex; align-items: center; justify-content: center; font-size: 13px;
+        }
         .phase-title { font-size: 16px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.3px; }
         .phase-total-badge { font-size: 12px; color: #64748b; font-weight: 600; padding: 4px 10px; background: #f1f5f9; border-radius: 20px; }
         .phase-total-badge .total-count { font-weight: 800; color: #1e293b; margin-left: 2px; }
         
-        .phase-body { 
-          display: grid; 
-          grid-template-columns: repeat(2, 1fr); 
-          gap: 8px; 
+        .phase-body {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 8px;
         }
+        .phase-body.phase-body-single { grid-template-columns: 1fr; }
 
         .miku-sub-status-chip {
-          background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 12px;
+          background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 13px;
           padding: 8px 10px; font-size: 13px; font-weight: 600; color: #64748b;
-          cursor: pointer; transition: all 0.2s var(--smooth-easing);
+          cursor: pointer; transition: all 0.25s var(--smooth-easing);
           display: flex; align-items: center; justify-content: space-between; gap: 4px;
           box-sizing: border-box;
           width: 100%;
@@ -973,22 +1316,38 @@ function MyPurchaseStatusContent() {
         
         .miku-sub-status-chip:hover { background: #e2e8f0; color: #1e293b; border-color: #cbd5e1; }
         
-        .theme-blue.phase-active { border-color: var(--color-blue); }
+        .theme-slate.phase-active { border-color: #475569; box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.12), var(--shadow-module); }
+        .theme-slate .miku-sub-status-chip.has-count .status-count { color: #334155; }
+        .theme-slate .miku-sub-status-chip.active { background: linear-gradient(135deg, #475569 0%, #1e293b 100%); color: #fff; border-color: transparent; box-shadow: 0 4px 12px rgba(30, 41, 59, 0.35); }
+        .theme-slate .phase-icon { background: linear-gradient(135deg, #475569 0%, #1e293b 100%); box-shadow: 0 6px 14px -5px rgba(30, 41, 59, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3); }
+
+        .theme-blue.phase-active { border-color: var(--color-blue); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), var(--shadow-module); }
         .theme-blue .miku-sub-status-chip.has-count .status-count { color: var(--color-blue); }
-        .theme-blue .miku-sub-status-chip.active { background: var(--color-blue); color: #fff; border-color: var(--color-blue); box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3); }
+        .theme-blue .miku-sub-status-chip.active { background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%); color: #fff; border-color: transparent; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35); }
+        .theme-blue .phase-icon { background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%); box-shadow: 0 6px 14px -5px rgba(37, 99, 235, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3); }
 
-        .theme-purple.phase-active { border-color: var(--color-purple); }
+        .theme-purple.phase-active { border-color: var(--color-purple); box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12), var(--shadow-module); }
         .theme-purple .miku-sub-status-chip.has-count .status-count { color: var(--color-purple); }
-        .theme-purple .miku-sub-status-chip.active { background: var(--color-purple); color: #fff; border-color: var(--color-purple); box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3); }
+        .theme-purple .miku-sub-status-chip.active { background: linear-gradient(135deg, #c084fc 0%, #7c3aed 100%); color: #fff; border-color: transparent; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35); }
+        .theme-purple .phase-icon { background: linear-gradient(135deg, #c084fc 0%, #7c3aed 100%); box-shadow: 0 6px 14px -5px rgba(124, 58, 237, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3); }
 
-        .theme-green.phase-active { border-color: var(--color-green); }
+        .theme-green.phase-active { border-color: var(--color-green); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12), var(--shadow-module); }
         .theme-green .miku-sub-status-chip.has-count .status-count { color: var(--color-green); }
-        .theme-green .miku-sub-status-chip.active { background: var(--color-green); color: #fff; border-color: var(--color-green); box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3); }
+        .theme-green .miku-sub-status-chip.active { background: linear-gradient(135deg, #34d399 0%, #059669 100%); color: #fff; border-color: transparent; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35); }
+        .theme-green .phase-icon { background: linear-gradient(135deg, #34d399 0%, #059669 100%); box-shadow: 0 6px 14px -5px rgba(5, 150, 105, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3); }
 
-        .theme-orange.phase-active { border-color: var(--color-orange); }
+        .theme-orange .phase-icon { background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%); box-shadow: 0 6px 14px -5px rgba(234, 88, 12, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3); }
+
+        .theme-orange.phase-active { border-color: var(--color-orange); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12), var(--shadow-module); }
         .theme-orange .miku-sub-status-chip.has-count .status-count { color: var(--color-orange); }
-        .theme-orange .miku-sub-status-chip.active { background: var(--color-orange); color: #fff; border-color: var(--color-orange); box-shadow: 0 4px 10px rgba(249, 115, 22, 0.3); }
-        
+        .theme-orange .miku-sub-status-chip.active { background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%); color: #fff; border-color: transparent; box-shadow: 0 4px 12px rgba(249, 115, 22, 0.35); }
+
+        .theme-rose .phase-icon { background: linear-gradient(135deg, #fb7185 0%, #be123c 100%); box-shadow: 0 6px 14px -5px rgba(190, 18, 60, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3); }
+
+        .theme-rose.phase-active { border-color: var(--color-rose); box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.12), var(--shadow-module); }
+        .theme-rose .miku-sub-status-chip.has-count .status-count { color: var(--color-rose); }
+        .theme-rose .miku-sub-status-chip.active { background: linear-gradient(135deg, #fb7185 0%, #be123c 100%); color: #fff; border-color: transparent; box-shadow: 0 4px 12px rgba(225, 29, 72, 0.35); }
+
         .miku-sub-status-chip.active .status-count { color: #fff !important; background: rgba(255,255,255,0.25); }
 
         .miku-tooltip {
@@ -1064,18 +1423,17 @@ function MyPurchaseStatusContent() {
         }
 
         /* 2. 개별 포장 버튼 (활성화 상태) - 명확한 인지를 위해 다크 톤으로 변경 */
-        .btn-individual.active { 
-          background: #1e293b; 
-          color: #ffffff; 
-          border: 1px solid #1e293b;
-          cursor: pointer; 
-          box-shadow: 0 4px 12px rgba(30, 41, 59, 0.15);
+        .btn-individual.active {
+          background: linear-gradient(135deg, #334155 0%, #0f172a 100%);
+          color: #ffffff;
+          border: 1px solid #0f172a;
+          cursor: pointer;
+          box-shadow: 0 4px 14px rgba(30, 41, 59, 0.25);
         }
-        .btn-individual.active:hover { 
-          background: #0f172a; 
-          border-color: #0f172a;
-          transform: translateY(-2px); 
-          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.25);
+        .btn-individual.active:hover {
+          filter: brightness(1.08);
+          transform: translateY(-2px);
+          box-shadow: 0 8px 22px rgba(15, 23, 42, 0.32);
         }
 
         /* 3. 합포장 요청 버튼 (활성화 상태) */
@@ -1093,44 +1451,37 @@ function MyPurchaseStatusContent() {
         
         .bundle-helper { margin: 0 0 32px 0; font-size: 13px; color: var(--color-red); font-weight: 600; text-align: right; }
 
-        .address-change-warning {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin: 0 0 32px 0;
-          padding: 16px 20px;
-          background: #fff1f2;
-          border: 1.5px solid #fda4af;
-          border-left: 5px solid #e11d48;
-          border-radius: 10px;
-          box-shadow: 0 2px 8px rgba(225, 29, 72, 0.08);
-          font-size: 16px;
-          font-weight: 600;
-          color: #9f1239;
-          text-align: left;
-          line-height: 1.6;
-        }
-
-        .address-change-warning-icon {
-          width: 34px;
-          height: 34px;
-          flex-shrink: 0;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #ffffff;
-          background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
-          box-shadow: 0 6px 14px -5px rgba(225, 29, 72, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.35);
-        }
-
-        .address-change-warning strong {
-          color: #e11d48;
-          font-weight: 800;
-        }
+        .address-change-warning { margin: 0 0 32px 0; }
 
         @media (max-width: 768px) {
           .miku-status-wrapper { padding: 0 12px 40px; box-sizing: border-box; width: 100%; overflow-x: hidden; }
+          .miku-status-section-header { margin-bottom: 10px; }
+          .miku-status-section-header h2 { font-size: 16px; }
+          .progress-only-toggle .toggle-label { font-size: 12px; }
+
+          .miku-progress-panel { padding: 16px; border-radius: 16px; margin-bottom: 16px; }
+          .miku-progress-panel .miku-unified-pipeline-container { margin-bottom: 20px; }
+          .miku-shipment-panel { padding: 16px; border-radius: 16px; margin-bottom: 16px; }
+          /* 🌟 국제 배송 현황 테이블(모바일): 합포장 뱃지는 자기 줄을 차지하고,
+             상품명 + "외 N건"은 한 줄로 깔끔하게 말줄임(...) 처리합니다. 주소/운송장 번호 칸도 더 좁힙니다. */
+          .miku-shipment-panel .premium-table { table-layout: fixed; }
+          .miku-shipment-panel .td-product { width: auto; }
+          .miku-shipment-panel .prod-name-box {
+            display: flex !important; flex-wrap: wrap !important; align-items: center !important;
+            row-gap: 4px; column-gap: 4px; overflow: hidden !important;
+          }
+          .miku-shipment-panel .bundle-group-badge { flex: 0 0 100%; margin-right: 0; }
+          .miku-shipment-panel .prod-name-text {
+            white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+            flex: 1 1 auto; min-width: 0;
+          }
+          .miku-shipment-panel .th-recipient,
+          .miku-shipment-panel .td-shipment-recipient { width: 74px !important; padding-right: 2px !important; font-size: 11px !important; }
+          .miku-shipment-panel .th-tracking,
+          .miku-shipment-panel .td-shipment-tracking { width: 64px !important; padding-left: 2px !important; }
+          .miku-shipment-panel .recipient-address { font-size: 10px; }
+          .miku-shipment-panel .btn-shipment-inquiry { padding: 5px 6px !important; font-size: 10px !important; }
+
           .miku-action-required-container { padding: 10px; border-radius: 12px; margin-bottom: 16px; width: 100%; box-sizing: border-box; overflow: hidden; }
           .container-header { margin-bottom: 10px; }
           .container-header .header-title { font-size: 14px; word-break: keep-all; line-height: 1.2; }
@@ -1189,12 +1540,15 @@ function MyPurchaseStatusContent() {
 
           .miku-action-card .card-desc,
           .miku-action-card .card-action-btn { 
-            display: none !important; 
+            display: none !important;
           }
-          
-          .miku-all-history-btn { width: 100%; justify-content: center; padding: 12px; font-size: 13px; }
-          .pipeline-modules-wrapper { margin: -16px 0 0 0; padding: 16px 20px 10px 0; }
+          .pipeline-modules-wrapper { margin: -16px 0 0 0; padding: 16px 0 10px 0; }
+          .pipeline-arrow { width: 14px; height: 14px; }
+          .pipeline-arrow svg { width: 8px; height: 8px; }
+          .pipeline-arrow-left { left: -8px; }
+          .pipeline-arrow-right { right: -8px; }
           .miku-phase-module { min-width: 260px; padding: 14px; gap: 10px; }
+          .miku-phase-module.phase-compact { min-width: 180px; }
           .phase-title { font-size: 14px; }
           .phase-total-badge { font-size: 11px; padding: 3px 8px; }
           .miku-sub-status-chip { padding: 6px 10px; font-size: 12px; }

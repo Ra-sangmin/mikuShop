@@ -132,9 +132,9 @@ export default function FAQPage() {
       `}</style>
 
       <div className="guide-page-container">
-        <h2 className="guide-title">자주하는 질문 (FAQ)</h2>
-        <p className="guide-desc">고객님들께서 가장 많이 묻는 질문들을 모았습니다.</p>
+        <h2 className="guide-title">자주하는 질문 (FAQ) <span className="guide-title-icon"><i className="fa fa-circle-question"></i></span></h2>
 
+        <div className="guide-panel">
         <div className="faq-list">
           {faqs.map((faq, index) => (
             <div key={index} className="faq-item">
@@ -148,6 +148,7 @@ export default function FAQPage() {
               </div>
             </div>
           ))}
+        </div>
         </div>
       </div>
     </GuideLayout>

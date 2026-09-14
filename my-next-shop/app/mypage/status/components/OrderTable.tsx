@@ -175,10 +175,10 @@ const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { item: any,
 };
 
 // 🌟 메인 테이블 컴포넌트
-export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete, myMoney = 0, exchangeRate = 0 }: any) {
-  const { 
-    isMobile, showConfirm, showAlert, 
-    getAuctionTimeData, getColSpanCount 
+export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete, onStatusClick, myMoney = 0, exchangeRate = 0 }: any) {
+  const {
+    isMobile, showConfirm, showAlert,
+    getAuctionTimeData, getColSpanCount
   } = useOrderTableLogic({ activeTab, fetchOrders });
 
   const isAuctionTab = activeTab === 'BID_PENDING' || activeTab === 'BIDDING';
@@ -186,6 +186,8 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
   // 🌟 합포장(bundleId) 묶음을 한 행으로 합쳐서 보여주는 탭들 (배송비 요청/배송비 결제 완료/국제 배송)
   const bundleGroupTabs = [ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING];
   const hasCheckbox = [ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab as any);
+  // 🌟 전체내역 탭에서는 행을 클릭하면 해당 상품의 상태 탭으로 이동합니다.
+  const isAllTab = activeTab === 'ALL';
 
   // 상태값에 따른 테마 색상 반환 함수
   const getBadgeTheme = (status: string) => {
@@ -263,36 +265,44 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     else setSelectedItems([...selectedItems.filter((id: string) => !ids.includes(id)), ...ids]);
   };
 
-  // 🌟 배송비 요청/배송비 결제 완료/국제 배송 탭에서는 같은 bundleId(합포장)로 묶인 주문들을 한 행으로 합쳐서 보여줍니다.
+  // 🌟 배송비 요청/배송비 결제 완료/국제 배송 탭 + 전체내역(ALL, 진행중 목록 포함) 탭에서는
+  // 같은 bundleId(합포장)로 묶인 주문들을 한 행으로 합쳐서 보여줍니다.
   const displayItems = React.useMemo(() => {
-    if (!bundleGroupTabs.includes(activeTab)) return items;
+    const shouldGroup = bundleGroupTabs.includes(activeTab) || activeTab === ORDER_STATUS.ALL;
+    if (!shouldGroup) return items;
 
-    const groups: Record<string, any[]> = {};
-    const singles: any[] = [];
+    const groupsByBundleId: Record<string, any[]> = {};
+    items.forEach((item: any) => {
+      if (item.bundleId) (groupsByBundleId[item.bundleId] ||= []).push(item);
+    });
+
+    // 🌟 원래 정렬 순서(우선순위/최신순)를 유지하기 위해, 각 항목을 순서대로 훑으며
+    // 묶음은 처음 등장하는 위치에서 한 번만 합쳐서 내보냅니다.
+    const seenBundles = new Set<string>();
+    const result: any[] = [];
     items.forEach((item: any) => {
       if (item.bundleId) {
-        (groups[item.bundleId] ||= []).push(item);
+        if (seenBundles.has(item.bundleId)) return;
+        seenBundles.add(item.bundleId);
+        const group = groupsByBundleId[item.bundleId];
+        const first = group[0];
+        result.push({
+          ...first,
+          orderId: item.bundleId,
+          orderIds: group.map((g: any) => g.orderId),
+          productName: group.length > 1 ? `${first.productName} 외 ${group.length - 1}건` : first.productName,
+          productPrice: group.reduce((sum: number, g: any) => sum + (g.productPrice || 0), 0),
+          domesticShippingFee: group.reduce((sum: number, g: any) => sum + (g.domesticShippingFee || 0), 0),
+          secondPaymentAmount: group.reduce((sum: number, g: any) => sum + (g.secondPaymentAmount || 0), 0),
+          isGroup: group.length > 1,
+          bundleItems: group,
+        });
       } else {
-        singles.push(item);
+        result.push(item);
       }
     });
 
-    const grouped = Object.entries(groups).map(([bundleId, group]) => {
-      const first = group[0];
-      return {
-        ...first,
-        orderId: bundleId,
-        orderIds: group.map((g: any) => g.orderId),
-        productName: group.length > 1 ? `${first.productName} 외 ${group.length - 1}건` : first.productName,
-        productPrice: group.reduce((sum: number, g: any) => sum + (g.productPrice || 0), 0),
-        domesticShippingFee: group.reduce((sum: number, g: any) => sum + (g.domesticShippingFee || 0), 0),
-        secondPaymentAmount: group.reduce((sum: number, g: any) => sum + (g.secondPaymentAmount || 0), 0),
-        isGroup: group.length > 1,
-        bundleItems: group,
-      };
-    });
-
-    return [...grouped, ...singles];
+    return result;
   }, [items, activeTab]);
 
   return (
@@ -349,8 +359,11 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                   <React.Fragment key={item.orderId}>
                     {/* 🌟 행 전체에 onClick 이벤트 및 커서 클래스 적용 */}
                     <tr
-                      className={`tr-row ${isChecked ? 'selected' : ''} ${hasCheckbox ? 'clickable' : ''}`}
-                      onClick={() => { if (hasCheckbox) toggleCheck(ids); }}
+                      className={`tr-row ${isChecked ? 'selected' : ''} ${hasCheckbox || isAllTab ? 'clickable' : ''}`}
+                      onClick={() => {
+                        if (isAllTab) { onStatusClick?.(item.status); return; }
+                        if (hasCheckbox) toggleCheck(ids);
+                      }}
                     >
                       {/* 체크박스 */}
                       {hasCheckbox && (
@@ -520,9 +533,9 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         /* 🌟 테이블 컨테이너 */
         .table-container {
           background: #ffffff;
-          border-radius: 20px;
-          border: 1px solid rgba(226, 232, 240, 0.8);
-          box-shadow: 0 10px 30px rgba(0,0,0,0.02);
+          border-radius: 22px;
+          border: 1px solid rgba(226, 232, 240, 0.75);
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 16px 36px -16px rgba(15, 23, 42, 0.10);
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
         }
@@ -533,19 +546,20 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           border-spacing: 0;
           min-width: 800px;
         }
-        
+
         .th-cell {
           padding: 18px 12px;
-          background: #f8fafc;
-          font-size: 14px;
+          background: linear-gradient(180deg, #fafbfc 0%, #f4f6f9 100%);
+          font-size: 13px;
           font-weight: 800;
+          letter-spacing: 0.2px;
           color: #475569;
           text-align: center;
           border-bottom: 1px solid #e2e8f0;
           white-space: nowrap;
         }
-        .th-cell:first-child { border-top-left-radius: 20px; }
-        .th-cell:last-child { border-top-right-radius: 20px; }
+        .th-cell:first-child { border-top-left-radius: 22px; }
+        .th-cell:last-child { border-top-right-radius: 22px; }
 
         .td-cell {
           padding: 16px 12px;
@@ -558,7 +572,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         .tr-row { transition: all 0.2s ease; }
         .tr-row.clickable { cursor: pointer; }
         .tr-row:hover { background: #f8fafc; }
-        .tr-row.selected { background: #fff8f6; }
+        .tr-row.selected { background: linear-gradient(90deg, #fff8f6 0%, #fffaf9 100%); box-shadow: inset 3px 0 0 var(--color-orange, #f97316); }
 
         .empty-row { padding: 60px; text-align: center; color: #94a3b8; font-weight: 600; }
 
@@ -604,11 +618,11 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           white-space: nowrap; 
           box-sizing: border-box;
         }
-        .badge-status.theme-blue { background: #dbeafe; color: var(--color-blue); }
-        .badge-status.theme-purple { background: #f3e8ff; color: var(--color-purple); }
-        .badge-status.theme-green { background: #d1fae5; color: var(--color-green); }
-        .badge-status.theme-orange { background: #ffedd5; color: var(--color-orange); }
-        .badge-status.theme-red { background: #fee2e2; color: var(--color-red); }
+        .badge-status.theme-blue { background: #dbeafe; color: var(--color-blue); box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.15); }
+        .badge-status.theme-purple { background: #f3e8ff; color: var(--color-purple); box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.15); }
+        .badge-status.theme-green { background: #d1fae5; color: var(--color-green); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.15); }
+        .badge-status.theme-orange { background: #ffedd5; color: var(--color-orange); box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.15); }
+        .badge-status.theme-red { background: #fee2e2; color: var(--color-red); box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.15); }
         .badge-status.theme-default { background: #f1f5f9; color: #64748b; }
 
         .badge-bid { padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 800; white-space: nowrap; }
@@ -617,7 +631,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         .badge-bid.additional { background: #dbeafe; color: #2563eb; }
         .badge-bid.default { background: #f1f5f9; color: #64748b; }
 
-        .price-val { font-weight: 900; color: #0f172a; font-size: 15px; }
+        .price-val { font-weight: 900; color: #0f172a; font-size: 15px; letter-spacing: -0.3px; }
         .recipient-address { display: block; margin-top: 2px; font-size: 12px; color: #94a3b8; }
 
         .bundle-group-badge {

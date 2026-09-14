@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { ORDER_STATUS } from '@/src/types/order';
+import NoticePanel from '@/app/components/NoticePanel';
 
 interface PaymentSummaryProps {
   activeTab: string;
@@ -143,16 +144,9 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
   return (
     <>
     {activeTabIsCart && (
-      <p className="domestic-fee-notice">
-        <span className="domestic-fee-notice-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-        </span>
-        <span>현지 배송료 발생시 <strong>국제 배송비</strong>에 합산됩니다.</span>
-      </p>
+      <NoticePanel tone="amber" className="domestic-fee-notice">
+        현지 배송료 발생시 <strong>국제 배송비</strong>에 합산됩니다.
+      </NoticePanel>
     )}
     <div className="miku-premium-payment-wrapper anim-slide-up">
       <div className="miku-payment-content-flex">
@@ -236,11 +230,11 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
         /* 🌟 전체 래퍼 (Premium 쉐도우 및 부드러운 테두리) */
         .miku-premium-payment-wrapper {
           margin-top: 40px;
-          background-color: #ffffff;
+          background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
           border-radius: 24px;
           border: 1px solid #f1f5f9;
           padding: 32px 40px;
-          box-shadow: 0 12px 40px rgba(15, 23, 42, 0.06);
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 16px 44px -12px rgba(15, 23, 42, 0.10);
           font-family: 'Pretendard', "Noto Sans KR", sans-serif;
           box-sizing: border-box;
         }
@@ -262,6 +256,7 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           border: 1px solid #f0f0f0;
           padding: 24px;
           box-sizing: border-box;
+          box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.8);
         }
         /* 🌟 구매요청 탭: 일본내 배송료 항목이 빠져 3개 항목만 표시됩니다. */
         .detail-grid.three-cols {
@@ -269,42 +264,11 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
         }
 
         /* 🌟 구매요청 탭 전용 안내 문구 (현지 배송료는 국제 배송비에 합산) */
-        .domestic-fee-notice {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin: 24px 0 8px;
-          padding: 16px 20px;
-          background: #fff7ed;
-          border: 1.5px solid #fdba74;
-          border-left: 5px solid #ea580c;
-          border-radius: 10px;
-          box-shadow: 0 2px 8px rgba(234, 88, 12, 0.08);
-          font-size: 15px;
-          font-weight: 600;
-          color: #9a3412;
-          line-height: 1.6;
-        }
+        .domestic-fee-notice { margin: 24px 0 8px; }
         /* 🌟 카드(.miku-premium-payment-wrapper)의 margin-top:40px와 마진이 겹쳐(collapse)
            문구의 margin-bottom을 줄여도 간격이 그대로였던 문제를 해결합니다. */
         .domestic-fee-notice + .miku-premium-payment-wrapper {
-          margin-top: 8px;
-        }
-        .domestic-fee-notice-icon {
-          width: 32px;
-          height: 32px;
-          flex-shrink: 0;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #ffffff;
-          background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
-          box-shadow: 0 6px 14px -5px rgba(234, 88, 12, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.35);
-        }
-        .domestic-fee-notice strong {
-          color: #ea580c;
-          font-weight: 800;
+          margin-top: 28px;
         }
 
         /* 🌟 배송비 요청 탭: 일본 내 배송비 + 국제 배송비 = 청구된 총 배송비 공식 */
@@ -367,7 +331,14 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           background: linear-gradient(145deg, #18181b 0%, #27272a 100%);
           color: #ffffff;
           border-radius: 20px;
-          box-shadow: 0 8px 24px rgba(24, 24, 27, 0.15);
+          box-shadow: 0 8px 24px rgba(24, 24, 27, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+          position: relative;
+          overflow: hidden;
+        }
+        .premium-dark-box::before {
+          content: '';
+          position: absolute; top: 0; left: 0; right: 0; height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
         }
 
         .total-box {
@@ -493,9 +464,9 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
             box-shadow: 0 4px 24px rgba(0,0,0,0.06);
           }
           .domestic-fee-notice + .miku-premium-payment-wrapper {
-            margin-top: 8px;
+            margin-top: 20px;
           }
-          
+
           .miku-payment-content-flex { 
             flex-direction: column; 
             gap: 12px; 

@@ -39,7 +39,8 @@ model User {
   
   // 💰 3. 비즈니스 로직 (결제/등급)
   cyberMoney          Int      @default(0) @map("cyber_money")
-  level               String   @default("일반회원")
+  membershipGrade     Int      @default(0) @map("membership_grade")           // membership_grades.id 참조 (0 = NEW)
+  grade               MembershipGrade @relation(fields: [membershipGrade], references: [id])
   addressId           String?   @map("address_id") @db.Text
   
   // 🗓️ 4. 가입 및 수정 일자
@@ -179,6 +180,81 @@ model FeeConfiguration {
   updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")  // 수정 시간
 
   @@map("fee_configurations")
+}
+
+model MembershipGrade {
+  id            Int      @id @default(autoincrement())                  // 데이터베이스 내부 관리용 고유 ID (자동 증가)
+  name          String   @unique                                        // 등급 이름 (예: "NEW", "SILVER", "GOLD", "DIAMOND")
+  discountRate  Float    @default(0) @map("discount_rate")               // 국제 배송비 할인율 (0~1 사이 소수, 예: 0.1 = 10%)
+  requiredOrders Int     @default(0) @map("required_orders")             // guide/membership에 표시되는 "주문 N건" 등업 기준 주문 건수
+  sortOrder     Int      @default(0) @map("sort_order")                  // 낮은 등급 → 높은 등급 순으로 정렬하기 위한 순서값
+  description   String?  @db.Text                                       // 관리자 메모
+  createdAt     DateTime @default(now()) @map("created_at")             // 생성 시간
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")  // 수정 시간
+
+  users         User[]                                                 // 이 등급을 가진 회원들 (users.membership_grade FK 역참조)
+
+  @@map("membership_grades")
+}
+
+// 🌟 guide/shipping-fee의 "항공" 배송비 계산식(calculateAirShippingFee)에 쓰이는
+// 등급별 변수입니다. steps=1(0.5kg 이하)이면 firstStepFee 고정, steps=2 이상이면
+// baseFeeAtStepTwo + (steps-2) * stepIncrement 로 계산합니다. DIAMOND는 자체 공식이
+// 없고 GOLD 요금에서 discountVsGold*를 빼는 방식이라 baseFeeAtStepTwo/stepIncrement가
+// null입니다 (steps<=9: Low, steps=10: Mid, steps>10: High 할인액 적용).
+model AirShippingFeeRule {
+  id                 Int      @id @default(autoincrement())
+  grade              String   @unique                                          // NEW / SILVER / GOLD / DIAMOND
+  firstStepFee       Int?     @map("first_step_fee")                           // steps=1(0.5kg 이하)일 때 고정 요금
+  baseFeeAtStepTwo   Int?     @map("base_fee_at_step_two")                     // steps=2(1.0kg)일 때 기준 요금 (DIAMOND는 null)
+  stepIncrement      Int?     @map("step_increment")                          // steps 3 이상부터 0.5kg(1스텝)마다 추가되는 요금 (DIAMOND는 null)
+  discountVsGoldLow  Int?     @map("discount_vs_gold_low")                    // DIAMOND 전용: steps<=9일 때 GOLD 요금에서 빼는 금액
+  discountVsGoldMid  Int?     @map("discount_vs_gold_mid")                    // DIAMOND 전용: steps===10일 때 GOLD 요금에서 빼는 금액
+  discountVsGoldHigh Int?     @map("discount_vs_gold_high")                   // DIAMOND 전용: steps>10일 때 GOLD 요금에서 빼는 금액
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("air_shipping_fee_rules")
+}
+
+// 🌟 guide/shipping-fee의 "EMS" 배송비(calculateEMSShippingFee)는 등급과 무관하며,
+// 0.5~7.0kg 구간은 값이 불규칙해 공식화할 수 없어 구간별 실제 요금을 그대로 저장합니다.
+// 7kg 초과분은 ShippingFeeExtraRate(method="EMS")를 따릅니다.
+model EmsShippingFeeBreakpoint {
+  id        Int      @id @default(autoincrement())
+  weightKg  Float    @unique @map("weight_kg")                                 // 0.5 ~ 7.0kg (0.5kg 단위)
+  fee       Int                                                                // 해당 무게 구간 요금
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("ems_shipping_fee_breakpoints")
+}
+
+// 🌟 EMS(7kg 초과)/우체국해운(calculateOceanShippingFee, 1kg 초과) 공통으로 쓰이는
+// "기준 무게까지는 고정 요금, 초과분은 1kg당 정액 추가" 규칙입니다.
+model ShippingFeeExtraRate {
+  id                  Int      @id @default(autoincrement())
+  method              String   @unique                                         // "EMS" | "OCEAN"
+  thresholdWeightKg   Float    @map("threshold_weight_kg")                    // 이 무게까지는 baseFeeAtThreshold 고정 (EMS=7.0, OCEAN=1.0)
+  baseFeeAtThreshold  Int      @map("base_fee_at_threshold")                  // 기준 무게 이하일 때 요금 (EMS=8200, OCEAN=2100)
+  extraPerKg          Int      @map("extra_per_kg")                          // 기준 무게 초과 시 1kg마다 추가되는 요금 (EMS=800, OCEAN=400)
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("shipping_fee_extra_rates")
+}
+
+// 🌟 src/utils/feeCalculator.ts의 calculateTieredPaymentFee/calculateTieredAgencyFee가
+// 참조하는 구간 변수입니다. PAYMENT: thresholdValue(엔) 미만이면 belowThresholdFee,
+// 이상이면 atOrAboveThresholdAmount(고정 금액). AGENCY: thresholdValue(개) 미만이면
+// belowThresholdFee(고정 금액), 이상이면 수량 × atOrAboveThresholdAmount(수량당 단가).
+// 어느 쪽으로 해석할지는 feeType에 따라 코드(feeCalculator.ts)에서 결정합니다.
+model OrderFeeRule {
+  id                        Int      @id @default(autoincrement())
+  feeType                   String   @unique @map("fee_type")                       // "PAYMENT" | "AGENCY"
+  thresholdValue            Float    @map("threshold_value")                        // PAYMENT: 상품금액 기준(엔), AGENCY: 수량 기준(개)
+  belowThresholdFee         Int      @map("below_threshold_fee")                    // 기준 미만일 때 금액(엔)
+  atOrAboveThresholdAmount  Int      @map("at_or_above_threshold_amount")           // 기준 이상일 때 금액(엔) — PAYMENT는 고정값, AGENCY는 수량당 단가
+  updatedAt                 DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("order_fee_rules")
 }
 
 model MercariCategory {

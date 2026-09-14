@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'; // 🌟 Hook 추가
 import GuideLayout from '@/app/components/GuideLayout';
 import PurchaseFormContainer from '@/app/components/PurchaseFormContainer';
+import '@/app/guide/guide-common.css';
 import { useRouter } from 'next/navigation'; // 🌟 라우터 추가
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; // 🌟 미쿠짱 전용 Alert 추가
 
@@ -42,7 +43,12 @@ export default function QuotePage() {
 
   return (
     <GuideLayout title="견적문의" type={PAGE_TYPE} hideSidebar={true}>
-      <PurchaseFormContainer type={PAGE_TYPE} hideDomesticShippingFee/>
+      <div style={{ maxWidth: '940px', margin: '0 auto', padding: '0 20px' }}>
+        <h2 className="guide-title">견적문의 <span className="guide-title-icon"><i className="fa fa-file-invoice"></i></span></h2>
+        <div className="guide-panel">
+          <PurchaseFormContainer type={PAGE_TYPE} hideDomesticShippingFee/>
+        </div>
+      </div>
     </GuideLayout>
   );
 }

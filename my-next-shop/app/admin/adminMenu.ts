@@ -14,6 +14,7 @@ export const ADMIN_MENU: AdminMenuItem[] = [
   { name: '정산 관리', path: '/admin/settlement' },
   { name: '환불 정보', path: '/admin/refund' },
   { name: '고객 센터', path: '/admin/cs' },
+  { name: '회원 등급 및 수수료 관리', path: '/admin/membership-grades' },
   { name: '견적 계산기', path: '/admin/estimate' },
   { name: '개발자 전용', path: '/admin/developer' },
 ];

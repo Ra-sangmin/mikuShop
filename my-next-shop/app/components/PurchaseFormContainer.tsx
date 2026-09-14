@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 // 🌟 MikuAlertContext 임포트 경로 확인
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
 import { ORDER_TYPE, OrderType, ORDER_STATUS } from '@/src/types/order';
-import { calculateTieredPaymentFee, calculateTieredAgencyFee } from '@/src/utils/feeCalculator';
+import { calculateTieredPaymentFee, calculateTieredAgencyFee, DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule } from '@/src/utils/feeCalculator';
 import { Camera, PackageCheck, ImagePlus } from 'lucide-react';
 import './purchase-form-container.css';
 
@@ -73,6 +73,23 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
       .catch(() => {});
   }, []);
 
+  // 🌟 결제/대행 수수료 구간 변수를 DB(order_fee_rules)에서 받아옵니다. 응답 전에는
+  // feeCalculator.ts의 기본값(DB 시드값과 동일)을 그대로 써서 화면이 비어 보이지 않습니다.
+  const [paymentFeeRule, setPaymentFeeRule] = useState<OrderFeeRule>(DEFAULT_PAYMENT_FEE_RULE);
+  const [agencyFeeRule, setAgencyFeeRule] = useState<OrderFeeRule>(DEFAULT_AGENCY_FEE_RULE);
+  useEffect(() => {
+    fetch('/api/order-fee-rules')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success || !Array.isArray(data.rules)) return;
+        const payment = data.rules.find((r: any) => r.feeType === 'PAYMENT');
+        if (payment) setPaymentFeeRule(payment);
+        const agency = data.rules.find((r: any) => r.feeType === 'AGENCY');
+        if (agency) setAgencyFeeRule(agency);
+      })
+      .catch(() => {});
+  }, []);
+
   // 🌟 실시간 금액 계산 로직 (useMemo로 최적화)
   // 🌟 [버그 수정] 예전엔 DB 설정값(feeSettings.TRANSFER/AGENCY)에 "상품 개수"를 곱하는
   // 전혀 다른 공식을 썼는데, 정작 장바구니에 담긴 뒤(mypage/status)에는 상품 1건의
@@ -100,10 +117,10 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
     // 가격 총액/수량 구간을 기준으로 계산한 뒤 합산합니다 (개수 곱하기가 아닙니다).
     const transferSum = products.reduce((sum, p) => {
       const priceTotal = (parseFloat(p.price) || 0) * (parseInt(p.quantity) || 0);
-      return sum + calculateTieredPaymentFee(priceTotal);
+      return sum + calculateTieredPaymentFee(priceTotal, paymentFeeRule);
     }, 0);
     const agencySum = products.reduce((sum, p) =>
-      sum + calculateTieredAgencyFee(parseInt(p.quantity) || 0), 0);
+      sum + calculateTieredAgencyFee(parseInt(p.quantity) || 0, agencyFeeRule), 0);
 
     const feesSum = shippingSum + transferSum + agencySum;
     const jpySum = productPriceSum + feesSum;
@@ -117,7 +134,7 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
       totalJPY: jpySum,
       totalKRW: Math.floor(jpySum * exchangeRate)
     };
-  }, [products, exchangeRate]);
+  }, [products, exchangeRate, paymentFeeRule, agencyFeeRule]);
 
   const updateProduct = (index: number, field: keyof ProductForm, value: any) => {
     setProducts(prev => {

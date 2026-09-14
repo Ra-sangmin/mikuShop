@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import '../admin-common.css';
+import { calculateTieredPaymentFee, calculateTieredAgencyFee, DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule } from '@/src/utils/feeCalculator';
 
 export default function PremiumEstimatePage() {
   const [exchangeRate, setExchangeRate] = useState(0);
@@ -51,15 +52,30 @@ export default function PremiumEstimatePage() {
     });
   }, []);
 
+  // 🌟 결제 수수료/대행 수수료 공식은 src/utils/feeCalculator.ts를 공통으로 참조합니다
+  // (purchase/quote, mypage/status와 동일한 계산식). 구간 변수는 DB(order_fee_rules)에서 받아옵니다.
+  const [paymentFeeRule, setPaymentFeeRule] = useState<OrderFeeRule>(DEFAULT_PAYMENT_FEE_RULE);
+  const [agencyFeeRule, setAgencyFeeRule] = useState<OrderFeeRule>(DEFAULT_AGENCY_FEE_RULE);
   useEffect(() => {
-    if (salePrice === 0) setPaymentFee(0);
-    else setPaymentFee(salePrice < 30000 ? 220 : 330);
-  }, [salePrice]);
+    fetch('/api/order-fee-rules')
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success || !Array.isArray(data.rules)) return;
+        const payment = data.rules.find((r: any) => r.feeType === 'PAYMENT');
+        if (payment) setPaymentFeeRule(payment);
+        const agency = data.rules.find((r: any) => r.feeType === 'AGENCY');
+        if (agency) setAgencyFeeRule(agency);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
-    if (quantity === 0) setAgencyFee(0);
-    else setAgencyFee(quantity < 4 ? 300 : quantity * 100);
-  }, [quantity]);
+    setPaymentFee(calculateTieredPaymentFee(salePrice, paymentFeeRule));
+  }, [salePrice, paymentFeeRule]);
+
+  useEffect(() => {
+    setAgencyFee(calculateTieredAgencyFee(quantity, agencyFeeRule));
+  }, [quantity, agencyFeeRule]);
 
   useEffect(() => {
     const fetchCalculate = async () => {

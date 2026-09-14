@@ -11,7 +11,8 @@ export async function GET() {
       include: {
         _count: {
           select: { orders: true }
-        }
+        },
+        grade: true
       }
     });
 
@@ -24,7 +25,7 @@ export async function GET() {
 
 export async function PATCH(req: Request) {
   try {
-    const { userId, level, cyberMoney } = await req.json();
+    const { userId, membershipGrade, cyberMoney } = await req.json();
 
     if (!userId) {
       return NextResponse.json({ error: '사용자 ID가 필요합니다.' }, { status: 400 });
@@ -33,9 +34,10 @@ export async function PATCH(req: Request) {
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
-        level,
+        membershipGrade: parseInt(membershipGrade) || 0,
         cyberMoney: parseInt(cyberMoney) || 0,
-      }
+      },
+      include: { grade: true }
     });
 
     return NextResponse.json({ success: true, user: updatedUser });

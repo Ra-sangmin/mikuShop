@@ -8,10 +8,10 @@ export default function GuidePrivacyPage() {
     <GuideLayout title="개인정보처리방침" type="guide">
       <div className="guide-page-container">
         {/* 🌟 새로 추가된 큰 제목과 설명 영역 */}
-        <h2 className="guide-title">개인정보처리방침</h2>
-        <p className="guide-desc guide-desc--tight">미쿠짱은 회원의 개인정보를 소중히 보호하며 관련 법규를 준수합니다.</p>
-
-        <p className="last-updated">시행일자: 2026년 6월 1일</p>
+        <div className="guide-title-row">
+          <h2 className="guide-title">개인정보처리방침 <span className="guide-title-icon"><i className="fa fa-shield-halved"></i></span></h2>
+          <p className="last-updated">시행일자: 2026년 6월 1일</p>
+        </div>
 
         <div className="guide-doc-card">
           

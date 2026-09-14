@@ -680,9 +680,50 @@ body {
 .social-wrap.is-end ~ .scroll-arrow-btn.right { opacity: 0; visibility: hidden; pointer-events: none; }
 
 /* -------------------------------------
- * 7. 하단 3단 정보 섹션 
+ * 7. 하단 3단 정보 섹션
  * ------------------------------------- */
 .bottom-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; align-items: stretch; margin-top: 80px; margin-bottom: 80px; width: 100%; }
+
+/* 🌟 CUSTOMER CENTER 카드(1:1문의 - 카카오톡) 프리미엄화 */
+.cs-icon-badge, .info-icon-badge {
+  width: 34px; height: 34px; border-radius: 11px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; color: #fff;
+  background: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
+  box-shadow: 0 6px 14px -5px rgba(79, 70, 229, 0.5);
+}
+.info-icon-badge.badge-notice {
+  background: linear-gradient(135deg, #fbbf24 0%, #ea580c 100%);
+  box-shadow: 0 6px 14px -5px rgba(234, 88, 12, 0.5);
+}
+.info-icon-badge.badge-bank {
+  background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+  box-shadow: 0 6px 14px -5px rgba(5, 150, 105, 0.5);
+}
+.bank-copy-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 700; color: #059669;
+  background-color: #ecfdf5; border: 1px solid #a7f3d0;
+  border-radius: 8px; padding: 5px 10px; cursor: pointer;
+  transition: all 0.2s ease;
+}
+.bank-copy-btn:hover { background-color: #d1fae5; border-color: #6ee7b7; }
+.notice-dot {
+  width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+  background-color: #cbd5e1; transition: background-color 0.2s ease;
+}
+.notice-row:hover .notice-dot { background-color: #f97316; }
+.cs-kakao-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: linear-gradient(135deg, #ffe94d 0%, #fee500 100%);
+  box-shadow: 0 8px 18px -6px rgba(234, 179, 8, 0.5);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease, filter 0.25s ease;
+}
+.cs-kakao-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -6px rgba(234, 179, 8, 0.6);
+  filter: brightness(1.03);
+}
+.cs-kakao-btn img { width: 26px; height: auto; display: block; }
 .bottom-info-section { padding: 48px 0 28px !important; }
 .bottom-info-grid { margin-top: 0; margin-bottom: 0; }
 

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Script from 'next/script';
 import GuideLayout from '../components/GuideLayout';
+import '../guide/guide-common.css';
 
 // 🌟 카카오 채널 공개 ID (기존 채팅 URL: https://pf.kakao.com/_fxgLsX/chat 의 _fxgLsX)
 const KAKAO_CHANNEL_PUBLIC_ID = '_fxgLsX';
@@ -63,6 +64,9 @@ export default function ContactPage() {
         onLoad={initKakao}
       />
 
+      <div style={{ maxWidth: '940px', margin: '0 auto', padding: '0 20px' }}>
+        <h2 className="guide-title">카카오톡 문의 <span className="guide-title-icon"><i className="fa fa-comment-dots"></i></span></h2>
+        <div className="guide-panel">
       <div className="contact-page-wrap">
       <div className="contact-container">
 
@@ -129,6 +133,8 @@ export default function ContactPage() {
         </div>
       </div>
       </div>
+        </div>
+      </div>
 
       {/* CSS 스타일 분리 */}
       <style jsx>{contactStyles}</style>
@@ -142,19 +148,13 @@ export default function ContactPage() {
 const contactStyles = `
   .contact-page-wrap {
     max-width: 640px;
-    margin: 32px auto 0;
+    margin: 0 auto;
   }
 
   .contact-container {
     position: relative;
-    padding: 64px 40px 48px;
+    padding: 12px 40px 16px;
     text-align: center;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    border-radius: 28px;
-    box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.06), inset 0 0 0 1px rgba(255,255,255,0.6);
     overflow: hidden;
     isolation: isolate;
   }
@@ -346,8 +346,7 @@ const contactStyles = `
   }
 
   @media (max-width: 768px) {
-    .contact-page-wrap { margin-top: 12px; }
-    .contact-container { padding: 44px 22px 32px; border-radius: 24px; }
+    .contact-container { padding: 8px 4px 12px; }
     .contact-title { font-size: 22px; margin-bottom: 10px; }
     .contact-desc { font-size: 15px; margin-bottom: 28px; }
     .kakao-btn { width: 100%; font-size: 16px; padding: 17px 20px; }

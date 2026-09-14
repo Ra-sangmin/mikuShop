@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'; // 🌟 Hook 추가
 import GuideLayout from '../../components/GuideLayout';
 import PurchaseFormContainer from '../../components/PurchaseFormContainer';
+import '../../guide/guide-common.css';
 import { useRouter } from 'next/navigation'; // 🌟 라우터 추가
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; // 🌟 미쿠짱 전용 Alert 추가
 
@@ -41,8 +42,13 @@ export default function DeliveryRequestPage() {
   }
 
   return (
-    <GuideLayout title="배송신청" type={PAGE_TYPE} hideSidebar={true}>
-      <PurchaseFormContainer type={PAGE_TYPE}/>
+    <GuideLayout title="배송대행 신청" type={PAGE_TYPE} hideSidebar={true}>
+      <div style={{ maxWidth: '940px', margin: '0 auto', padding: '0 20px' }}>
+        <h2 className="guide-title">배송대행 신청 <span className="guide-title-icon"><i className="fa fa-truck-fast"></i></span></h2>
+        <div className="guide-panel">
+          <PurchaseFormContainer type={PAGE_TYPE}/>
+        </div>
+      </div>
     </GuideLayout>
   );
 }

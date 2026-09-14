@@ -13,15 +13,8 @@ const s = {
   // 🌟 padding-top을 0으로: GuideLayout이 헤더와 콘텐츠 패널 사이 간격을 이미 없앴는데,
   // 이 컨테이너 자체의 위쪽 padding(48px)이 그 위에 또 여백을 만들고 있었음
   container: { maxWidth: '672px', margin: '0 auto', padding: '0 16px 48px 16px', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif' },
-  card: { backgroundColor: '#fff', borderRadius: '24px', padding: '40px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', border: '1px solid #e2e8f0' },
-  title: { fontSize: '24px', fontWeight: '800', color: '#0f172a', marginBottom: '32px', textAlign: 'center' as const },
   formWrapper: { display: 'flex', flexDirection: 'column' as const, gap: '24px' },
-  
-  // 환불 가능 머니 영역
-  balanceBox: { backgroundColor: '#f8fafc', borderRadius: '16px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #f1f5f9' },
-  balanceLabel: { color: '#475569', fontWeight: '600', fontSize: '15px' },
-  balanceVal: { fontSize: '20px', fontWeight: '900', color: '#f97316' },
-  
+
   // 라벨 및 입력창 공통
   label: { display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginLeft: '4px', marginBottom: '8px' },
   
@@ -52,14 +45,61 @@ const globalStyles = `
   .action-btn { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
   .action-btn:hover:not(:disabled) { background-color: #1e293b !important; transform: translateY(-2px); box-shadow: 0 10px 20px rgba(15, 23, 42, 0.15) !important; }
 
+  /* 🌟 mypage/money/charge 페이지와 동일한 타이틀 + BG 패널 스타일 (통일감) */
+  .money-page-title {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 20px; font-weight: 900; color: #0f172a;
+    letter-spacing: -0.4px; margin-bottom: 16px;
+  }
+  .money-title-icon {
+    width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
+    background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+    box-shadow: 0 6px 14px -5px rgba(234, 88, 12, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  }
+  .money-panel {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+    border: 1px solid rgba(226, 232, 240, 0.7);
+    border-radius: 32px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 14px 34px -14px rgba(15, 23, 42, 0.10);
+    padding: 40px;
+    box-sizing: border-box;
+  }
+  .money-panel::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, #fb923c 0%, #ea580c 50%, #fb923c 100%);
+  }
+
+  /* 🌟 타이틀 오른쪽에 현재 보유 머니를 함께 보여주는 영역 */
+  .money-title-row {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px;
+  }
+  .money-title-row .money-page-title { margin-bottom: 0; }
+  .money-title-balance {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin: 0; padding: 9px 18px;
+    background: linear-gradient(135deg, #fff7ed 0%, #ffece0 100%);
+    border: 1px solid #fed7aa;
+    border-radius: 999px;
+    font-size: 13px; font-weight: 700; color: #9a3412;
+    white-space: nowrap;
+  }
+  .money-title-balance strong {
+    font-size: 19px; font-weight: 900; color: #ea580c;
+  }
+
   @media (max-width: 768px) {
     /* 🌟 currentMenu(고정 바)와 카드 사이 여백 제거 */
     .refund-container { padding: 0 10px !important; }
-    .refund-card { padding: 24px 20px !important; border-radius: 20px !important; }
-    .refund-card h2 { font-size: 20px !important; margin-bottom: 24px !important; }
-    .balance-box { padding: 16px !important; }
-    .balance-label { font-size: 14px !important; }
-    .balance-val { font-size: 18px !important; }
+    .money-page-title { font-size: 16px; gap: 8px; }
+    .money-title-icon { width: 24px; height: 24px; border-radius: 8px; font-size: 11px; }
+    .money-title-balance { padding: 7px 14px; font-size: 11px; gap: 6px; }
+    .money-title-balance strong { font-size: 15px; }
+    .money-panel { padding: 16px; border-radius: 16px; }
     .refund-input { font-size: 16px !important; padding: 12px !important; }
     .amount-input { font-size: 20px !important; }
     .info-box { padding: 12px !important; }
@@ -183,20 +223,15 @@ export default function MoneyRefundPage() {
       <style jsx global>{globalStyles}</style>
 
       <div className="refund-container" style={s.container}>
-        <div className="refund-card" style={s.card}>
-          <h2 className="anim-item" style={s.title}>미쿠짱머니 환불 신청</h2>
-          
-          <div style={s.formWrapper}>
-            
-            {/* 1. 환불 가능 머니 */}
-            <div className="anim-item delay-1 balance-box" style={s.balanceBox}>
-              <span className="balance-label" style={s.balanceLabel}>환불 가능 머니</span>
-              <span className="balance-val" style={s.balanceVal}>
-                {balance.toLocaleString()}원
-              </span>
-            </div>
+        <div className="money-title-row">
+          <h2 className="money-page-title">환불 신청 <span className="money-title-icon"><i className="fa fa-money-bill-transfer"></i></span></h2>
+          <p className="money-title-balance">현재 보유 머니<strong>{balance.toLocaleString()}원</strong></p>
+        </div>
 
-            {/* 2. 환불 금액 입력 */}
+        <div className="refund-card anim-item money-panel">
+          <div style={s.formWrapper}>
+
+            {/* 1. 환불 금액 입력 */}
             <div className="anim-item delay-2">
               <label style={s.label}>환불 신청 금액</label>
               <div style={s.amountInputWrapper}>
@@ -218,7 +253,7 @@ export default function MoneyRefundPage() {
               </button>
             </div>
 
-            {/* 3. 계좌 정보 입력 */}
+            {/* 2. 계좌 정보 입력 */}
             <div className="anim-item delay-3" style={s.accountSection}>
               <p style={s.accountTitle}>환불 계좌 정보</p>
               
@@ -250,7 +285,7 @@ export default function MoneyRefundPage() {
               </div>
             </div>
 
-            {/* 4. 안내 사항 및 전송 버튼 */}
+            {/* 3. 안내 사항 및 전송 버튼 */}
             <div className="anim-item delay-4" style={s.bottomSection}>
               <div className="info-box" style={s.infoBox}>
                 <p style={s.infoText}>

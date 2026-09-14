@@ -2,11 +2,13 @@
 import React, { useState } from 'react';
 import GuideLayout from '../../components/GuideLayout';
 import '../guide-common.css';
+import { Lightbulb, ChartBar, TShirt, Basketball, Laptop, Baby } from '@phosphor-icons/react';
+import GuideFooterNotice from '../components/GuideFooterNotice';
 
 const taxCategories = [
   {
-    name: '의류/잡화', 
-    icon: '👕',
+    name: '의류/잡화',
+    icon: <TShirt weight="fill" />,
     items: [
       { name: '가방 및 지갑', tariff: '8%', vat: '10%' },
       { name: '일반시계', tariff: '8%', vat: '10%' },
@@ -21,7 +23,7 @@ const taxCategories = [
   },
   {
     name: '레져/스포츠',
-    icon: '⛳',
+    icon: <Basketball weight="fill" />,
     items: [
       { name: '골프용품/채', tariff: '8%', vat: '10%' },
       { name: '공 / 라켓', tariff: '8%', vat: '10%' },
@@ -34,7 +36,7 @@ const taxCategories = [
   },
   {
     name: '전자/컴퓨터',
-    icon: '💻',
+    icon: <Laptop weight="fill" />,
     items: [
       { name: '디지털 카메라', tariff: '0%', vat: '10%' },
       { name: '휴대폰', tariff: '0%', vat: '10%' },
@@ -46,7 +48,7 @@ const taxCategories = [
   },
   {
     name: '유아/가정',
-    icon: '🍼',
+    icon: <Baby weight="fill" />,
     items: [
       { name: '기타/조립완구', tariff: '0~8%', vat: '10%' },
       { name: '분유/이유식', tariff: '36%~', vat: '10%' },
@@ -69,31 +71,81 @@ export default function CustomsTaxGuidePage() {
              ../guide-common.css로 옮겼습니다. */
 
           .customs-container {
-            max-width: 1000px;
+            /* 🌟 guide/membership, fee-guide, shipping-fee, customs 4개 페이지가 서로 다른
+               max-width/padding을 써서 전체 가로 폭과 타이틀 위치가 제각각이었습니다.
+               1100px + 좌우 24px로 4개 페이지 모두 통일합니다. */
+            max-width: 1100px;
             width: 100%;
             margin: 0 auto;
-            padding: 20px;
+            padding: 0 24px 56px;
             font-family: "Noto Sans KR", sans-serif;
             color: #334155;
             box-sizing: border-box;
           }
 
           .base-card {
+            position: relative;
             background-color: #fff;
             border-radius: 24px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e2e8f0;
+            box-shadow: 0 16px 36px -18px rgba(15, 23, 42, 0.16);
+            border: 1px solid #eef0f5;
             overflow: hidden;
             width: 100%;
             box-sizing: border-box;
           }
-
-          .tab-menu-wrap { display: flex; gap: 10px; margin-bottom: 30px; width: 100%; }
-          .tab-btn {
-            flex: 1; padding: 18px 10px; border-radius: 14px; fontWeight: 800; fontSize: 18px;
-            cursor: pointer; border: none; transition: all 0.2s;
-            display: flex; align-items: center; justifyContent: center; gap: 8px;
+          .standard-card { position: relative; overflow: hidden; }
+          .standard-card-icon {
+            width: 42px; height: 42px; border-radius: 13px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center; color: #fff;
+            margin-bottom: 16px;
           }
+          .standard-card-icon.dark { background: linear-gradient(135deg, #fde047 0%, #eab308 100%); box-shadow: 0 8px 16px -6px rgba(234, 179, 8, 0.5); }
+          .standard-card-icon.accent { background: linear-gradient(135deg, #ff7a59 0%, #ea580c 100%); box-shadow: 0 8px 16px -6px rgba(234, 88, 12, 0.5); }
+          .standard-card.dark-tone::before {
+            content: '';
+            position: absolute; right: -60px; top: -90px; width: 200px; height: 200px;
+            background: radial-gradient(circle, rgba(251,191,36,0.12) 0%, rgba(251,191,36,0) 70%);
+            border-radius: 50%;
+          }
+          .standard-card.accent-tone { border: 1.5px solid #fed7aa; }
+          .standard-card.accent-tone::before {
+            content: '';
+            position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
+            background: linear-gradient(180deg, #ff7a59 0%, #ea580c 100%);
+          }
+
+          .tab-menu-wrap {
+            display: flex; gap: 6px; margin-bottom: 24px; width: 100%;
+            padding: 6px; background: #eef1f6; border-radius: 16px; box-sizing: border-box;
+          }
+          .tab-btn {
+            flex: 1; padding: 15px 10px; border-radius: 12px; font-weight: 800; font-size: 16px;
+            cursor: pointer; border: none; background: transparent; color: #64748b;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+          }
+          .tab-btn:hover:not(.active) { color: #ff4b2b; }
+          .tab-btn.active {
+            background: linear-gradient(135deg, #ff7a59 0%, #ff4b2b 100%);
+            color: #fff;
+            box-shadow: 0 10px 22px -8px rgba(255, 75, 43, 0.55);
+          }
+          .tab-icon { display: flex; align-items: center; font-size: 19px; line-height: 1; }
+
+          .customs-table th {
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            border-bottom: 2px solid #e2e8f0;
+            font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; font-size: 12.5px;
+          }
+          .customs-table tbody tr { transition: background-color 0.15s ease; }
+          .customs-table tbody tr:hover { background-color: #fbfbfe; }
+          .tariff-chip {
+            display: inline-block; padding: 3px 10px; border-radius: 999px;
+            background: linear-gradient(135deg, #fff1ee 0%, #ffe4dc 100%);
+            color: #ff4b2b; font-weight: 800;
+          }
+
+          /* 🌟 하단 안내 카드는 app/guide/components/GuideFooterNotice.tsx로 공용화했습니다. */
 
           /* 📱 모바일 레이아웃 버그 수정 */
           @media (max-width: 768px) {
@@ -121,10 +173,7 @@ export default function CustomsTaxGuidePage() {
               white-space: nowrap !important; 
               flex: none !important;
             }
-            .tab-btn span { font-size: 16px !important; }
-
-            .header-title { font-size: 22px !important; margin-top: 10px !important; }
-            .header-desc { font-size: 13px !important; }
+            .tab-icon { font-size: 17px !important; }
 
             .grid-2col { grid-template-columns: 1fr !important; gap: 12px !important; width: 100% !important; }
             .standard-card { padding: 20px !important; width: 100% !important; box-sizing: border-box !important; }
@@ -140,20 +189,21 @@ export default function CustomsTaxGuidePage() {
           }
         `}</style>
 
-        {/* Header Section */}
-        <div className="animate-1" style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <span style={{ fontSize: '12px', fontWeight: '800', color: '#ff4b2b', letterSpacing: '1px', backgroundColor: '#fff1f0', padding: '4px 12px', borderRadius: '20px' }}>TAX GUIDE</span>
-          <h2 className="header-title" style={{ fontSize: '36px', fontWeight: '900', color: '#0f172a', marginTop: '20px' }}>통관 및 관부가세</h2>
-        </div>
+        {/* 🌟 새로 추가된 큰 제목 영역 (membership/shipping-fee 페이지와 동일한 위치/스타일) */}
+        <h2 className="guide-title">예상 관부과세 안내 <span className="guide-title-icon"><i className="fa fa-landmark"></i></span></h2>
+
+        <div className="guide-panel">
 
         {/* 1. 과세기준 핵심 카드 */}
         <div className="animate-2 grid-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '40px' }}>
-          <div className="base-card standard-card" style={{ padding: '30px', backgroundColor: '#0f172a', color: '#fff' }}>
-            <h4 style={{ fontSize: '20px', fontWeight: '800', marginBottom: '15px', color: '#ffcc00' }}>💡 과세 표준 가격</h4>
+          <div className="base-card standard-card dark-tone" style={{ padding: '30px', background: 'linear-gradient(145deg, #111827 0%, #0f172a 100%)', color: '#fff' }}>
+            <div className="standard-card-icon dark"><Lightbulb size={20} weight="fill" /></div>
+            <h4 style={{ fontSize: '20px', fontWeight: '800', marginBottom: '15px', color: '#ffcc00' }}>과세 표준 가격</h4>
             <p style={{ fontSize: '16px', color: '#cbd5e1', margin: 0 }}>[물품값 + 현지운임 + 세금]</p>
           </div>
-          <div className="base-card standard-card" style={{ padding: '30px', border: '2px solid #ff4b2b' }}>
-            <h4 style={{ fontSize: '20px', fontWeight: '800', marginBottom: '15px', color: '#0f172a' }}>📊 면세 기준</h4>
+          <div className="base-card standard-card accent-tone" style={{ padding: '30px' }}>
+            <div className="standard-card-icon accent"><ChartBar size={20} weight="fill" /></div>
+            <h4 style={{ fontSize: '20px', fontWeight: '800', marginBottom: '15px', color: '#0f172a' }}>면세 기준</h4>
             <div style={{ fontSize: '16px', color: '#475569' }}>결제액 <strong style={{ color: '#ff4b2b', fontSize: '22px' }}>$150 이하</strong> 면세</div>
           </div>
         </div>
@@ -165,32 +215,27 @@ export default function CustomsTaxGuidePage() {
               <button
                 key={cat.name}
                 onClick={() => setActiveTab(cat.name)}
-                className="tab-btn"
-                style={{
-                  backgroundColor: activeTab === cat.name ? '#ff4b2b' : '#f1f5f9',
-                  color: activeTab === cat.name ? '#fff' : '#64748b',
-                  boxShadow: activeTab === cat.name ? '0 4px 10px rgba(255, 75, 43, 0.2)' : 'none',
-                }}
+                className={`tab-btn ${activeTab === cat.name ? 'active' : ''}`}
               >
-                <span>{cat.icon}</span> {cat.name}
+                <span className="tab-icon">{cat.icon}</span> {cat.name}
               </button>
             ))}
           </div>
 
           <div className="base-card table-wrap">
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table className="customs-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                  <th style={{ padding: '15px', fontSize: '14px', textAlign: 'left', paddingLeft: '20px', color: '#64748b' }}>수입 품목</th>
-                  <th style={{ padding: '15px', fontSize: '14px', textAlign: 'center', color: '#64748b' }}>관세</th>
-                  <th style={{ padding: '15px', fontSize: '14px', textAlign: 'center', color: '#64748b' }}>부가세</th>
+                <tr>
+                  <th style={{ padding: '15px', textAlign: 'left', paddingLeft: '20px', color: '#64748b' }}>수입 품목</th>
+                  <th style={{ padding: '15px', textAlign: 'center', color: '#64748b' }}>관세</th>
+                  <th style={{ padding: '15px', textAlign: 'center', color: '#64748b' }}>부가세</th>
                 </tr>
               </thead>
               <tbody>
                 {taxCategories.find(c => c.name === activeTab)?.items.map((item, idx) => (
                   <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '12px 20px', fontSize: '13px', fontWeight: '700', color: '#1e293b' }}>{item.name}</td>
-                    <td style={{ padding: '12px', fontSize: '13px', textAlign: 'center', color: '#ff4b2b', fontWeight: '800' }}>{item.tariff}</td>
+                    <td style={{ padding: '12px', fontSize: '13px', textAlign: 'center' }}><span className="tariff-chip">{item.tariff}</span></td>
                     <td style={{ padding: '12px', fontSize: '13px', textAlign: 'center', color: '#0f172a', fontWeight: '700' }}>{item.vat}</td>
                   </tr>
                 ))}
@@ -200,12 +245,11 @@ export default function CustomsTaxGuidePage() {
         </div>
 
         {/* Footer info */}
-        <div className="animate-6" style={{ backgroundColor: '#f8fafc', padding: '30px', borderRadius: '24px', textAlign: 'center', border: '1px dashed #cbd5e1' }}>
-          <p style={{ fontSize: '14px', color: '#64748b', fontWeight: '600', margin: 0 }}>
-            정확한 확인은 <span style={{ color: '#0f172a', fontWeight: '800', borderBottom: '1.5px solid #ff4b2b', cursor: 'pointer' }}>1:1 상담</span>을 통해 문의주세요.
-          </p>
-        </div>
+        <GuideFooterNotice className="animate-6">
+          정확한 확인은 <span className="footer-info-link">1:1 상담</span>을 통해 문의주세요.
+        </GuideFooterNotice>
 
+        </div>
       </div>
     </GuideLayout>
   );

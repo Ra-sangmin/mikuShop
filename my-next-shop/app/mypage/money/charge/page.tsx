@@ -13,13 +13,7 @@ const s = {
   // 🌟 padding-top을 0으로: GuideLayout이 헤더와 콘텐츠 패널 사이 간격을 이미 없앴는데,
   // 이 컨테이너 자체의 위쪽 padding(48px)이 그 위에 또 여백을 만들고 있었음
   container: { maxWidth: '672px', margin: '0 auto', padding: '0 16px 48px 16px', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif' },
-  card: { backgroundColor: '#fff', borderRadius: '32px', boxShadow: '0 10px 40px rgba(0, 0, 0, 0.04)', border: '1px solid #e2e8f0', padding: '40px' },
-  pageTitle: { fontSize: '26px', fontWeight: '900', color: '#0f172a', marginBottom: '32px', textAlign: 'center' as const },
   formWrapper: { display: 'flex', flexDirection: 'column' as const, gap: '28px' },
-  
-  moneySummaryBox: { backgroundColor: '#f8fafc', borderRadius: '16px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #f1f5f9' },
-  moneySummaryLabel: { color: '#475569', fontWeight: '600', fontSize: '15px' },
-  moneySummaryValue: { fontSize: '22px', fontWeight: '900', color: '#ff4b2b' },
   
   label: { display: 'block', fontSize: '14px', fontWeight: '800', color: '#334155', marginBottom: '8px' },
   inputContainer: { position: 'relative' as const },
@@ -51,9 +45,61 @@ const globalAnimation = `
   @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
   .anim { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
+  /* 🌟 mypage/guide 페이지들과 동일한 타이틀 + BG 패널 스타일 (통일감) */
+  .money-page-title {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 20px; font-weight: 900; color: #0f172a;
+    letter-spacing: -0.4px; margin-bottom: 16px;
+  }
+  .money-title-icon {
+    width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
+    background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+    box-shadow: 0 6px 14px -5px rgba(234, 88, 12, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  }
+  .money-panel {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+    border: 1px solid rgba(226, 232, 240, 0.7);
+    border-radius: 32px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 14px 34px -14px rgba(15, 23, 42, 0.10);
+    padding: 40px;
+    box-sizing: border-box;
+  }
+  .money-panel::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, #fb923c 0%, #ea580c 50%, #fb923c 100%);
+  }
+
+  /* 🌟 타이틀 오른쪽에 현재 보유 머니를 함께 보여주는 영역 */
+  .money-title-row {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px;
+  }
+  .money-title-row .money-page-title { margin-bottom: 0; }
+  .money-title-balance {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin: 0; padding: 9px 18px;
+    background: linear-gradient(135deg, #fff7ed 0%, #ffece0 100%);
+    border: 1px solid #fed7aa;
+    border-radius: 999px;
+    font-size: 13px; font-weight: 700; color: #9a3412;
+    white-space: nowrap;
+  }
+  .money-title-balance strong {
+    font-size: 19px; font-weight: 900; color: #ea580c;
+  }
+
   /* 🌟 모바일: currentMenu(고정 바)와 카드 사이 여백 제거 */
   @media (max-width: 768px) {
     .money-charge-container { padding-top: 0 !important; }
+    .money-page-title { font-size: 16px; gap: 8px; }
+    .money-title-icon { width: 24px; height: 24px; border-radius: 8px; font-size: 11px; }
+    .money-title-balance { padding: 7px 14px; font-size: 11px; gap: 6px; }
+    .money-title-balance strong { font-size: 15px; }
+    .money-panel { padding: 16px; border-radius: 16px; }
   }
 `;
 
@@ -265,17 +311,13 @@ export default function MoneyChargePage() {
       <style jsx global>{globalAnimation}</style>
 
       <div className="money-charge-container" style={s.container}>
-        <div className="anim" style={s.card}>
-          <h2 style={s.pageTitle}>
-            미쿠짱머니 충전 신청
-          </h2>
-          
+        <div className="money-title-row">
+          <h2 className="money-page-title">충전 신청 <span className="money-title-icon"><i className="fa fa-wallet"></i></span></h2>
+          <p className="money-title-balance">현재 보유 머니<strong>{currentMoney.toLocaleString()}원</strong></p>
+        </div>
+
+        <div className="anim money-panel">
           <div style={s.formWrapper}>
-            
-            <div style={s.moneySummaryBox}>
-              <span style={s.moneySummaryLabel}>현재 보유 머니</span>
-              <span style={s.moneySummaryValue}>{currentMoney.toLocaleString()}원</span>
-            </div>
 
             <div>
               <label style={s.label}>충전 신청 금액</label>

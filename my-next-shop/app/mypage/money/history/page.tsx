@@ -15,21 +15,9 @@ const s = {
   // 공통 및 레이아웃
   // 🌟 padding-top을 0으로: GuideLayout이 헤더와 콘텐츠 패널 사이 간격을 이미 없앴는데,
   // 이 컨테이너 자체의 위쪽 padding(40px)이 그 위에 또 여백을 만들고 있었음
-  // 🌟 배경색(#fdfdfd)은 더 이상 여기 두지 않습니다. container 전체에 배경을 깔면
-  // 둥근 모서리(28px)인 검은색 잔액 카드의 네모난 바깥 모서리 부분에서 이 배경이
-  // 삐죽 비쳐 보여 카드와 겹쳐 보이는 느낌을 줬습니다. 대신 contentPanel로 옮겨서
-  // "타입 필터 탭"부터 배경이 시작하게 하고, 잔액 카드는 페이지 배경 위에 독립적으로 뜨게 둡니다.
-  container: { maxWidth: '600px', margin: '0 auto', padding: '0 16px 40px 16px', minHeight: '100vh' },
+  container: { maxWidth: '672px', margin: '0 auto', padding: '0 16px 40px 16px', minHeight: '100vh' },
 
-  // 현재 머니 카드
-  // 🌟 marginBottom을 32px에서 16px로 줄임: 아래 contentPanel의 위쪽 padding(10px)과 합쳐
-  // 잔액 카드~타입 필터 탭 사이 간격이 기존 52px(32+20)에서 26px로, 정확히 절반이 됨
-  balanceCard: { background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)', borderRadius: '28px', padding: '32px', color: '#fff', marginBottom: '16px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' },
-  balanceLabel: { fontSize: '14px', opacity: 0.8, marginBottom: '6px', fontWeight: '500' },
-  balanceAmount: { fontSize: '32px', fontWeight: '900', letterSpacing: '-0.5px' },
-
-  // 🌟 타입 필터 탭부터 목록 끝까지를 감싸는 배경 패널 (예전엔 container 전체 배경이었음)
-  // 위쪽 padding만 20px -> 10px로 줄임 (balanceCard와의 간격 절반화, 좌우/아래는 유지)
+  // 🌟 타입 필터 탭부터 목록 끝까지를 감싸는 배경 패널
   contentPanel: { backgroundColor: '#fdfdfd', borderRadius: '24px', padding: '10px 16px 20px 16px' },
 
   // 탭 (전체, 충전, 사용, 환불)
@@ -258,22 +246,75 @@ export default function MoneyHistoryPage() {
   };
 
   return (
-    <GuideLayout title="이용내역" type="money">
+    <GuideLayout title="이용 내역" type="money">
       <style jsx global>{`
+        /* 🌟 mypage/money/charge 페이지와 동일한 타이틀 + BG 패널 스타일 (통일감) */
+        .money-page-title {
+          display: flex; align-items: center; gap: 10px;
+          font-size: 20px; font-weight: 900; color: #0f172a;
+          letter-spacing: -0.4px; margin-bottom: 16px;
+        }
+        .money-title-icon {
+          width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0; color: #fff;
+          display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
+          background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+          box-shadow: 0 6px 14px -5px rgba(234, 88, 12, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+        }
+        .money-panel {
+          position: relative;
+          overflow: hidden;
+          background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+          border: 1px solid rgba(226, 232, 240, 0.7);
+          border-radius: 32px;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 14px 34px -14px rgba(15, 23, 42, 0.10);
+          padding: 28px;
+          box-sizing: border-box;
+        }
+        .money-panel::before {
+          content: '';
+          position: absolute; top: 0; left: 0; right: 0; height: 4px;
+          background: linear-gradient(90deg, #fb923c 0%, #ea580c 50%, #fb923c 100%);
+        }
+
+        /* 🌟 타이틀 오른쪽에 현재 보유 머니를 함께 보여주는 영역 */
+        .money-title-row {
+          display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px;
+        }
+        .money-title-row .money-page-title { margin-bottom: 0; }
+        .money-title-balance {
+          display: inline-flex; align-items: center; gap: 8px;
+          margin: 0; padding: 9px 18px;
+          background: linear-gradient(135deg, #fff7ed 0%, #ffece0 100%);
+          border: 1px solid #fed7aa;
+          border-radius: 999px;
+          font-size: 13px; font-weight: 700; color: #9a3412;
+          white-space: nowrap;
+        }
+        .money-title-balance strong {
+          font-size: 19px; font-weight: 900; color: #ea580c;
+        }
+
         /* 🌟 모바일: currentMenu(고정 바)와 카드 사이 여백 제거 */
         @media (max-width: 768px) {
           .money-history-container { padding-top: 0 !important; }
+          .money-page-title { font-size: 16px; gap: 8px; }
+          .money-title-icon { width: 24px; height: 24px; border-radius: 8px; font-size: 11px; }
+          .money-title-balance { padding: 7px 14px; font-size: 11px; gap: 6px; }
+          .money-title-balance strong { font-size: 15px; }
+          .money-panel { padding: 16px; border-radius: 16px; }
         }
       `}</style>
       <div className="money-history-container" style={s.container}>
 
-        {/* 현재 머니 카드 */}
-        <div style={s.balanceCard}>
-          <p style={s.balanceLabel}>현재 보유 머니</p>
-          <h2 style={s.balanceAmount}>{currentMoney.toLocaleString()}원</h2>
+        <div className="money-title-row">
+          <h2 className="money-page-title">이용 내역 <span className="money-title-icon"><i className="fa fa-coins"></i></span></h2>
+          <p className="money-title-balance">현재 보유 머니<strong>{currentMoney.toLocaleString()}원</strong></p>
         </div>
 
-        {/* 🌟 타입 필터 탭부터 아래로는 별도 배경 패널로 감쌈 (잔액 카드와 배경이 겹쳐 보이지 않도록) */}
+        <div className="money-panel">
+
+        {/* 🌟 타입 필터 탭부터 아래로는 별도 배경 패널로 감쌈 */}
         <div style={s.contentPanel}>
 
         {/* 타입 필터 탭 */}
@@ -372,6 +413,8 @@ export default function MoneyHistoryPage() {
             </button>
           </div>
         )}
+
+        </div>
 
         </div>
 

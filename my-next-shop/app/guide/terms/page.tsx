@@ -8,10 +8,10 @@ export default function GuideTermsPage() {
     <GuideLayout title="이용약관" type="guide">
       <div className="guide-page-container">
         {/* 🌟 새로 추가된 큰 제목과 설명 영역 */}
-        <h2 className="guide-title">이용약관</h2>
-        <p className="guide-desc guide-desc--tight">미쿠짱 서비스 이용을 위한 약관을 상세히 안내해 드립니다.</p>
-
-        <p className="last-updated">시행일자: 2026년 6월 1일</p>
+        <div className="guide-title-row">
+          <h2 className="guide-title">이용약관 <span className="guide-title-icon"><i className="fa fa-file-contract"></i></span></h2>
+          <p className="last-updated">시행일자: 2026년 6월 1일</p>
+        </div>
 
         <div className="guide-doc-card">
           

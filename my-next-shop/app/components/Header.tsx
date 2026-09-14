@@ -4,11 +4,11 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
-import { 
-  ClipboardText, ChatCircleDots, ShoppingCartSimple, MapPin, AirplaneTilt, 
-  Wallet, Coins, Money, Crown, Info, Scales, BookOpen, PaperPlaneTilt, 
+import {
+  ClipboardText, ChatCircleDots, ShoppingCartSimple, MapPin, AirplaneTilt,
+  Wallet, Coins, Money, Crown, Info, Scales, BookOpen, PaperPlaneTilt,
   Question, Headset, SignOut, User, FilePlus, CaretDown,
-  Notepad, ShieldCheck, Calculator 
+  Notepad, ShieldCheck, Calculator, House, Heart, LockKey
 } from "@phosphor-icons/react";
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 
@@ -44,6 +44,22 @@ const styles: Record<string, any> = {
   },
   itemText: { fontWeight: '700', fontSize: '15px', color: '#475569', letterSpacing: '-0.3px' },
 };
+
+// 🌟 "/mypage/profile#jp-address-section"처럼 해시가 붙은 메뉴 링크를 클릭했을 때,
+// 이미 그 경로+해시에 있으면(예: Header 드롭다운으로 같은 섹션을 다시 클릭) URL이
+// 전혀 바뀌지 않아 Next.js Link도, 브라우저의 해시 스크롤도 동작하지 않는 문제가
+// 있었습니다. 이 경우만 직접 해당 요소로 스크롤시켜 줍니다.
+function handleHashLinkClick(href: string) {
+  return () => {
+    const hashIndex = href.indexOf('#');
+    if (hashIndex === -1) return;
+    const path = href.slice(0, hashIndex) || '/';
+    const hash = href.slice(hashIndex + 1);
+    if (window.location.pathname === path && window.location.hash === `#${hash}`) {
+      document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+}
 
 // =================================================================
 // 1. 비즈니스 로직 영역 (Business Logic Layer)
@@ -88,8 +104,8 @@ function useHeaderLogic() {
 
   const menuData = [
     { label: "구매대행", items: [{ label: '전체내역', href: '/mypage/status?tab=전체내역' }, { label: '견적문의', href: '/purchase/quote' }, { label: '구매대행 신청', href: '/purchase/request' }] },
-    { label: "배송대행", items: [{ label: '전체내역', href: '/mypage/status?tab=전체내역' }, { label: '일본 배송주소 확인', href: '/delivery/address' }, { label: '배송신청', href: '/delivery/request' }] },
-    { label: "미쿠짱머니", items: [{ label: '충전하기', href: '/mypage/money/charge' }, { label: '이용내역', href: '/mypage/money/history' }, { label: '환불신청', href: '/mypage/money/refund' }] },
+    { label: "배송대행", items: [{ label: '전체내역', href: '/mypage/status?tab=전체내역' }, { label: '일본 배송주소 확인', href: '/mypage/profile#jp-address-section' }, { label: '배송대행 신청', href: '/delivery/request' }] },
+    { label: "미쿠짱머니", items: [{ label: '충전 신청', href: '/mypage/money/charge' }, { label: '이용 내역', href: '/mypage/money/history' }, { label: '환불 신청', href: '/mypage/money/refund' }] },
     { label: "수수료/배송비", items: [{ label: '회원 등급 및 혜택', href: '/guide/membership' }, { label: '수수료 안내', href: '/guide/fee-guide' }, { label: '국제 배송 요금표', href: '/guide/shipping-fee' }, { label: '예상 관부과세 안내', href: '/guide/customs' }] },
     { label: "이용가이드", items: [{ label: '구매대행 방법', href: '/guide/purchase-method' }, { label: '배송대행 방법', href: '/guide/delivery-method' }, { label: '자주하는 질문', href: '/guide/faq' }, { label: '이용약관', href: '/guide/terms' }, { label: '개인정보처리방침', href: '/guide/privacy' }] },
     { label: "고객문의", items: [{ label: '카카오톡 문의', href: '/contact' }] }
@@ -116,10 +132,10 @@ function NavItem({ label, items }: { label: string, items?: any[] }) {
       case '견적문의': return <ChatCircleDots {...iconProps} />;
       case '구매대행 신청': return <ShoppingCartSimple {...iconProps} />;
       case '일본 배송주소 확인': return <MapPin {...iconProps} />;
-      case '배송신청': return <AirplaneTilt {...iconProps} />;
-      case '충전하기': return <Wallet {...iconProps} />;
-      case '이용내역': return <Coins {...iconProps} />;
-      case '환불신청': return <Money {...iconProps} />;
+      case '배송대행 신청': return <AirplaneTilt {...iconProps} />;
+      case '충전 신청': return <Wallet {...iconProps} />;
+      case '이용 내역': return <Coins {...iconProps} />;
+      case '환불 신청': return <Money {...iconProps} />;
       case '회원 등급 및 혜택': return <Crown {...iconProps} />;
       case '수수료 안내': return <Info {...iconProps} />;
       case '국제 배송 요금표': return <Scales {...iconProps} />;
@@ -131,6 +147,9 @@ function NavItem({ label, items }: { label: string, items?: any[] }) {
       case '개인정보처리방침': return <ShieldCheck {...iconProps} />;
       case '카카오톡 문의': return <Headset {...iconProps} />;
       case '내 정보': return <User {...iconProps} />;
+      case '나의 배송지 정보': return <House {...iconProps} />;
+      case '관심 상품 목록': return <Heart {...iconProps} />;
+      case '비밀번호 수정': return <LockKey {...iconProps} />;
       default:
         if (itemLabel.includes('내역')) return <ClipboardText {...iconProps} />;
         if (itemLabel.includes('신청')) return <FilePlus {...iconProps} />;
@@ -152,7 +171,11 @@ function NavItem({ label, items }: { label: string, items?: any[] }) {
             {items.map((item: any, index: number) => (
               <li key={index} className="dropdown-li">
                 {item.href ? (
-                  <Link href={item.href} className="dropdown-link" onClick={item.onClick}>
+                  <Link
+                    href={item.href}
+                    className="dropdown-link"
+                    onClick={(e) => { handleHashLinkClick(item.href)(); item.onClick?.(e); }}
+                  >
                     <div className="icon-box">{getIconByLabel(item.label)}</div>
                     <span className="item-text">{item.label}</span>
                   </Link>
@@ -210,13 +233,15 @@ export default function Header() {
             {!isLoggedIn ? (
               <Link href="/auth/login" className="nav-login-btn">로그인</Link>
             ) : (
-              <NavItem 
-                label="마이페이지" 
-                items={[ 
-                  { label: '내 정보', href: '/mypage' }, 
-                  { label: '전체내역', href: '/mypage/status' }, 
-                  { label: '로그아웃', onClick: handleLogoutClick } 
-                ]} 
+              <NavItem
+                label="마이페이지"
+                items={[
+                  { label: '내 정보', href: '/mypage' },
+                  { label: '전체 구매 내역', href: '/mypage/status' },
+                  { label: '나의 배송지 정보', href: '/mypage/profile' },
+                  { label: '관심 상품 목록', href: '/wishlist' },
+                  { label: '로그아웃', onClick: handleLogoutClick }
+                ]}
               />
             )}
           </nav>
@@ -269,9 +294,10 @@ export default function Header() {
                 <div className={`accordion-body ${isOpen ? 'open' : ''}`}>
                   <div className="accordion-body-inner">
                     {section.items.map((item, itemIdx) => (
-                      <Link 
-                        key={itemIdx} href={item.href || '#'} 
-                        className="accordion-link" onClick={() => setIsSidebarOpen(false)} 
+                      <Link
+                        key={itemIdx} href={item.href || '#'}
+                        className="accordion-link"
+                        onClick={() => { handleHashLinkClick(item.href || '')(); setIsSidebarOpen(false); }}
                       >
                         <span className="link-bullet"></span>
                         {item.label}

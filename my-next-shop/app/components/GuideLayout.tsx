@@ -25,10 +25,9 @@ function useGuideLayoutLogic(type?: string) {
 
   const mypageMenu = [
     { label: '내 정보', href: '/mypage' },
-    { label: '구매대행 상황', href: '/mypage/status' },
-    { label: '나의 배송지 정보 수정', href: '/mypage/profile' },
-    { label: '관심목록', href: '/wishlist' },
-    { label: '비밀번호 수정', href: '/auth/change-password' },
+    { label: '전체 구매 내역', href: '/mypage/status' },
+    { label: '나의 배송지 정보', href: '/mypage/profile' },
+    { label: '관심 상품 목록', href: '/wishlist' },
   ];
 
   const guideMenu = [
@@ -47,9 +46,9 @@ function useGuideLayoutLogic(type?: string) {
   ];
 
   const moneyMenu = [
-    { label: '머니 충전', href: '/mypage/money/charge' },
-    { label: '머니 이용내역', href: '/mypage/money/history' },
-    { label: '환불신청', href: '/mypage/money/refund' },
+    { label: '충전 신청', href: '/mypage/money/charge' },
+    { label: '이용 내역', href: '/mypage/money/history' },
+    { label: '환불 신청', href: '/mypage/money/refund' },
   ];
 
   const currentMenu = 
@@ -83,8 +82,11 @@ function useGuideLayoutLogic(type?: string) {
       const headerEl = document.querySelector('.miku-header-wrapper') as HTMLElement | null;
       const headerH = headerEl ? headerEl.getBoundingClientRect().height : 89;
       const menuH = menuEl ? menuEl.getBoundingClientRect().height : 64;
-      document.documentElement.style.setProperty('--sticky-header-h', `${headerH}px`);
-      document.documentElement.style.setProperty('--sticky-menu-h', `${menuH}px`);
+      // 🌟 측정 타이밍에 따라 0이 잡히는 경우가 있어(레이아웃이 아직 자리잡기 전), 그 값을
+      // 그대로 쓰면 콘텐츠가 고정 바 뒤에 가려버린다. 0은 무시하고 CSS의 기본값(fallback)이나
+      // 이전에 측정된 정상 값을 유지한 채, 다음 ResizeObserver 콜백에서 다시 갱신되게 둔다.
+      if (headerH > 0) document.documentElement.style.setProperty('--sticky-header-h', `${headerH}px`);
+      if (menuH > 0) document.documentElement.style.setProperty('--sticky-menu-h', `${menuH}px`);
     };
 
     updateStickyOffsets();

@@ -281,20 +281,26 @@ export default function HomePage() {
       <section className="bottom-info-section anim-item delay-4" style={{ borderTop: '1px solid #f1f5f9', padding: '80px 0', backgroundColor: '#fff' }}>
         <div className="align-container bottom-info-grid">
             <div className="bottom-info-box" style={styles.infoBox}>
-                <div style={styles.infoHeaderWrap}><i className="fa fa-headset" style={styles.infoIconCS}></i><span style={styles.infoTitle}>CUSTOMER CENTER</span></div>
-                <h3 style={styles.csHeading}>1:1문의 - 카카오톡</h3>
-                <p style={styles.csDesc}>상담시간 ⏰ 10:00 ~ 24:00<br/><span style={styles.csHighlight}>365일 연중무휴</span> 실시간 대응</p>
+                <div style={styles.infoHeaderWrap}><span className="cs-icon-badge"><i className="fa fa-headset" style={{ fontSize: '15px' }}></i></span><span style={styles.infoTitle}>CUSTOMER CENTER</span></div>
+                <h3 style={styles.csHeading}>1:1문의 <span style={styles.csHeadingAccent}>카카오톡</span></h3>
+                <div style={styles.csMetaRow}>
+                    <span style={styles.csTimeBadge}><i className="fa fa-clock" style={{ fontSize: '11px' }}></i> 10:00 ~ 24:00</span>
+                    <span style={styles.csDayBadge}>365일 연중무휴</span>
+                </div>
+                <p style={styles.csDesc}>실시간 대응으로 빠르게 도와드립니다</p>
                 <div style={styles.csBtnWrap}>
-                    <button 
-                      style={styles.csKakaoBtn} 
+                    <button
+                      className="cs-kakao-btn"
+                      style={styles.csKakaoBtn}
                       onClick={() => window.location.href = '/contact'}
                     >
+                      <img src="/images/kakao_icon/kakaotalk_sharing_btn_small_notBG.png" alt="" />
                       카카오톡
                     </button>
                 </div>
             </div>
             <div className="bottom-info-box" style={styles.infoBox}>
-                <div style={styles.infoHeaderWrap}><i className="fa fa-bullhorn" style={styles.infoIconNotice}></i><span style={styles.infoTitle}>NOTICE</span></div>
+                <div style={styles.infoHeaderWrap}><span className="info-icon-badge badge-notice"><i className="fa fa-bullhorn" style={{ fontSize: '15px' }}></i></span><span style={styles.infoTitle}>NOTICE</span></div>
                 <div style={styles.noticeListWrap}>
                     <NoticeItem title="미쿠짱 2026년 3월 국제 발송일정 안내" date="03.01" />
                     <NoticeItem title="미쿠짱 2026년 2월 국제 발송일정 안내" date="02.06" />
@@ -304,9 +310,25 @@ export default function HomePage() {
                 <Link href="#" style={styles.noticeMoreLink}>전체보기 <i className="fa fa-arrow-right" style={styles.noticeMoreIcon}></i></Link>
             </div>
             <div className="bottom-info-box" style={styles.infoBox}>
-                <div style={styles.infoHeaderWrap}><i className="fa fa-university" style={styles.infoIconBank}></i><span style={styles.infoTitle}>BANK INFO</span></div>
-                <div style={styles.bankWrap}><div style={styles.bankName}>🏦 신한은행</div><div style={styles.bankAccount}>110-629-593784</div><div style={styles.bankOwner}>예금주: 미쿠짱</div></div>
-                <div style={styles.bankFooterWrap}><div style={styles.bankFooterText}>입금 확인은 실시간으로 처리됩니다.</div></div>
+                <div style={styles.infoHeaderWrap}><span className="info-icon-badge badge-bank"><i className="fa fa-university" style={{ fontSize: '15px' }}></i></span><span style={styles.infoTitle}>BANK INFO</span></div>
+                <div style={styles.bankWrap}>
+                    <div style={styles.bankNameRow}>
+                        <img src="/images/sinhan_bank.png" alt="신한은행" style={styles.bankLogoDot} />
+                        <span style={styles.bankName}>신한은행</span>
+                    </div>
+                    <div style={styles.bankAccountRow}>
+                        <span style={styles.bankAccount}>110-629-593784</span>
+                        <button
+                          type="button"
+                          className="bank-copy-btn"
+                          onClick={() => { navigator.clipboard.writeText('110-629-593784'); showAlert('계좌번호가 복사되었습니다.', 'success'); }}
+                        >
+                          <i className="fa fa-copy" style={{ fontSize: '11px' }}></i> 복사
+                        </button>
+                    </div>
+                    <div style={styles.bankOwner}>예금주 · 미쿠짱</div>
+                </div>
+                <div style={styles.bankFooterWrap}><div style={styles.bankFooterText}><i className="fa fa-shield-halved" style={{ fontSize: '12px', marginRight: '6px' }}></i>입금 확인은 실시간으로 처리됩니다.</div></div>
             </div>
         </div>
       </section>
@@ -371,9 +393,12 @@ function SocialIcon({ url, src, brandColor, desc, isDragging }: any) {
 function NoticeItem({ title, date }: any) {
     const [isHovered, setIsHovered] = useState(false);
     return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 10px', borderBottom: '1px solid #f8fafc', cursor: 'pointer', transition: 'all 0.2s ease', backgroundColor: isHovered ? '#f8fafc' : 'transparent', borderRadius: '8px' }} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
-            <span style={{ color: isHovered ? '#0f172a' : '#334155', fontSize: '15px', fontWeight: isHovered ? '700' : '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginRight: '15px', transition: 'color 0.2s' }}>{title}</span>
-            <span style={{ color: isHovered ? '#f97316' : '#cbd5e1', fontSize: '13px', fontWeight: '600', flexShrink: 0, transition: 'color 0.2s' }}>{date}</span>
+        <div className="notice-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 10px', borderBottom: '1px solid #f8fafc', cursor: 'pointer', transition: 'all 0.2s ease', backgroundColor: isHovered ? '#f8fafc' : 'transparent', borderRadius: '8px' }} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, marginRight: '15px' }}>
+                <span className="notice-dot"></span>
+                <span style={{ color: isHovered ? '#0f172a' : '#334155', fontSize: '15px', fontWeight: isHovered ? '700' : '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', transition: 'color 0.2s' }}>{title}</span>
+            </span>
+            <span style={{ color: isHovered ? '#ea580c' : '#94a3b8', backgroundColor: isHovered ? '#fff7ed' : '#f8fafc', fontSize: '12px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', flexShrink: 0, transition: 'all 0.2s' }}>{date}</span>
         </div>
     );
 }
@@ -383,26 +408,29 @@ function NoticeItem({ title, date }: any) {
 // ==========================================
 const styles: Record<string, React.CSSProperties> = {
   infoBox: { backgroundColor: '#fff', padding: '40px 30px', borderRadius: '24px', boxShadow: '0 10px 40px rgba(0,0,0,0.03)', border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column' },
-  infoHeaderWrap: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '25px', color: '#1e293b' },
-  infoIconCS: { fontSize: '20px', color: '#6366f1' },
-  infoIconNotice: { fontSize: '20px', color: '#f59e0b' },
-  infoIconBank: { fontSize: '20px', color: '#10b981' },
+  infoHeaderWrap: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '25px', color: '#1e293b' },
   infoTitle: { fontSize: '18px', fontWeight: 'bold', letterSpacing: '-0.5px' },
-  csHeading: { fontSize: '22px', fontWeight: '800', color: '#0f172a', marginBottom: '12px' },
+  csHeading: { fontSize: '22px', fontWeight: '800', color: '#0f172a', marginBottom: '14px', letterSpacing: '-0.3px' },
+  csHeadingAccent: { backgroundImage: 'linear-gradient(135deg, #818cf8 0%, #4f46e5 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' },
+  csMetaRow: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' },
+  csTimeBadge: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600', color: '#475569', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '6px 14px' },
+  csDayBadge: { display: 'inline-flex', alignItems: 'center', fontSize: '13px', fontWeight: '700', color: '#4f46e5', backgroundColor: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.16)', borderRadius: '20px', padding: '6px 14px' },
   csDesc: { fontSize: '15px', color: '#64748b', lineHeight: '1.6', marginBottom: '30px' },
-  csHighlight: { color: '#6366f1', fontWeight: '600' },
   csBtnWrap: { display: 'flex', gap: '12px', marginTop: 'auto' },
-  csKakaoBtn: { flex: 1, padding: '14px', backgroundColor: '#fee500', color: '#3c1e1e', border: 'none', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', transition: 'all 0.3s', boxShadow: '0 4px 10px rgba(254, 229, 0, 0.2)' },
+  csKakaoBtn: { flex: 1, padding: '14px', color: '#3c1e1e', border: 'none', borderRadius: '12px', fontWeight: '900', cursor: 'pointer' },
   csReviewBtn: { flex: 1, padding: '14px', backgroundColor: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.3s' },
   noticeListWrap: { display: 'flex', flexDirection: 'column' },
   noticeMoreLink: { display: 'inline-block', marginTop: 'auto', paddingTop: '20px', fontSize: '14px', color: '#94a3b8', textDecoration: 'none', fontWeight: '600', transition: 'color 0.2s' },
   noticeMoreIcon: { fontSize: '10px' },
   bankWrap: { marginBottom: '20px' },
-  bankName: { fontSize: '16px', color: '#64748b', marginBottom: '8px', fontWeight: 'bold' },
-  bankAccount: { fontSize: '28px', fontWeight: '900', letterSpacing: '1px', marginBottom: '8px', color: '#0f172a' },
-  bankOwner: { fontSize: '15px', color: '#334155', fontWeight: '500' },
+  bankNameRow: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' },
+  bankLogoDot: { width: '18px', height: '18px', objectFit: 'contain', flexShrink: 0 },
+  bankName: { fontSize: '15px', color: '#64748b', fontWeight: 'bold' },
+  bankAccountRow: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' },
+  bankAccount: { fontSize: '26px', fontWeight: '900', letterSpacing: '0.5px', color: '#0f172a' },
+  bankOwner: { fontSize: '14px', color: '#94a3b8', fontWeight: '600', letterSpacing: '0.2px' },
   bankFooterWrap: { marginTop: 'auto', paddingTop: '30px' },
-  bankFooterText: { padding: '12px', backgroundColor: '#ecfdf5', borderRadius: '12px', textAlign: 'center', fontSize: '13px', color: '#059669', fontWeight: '600' },
+  bankFooterText: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px', backgroundColor: '#ecfdf5', borderRadius: '12px', textAlign: 'center', fontSize: '13px', color: '#059669', fontWeight: '600' },
   quickLink: { textDecoration: 'none' },
   quickImg: { width: '65%', height: '65%', objectFit: 'contain' },
   siteCardLink: { textDecoration: 'none' },

@@ -318,8 +318,10 @@
   .quote-detail-item::after { display: none; }
   .quote-item-label { font-size: 11px; color: #64748b; font-weight: 600; }
   .quote-item-val { font-size: 16px; font-weight: 800; color: #0f172a; }
-  .quote-total-box { width: 100%; padding: 20px 16px; border-radius: 16px; flex-direction: row; justify-content: space-between; align-items: center; text-align: right; }
-  .quote-total-label { margin-bottom: 0; font-size: 13px; }
+  /* 🌟 label/value/내 미쿠짱 머니 3개를 한 줄(row)로 배치했더니 좁은 화면에서 서로 겹치는
+     문제가 있었습니다. 데스크톱과 동일하게 세로(column)로 쌓아 겹침 없이 표시합니다. */
+  .quote-total-box { width: 100%; padding: 20px 16px; border-radius: 16px; }
+  .quote-total-label { font-size: 13px; }
   .quote-total-value { font-size: 26px; }
 }
 

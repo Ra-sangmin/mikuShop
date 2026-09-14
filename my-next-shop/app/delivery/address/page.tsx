@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react'; // 🌟 Hook 추가
 import { motion } from 'framer-motion';
 import GuideLayout from '../../components/GuideLayout';
+import NoticePanel from '../../components/NoticePanel';
+import '../../guide/guide-common.css';
 import { useRouter } from 'next/navigation'; // 🌟 라우터 추가
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; // 🌟 미쿠짱 전용 Alert 추가
 import { MapPin, Fingerprint, Lightbulb } from 'lucide-react';
@@ -40,7 +42,11 @@ export default function DeliveryAddressPage() {
 
   return (
     <GuideLayout title="일본 배송주소 확인" type="delivery" hideSidebar={true}>
-      <motion.div 
+      <div style={{ maxWidth: '940px', margin: '0 auto', padding: '0 20px' }}>
+        <h2 className="guide-title">일본 배송주소 확인 <span className="guide-title-icon"><i className="fa fa-location-dot"></i></span></h2>
+
+        <div className="guide-panel">
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -53,28 +59,6 @@ export default function DeliveryAddressPage() {
             padding: 40px 20px;
           }
 
-          .page-eyebrow {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 0.08em;
-            color: #4f46e5;
-            background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
-            border: 1px solid #e0e7ff;
-            padding: 6px 14px;
-            border-radius: 100px;
-            margin-bottom: 14px;
-          }
-
-          .header-title-accent {
-            background: linear-gradient(135deg, #818cf8 0%, #4f46e5 60%, #a855f7 100%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-          }
-
           .address-card {
             background: #fff;
             border-radius: 24px;
@@ -83,14 +67,6 @@ export default function DeliveryAddressPage() {
             overflow: hidden;
             position: relative;
           }
-          .address-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, #818cf8 0%, #6366f1 50%, #a855f7 100%);
-          }
-
           .card-grid {
             padding: 40px;
             display: grid;
@@ -208,69 +184,11 @@ export default function DeliveryAddressPage() {
           }
           .tip-text { color: #4338ca; font-size: 14px; line-height: 1.5; }
 
-          .addr-warning-box {
-            margin-top: 30px;
-            padding: 22px 26px;
-            background: linear-gradient(135deg, #fff7ed 0%, #fff1e0 100%);
-            border: 1.5px solid #fdba74;
-            border-left: 5px solid #ea580c;
-            border-radius: 16px;
-            box-shadow: 0 10px 28px -14px rgba(234, 88, 12, 0.35);
-            display: flex;
-            align-items: flex-start;
-            gap: 16px;
-          }
-          .addr-warning-icon {
-            width: 36px;
-            height: 36px;
-            flex-shrink: 0;
-            border-radius: 11px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #ffffff;
-            background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
-            box-shadow: 0 6px 14px -5px rgba(234, 88, 12, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.35);
-          }
-          .addr-warning-title {
-            font-size: 15.5px;
-            font-weight: 800;
-            color: #c2410c;
-            margin: 2px 0 12px;
-          }
-          .addr-warning-list {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 9px;
-          }
-          .addr-warning-list li {
-            position: relative;
-            padding-left: 16px;
-            font-size: 13.5px;
-            font-weight: 500;
-            color: #9a3412;
-            line-height: 1.6;
-          }
-          .addr-warning-list li::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 8px;
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            background: #ea580c;
-          }
-          .addr-warning-list strong { color: #ea580c; font-weight: 800; }
+          .addr-warning-box { margin-top: 30px; }
 
           /* 📱 모바일 대응 스타일 */
           @media (max-width: 768px) {
             .address-page-container { padding: 20px 10px; }
-            .header-h2 { font-size: 22px !important; }
-            .header-p { font-size: 14px !important; }
 
             .card-grid {
               padding: 20px;
@@ -286,20 +204,6 @@ export default function DeliveryAddressPage() {
             .addr-row-box { width: 100%; box-sizing: border-box; }
           }
         `}</style>
-
-        {/* 상단 안내 문구 */}
-        <header style={{ marginBottom: '40px', textAlign: 'center' }}>
-          <span className="page-eyebrow">
-            <MapPin size={12} strokeWidth={2.5} />
-            MY JAPAN ADDRESS
-          </span>
-          <h2 className="header-h2" style={{ fontSize: '28px', fontWeight: '800', color: '#1a202c', marginBottom: '10px' }}>
-            나의 <span className="header-title-accent">일본 전용</span> 주소
-          </h2>
-          <p className="header-p" style={{ color: '#718096', fontSize: '16px' }}>
-            현지 쇼핑몰 결제 시 아래 정보를 정확히 입력해 주세요.
-          </p>
-        </header>
 
         {/* 주소 카드 섹션 */}
         <div className="address-card">
@@ -336,24 +240,16 @@ export default function DeliveryAddressPage() {
         </div>
 
         {/* 주의사항 섹션 */}
-        <div className="addr-warning-box">
-          <span className="addr-warning-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-          </span>
-          <div>
-            <h4 className="addr-warning-title">이용 전 필독사항</h4>
-            <ul className="addr-warning-list">
-              <li>현지 창고 사정에 따라 주소가 예고 없이 변경될 수 있습니다.</li>
-              <li><strong>대비키(착불 결제)</strong> 상품은 수령이 불가하여 반송 처리됩니다.</li>
-              <li>사서함 번호 미기재 시 미확인 화물로 분류되어 입고가 지연됩니다.</li>
-            </ul>
-          </div>
-        </div>
+        <NoticePanel tone="amber" title="이용 전 필독사항" className="addr-warning-box">
+          <ul>
+            <li>현지 창고 사정에 따라 주소가 예고 없이 변경될 수 있습니다.</li>
+            <li><strong>대비키(착불 결제)</strong> 상품은 수령이 불가하여 반송 처리됩니다.</li>
+            <li>사서함 번호 미기재 시 미확인 화물로 분류되어 입고가 지연됩니다.</li>
+          </ul>
+        </NoticePanel>
       </motion.div>
+        </div>
+      </div>
     </GuideLayout>
   );
 }
