@@ -30,8 +30,20 @@ const LAUNCH_ARGS = [
 const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
 
-// 🌟 이미지/폰트/미디어/스타일시트 + 광고·트래킹 스크립트를 공통으로 차단합니다.
-const BLOCKED_RESOURCE_TYPES = ['image', 'font', 'media', 'stylesheet'];
+// 🌟 이미지/폰트/미디어 + 광고·트래킹 스크립트를 공통으로 차단합니다.
+//
+// 🐛 예전에는 stylesheet(CSS)도 차단했는데, 그러면 메루카리에서 상품이 "한 개도" 안 잡혔습니다.
+//    메루카리 검색 화면은 CSS 로 잡힌 레이아웃을 기준으로 상품 그리드를 지연 렌더링(lazy-load)해서,
+//    CSS 가 없으면 그리드 높이가 0 이 되고 "화면에 안 보인다"고 판단해 영영 그리지 않습니다.
+//    (문서 높이 실측: 정상 15000px+ vs CSS 차단 시 6140px)
+//
+//    운영 서버에서 확인한 결과 (jp.mercari.com/search?category_id=2634, 20초 대기):
+//      image+font+media+stylesheet 차단 → 0개
+//      image+font+media 차단 (CSS 허용) → 10초에 120개 ✅
+//      URL 패턴만 해제하고 CSS 는 계속 차단 → 0개 (URL 패턴은 무관)
+//    → CSS 만 허용하면 대역폭 절감(이미지 차단)은 그대로 두고 문제가 해결됩니다.
+//    야후옥션은 CSS 를 차단해도 잘 동작하지만, 허용해도 영향이 없어 공통 규칙으로 둡니다.
+const BLOCKED_RESOURCE_TYPES = ['image', 'font', 'media'];
 const BLOCKED_URL_PATTERNS = ['google-analytics', 'facebook', 'ad-delivery', 'sentry.io', 'karte'];
 
 export function shouldBlockRequest(resourceType: string, url: string): boolean {

@@ -210,10 +210,10 @@ export async function GET() {
         let attemptPage: any = null;
         let foundInThisAttempt = 0;
         try {
-          // 🌟 browserPool.createPage()는 기본적으로 stylesheet까지 차단하는데, 이 페이지는
-          // 그 상태로 렌더링되면 문서 높이가 정상 대비 크게 줄어들어(실측: 정상 15000px+ vs
-          // 차단 시 6140px) "おすすめの商品" 섹션까지 스크롤이 아예 못 내려갑니다. 이 라우트는
-          // 스크롤 거리 기반 휴리스틱에 의존하므로 CSS를 켭니다.
+          // 🌟 이 라우트는 "스크롤 거리" 기반 휴리스틱으로 "おすすめの商品" 섹션까지 내려갑니다.
+          // 문서 높이가 실제 화면과 같아야 판단이 맞아떨어지므로 리소스 차단을 전부 끕니다.
+          // (CSS 를 막으면 문서 높이가 15000px+ → 6140px 로 줄어 섹션에 도달하지 못합니다.
+          //  이미지까지 허용하는 건 높이를 실제와 최대한 같게 맞추기 위한 보수적인 선택입니다)
           attemptPage = await createPage({ viewport: { width: 1280, height: 1080 }, blockResources: false });
           if (isClosed) return 0;
           recommendPage = attemptPage;
