@@ -6,6 +6,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       platformName="라쿠텐" 
       platformDesc="일본 대표 종합 쇼핑몰" // 라쿠텐 카드에 있는 설명을 전달
       brandColor="#bf0000"
+      logoSrc="/images/rakuten_logo.png"
     >
       {children}
     </GlobalLayout>

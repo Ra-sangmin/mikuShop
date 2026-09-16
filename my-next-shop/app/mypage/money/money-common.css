@@ -1,0 +1,716 @@
+/* ============================================================
+   💰 mypage/money (charge · history · refund) 공통 스타일
+   - mm- 접두사만 사용합니다.
+   - ⚠️ color-mix()는 이 프로젝트 CSS 빌드에서 오류를 내므로 쓰지 않습니다.
+   - 포인트 색: 흰 글씨 대비 시작색 4.1:1(#d0591a) / 끝색 6.1:1(#a4440f),
+     글자 포인트 #b04a12(5.5:1)
+   ============================================================ */
+
+.mm-page {
+  --mm-accent: #b04a12;
+  --mm-from: #d0591a;
+  --mm-to: #a4440f;
+  --mm-bg: #fff6ef;
+  --mm-line: #f6dcc8;
+  --mm-ring: rgba(208, 89, 26, 0.16);
+  --mm-shadow: rgba(164, 68, 15, 0.42);
+  width: 100%;
+  padding: 0 0 48px;
+  box-sizing: border-box;
+  font-family: Pretendard, "Noto Sans KR", sans-serif;
+  color: #111827;
+}
+.mm-page *, .mm-page *::before, .mm-page *::after { box-sizing: border-box; }
+.mm-page button, .mm-page input { font-family: inherit; }
+.mm-page p { margin: 0; }
+.mm-page input::-webkit-outer-spin-button,
+.mm-page input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.mm-page input[type=number] { -moz-appearance: textfield; }
+
+@media (max-width: 400px) {
+  .mm-segment-dot, .mm-period svg { display: none; }
+}
+
+@keyframes mmSlideUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes mmSpin { to { transform: rotate(360deg); } }
+@keyframes mmShimmer { 0% { background-position: -300px 0; } 100% { background-position: 300px 0; } }
+.anim-balance { animation: mmSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.mm-anim { animation: mmSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.06s both; }
+.mm-spin { animation: mmSpin 0.9s linear infinite; }
+
+/* ---------- 현재 보유 머니 카드 ---------- */
+.mm-balance {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  margin: 0 0 18px;
+  padding: 22px 24px;
+  border-radius: 24px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #232a3b 0%, #171c28 60%, #1b1a24 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 18px 40px -18px rgba(15, 18, 30, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.mm-balance::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(251, 146, 60, 0) 0%, #f08a44 18%, #d0591a 50%, #f08a44 82%, rgba(251, 146, 60, 0) 100%);
+}
+.mm-balance-glow {
+  position: absolute;
+  right: -60px;
+  top: -80px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(240, 138, 68, 0.28) 0%, rgba(240, 138, 68, 0) 70%);
+  pointer-events: none;
+}
+.mm-balance-main { position: relative; display: flex; align-items: center; gap: 16px; min-width: 0; flex: 1 1 260px; }
+.mm-balance-icon {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background: linear-gradient(135deg, #e0763a 0%, #b04a12 100%);
+  box-shadow: 0 10px 22px -8px rgba(224, 118, 58, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.mm-balance-text { display: flex; flex-direction: column; min-width: 0; }
+.mm-balance-eyebrow { font-size: 10px; font-weight: 800; letter-spacing: 0.18em; color: #f5b68a; }
+.mm-balance-label { margin-top: 2px; font-size: 13px; font-weight: 700; color: #c3c8d4; }
+.mm-balance-amount {
+  margin-top: 2px;
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  line-height: 1.15;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+  word-break: keep-all;
+}
+.mm-balance-amount span { margin-left: 3px; font-size: 18px; font-weight: 800; color: #d6dae3; }
+
+.mm-balance-stats {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+.mm-balance-stat {
+  min-width: 128px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.mm-balance-stat dt { font-size: 11px; font-weight: 700; color: #aeb4c2; margin: 0 0 3px; }
+.mm-balance-stat dd { margin: 0; font-size: 16px; font-weight: 800; color: #ffffff; font-variant-numeric: tabular-nums; }
+.mm-balance-stat.tone-plus dd { color: #9fd8ff; }
+.mm-balance-stat.tone-minus dd { color: #fcd9a8; }
+.mm-balance-stat.tone-warn { background: rgba(248, 113, 113, 0.12); border-color: rgba(248, 113, 113, 0.3); }
+.mm-balance-stat.tone-warn dd { color: #fecaca; }
+
+.mm-balance-links {
+  position: relative;
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.mm-balance-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #d6dae3;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.mm-balance-link:hover { background: rgba(255, 255, 255, 0.12); color: #ffffff; }
+.mm-balance-link.is-active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #d0591a 0%, #a4440f 100%);
+  border-color: transparent;
+  box-shadow: 0 6px 14px -6px rgba(208, 89, 26, 0.7);
+}
+
+/* ---------- 섹션 공통 ---------- */
+.mm-stack { display: flex; flex-direction: column; gap: 26px; }
+.mm-section + .mm-section { padding-top: 24px; border-top: 1px solid #f0f1f4; }
+.mm-section-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 14px; }
+.mm-section-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 16px; font-weight: 800; color: #111827; letter-spacing: -0.3px; }
+.mm-step {
+  min-width: 28px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 900;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--mm-from) 0%, var(--mm-to) 100%);
+  box-shadow: 0 4px 10px -4px var(--mm-shadow);
+  font-variant-numeric: tabular-nums;
+}
+.mm-section-sub { font-size: 12px; font-weight: 600; color: #6b7280; }
+
+.mm-label { display: flex; align-items: center; gap: 6px; margin: 0 0 7px 2px; font-size: 13px; font-weight: 800; color: #374151; }
+.mm-field + .mm-field { margin-top: 14px; }
+
+.mm-input-wrap { position: relative; }
+.mm-input {
+  width: 100%;
+  height: 50px;
+  padding: 0 16px;
+  border: 1px solid #e2e5eb;
+  border-radius: 14px;
+  background: #fbfbfc;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+.mm-input::placeholder { color: #8b919e; font-weight: 500; }
+.mm-input:hover { border-color: #e9c3a8; background: #ffffff; }
+.mm-input:focus { border-color: var(--mm-from); background: #ffffff; box-shadow: 0 0 0 4px var(--mm-ring); }
+.mm-input.has-icon { padding-left: 44px; }
+.mm-input.is-error, .mm-input.is-error:focus { border-color: #d92d20; box-shadow: 0 0 0 4px rgba(217, 45, 32, 0.12); }
+.mm-input-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #8b919e; pointer-events: none; }
+.mm-input-wrap:focus-within .mm-input-icon { color: var(--mm-accent); }
+
+/* 큰 금액 입력 */
+.mm-amount-box {
+  position: relative;
+  padding: 16px 20px 14px;
+  border-radius: 18px;
+  border: 1px solid #e2e5eb;
+  background: #ffffff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.mm-amount-box:focus-within { border-color: var(--mm-from); box-shadow: 0 0 0 4px var(--mm-ring); }
+.mm-amount-box.is-error, .mm-amount-box.is-error:focus-within { border-color: #d92d20; box-shadow: 0 0 0 4px rgba(217, 45, 32, 0.1); }
+.mm-amount-row { display: flex; align-items: baseline; gap: 8px; }
+.mm-amount-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -0.8px;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+.mm-amount-input::placeholder { color: #b6bbc6; font-weight: 700; font-size: 22px; letter-spacing: -0.3px; }
+.mm-amount-unit { font-size: 18px; font-weight: 800; color: #4b5563; }
+.mm-amount-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; padding-top: 10px; border-top: 1px dashed #eceef3; }
+.mm-amount-readout { font-size: 13px; font-weight: 700; color: var(--mm-accent); }
+.mm-amount-readout.is-muted { color: #6b7280; font-weight: 600; }
+.mm-amount-readout.is-error { color: #b42318; }
+.mm-amount-limit { font-size: 12px; font-weight: 600; color: #6b7280; }
+
+.mm-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.mm-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 1 1 0;
+  min-width: 72px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e5eb;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.mm-chip:hover { border-color: var(--mm-line); background: var(--mm-bg); color: var(--mm-accent); transform: translateY(-1px); }
+.mm-chip.is-ghost { flex: 0 0 auto; color: #6b7280; background: #f7f8fa; }
+.mm-chip.is-ghost:hover { color: #374151; background: #eef0f3; border-color: #e2e5eb; }
+.mm-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--mm-line);
+  background: var(--mm-bg);
+  color: var(--mm-accent);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.mm-text-btn:hover { background: #ffecdc; border-color: #eec2a0; }
+
+/* 결제 수단 카드 */
+.mm-methods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.mm-method {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1.5px solid #e5e7eb;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.mm-method:hover { border-color: #e9c3a8; transform: translateY(-1px); box-shadow: 0 8px 18px -12px rgba(15, 23, 42, 0.25); }
+.mm-method.is-active {
+  border-color: var(--mm-from);
+  background: linear-gradient(135deg, var(--mm-bg) 0%, #ffffff 100%);
+  box-shadow: 0 10px 22px -14px var(--mm-shadow);
+}
+.mm-method:focus-visible { outline: none; box-shadow: 0 0 0 4px var(--mm-ring); }
+.mm-method-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4b5563;
+  background: #f3f4f6;
+  transition: all 0.2s ease;
+}
+.mm-method.is-active .mm-method-icon { color: #ffffff; background: linear-gradient(135deg, var(--mm-from) 0%, var(--mm-to) 100%); box-shadow: 0 6px 14px -6px var(--mm-shadow); }
+.mm-method-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mm-method-text strong { font-size: 15px; font-weight: 800; color: #1f2937; }
+.mm-method.is-active .mm-method-text strong { color: var(--mm-accent); }
+.mm-method-text span { font-size: 12px; font-weight: 600; color: #6b7280; }
+.mm-radio {
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+.mm-method.is-active .mm-radio { border-color: var(--mm-from); }
+.mm-method.is-active .mm-radio::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(135deg, var(--mm-from) 0%, var(--mm-to) 100%); }
+
+/* 입금 계좌 카드 */
+.mm-bank {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f7f8fb 0%, #eef1f6 100%);
+  border: 1px solid #e3e7ee;
+}
+.mm-bank-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1e40af;
+  background: #ffffff;
+  border: 1px solid #dfe5f1;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
+}
+.mm-bank-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 180px; }
+.mm-bank-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; color: #6b7280; }
+.mm-bank-number { font-size: 19px; font-weight: 900; color: #111827; letter-spacing: -0.2px; font-variant-numeric: tabular-nums; word-break: keep-all; }
+.mm-bank-owner { font-size: 13px; font-weight: 700; color: #4b5563; }
+.mm-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: 1px solid #d7dce6;
+  background: #ffffff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.mm-copy-btn:hover { border-color: #b9c1d0; color: #111827; transform: translateY(-1px); }
+.mm-copy-btn.is-done { color: #1f7a4a; border-color: #b7e3c9; background: #ecfdf3; }
+
+/* 안내 박스 */
+.mm-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fffbeb 0%, #fff8ef 100%);
+  border: 1px solid #f6dfae;
+}
+.mm-notice.is-neutral { background: #f8f9fb; border-color: #eceef3; }
+.mm-notice-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #b45309;
+  background: #fdecc8;
+}
+.mm-notice.is-neutral .mm-notice-icon { color: #475569; background: #e9edf3; }
+.mm-notice-body { flex: 1; min-width: 0; }
+.mm-notice-title { display: block; margin: 1px 0 4px; font-size: 13px; font-weight: 800; color: #8a4a0b; }
+.mm-notice.is-neutral .mm-notice-title { color: #1f2937; }
+.mm-notice ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+.mm-notice li { position: relative; padding-left: 12px; font-size: 13px; line-height: 1.6; color: #7c4a14; word-break: keep-all; }
+.mm-notice.is-neutral li { color: #4b5563; }
+.mm-notice li::before { content: ''; position: absolute; left: 0; top: 9px; width: 4px; height: 4px; border-radius: 50%; background: #d19a4d; }
+.mm-notice.is-neutral li::before { background: #9aa3b2; }
+.mm-notice b { font-weight: 800; color: #8a4a0b; }
+.mm-notice.is-neutral b { color: #111827; }
+
+/* 신청 요약 + 버튼 */
+.mm-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-radius: 18px;
+  border: 1px solid #eceef3;
+  background: #f8f9fb;
+  overflow: hidden;
+}
+.mm-summary-item { display: flex; flex-direction: column; gap: 4px; padding: 14px 18px; min-width: 0; }
+.mm-summary-item + .mm-summary-item { border-left: 1px solid #eceef3; }
+.mm-summary-item span { font-size: 12px; font-weight: 700; color: #6b7280; }
+.mm-summary-item strong { font-size: 19px; font-weight: 900; color: #111827; letter-spacing: -0.4px; font-variant-numeric: tabular-nums; }
+.mm-summary-item strong.is-accent { color: var(--mm-accent); }
+.mm-summary-item strong.is-error { color: #b42318; }
+
+.mm-submit {
+  width: 100%;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: none;
+  border-radius: 16px;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--mm-from) 0%, var(--mm-to) 100%);
+  box-shadow: 0 14px 28px -12px var(--mm-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.mm-submit.is-dark { background: linear-gradient(135deg, #2b3345 0%, #151a26 100%); box-shadow: 0 14px 28px -12px rgba(15, 18, 30, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+.mm-submit:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.05); }
+.mm-submit:active:not(:disabled) { transform: translateY(0); }
+.mm-submit:focus-visible { outline: 3px solid var(--mm-ring); outline-offset: 2px; }
+.mm-submit:disabled { background: #d1d5db; color: #4b5563; box-shadow: none; cursor: not-allowed; }
+.mm-submit-arrow { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.18); }
+
+.mm-widget { border-radius: 18px; border: 1px solid #eceef3; background: #ffffff; padding: 6px; overflow: hidden; }
+
+/* ---------- 이용 내역 ---------- */
+.mm-stat-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
+.mm-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid #eceef3;
+  background: #ffffff;
+  min-width: 0;
+}
+.mm-stat-icon { width: 38px; height: 38px; flex-shrink: 0; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+.mm-stat-text { display: flex; flex-direction: column; min-width: 0; }
+.mm-stat-text span { font-size: 12px; font-weight: 700; color: #6b7280; }
+.mm-stat-text strong { font-size: 17px; font-weight: 900; color: #111827; letter-spacing: -0.4px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.tone-charge .mm-stat-icon, .mm-log-icon.tone-charge { color: #1d5fbf; background: #e9f1fd; }
+.tone-use .mm-stat-icon, .mm-log-icon.tone-use { color: #b04a12; background: #fff1e6; }
+.tone-refund .mm-stat-icon, .mm-log-icon.tone-refund { color: #b42350; background: #fdecf1; }
+
+.mm-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 16px; }
+.mm-segment { display: inline-flex; padding: 4px; gap: 2px; border-radius: 14px; background: #f1f3f6; border: 1px solid #e8ebf0; }
+.mm-segment-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.mm-segment-btn:hover { color: #111827; }
+.mm-segment-btn.is-active { background: #ffffff; color: #111827; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 10px rgba(15, 23, 42, 0.06); }
+.mm-segment-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+.mm-periods { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.mm-period {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid #e2e5eb;
+  background: #ffffff;
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+.mm-period:hover { border-color: #cfd4dc; color: #111827; }
+.mm-period.is-active { background: #1f2533; border-color: #1f2533; color: #ffffff; }
+
+.mm-date-range { position: relative; display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+/* 🌟 달력 팝업이 패널(overflow: hidden)에 잘리지 않도록 이용 내역 패널만 넘침을 허용합니다 */
+.guide-panel.mm-panel-visible { overflow: visible; }
+.mm-date-col { flex: 1; position: relative; min-width: 0; }
+.mm-date-btn {
+  width: 100%;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid #e2e5eb;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.mm-date-btn:hover { border-color: #e9c3a8; }
+.mm-date-btn.is-open { border-color: var(--mm-from); box-shadow: 0 0 0 4px var(--mm-ring); }
+.mm-date-btn svg { color: var(--mm-accent); flex-shrink: 0; }
+.mm-date-btn .is-placeholder { color: #8b919e; font-weight: 600; }
+.mm-date-sep { color: #9ca3af; font-weight: 800; flex-shrink: 0; }
+
+.mm-cal {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 1000;
+  width: 300px;
+  max-width: calc(100vw - 48px);
+  padding: 18px;
+  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid #eceef3;
+  box-shadow: 0 24px 50px -16px rgba(15, 23, 42, 0.28);
+}
+.mm-date-col.is-end .mm-cal { left: auto; right: 0; }
+.mm-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.mm-cal-title { font-size: 16px; font-weight: 900; color: #111827; }
+.mm-cal-nav { display: flex; gap: 4px; }
+.mm-cal-nav button {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #e8ebf0;
+  background: #ffffff;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.mm-cal-nav button:hover { background: var(--mm-bg); color: var(--mm-accent); border-color: var(--mm-line); }
+.mm-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.mm-cal-dow { height: 28px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: #6b7280; }
+.mm-cal-dow.is-sun { color: #c2410c; }
+.mm-cal-day {
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.mm-cal-day:hover { background: var(--mm-bg); color: var(--mm-accent); }
+.mm-cal-day.is-today { box-shadow: inset 0 0 0 1.5px var(--mm-line); color: var(--mm-accent); }
+.mm-cal-day.is-selected { background: linear-gradient(135deg, var(--mm-from) 0%, var(--mm-to) 100%); color: #ffffff; box-shadow: 0 4px 10px -4px var(--mm-shadow); }
+.mm-cal-foot { display: flex; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f1f4; }
+.mm-cal-foot button { border: none; background: none; font-size: 13px; font-weight: 800; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+.mm-cal-foot .is-clear { color: #6b7280; }
+.mm-cal-foot .is-today { color: var(--mm-accent); }
+.mm-cal-foot button:hover { background: #f5f6f8; }
+
+.mm-log-list {
+  border-radius: 18px;
+  border: 1px solid #eceef3;
+  background: #ffffff;
+  overflow: hidden;
+}
+.mm-log {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  transition: background 0.2s ease;
+}
+.mm-log + .mm-log { border-top: 1px solid #f1f2f5; }
+.mm-log:hover { background: #fcfcfd; }
+.mm-log-icon { width: 42px; height: 42px; flex-shrink: 0; border-radius: 13px; display: flex; align-items: center; justify-content: center; }
+.mm-log-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mm-log-title { font-size: 15px; font-weight: 800; color: #111827; letter-spacing: -0.2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-log-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; font-weight: 600; color: #6b7280; }
+.mm-log-type { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; }
+.mm-log-type.tone-charge { color: #1d5fbf; background: #e9f1fd; }
+.mm-log-type.tone-use { color: #9a3d0c; background: #fff1e6; }
+.mm-log-type.tone-refund { color: #a41f47; background: #fdecf1; }
+.mm-log-right { text-align: right; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
+.mm-log-amount { font-size: 17px; font-weight: 900; letter-spacing: -0.4px; font-variant-numeric: tabular-nums; }
+.mm-log-amount.is-plus { color: #1d5fbf; }
+.mm-log-amount.is-minus { color: #111827; }
+.mm-log-balance { font-size: 12px; font-weight: 600; color: #6b7280; font-variant-numeric: tabular-nums; }
+
+.mm-skeleton { height: 14px; border-radius: 7px; background: linear-gradient(90deg, #f1f2f5 0%, #e6e8ec 50%, #f1f2f5 100%); background-size: 600px 100%; animation: mmShimmer 1.2s linear infinite; }
+.mm-skeleton.is-icon { width: 42px; height: 42px; border-radius: 13px; flex-shrink: 0; }
+
+.mm-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 56px 20px; text-align: center; }
+.mm-empty-icon { width: 56px; height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; color: #9ca3af; background: #f3f4f6; margin-bottom: 4px; }
+.mm-empty strong { font-size: 15px; font-weight: 800; color: #374151; }
+.mm-empty span { font-size: 13px; font-weight: 600; color: #6b7280; word-break: keep-all; }
+
+.mm-pager { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 24px; }
+.mm-page-btn {
+  min-width: 38px;
+  height: 38px;
+  padding: 0 8px;
+  border-radius: 12px;
+  border: 1px solid #e2e5eb;
+  background: #ffffff;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  transition: all 0.2s ease;
+}
+.mm-page-btn:hover:not(:disabled):not(.is-active) { border-color: var(--mm-line); background: var(--mm-bg); color: var(--mm-accent); }
+.mm-page-btn.is-active { color: #ffffff; border-color: transparent; background: linear-gradient(135deg, var(--mm-from) 0%, var(--mm-to) 100%); box-shadow: 0 6px 14px -6px var(--mm-shadow); }
+.mm-page-btn:disabled { color: #c4c8d0; background: #f9fafb; cursor: not-allowed; }
+
+/* ---------- 반응형 ---------- */
+@media (min-width: 769px) and (max-width: 1100px) {
+  .mm-stat { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .mm-toolbar { flex-direction: column; align-items: stretch; }
+  .mm-segment { display: flex; }
+  .mm-segment-btn { flex: 1; justify-content: center; }
+}
+
+@media (max-width: 768px) {
+  .mm-page { padding: 0 0 40px; }
+  .mm-balance { padding: 18px; gap: 14px; border-radius: 20px; }
+  .mm-balance-icon { width: 44px; height: 44px; border-radius: 14px; }
+  .mm-balance-amount { font-size: 26px; }
+  .mm-balance-stats { flex-basis: 100%; }
+  .mm-balance-stat { flex: 1 1 0; min-width: 0; }
+  /* 모바일은 상단 고정 탭 바에 같은 메뉴가 있어 카드 안 바로가기는 숨깁니다 */
+  .mm-balance-links { display: none; }
+
+  .mm-stack { gap: 22px; }
+  .mm-amount-input { font-size: 24px; }
+  .mm-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .mm-chip { min-width: 0; padding: 0 4px; gap: 2px; font-size: 12px; }
+  .mm-chip.is-ghost { grid-column: 1 / -1; }
+  .mm-amount-input::placeholder { font-size: 18px; }
+  .mm-methods { grid-template-columns: 1fr; }
+  .mm-bank { padding: 16px; }
+  .mm-copy-btn { width: 100%; justify-content: center; }
+  .mm-summary-item { padding: 12px 14px; }
+  .mm-summary-item strong { font-size: 16px; }
+  .mm-submit { height: 54px; font-size: 16px; }
+
+  .mm-stat-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 16px; }
+  .mm-stat { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 10px; }
+  .mm-stat-icon { width: 30px; height: 30px; border-radius: 10px; }
+  .mm-stat-text span { font-size: 11px; }
+  .mm-stat-text strong { font-size: 14px; }
+  .mm-toolbar { flex-direction: column; align-items: stretch; }
+  .mm-segment { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .mm-segment-btn { justify-content: center; padding: 8px 2px; gap: 4px; min-width: 0; }
+  .mm-periods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+  .mm-period { justify-content: center; padding: 7px 4px; min-width: 0; }
+  .mm-log { align-items: flex-start; }
+  .mm-log-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4; }
+  .mm-log-meta span { white-space: nowrap; }
+  .mm-date-range { gap: 6px; }
+  .mm-date-btn { padding: 0 10px; font-size: 13px; }
+  .mm-date-col { position: static; }
+  .mm-cal, .mm-date-col.is-end .mm-cal { left: 0; right: 0; width: auto; max-width: none; }
+  .mm-log { padding: 14px; gap: 12px; }
+  .mm-log-icon { width: 38px; height: 38px; }
+  .mm-log-title { font-size: 14px; }
+  .mm-log-amount { font-size: 15px; }
+}
+
+/* ============================================================
+   🌟 상단 요약 카드 (MoneyBalanceCard → mypage/wishlist 의 .mp-hero 와 동일)
+   - 기본 스타일: app/mypage/mypage-premium.css
+   - 여기서는 여백과 수치 색상 톤만 보탭니다
+   ============================================================ */
+.mp-hero.mm-hero { margin-bottom: 24px; }
+.mm-hero .mp-avatar svg { color: #ffffff; }
+.mm-hero .mp-hero-money-actions a svg { flex-shrink: 0; }
+.mm-hero .mp-hero-stat.mm-tone-plus strong { color: #9fd8ff; }
+.mm-hero .mp-hero-stat.mm-tone-minus strong { color: #fcd9a8; }
+.mm-hero .mp-hero-stat.mm-tone-warn { background: rgba(248, 113, 113, 0.12); border-color: rgba(248, 113, 113, 0.3); }
+.mm-hero .mp-hero-stat.mm-tone-warn strong { color: #fecaca; }

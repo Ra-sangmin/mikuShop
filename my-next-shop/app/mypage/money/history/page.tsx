@@ -2,8 +2,12 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import GuideLayout from '@/app/components/GuideLayout';
+import '@/app/guide/guide-common.css';
 import { useRouter } from 'next/navigation'; // 🌟 라우터 임포트
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; // 🌟 Context 임포트
+import { ArrowDownLeft, ShoppingBag, Undo2, CalendarDays, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
+import MoneyBalanceCard from '../MoneyBalanceCard';
+import GuideTitle from '@/app/guide/components/GuideTitle';
 
 // ==========================================
 // 🎨 1. 스타일 시스템 및 보조 함수
@@ -15,7 +19,8 @@ const s = {
   // 공통 및 레이아웃
   // 🌟 padding-top을 0으로: GuideLayout이 헤더와 콘텐츠 패널 사이 간격을 이미 없앴는데,
   // 이 컨테이너 자체의 위쪽 padding(40px)이 그 위에 또 여백을 만들고 있었음
-  container: { maxWidth: '672px', margin: '0 auto', padding: '0 16px 40px 16px', minHeight: '100vh' },
+  // 🌟 가로 폭: 다른 사이드바 페이지(inquiry/faq 등의 .guide-page-container)처럼 본문 영역 전체를 씁니다.
+  container: { width: '100%', padding: '0 0 40px 0', boxSizing: 'border-box' as const, minHeight: '100vh' },
 
   // 🌟 타입 필터 탭부터 목록 끝까지를 감싸는 배경 패널
   contentPanel: { backgroundColor: '#fdfdfd', borderRadius: '24px', padding: '10px 16px 20px 16px' },
@@ -177,20 +182,45 @@ function useMoneyHistoryLogic() {
     loading, currentMoney, period, setPeriod, filterType, setFilterType,
     customDates, setCustomDates, currentPage, setCurrentPage,
     showPicker, setShowPicker, viewDate, setViewDate, pickerWrapperRef,
-    currentLogs, totalPages, pageNumbers
+    logs, currentLogs, totalPages, pageNumbers
   };
 }
 
 // ==========================================
 // 🖥️ 3. 메인 컴포넌트 (UI 마크업 전용)
 // ==========================================
+const TYPE_TABS = [
+  { key: 'ALL', label: '전체', dot: '#6b7280' },
+  { key: 'CHARGE', label: '충전', dot: '#1d5fbf' },
+  { key: 'USE', label: '사용', dot: '#c2541a' },
+  { key: 'REFUND', label: '환불', dot: '#b42350' },
+];
+const PERIODS = [
+  { key: 'all', label: '전체 기간' },
+  { key: '1week', label: '1주' },
+  { key: '1month', label: '1개월' },
+  { key: 'custom', label: '직접 선택' },
+];
+const TYPE_META: Record<string, { tone: string; label: string; icon: React.ElementType }> = {
+  CHARGE: { tone: 'tone-charge', label: '충전', icon: ArrowDownLeft },
+  USE: { tone: 'tone-use', label: '사용', icon: ShoppingBag },
+  REFUND: { tone: 'tone-refund', label: '환불', icon: Undo2 },
+};
+
+const formatLogDate = (value: string) => {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 export default function MoneyHistoryPage() {
   const {
     isAuthChecking, // 🌟 상태 받아오기
     loading, currentMoney, period, setPeriod, filterType, setFilterType,
     customDates, setCustomDates, currentPage, setCurrentPage,
     showPicker, setShowPicker, viewDate, setViewDate, pickerWrapperRef,
-    currentLogs, totalPages, pageNumbers
+    logs, currentLogs, totalPages, pageNumbers
   } = useMoneyHistoryLogic();
 
   // 🌟 로그인 여부 확인 중일 때는 빈 화면을 렌더링해 깜빡임 방지
@@ -198,48 +228,64 @@ export default function MoneyHistoryPage() {
     return <div style={{ height: '100vh', backgroundColor: '#fdfdfd' }} />;
   }
 
+  // 🌟 현재 조회 조건(유형·기간)에 해당하는 내역 전체의 합계
+  const totals = logs.reduce(
+    (acc: { charge: number; use: number; refund: number }, log: any) => {
+      const value = Math.abs(Number(log.amount) || 0);
+      if (log.type === 'CHARGE') acc.charge += value;
+      else if (log.type === 'REFUND') acc.refund += value;
+      else acc.use += value;
+      return acc;
+    },
+    { charge: 0, use: 0, refund: 0 }
+  );
+
   const renderCalendar = (target: 'start' | 'end') => {
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth();
     const days = getDaysInMonth(year, month);
     const firstDay = getFirstDayOfMonth(year, month);
     const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
     const handleTodayClick = () => {
-      const today = new Date();
-      const formatted = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      setCustomDates(prev => ({ ...prev, [target]: formatted }));
-      setViewDate(today);
+      setCustomDates(prev => ({ ...prev, [target]: todayStr }));
+      setViewDate(now);
       setShowPicker(null);
     };
 
     return (
-      <div style={s.calendarModal} onClick={(e) => e.stopPropagation()}>
-        <div style={s.calHeader}>
-          <span style={s.calTitle}>{year}년 {month + 1}월</span>
-          <div style={s.calNavGroup}>
-            <button onClick={() => setViewDate(new Date(year, month - 1))} style={s.calNavBtn}>▲</button>
-            <button onClick={() => setViewDate(new Date(year, month + 1))} style={s.calNavBtn}>▼</button>
+      <div className="mm-cal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={target === 'start' ? '시작일 선택' : '종료일 선택'}>
+        <div className="mm-cal-head">
+          <span className="mm-cal-title">{year}년 {month + 1}월</span>
+          <div className="mm-cal-nav">
+            <button type="button" aria-label="이전 달" onClick={() => setViewDate(new Date(year, month - 1))}><ChevronLeft size={16} strokeWidth={2.4} /></button>
+            <button type="button" aria-label="다음 달" onClick={() => setViewDate(new Date(year, month + 1))}><ChevronRight size={16} strokeWidth={2.4} /></button>
           </div>
         </div>
-        <div style={s.grid}>
-          {dayLabels.map(l => <div key={l} style={s.calDayLabel}>{l}</div>)}
-        </div>
-        <div style={s.grid}>
+        <div className="mm-cal-grid">
+          {dayLabels.map((l, i) => <div key={l} className={`mm-cal-dow ${i === 0 ? 'is-sun' : ''}`}>{l}</div>)}
           {Array(firstDay).fill(null).map((_, i) => <div key={`empty-${i}`} />)}
           {Array.from({ length: days }, (_, i) => i + 1).map(d => {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const isSelected = customDates[target] === dateStr;
             return (
-              <div key={d} style={s.dayCell(customDates[target] === dateStr, new Date().toISOString().split('T')[0] === dateStr, true)} onClick={() => {
-                setCustomDates(prev => ({ ...prev, [target]: dateStr }));
-                setShowPicker(null);
-              }}>{d}</div>
+              <button
+                type="button"
+                key={d}
+                className={`mm-cal-day ${isSelected ? 'is-selected' : ''} ${todayStr === dateStr ? 'is-today' : ''}`}
+                onClick={() => {
+                  setCustomDates(prev => ({ ...prev, [target]: dateStr }));
+                  setShowPicker(null);
+                }}
+              >{d}</button>
             );
           })}
         </div>
-        <div style={s.calFooter}>
-          <button style={s.calClearBtn} onClick={() => { setCustomDates(prev => ({ ...prev, [target]: '' })); setShowPicker(null); }}>삭제</button>
-          <button style={s.calTodayBtn} onClick={handleTodayClick}>오늘</button>
+        <div className="mm-cal-foot">
+          <button type="button" className="is-clear" onClick={() => { setCustomDates(prev => ({ ...prev, [target]: '' })); setShowPicker(null); }}>지우기</button>
+          <button type="button" className="is-today" onClick={handleTodayClick}>오늘</button>
         </div>
       </div>
     );
@@ -248,176 +294,173 @@ export default function MoneyHistoryPage() {
   return (
     <GuideLayout title="이용 내역" type="money">
       <style jsx global>{`
-        /* 🌟 mypage/money/charge 페이지와 동일한 타이틀 + BG 패널 스타일 (통일감) */
-        .money-page-title {
-          display: flex; align-items: center; gap: 10px;
-          font-size: 20px; font-weight: 900; color: #0f172a;
-          letter-spacing: -0.4px; margin-bottom: 16px;
-        }
-        .money-title-icon {
-          width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0; color: #fff;
-          display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
-          background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
-          box-shadow: 0 6px 14px -5px rgba(234, 88, 12, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
-        }
-        .money-panel {
-          position: relative;
-          overflow: hidden;
-          background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
-          border: 1px solid rgba(226, 232, 240, 0.7);
-          border-radius: 32px;
-          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 14px 34px -14px rgba(15, 23, 42, 0.10);
-          padding: 28px;
-          box-sizing: border-box;
-        }
-        .money-panel::before {
-          content: '';
-          position: absolute; top: 0; left: 0; right: 0; height: 4px;
-          background: linear-gradient(90deg, #fb923c 0%, #ea580c 50%, #fb923c 100%);
-        }
-
-        /* 🌟 타이틀 오른쪽에 현재 보유 머니를 함께 보여주는 영역 */
-        .money-title-row {
-          display: flex; align-items: center; justify-content: space-between;
-          flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px;
-        }
-        .money-title-row .money-page-title { margin-bottom: 0; }
-        .money-title-balance {
-          display: inline-flex; align-items: center; gap: 8px;
-          margin: 0; padding: 9px 18px;
-          background: linear-gradient(135deg, #fff7ed 0%, #ffece0 100%);
-          border: 1px solid #fed7aa;
-          border-radius: 999px;
-          font-size: 13px; font-weight: 700; color: #9a3412;
-          white-space: nowrap;
-        }
-        .money-title-balance strong {
-          font-size: 19px; font-weight: 900; color: #ea580c;
-        }
-
         /* 🌟 모바일: currentMenu(고정 바)와 카드 사이 여백 제거 */
         @media (max-width: 768px) {
           .money-history-container { padding-top: 0 !important; }
-          .money-page-title { font-size: 16px; gap: 8px; }
-          .money-title-icon { width: 24px; height: 24px; border-radius: 8px; font-size: 11px; }
-          .money-title-balance { padding: 7px 14px; font-size: 11px; gap: 6px; }
-          .money-title-balance strong { font-size: 15px; }
-          .money-panel { padding: 16px; border-radius: 16px; }
         }
       `}</style>
-      <div className="money-history-container" style={s.container}>
+      <div className="money-history-container mm-page" style={{ minHeight: '100vh' }}>
 
-        <div className="money-title-row">
-          <h2 className="money-page-title">이용 내역 <span className="money-title-icon"><i className="fa fa-coins"></i></span></h2>
-          <p className="money-title-balance">현재 보유 머니<strong>{currentMoney.toLocaleString()}원</strong></p>
-        </div>
+        {/* 🌟 요약 카드 + 제목 — mypage/wishlist 와 같은 구성 (카드가 제목 위) */}
+        <MoneyBalanceCard
+          current="history"
+          balance={currentMoney}
+          stats={[
+            { label: '조회 내역', value: `${logs.length}건` },
+            { label: '충전 합계', value: `${totals.charge > 0 ? '+' : ''}${totals.charge.toLocaleString()}원`, tone: 'plus' },
+            { label: '사용 합계', value: `${totals.use > 0 ? '-' : ''}${totals.use.toLocaleString()}원`, tone: 'minus' },
+            { label: '환불 합계', value: `${totals.refund.toLocaleString()}원` },
+          ]}
+        />
 
-        <div className="money-panel">
+        <GuideTitle eyebrow="History" title="이용 내역" icon="fa-coins" />
 
-        {/* 🌟 타입 필터 탭부터 아래로는 별도 배경 패널로 감쌈 */}
-        <div style={s.contentPanel}>
+        <div className="guide-panel mm-anim mm-panel-visible">
 
-        {/* 타입 필터 탭 */}
-        <div style={s.tabContainer}>
-          {['ALL', 'CHARGE', 'USE', 'REFUND'].map((t) => (
-            <div key={t} style={s.tabItem(filterType === t)} onClick={() => setFilterType(t)}>
-              {t === 'ALL' ? '전체' : t === 'CHARGE' ? '충전' : t === 'USE' ? '사용' : '환불'}
+          {/* 조회 조건 합계 */}
+          <div className="mm-stat-row" translate="no">
+            <div className="mm-stat tone-charge">
+              <span className="mm-stat-icon"><ArrowDownLeft size={18} strokeWidth={2.3} /></span>
+              <span className="mm-stat-text"><span>충전 합계</span><strong>{totals.charge > 0 ? '+' : ''}{totals.charge.toLocaleString()}원</strong></span>
             </div>
-          ))}
-        </div>
-
-        {/* 기간 필터 버튼 */}
-        <div style={s.periodWrapper}>
-          {['all', '1week', '1month', 'custom'].map(p => (
-            <button key={p} onClick={() => setPeriod(p)} style={s.periodBtn(period === p)}>
-              {p === 'all' ? '전체' : p === '1week' ? '1주' : p === '1month' ? '1개월' : '🗓️ 직접 선택'}
-            </button>
-          ))}
-        </div>
-
-        {/* 직접 선택 달력 피커 */}
-        {period === 'custom' && (
-          <div ref={pickerWrapperRef} style={s.datePickerWrapper}>
-            <div style={s.dateInputCol}>
-              <div onClick={() => setShowPicker('start')} style={s.dateInputBox}>{customDates.start || '시작일'}</div>
-              {showPicker === 'start' && renderCalendar('start')}
+            <div className="mm-stat tone-use">
+              <span className="mm-stat-icon"><ShoppingBag size={18} strokeWidth={2.3} /></span>
+              <span className="mm-stat-text"><span>사용 합계</span><strong>{totals.use > 0 ? '-' : ''}{totals.use.toLocaleString()}원</strong></span>
             </div>
-            <div style={s.dateArrow}>→</div>
-            <div style={s.dateInputCol}>
-              <div onClick={() => setShowPicker('end')} style={s.dateInputBox}>{customDates.end || '종료일'}</div>
-              {showPicker === 'end' && renderCalendar('end')}
+            <div className="mm-stat tone-refund">
+              <span className="mm-stat-icon"><Undo2 size={18} strokeWidth={2.3} /></span>
+              <span className="mm-stat-text"><span>환불 합계</span><strong>{totals.refund.toLocaleString()}원</strong></span>
             </div>
           </div>
-        )}
 
-        {/* 이용내역 리스트 */}
-        <div style={s.listWrapper}>
-          {loading ? <div style={s.loadingText}>데이터를 불러오는 중입니다...</div> :
-            currentLogs.length > 0 ? currentLogs.map((log) => {
-              
-              const style = getTypeStyle(log.type);
+          {/* 필터 */}
+          <div className="mm-toolbar">
+            <div className="mm-segment" role="tablist" aria-label="내역 유형">
+              {TYPE_TABS.map((t) => (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={filterType === t.key}
+                  key={t.key}
+                  className={`mm-segment-btn ${filterType === t.key ? 'is-active' : ''}`}
+                  onClick={() => setFilterType(t.key)}
+                >
+                  <span className="mm-segment-dot" style={{ background: t.dot }} />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="mm-periods" aria-label="조회 기간">
+              {PERIODS.map(p => (
+                <button type="button" key={p.key} onClick={() => setPeriod(p.key)} className={`mm-period ${period === p.key ? 'is-active' : ''}`}>
+                  {p.key === 'custom' && <CalendarDays size={13} strokeWidth={2.3} />}
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-              return (
-                <div key={log.id} style={s.logCard(style)}>
-                  <div style={s.logLeft}>
-                    <div style={s.logBadge(style)}>
-                      {log.type === 'CHARGE' ? '충전' : log.type === 'REFUND' ? '환불' : '사용'}
-                    </div>
-                    <div>
-                      <p style={s.logTitle(style.titleColor)}>{log.content}</p>
-                      <p style={s.logDate}>
-                        {new Date(log.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
+          {/* 직접 선택 달력 피커 */}
+          {period === 'custom' && (
+            <div ref={pickerWrapperRef} className="mm-date-range">
+              <div className="mm-date-col">
+                <button type="button" className={`mm-date-btn ${showPicker === 'start' ? 'is-open' : ''}`} onClick={() => setShowPicker(showPicker === 'start' ? null : 'start')}>
+                  <CalendarDays size={16} strokeWidth={2.2} />
+                  <span className={customDates.start ? '' : 'is-placeholder'}>{customDates.start || '시작일'}</span>
+                </button>
+                {showPicker === 'start' && renderCalendar('start')}
+              </div>
+              <span className="mm-date-sep">~</span>
+              <div className="mm-date-col is-end">
+                <button type="button" className={`mm-date-btn ${showPicker === 'end' ? 'is-open' : ''}`} onClick={() => setShowPicker(showPicker === 'end' ? null : 'end')}>
+                  <CalendarDays size={16} strokeWidth={2.2} />
+                  <span className={customDates.end ? '' : 'is-placeholder'}>{customDates.end || '종료일'}</span>
+                </button>
+                {showPicker === 'end' && renderCalendar('end')}
+              </div>
+            </div>
+          )}
+
+          {/* 이용내역 리스트 */}
+          <div className="mm-log-list">
+            {loading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="mm-log" aria-hidden="true">
+                  <span className="mm-skeleton is-icon" />
+                  <div className="mm-log-main">
+                    <span className="mm-skeleton" style={{ width: '55%' }} />
+                    <span className="mm-skeleton" style={{ width: '30%', height: '10px' }} />
                   </div>
-                  <div style={s.logRight}>
-                    <p style={s.logAmount(style.amountColor)}>
-                      {log.amount > 0 ? `+${log.amount.toLocaleString()}` : log.amount.toLocaleString()}원
+                  <span className="mm-skeleton" style={{ width: '80px' }} />
+                </div>
+              ))
+            ) : currentLogs.length > 0 ? currentLogs.map((log: any) => {
+              const meta = TYPE_META[log.type] || TYPE_META.USE;
+              const Icon = meta.icon;
+              const isPlus = log.amount > 0;
+              return (
+                <div key={log.id} className="mm-log">
+                  <span className={`mm-log-icon ${meta.tone}`}><Icon size={19} strokeWidth={2.2} /></span>
+                  <div className="mm-log-main">
+                    <p className="mm-log-title" title={log.content}>{log.content}</p>
+                    <p className="mm-log-meta">
+                      <span className={`mm-log-type ${meta.tone}`}>{meta.label}</span>
+                      <span translate="no">{formatLogDate(log.createdAt)}</span>
                     </p>
-                    <p style={s.logBalance}>
-                      잔액 {log.balanceAfter.toLocaleString()}원
+                  </div>
+                  <div className="mm-log-right" translate="no">
+                    <p className={`mm-log-amount ${isPlus ? 'is-plus' : 'is-minus'}`}>
+                      {isPlus ? `+${log.amount.toLocaleString()}` : log.amount.toLocaleString()}원
                     </p>
+                    <p className="mm-log-balance">잔액 {Number(log.balanceAfter || 0).toLocaleString()}원</p>
                   </div>
                 </div>
               );
-            }) : <div style={s.emptyText}>내역이 없습니다.</div>}
-        </div>
-
-        {/* 페이지네이션 영역 */}
-        {!loading && totalPages > 1 && (
-          <div style={s.paginationWrapper}>
-            <button 
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              style={s.pageBtn(false, currentPage === 1)}
-            >
-              &lt;
-            </button>
-            
-            {pageNumbers.map(page => (
-              <button
-                key={page}
-                onClick={() => setCurrentPage(page)}
-                style={s.pageBtn(currentPage === page, false)}
-              >
-                {page}
-              </button>
-            ))}
-
-            <button 
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              style={s.pageBtn(false, currentPage === totalPages)}
-            >
-              &gt;
-            </button>
+            }) : (
+              <div className="mm-empty">
+                <span className="mm-empty-icon"><Inbox size={26} strokeWidth={1.8} /></span>
+                <strong>내역이 없습니다</strong>
+                <span>조회 기간이나 유형을 바꿔서 다시 확인해 보세요.</span>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* 페이지네이션 영역 */}
+          {!loading && totalPages > 1 && (
+            <nav className="mm-pager" aria-label="페이지 이동">
+              <button
+                type="button"
+                className="mm-page-btn"
+                aria-label="이전 페이지"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft size={16} strokeWidth={2.4} />
+              </button>
+              {pageNumbers.map(page => (
+                <button
+                  type="button"
+                  key={page}
+                  className={`mm-page-btn ${currentPage === page ? 'is-active' : ''}`}
+                  aria-current={currentPage === page ? 'page' : undefined}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="mm-page-btn"
+                aria-label="다음 페이지"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                <ChevronRight size={16} strokeWidth={2.4} />
+              </button>
+            </nav>
+          )}
 
         </div>
-
-        </div>
-
       </div>
     </GuideLayout>
   );

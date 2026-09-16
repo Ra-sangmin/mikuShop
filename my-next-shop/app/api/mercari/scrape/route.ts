@@ -1,8 +1,29 @@
 import { NextResponse } from 'next/server';
 import puppeteer from 'puppeteer';
 import * as cheerio from 'cheerio';
+import { requireAdmin } from '@/lib/apiAuth';
+import { SANDBOX_ARGS } from '@/lib/crawler/sandbox';
+
+// 🔒 크롤링을 허용할 도메인 (하위 도메인 포함)
+const ALLOWED_SCRAPE_HOSTS = ['mercari.com', 'jp.mercari.com'];
+
+function isAllowedScrapeTarget(rawUrl: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:') return false;
+  const host = parsed.hostname.toLowerCase();
+  return ALLOWED_SCRAPE_HOSTS.some(allowed => host === allowed || host.endsWith(`.${allowed}`));
+}
 
 export async function GET(request: Request) {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   const { searchParams } = new URL(request.url);
   const targetUrl = searchParams.get('url');
 
@@ -10,13 +31,23 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: false, error: '타겟 URL이 필요합니다.' }, { status: 400 });
   }
 
+  // 🔒 SSRF 방지: 임의의 주소를 열 수 있으면 내부망이나 클라우드 메타데이터
+  // (169.254.169.254 등)까지 접근할 수 있으므로, 메루카리 도메인만 허용합니다.
+  if (!isAllowedScrapeTarget(targetUrl)) {
+    return NextResponse.json(
+      { success: false, error: '허용되지 않은 URL입니다. (mercari.com 주소만 사용할 수 있습니다)' },
+      { status: 400 }
+    );
+  }
+
   let browser;
 
   try {
     // 1. headless: false로 설정하여 내 컴퓨터에 크롬 창이 직접 뜨도록 함 (봇 차단 화면인지 눈으로 확인 가능)
-    browser = await puppeteer.launch({ 
-      headless: false, 
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1280,960'] 
+    browser = await puppeteer.launch({
+      headless: false,
+      // 🔒 샌드박스는 기본으로 켭니다 (lib/crawler/sandbox.ts 참고)
+      args: [...SANDBOX_ARGS, '--window-size=1280,960'],
     });
     
     const page = await browser.newPage();

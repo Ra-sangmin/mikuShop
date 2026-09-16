@@ -6,7 +6,7 @@ import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 import GlobalProductDetailBase from "./GlobalProductDetailBase";
 import { GlobalProduct } from "./GlobalProductDetail";
-import { getDetailStyles, DetailTheme } from "./GlobalProductDetail.styles";
+import { getDetailStyles, getDetailTheme } from "./GlobalProductDetail.styles";
 import { getDisplayedName, extractProductFeatures } from "./aiSummaryUtils";
 
 interface Props {
@@ -74,10 +74,7 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
     return numericBid <= livePrice;
   }, [bidAmount, livePrice]);
 
-  const theme = useMemo(() => ({
-    main: '#ef4444', 
-    light: '#fef2f2'
-  }), []);
+  const theme = useMemo(() => getDetailTheme('yahoo_auction'), []);
 
   const styles = useMemo(() => getDetailStyles(isMobile, theme), [isMobile, theme]);
   

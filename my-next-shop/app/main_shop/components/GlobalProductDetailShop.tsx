@@ -6,7 +6,7 @@ import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 import GlobalProductDetailBase from "./GlobalProductDetailBase";
 import { GlobalProduct } from "./GlobalProductDetail";
-import { getDetailStyles, DetailTheme } from "./GlobalProductDetail.styles";
+import { getDetailStyles, getDetailTheme } from "./GlobalProductDetail.styles";
 import { getDisplayedName, extractProductFeatures } from "./aiSummaryUtils";
 
 interface Props {
@@ -35,27 +35,66 @@ export default function GlobalProductDetailShop({ product, onClose }: Props) {
   const [isFeatureOpen, setIsFeatureOpen] = useState(false);
 
   const [isMobile, setIsMobile] = useState(false);
-  const theme = useMemo(() => {
-    switch(product.platform) {
-      case 'mercari': return { main: '#ff007f', light: '#fff5f6' };
-      case 'rakuten': return { main: '#bf0000', light: '#fdf2f2' };
-      case 'amazon':  return { main: '#ff9900', light: '#fff9f0' };
-      default:        return { main: '#ff007f', light: '#fff5f6' };
-    }
-  }, [product.platform]);
+  // 🌟 목록 화면과 같은 부드러운 쇼핑몰 팔레트 (원색 #bf0000 등 대신)
+  const theme = useMemo(() => getDetailTheme(product.platform), [product.platform]);
 
   const styles = useMemo(() => getDetailStyles(isMobile, theme), [isMobile, theme]);
+
+  // 🐛 장바구니에 담기는 상품명이 일본어 원문(product.name)이었습니다. 상세 화면에서는 구글 웹 번역이
+  //    제목을 한국어로 바꿔 보여주므로, "화면에 보이는 그 한국어 제목"을 읽어 저장합니다.
+  //    (번역이 아직 안 됐거나 꺼져 있어 일본어 그대로면 원문을 그대로 씁니다)
+  // 🌟 라쿠텐 판매자들은 검색 노출을 위해 상품명에 같은 단어를 여러 번 넣습니다
+  //    (예: "山ねこ 720ml 山ねこ720 山ねこ720ml ねこ ねこ720 …"). 번역해도 그대로 반복되므로,
+  //    장바구니에는 같은 단어의 두 번째 이후 등장을 지운 이름을 저장합니다. (첫 등장 순서는 유지)
+  //    공백뿐 아니라 "소주/선물/선물" 처럼 슬래시·가운뎃점으로 이어진 반복도 지우되, 구분자는 그대로 둡니다.
+  //    단, "가로 30cm × 세로 30cm" 처럼 숫자 토큰은 정당하게 두 번 나올 수 있어, 숫자로 시작하는 토큰은
+  //    바로 앞 단어와 붙어 반복되거나(같은 구절의 반복) 직전 단어가 지워진 흐름 속에 있을 때만 지웁니다.
+  const dedupeRepeatedWords = (name: string): string => {
+    const seenWord = new Set<string>();
+    const seenPair = new Set<string>();
+    let out = '';
+    let pendingSep = '';
+    let prevKey = '';          // 직전 원문 단어
+    let prevRemoved = false;   // 직전 원문 단어가 지워졌는지
+    // 단어와 구분자를 번갈아 얻습니다. (구분자: 공백, / ／ | ｜ ・ ･)
+    for (const part of name.split(/(\s+|[\/／|｜・･]+)/)) {
+      if (!part) continue;
+      if (/^(\s+|[\/／|｜・･]+)$/.test(part)) { pendingSep = part; continue; }
+
+      const key = part.toLowerCase();
+      const pair = `${prevKey} ${key}`;
+      const isNumeric = /^\d/.test(key);
+      const remove: boolean = seenWord.has(key) && (!isNumeric || prevRemoved || key === prevKey || seenPair.has(pair));
+
+      seenWord.add(key);
+      seenPair.add(pair);
+      prevKey = key;
+      prevRemoved = remove;
+      if (remove) continue; // 반복 단어는 앞 구분자와 함께 버립니다
+
+      out += (out ? pendingSep : '') + part;
+      pendingSep = '';
+    }
+    return out.trim();
+  };
+
+  const getKoreanProductName = (): string => {
+    const shown = (document.querySelector('[data-product-title]')?.textContent || '').replace(/\s+/g, ' ').trim();
+    const hasKorean = /[가-힣]/.test(shown);
+    const hasKana = /[぀-ゟ゠-ヿ]/.test(shown);
+    return dedupeRepeatedWords(shown && hasKorean && !hasKana ? shown : product.name);
+  };
 
   const handleAddToCart = async () => {
     const userId = localStorage.getItem('user_id');
     if (!userId) { showAlert("로그인이 필요한 서비스입니다. 🌸"); return; }
-    
+
     try {
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId, platform: product.platform, productName: product.name,
+          userId, platform: product.platform, productName: getKoreanProductName(),
           productPrice: product.price, productCount: quantity,
           productImageUrl: product.thumbnail, productUrl: product.url,
           productOption: optionMemo, status: "장바구니",
@@ -151,9 +190,14 @@ export default function GlobalProductDetailShop({ product, onClose }: Props) {
       {({ styles, isMobile, theme }) => (
         <>
           <div style={styles.priceContainer}>
-            <span style={styles.priceLabel}>판매 가격</span>
-            <span className="notranslate" style={styles.priceTag}>¥{(product.price * quantity).toLocaleString()}</span>
-            <span className="notranslate" style={styles.priceKrw}>약 {(Math.round(product.price * quantity * exchangeRate / 100) * 100).toLocaleString()}원</span>
+            <span style={styles.priceLabel}>Price · 판매 가격</span>
+            <div style={styles.priceRow}>
+              <span className="notranslate" translate="no" style={styles.priceTag}>¥{(product.price * quantity).toLocaleString()}</span>
+              <span className="notranslate" translate="no" style={styles.priceKrw}>약 {(Math.round(product.price * quantity * exchangeRate / 100) * 100).toLocaleString()}원</span>
+            </div>
+            {quantity > 1 && (
+              <p className="notranslate" translate="no" style={styles.priceNote}>개당 ¥{product.price.toLocaleString()} × {quantity}개</p>
+            )}
           </div>
 
           {product.platform === 'mercari' ? (
@@ -164,16 +208,56 @@ export default function GlobalProductDetailShop({ product, onClose }: Props) {
           ) : (
             <div style={styles.rakutenTable}>
               <div style={styles.tableRow}>
-                <div style={styles.tableLabel}>상점명</div>
-                <div style={styles.tableValue}><b>{product.shopName || 'Rakuten Fashion'}</b>{product.shopUrl && <button style={styles.smallBtn} onClick={() => window.open(product.shopUrl, '_blank')}>상점보기</button>}</div>
+                <div style={styles.tableLabel}>
+                  <span style={styles.tableLabelIcon}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 9 4.5 4h15L21 9" /><path d="M4 9v11h16V9" /><path d="M9 20v-6h6v6" /><path d="M3 9h18" />
+                    </svg>
+                  </span>
+                  상점명
+                </div>
+                <div style={styles.tableValue}>
+                  <span style={styles.shopNameText}>{product.shopName || PLATFORM_FALLBACK_NAME[product.platform] || 'Rakuten Fashion'}</span>
+                  {product.shopUrl && (
+                    <button type="button" className="gpd-shop-link" style={styles.smallBtn} onClick={() => window.open(product.shopUrl, '_blank', 'noopener,noreferrer')}>
+                      상점보기
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M8 7h9v9" /></svg>
+                    </button>
+                  )}
+                </div>
               </div>
               <div style={styles.tableRow}>
-                <div style={styles.tableLabel}>수량</div>
-                <div style={styles.tableValue}><input type="number" value={quantity} onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))} style={styles.numberInput} /></div>
+                <div style={styles.tableLabel}>
+                  <span style={styles.tableLabelIcon}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m7.5 4.27 9 5.15" /><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" /><path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" />
+                    </svg>
+                  </span>
+                  수량
+                </div>
+                <div style={styles.tableValue}>
+                  <div className="gpd-stepper" style={styles.stepper}>
+                    <button type="button" className="gpd-step-btn" aria-label="수량 줄이기" style={styles.stepBtn} disabled={quantity <= 1} onClick={() => setQuantity(q => Math.max(1, q - 1))}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M5 12h14" /></svg>
+                    </button>
+                    <input type="number" min={1} aria-label="수량" value={quantity} onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))} style={styles.numberInput} />
+                    <button type="button" className="gpd-step-btn" aria-label="수량 늘리기" style={styles.stepBtn} onClick={() => setQuantity(q => q + 1)}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
+                    </button>
+                  </div>
+                  <span style={styles.stepHint}>4개 이상은 대행 수수료가 개당 ¥100</span>
+                </div>
               </div>
-              <div style={{ ...styles.tableRow, borderBottom: 'none' }}>
-                <div style={styles.tableLabel}>옵션 메모</div>
-                <div style={styles.tableValue}><textarea placeholder="옵션 정보 입력..." value={optionMemo} onChange={(e) => setOptionMemo(e.target.value)} style={styles.memoArea} /></div>
+              <div style={{ ...styles.tableRow, ...styles.tableRowTop, borderBottom: 'none' }}>
+                <div style={{ ...styles.tableLabel, paddingTop: '11px' }}>
+                  <span style={styles.tableLabelIcon}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                  </span>
+                  옵션 메모
+                </div>
+                <div style={styles.tableValue}><textarea placeholder="색상 · 사이즈 등 원하시는 옵션을 적어주세요" value={optionMemo} onChange={(e) => setOptionMemo(e.target.value)} style={styles.memoArea} /></div>
               </div>
             </div>
           )}

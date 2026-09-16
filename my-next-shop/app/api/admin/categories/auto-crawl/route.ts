@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'; 
 import { PrismaClient, Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { requireAdmin } from '@/lib/apiAuth';
 
 const TABLE_MAP: Record<string, string> = {
   YAHOO_AUCTION: 'YahooAuctionCategory',
@@ -12,7 +13,11 @@ const TABLE_MAP: Record<string, string> = {
 };
 
 // 🌟 2. 파라미터 타입을 NextRequest로 변경
-export async function GET(request: NextRequest) { 
+export async function GET(request: NextRequest) {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+ 
   try {
     // 🌟 3. nextUrl을 이용해 훨씬 직관적으로 파라미터를 가져옵니다.
     const searchParams = request.nextUrl.searchParams;

@@ -84,3 +84,16 @@ yarn-error.log*
 *.pem
 .vscode/
 .idea/
+
+# 6. 빌드 캐시 / 자동 생성 파일 (Build Cache & Generated)
+# 내 PC 의 컴파일 상태라 서버와 무관하거나, Next.js 가 빌드할 때 알아서 다시 만드는 파일입니다.
+*.tsbuildinfo
+next-env.d.ts
+
+# 7. 작업용 임시 파일 (Scratch / Temp)
+# 동작 확인용으로 잠깐 만들었다 지우는 스크립트는 반드시 "*.tmp.*" 로 이름 짓습니다.
+#   예) probe.tmp.cjs, verify.tmp.ts, inproc.tmp.ts
+*.tmp.*
+/scratch/
+/tmp/
+**/Claude outputs/

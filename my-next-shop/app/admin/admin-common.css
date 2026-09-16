@@ -108,14 +108,14 @@
   color: #334155;
 }
 
-/* 단순 테이블 (cs/dashboard/refund/users) */
+/* 단순 테이블 (cs/dashboard) */
 .admin-table-simple {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
 }
 
-/* 열 리사이즈가 가능한 테이블 (delivery/orders/settlement) */
+/* 열 리사이즈가 가능한 테이블 (delivery/orders/settlement/users/refund) */
 .admin-table-resizable {
   border-collapse: collapse;
   text-align: left;

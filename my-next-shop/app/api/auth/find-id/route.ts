@@ -1,8 +1,19 @@
 import { NextResponse } from 'next/server';
 import prisma from "@/lib/prisma";
+import { rateLimit, clientIp } from "@/lib/rateLimit";
 
 export async function POST(req: Request) {
   try {
+    // 🔒 남용 방지: 제한이 없으면 이메일을 바꿔가며 반복 호출해
+    // "어떤 이메일이 가입되어 있는지" 목록을 수집할 수 있습니다.
+    const limited = rateLimit(`find-id:${clientIp(req)}`, 10, 10 * 60 * 1000);
+    if (!limited.allowed) {
+      return NextResponse.json(
+        { success: false, message: `요청이 너무 많습니다. ${limited.retryAfterSeconds}초 후 다시 시도해주세요.` },
+        { status: 429, headers: { 'Retry-After': String(limited.retryAfterSeconds) } }
+      );
+    }
+
     const body = await req.json();
     const { email } = body;
 

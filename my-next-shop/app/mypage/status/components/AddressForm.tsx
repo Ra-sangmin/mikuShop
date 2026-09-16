@@ -275,7 +275,7 @@ export default function AddressForm(props: any) {
 
         .add-new-btn {
           background: #ffffff;
-          color: #ea580c;
+          color: #a94a53;
           border: 1px solid #fdba74;
           padding: 10px 20px;
           border-radius: 12px;
@@ -284,7 +284,7 @@ export default function AddressForm(props: any) {
           cursor: pointer;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .add-new-btn:hover { background: #fff8f6; color: #ff4b2b; border-color: #ff4b2b; }
+        .add-new-btn:hover { background: #fdf4f4; color: #a94a53; border-color: #a94a53; }
 
         .addr-list {
           display: flex;
@@ -315,16 +315,16 @@ export default function AddressForm(props: any) {
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .radio-card:hover:not(.selected) { border-color: #cbd5e1; transform: translateY(-2px); box-shadow: 0 8px 20px -4px rgba(0,0,0,0.05); }
-        .radio-card.selected { border-color: #ff4b2b; background-color: #fff8f6; box-shadow: 0 8px 24px rgba(255, 75, 43, 0.12); }
+        .radio-card.selected { border-color: #a94a53; background-color: #fdf4f4; box-shadow: 0 8px 24px rgba(169, 74, 83, 0.12); }
 
         .card-info { flex: 1; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
         
         .card-header { display: flex; align-items: center; gap: 10px; }
         .recipient-name { font-size: 18px; font-weight: 900; color: #0f172a; transition: color 0.2s; }
-        .radio-card.selected .recipient-name { color: #ea580c; }
+        .radio-card.selected .recipient-name { color: #a94a53; }
         
         .badge-default {
-          background-color: #ea580c; color: #fff; font-size: 11px; font-weight: 800;
+          background-color: #a94a53; color: #fff; font-size: 11px; font-weight: 800;
           padding: 4px 8px; border-radius: 6px;
         }
 
@@ -343,7 +343,7 @@ export default function AddressForm(props: any) {
           width: 14px; height: 14px; color: white; opacity: 0; transform: scale(0.5);
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .custom-radio.checked { border-color: transparent; background: linear-gradient(135deg, #ff4b2b 0%, #e63e1f 100%); box-shadow: 0 4px 10px rgba(255, 75, 43, 0.3); }
+        .custom-radio.checked { border-color: transparent; background: linear-gradient(135deg, #c0606a 0%, #a94a53 100%); box-shadow: 0 4px 10px rgba(169, 74, 83, 0.3); }
         .custom-radio.checked svg { opacity: 1; transform: scale(1); }
 
         /* 🌟 모달 디자인 (새 주소 추가) */
@@ -384,7 +384,7 @@ export default function AddressForm(props: any) {
           width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid #cbd5e1;
           font-size: 15px; color: #0f172a; transition: all 0.2s; outline: none; box-sizing: border-box;
         }
-        .modal-input:focus { border-color: #ff4b2b; box-shadow: 0 0 0 4px rgba(255, 75, 43, 0.1); }
+        .modal-input:focus { border-color: #a94a53; box-shadow: 0 0 0 4px rgba(169, 74, 83, 0.1); }
         .modal-input.readonly { background: #f8fafc; color: #64748b; cursor: not-allowed; }
         .modal-input.readonly:focus { border-color: #cbd5e1; box-shadow: none; }
 
@@ -396,18 +396,18 @@ export default function AddressForm(props: any) {
         .btn-search:hover { background: #334155; }
 
         .checkbox-label {
-          display: flex; align-items: center; gap: 10px; padding: 16px; background: #fff8f6;
-          border: 1px solid #ffedd5; border-radius: 12px; cursor: pointer; margin-top: 8px;
+          display: flex; align-items: center; gap: 10px; padding: 16px; background: #fdf4f4;
+          border: 1px solid #f0d9da; border-radius: 12px; cursor: pointer; margin-top: 8px;
         }
-        .checkbox-input { width: 20px; height: 20px; accent-color: #ea580c; cursor: pointer; }
-        .checkbox-text { font-size: 15px; font-weight: 800; color: #ea580c; }
+        .checkbox-input { width: 20px; height: 20px; accent-color: #a94a53; cursor: pointer; }
+        .checkbox-text { font-size: 15px; font-weight: 800; color: #a94a53; }
 
         .modal-footer { display: flex; gap: 12px; padding: 24px 32px; background: #f8fafc; border-top: 1px solid #f1f5f9; }
         .btn-cancel, .btn-save { flex: 1; padding: 16px; border-radius: 14px; font-size: 15px; font-weight: 800; cursor: pointer; transition: all 0.2s; border: none; }
         .btn-cancel { background: #e2e8f0; color: #475569; }
         .btn-cancel:hover { background: #cbd5e1; color: #0f172a; }
-        .btn-save { background: linear-gradient(135deg, #ff4b2b 0%, #e63e1f 100%); color: #fff; box-shadow: 0 4px 10px rgba(255, 75, 43, 0.2); }
-        .btn-save:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(255, 75, 43, 0.3); }
+        .btn-save { background: linear-gradient(135deg, #c0606a 0%, #a94a53 100%); color: #fff; box-shadow: 0 4px 10px rgba(169, 74, 83, 0.2); }
+        .btn-save:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(169, 74, 83, 0.3); }
 
         .postcode-content { background: #fff; width: 100%; max-width: 440px; border-radius: 20px; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.15); }
 

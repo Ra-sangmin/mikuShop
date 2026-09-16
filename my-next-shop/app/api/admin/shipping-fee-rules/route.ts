@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireAdmin } from '@/lib/apiAuth';
 
 export async function GET() {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   try {
     const [airRules, emsBreakpoints, extraRates] = await Promise.all([
       prisma.airShippingFeeRule.findMany(),
@@ -19,6 +24,10 @@ export async function GET() {
 // 🌟 세 테이블(항공/EMS 구간표/EMS·우체국해운 초과 규칙)을 하나의 라우트에서 다루기 위해
 // body의 type으로 어느 테이블을 수정할지 구분합니다.
 export async function PATCH(req: Request) {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   try {
     const body = await req.json();
     const { type, id } = body;

@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireAdmin } from '@/lib/apiAuth';
 
 export async function PUT(request: Request) {
-  try {
-    const { requestId, status, adminId, adminNote } = await request.json();
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
 
-    // 1. 최소한의 관리자 식별 검증
-    if (!adminId) {
-      return NextResponse.json({ error: '처리 권한이 없습니다.' }, { status: 403 });
-    }
+  try {
+    // 🔒 관리자 확인은 위의 requireAdmin(서명된 세션 쿠키)으로 처리합니다. (body의 adminId는 신뢰하지 않음)
+    const { requestId, status, adminNote } = await request.json();
 
     // 2. 신청 내역 조회
     const targetRequest = await prisma.moneyRequest.findUnique({

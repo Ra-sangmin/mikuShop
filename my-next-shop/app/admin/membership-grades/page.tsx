@@ -2,6 +2,65 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import '../admin-common.css';
+import { useResizableColumns, ResizableTableHead, type ResizableColumn } from '../components/useResizableColumns';
+
+// 🌟 이 화면의 표 5개는 모두 orders 처럼 헤더 경계를 드래그해 열 너비를 조절할 수 있습니다.
+//    (표마다 조절한 너비를 따로 저장하므로 storageKey 도 표마다 다릅니다)
+const GRADE_COLUMNS: readonly ResizableColumn[] = [
+  { key: 'sortOrder', label: '순서' },
+  { key: 'name', label: '등급명' },
+  { key: 'requiredOrders', label: '필요 주문 건수', align: 'right' },
+  { key: 'discountRate', label: '국제 배송비 할인율', align: 'right' },
+  { key: 'description', label: '설명' },
+  { key: 'manage', label: '관리', align: 'center' },
+];
+const GRADE_DEFAULT_WIDTHS = {
+  sortOrder: 90, name: 150, requiredOrders: 150, discountRate: 170, description: 320, manage: 160,
+};
+
+const ORDER_FEE_COLUMNS: readonly ResizableColumn[] = [
+  { key: 'feeType', label: '구분' },
+  { key: 'thresholdValue', label: '기준값', align: 'right' },
+  { key: 'belowThresholdFee', label: '기준 미만 금액', align: 'right' },
+  { key: 'atOrAboveThresholdAmount', label: '기준 이상 금액', align: 'right' },
+  { key: 'manage', label: '관리', align: 'center' },
+];
+const ORDER_FEE_DEFAULT_WIDTHS = {
+  feeType: 150, thresholdValue: 150, belowThresholdFee: 170, atOrAboveThresholdAmount: 200, manage: 160,
+};
+
+const AIR_COLUMNS: readonly ResizableColumn[] = [
+  { key: 'grade', label: '등급' },
+  { key: 'firstStepFee', label: '0.5kg 이하 기본가', align: 'right' },
+  { key: 'baseFeeAtStepTwo', label: '1.0kg 기준가', align: 'right' },
+  { key: 'stepIncrement', label: '0.5kg당 증가액', align: 'right' },
+  { key: 'discountVsGoldLow', label: '골드대비 할인(4.5kg 이하)', align: 'right' },
+  { key: 'discountVsGoldMid', label: '골드대비 할인(4.5~5.0kg)', align: 'right' },
+  { key: 'discountVsGoldHigh', label: '골드대비 할인(5.0kg 초과)', align: 'right' },
+  { key: 'manage', label: '관리', align: 'center' },
+];
+const AIR_DEFAULT_WIDTHS = {
+  grade: 130, firstStepFee: 160, baseFeeAtStepTwo: 140, stepIncrement: 150,
+  discountVsGoldLow: 200, discountVsGoldMid: 200, discountVsGoldHigh: 200, manage: 160,
+};
+
+const EMS_COLUMNS: readonly ResizableColumn[] = [
+  { key: 'weightKg', label: '무게(kg)' },
+  { key: 'fee', label: '요금', align: 'right' },
+  { key: 'manage', label: '관리', align: 'center' },
+];
+const EMS_DEFAULT_WIDTHS = { weightKg: 140, fee: 180, manage: 160 };
+
+const EXTRA_COLUMNS: readonly ResizableColumn[] = [
+  { key: 'method', label: '구분' },
+  { key: 'thresholdWeightKg', label: '기준 무게(kg)', align: 'right' },
+  { key: 'baseFeeAtThreshold', label: '기준 요금', align: 'right' },
+  { key: 'extraPerKg', label: '초과 1kg당 추가금', align: 'right' },
+  { key: 'manage', label: '관리', align: 'center' },
+];
+const EXTRA_DEFAULT_WIDTHS = {
+  method: 170, thresholdWeightKg: 150, baseFeeAtThreshold: 150, extraPerKg: 190, manage: 160,
+};
 
 // 🌟 air_shipping_fee_rules.grade는 코드(NEW/SILVER/GOLD/DIAMOND) 고정값이고, 화면에
 // 보여줄 실제 이름은 membership_grades.name(관리자가 위 표에서 바꿀 수 있음)을 따릅니다.
@@ -16,6 +75,33 @@ const AIR_GRADE_CODE_ORDER = ['NEW', 'SILVER', 'GOLD', 'DIAMOND'];
 export default function MembershipGradeManagement() {
   const [grades, setGrades] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // 🌟 표별 열 너비 조절 (orders 와 동일한 방식)
+  const gradeCols = useResizableColumns({
+    storageKey: 'admin_membership_grades_column_widths',
+    defaultWidths: GRADE_DEFAULT_WIDTHS,
+    visibleColumns: GRADE_COLUMNS.map(c => c.key),
+  });
+  const orderFeeCols = useResizableColumns({
+    storageKey: 'admin_membership_order_fee_column_widths',
+    defaultWidths: ORDER_FEE_DEFAULT_WIDTHS,
+    visibleColumns: ORDER_FEE_COLUMNS.map(c => c.key),
+  });
+  const airCols = useResizableColumns({
+    storageKey: 'admin_membership_air_column_widths',
+    defaultWidths: AIR_DEFAULT_WIDTHS,
+    visibleColumns: AIR_COLUMNS.map(c => c.key),
+  });
+  const emsCols = useResizableColumns({
+    storageKey: 'admin_membership_ems_column_widths',
+    defaultWidths: EMS_DEFAULT_WIDTHS,
+    visibleColumns: EMS_COLUMNS.map(c => c.key),
+  });
+  const extraCols = useResizableColumns({
+    storageKey: 'admin_membership_extra_column_widths',
+    defaultWidths: EXTRA_DEFAULT_WIDTHS,
+    visibleColumns: EXTRA_COLUMNS.map(c => c.key),
+  });
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ name: '', discountRate: 0, requiredOrders: 0, sortOrder: 0, description: '' });
@@ -102,10 +188,17 @@ export default function MembershipGradeManagement() {
     }
   };
 
+  // 🐛 예전에는 AIR_GRADE_CODE_ORDER의 순번으로 grades[idx]를 집어왔습니다. grades는 id 순으로
+  //    내려오는데 이 화면에서 sortOrder를 편집할 수 있고 등급이 추가/삭제될 수도 있어서,
+  //    순번이 어긋나면 엉뚱한 등급 이름이 항공 요금 행에 붙었습니다.
+  //    → membership_grades.name이 고유(unique)하고 코드값(NEW/SILVER/…)과 같으므로 이름으로 맞춥니다.
   const airGradeDisplayNameByCode = useMemo(() => {
+    const byName = new Map<string, any>(
+      grades.map((g: any) => [String(g.name).toUpperCase(), g])
+    );
     const map: Record<string, string> = {};
-    AIR_GRADE_CODE_ORDER.forEach((code, idx) => {
-      map[code] = grades[idx]?.name ?? code;
+    AIR_GRADE_CODE_ORDER.forEach((code) => {
+      map[code] = byName.get(code.toUpperCase())?.name ?? code;
     });
     return map;
   }, [grades]);
@@ -282,17 +375,8 @@ export default function MembershipGradeManagement() {
     <div className="admin-container" style={gs.section}>
       <h3 className="admin-section-title">회원 등급 및 국제 배송비 할인율</h3>
       <div style={gs.tableWrapper}>
-        <table className="admin-table-simple">
-          <thead>
-            <tr className="admin-table-head-row">
-              <th className="admin-base-th">순서</th>
-              <th className="admin-base-th">등급명</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>필요 주문 건수</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>국제 배송비 할인율</th>
-              <th className="admin-base-th">설명</th>
-              <th className="admin-base-th" style={{ textAlign: 'center' }}>관리</th>
-            </tr>
-          </thead>
+        <table className="admin-table-resizable" style={{ width: gradeCols.totalTableWidth }}>
+          <ResizableTableHead columns={GRADE_COLUMNS} columnWidths={gradeCols.columnWidths} onMouseDown={gradeCols.onMouseDown} />
           <tbody>
             {!isLoading ? (
               grades.length > 0 ? grades.map((grade) => (
@@ -423,16 +507,8 @@ export default function MembershipGradeManagement() {
         <strong>대행 수수료</strong>: 수량이 기준값 미만이면 "기준 미만 금액"이 고정으로, 이상이면 수량 × "기준 이상 금액"(수량당 단가)으로 계산됩니다.
       </p>
       <div style={gs.tableWrapper}>
-        <table className="admin-table-simple">
-          <thead>
-            <tr className="admin-table-head-row">
-              <th className="admin-base-th">구분</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>기준값</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>기준 미만 금액</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>기준 이상 금액</th>
-              <th className="admin-base-th" style={{ textAlign: 'center' }}>관리</th>
-            </tr>
-          </thead>
+        <table className="admin-table-resizable" style={{ width: orderFeeCols.totalTableWidth }}>
+          <ResizableTableHead columns={ORDER_FEE_COLUMNS} columnWidths={orderFeeCols.columnWidths} onMouseDown={orderFeeCols.onMouseDown} />
           <tbody>
             {!isOrderFeeLoading ? orderFeeRules.map((rule) => {
               const isEditing = editingOrderFeeId === rule.id;
@@ -483,19 +559,8 @@ export default function MembershipGradeManagement() {
       <h3 className="admin-section-title">항공 배송비 등급별 변수</h3>
       <p style={gs.helperText}>무게 0.5kg 이하는 "0.5kg 이하 기본가" 고정, 0.5kg 초과는 "1.0kg 기준가 + 1.0kg을 넘어 0.5kg 늘어날 때마다 0.5kg당 증가액"으로 계산됩니다. DIAMOND는 GOLD 요금에서 할인액을 빼는 방식이라 1.0kg 기준가/0.5kg당 증가액이 없습니다.</p>
       <div style={gs.tableWrapper}>
-        <table className="admin-table-simple">
-          <thead>
-            <tr className="admin-table-head-row">
-              <th className="admin-base-th">등급</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>0.5kg 이하 기본가</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>1.0kg 기준가</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>0.5kg당 증가액</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>골드대비 할인(4.5kg 이하)</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>골드대비 할인(4.5~5.0kg)</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>골드대비 할인(5.0kg 초과)</th>
-              <th className="admin-base-th" style={{ textAlign: 'center' }}>관리</th>
-            </tr>
-          </thead>
+        <table className="admin-table-resizable" style={{ width: airCols.totalTableWidth }}>
+          <ResizableTableHead columns={AIR_COLUMNS} columnWidths={airCols.columnWidths} onMouseDown={airCols.onMouseDown} />
           <tbody>
             {!isShippingLoading ? airRules.map((rule) => {
               const isEditing = editingAirId === rule.id;
@@ -539,14 +604,8 @@ export default function MembershipGradeManagement() {
       <h3 className="admin-section-title">EMS 요금 구간표 (0.5 ~ 7.0kg)</h3>
       <p style={gs.helperText}>등급과 무관한 공통 요금이며, 7kg 초과분은 아래 "초과 규칙"을 따릅니다.</p>
       <div style={{ ...gs.tableWrapper, maxHeight: '360px', overflowY: 'auto' }}>
-        <table className="admin-table-simple">
-          <thead>
-            <tr className="admin-table-head-row">
-              <th className="admin-base-th">무게(kg)</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>요금</th>
-              <th className="admin-base-th" style={{ textAlign: 'center' }}>관리</th>
-            </tr>
-          </thead>
+        <table className="admin-table-resizable" style={{ width: emsCols.totalTableWidth }}>
+          <ResizableTableHead columns={EMS_COLUMNS} columnWidths={emsCols.columnWidths} onMouseDown={emsCols.onMouseDown} />
           <tbody>
             {!isShippingLoading ? emsBreakpoints.map((bp) => {
               const isEditing = editingEmsId === bp.id;
@@ -588,16 +647,8 @@ export default function MembershipGradeManagement() {
       <h3 className="admin-section-title">EMS / 우체국해운 기준 무게 초과 규칙</h3>
       <p style={gs.helperText}>기준 무게까지는 "기준 요금" 고정, 초과분부터는 1kg마다 "초과 1kg당 추가금"이 더해집니다. (우체국해운은 구간표 없이 이 규칙 하나로 전체 계산됩니다.)</p>
       <div style={gs.tableWrapper}>
-        <table className="admin-table-simple">
-          <thead>
-            <tr className="admin-table-head-row">
-              <th className="admin-base-th">구분</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>기준 무게(kg)</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>기준 요금</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>초과 1kg당 추가금</th>
-              <th className="admin-base-th" style={{ textAlign: 'center' }}>관리</th>
-            </tr>
-          </thead>
+        <table className="admin-table-resizable" style={{ width: extraCols.totalTableWidth }}>
+          <ResizableTableHead columns={EXTRA_COLUMNS} columnWidths={extraCols.columnWidths} onMouseDown={extraCols.onMouseDown} />
           <tbody>
             {!isShippingLoading ? extraRates.map((rate) => {
               const isEditing = editingExtraId === rate.id;
@@ -655,7 +706,14 @@ const colors = {
   badgeTextLevel: '#3b82f6',
 };
 
-const baseTd: React.CSSProperties = { padding: '16px 12px' };
+// 🌟 열 너비를 고정(table-layout: fixed)했으므로, 넘치는 값은 말줄임으로 처리합니다.
+const baseTd: React.CSSProperties = {
+  padding: '16px 12px',
+  borderRight: '1px solid #f1f5f9',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
 
 const gs: Record<string, React.CSSProperties> = {
   section: {
@@ -687,6 +745,8 @@ const gs: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     border: `1px solid ${colors.borderInput}`,
     width: '70px',
+    maxWidth: '100%',
+    boxSizing: 'border-box',
     textAlign: 'right',
   },
   numberInputSmall: {
@@ -694,6 +754,8 @@ const gs: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     border: `1px solid ${colors.borderInput}`,
     width: '56px',
+    maxWidth: '100%',
+    boxSizing: 'border-box',
     textAlign: 'right',
   },
   percentInputWrap: {

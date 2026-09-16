@@ -4,6 +4,9 @@ import React, { useState, useEffect, useRef } from 'react'; // 🌟 Hook 추가
 import GuideLayout from '@/app/components/GuideLayout';
 import PurchaseFormContainer from '@/app/components/PurchaseFormContainer';
 import '@/app/guide/guide-common.css';
+import GuideTitle from '@/app/guide/components/GuideTitle';
+import GuidePremiumHero from '@/app/guide/components/GuidePremiumHero';
+import { ClipboardText } from '@phosphor-icons/react';
 import { useRouter } from 'next/navigation'; // 🌟 라우터 추가
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; // 🌟 미쿠짱 전용 Alert 추가
 
@@ -42,9 +45,18 @@ export default function QuotePage() {
   }
 
   return (
-    <GuideLayout title="견적문의" type={PAGE_TYPE} hideSidebar={true}>
-      <div style={{ maxWidth: '940px', margin: '0 auto', padding: '0 20px' }}>
-        <h2 className="guide-title">견적문의 <span className="guide-title-icon"><i className="fa fa-file-invoice"></i></span></h2>
+    <GuideLayout title="견적문의" type={PAGE_TYPE}>
+      <div className="order-form-page">
+        {/* 🌟 얇은 요약 카드 (다른 화면의 검은색 카드와 같은 톤, 폼이 밀리지 않도록 통계 없이) */}
+        <GuidePremiumHero
+          className="is-slim"
+          ariaLabel="견적문의 안내"
+          eyebrow="QUOTE"
+          title={<>구매 전에 <em>예상 금액</em>을 확인하세요</>}
+          desc="상품 링크를 남겨 주시면 상품가·수수료·배송비를 확인한 뒤 장바구니에서 결제할 수 있어요."
+          icon={<ClipboardText weight="duotone" />}
+        />
+        <GuideTitle eyebrow="Quote" title="견적문의" icon="fa-file-invoice" />
         <div className="guide-panel">
           <PurchaseFormContainer type={PAGE_TYPE} hideDomesticShippingFee/>
         </div>

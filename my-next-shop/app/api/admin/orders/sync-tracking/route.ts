@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireAdmin } from '@/lib/apiAuth';
 
 export async function POST() {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   try {
     // 1. 배송이 진행 중이고, 운송장 번호가 있는 주문들만 DB에서 찾습니다.
     const activeOrders = await prisma.order.findMany({

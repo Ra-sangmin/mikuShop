@@ -2,6 +2,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
+import {
+  ChatCircleDots, ShoppingCartSimple, AirplaneTilt, Receipt, Scales, Headset, ArrowRight,
+  ArrowUpRight, CaretLeft, CaretRight,
+  Megaphone, Bank, Clock, CalendarCheck, Copy, ShieldCheck,
+} from '@phosphor-icons/react';
+
+const HERO_AUTOPLAY_MS = 5000;
 
 export const dynamic = "force-dynamic";
 
@@ -9,16 +16,44 @@ export const dynamic = "force-dynamic";
 interface Banner {
   title: React.ReactNode;
   subTitle: string;
+  desc: string;
   image: string;
-  bgColor: string;
+  bgColor: string;   // 배경 파스텔 색
+  accent: string;    // 배지 점·장식 링에 쓰는 진한 색
+  primary: { label: string; href: string };
+  secondary: { label: string; href: string };
 }
 
 export default function HomePage() {
   const banners: Banner[] = [
-    { title: <>안전포장 빠른배송<br />평일 매일 국제발송</>, subTitle: "합리적이고 저렴한 배송비", bgColor: "#E2F0D9", image: "/images/hero.png" },
-    { title: <>일본 쇼핑의 시작<br />미쿠짱과 함께하세요</>, subTitle: "최저가 구매대행 서비스", bgColor: "#FFF4CC", image: "/images/hero.png" },
-    { title: <>메루카리·야후옥션<br />실시간 입찰 및 구매</>, subTitle: "간편한 일본 직구 솔루션", bgColor: "#E1F5FE", image: "/images/hero.png" },
-    { title: <>다양한 혜택과 이벤트<br />회원 등급별 포인트 적립</>, subTitle: "신규 가입 시 적립금 증정", bgColor: "#FFEBEE", image: "/images/hero.png" }
+    {
+      title: <>안전포장 빠른배송<br />평일 매일 국제발송</>, subTitle: "합리적이고 저렴한 배송비",
+      desc: "도착한 상품을 꼼꼼히 포장해 한국까지 보내드려요.",
+      bgColor: "#E2F0D9", accent: "#5c9a6f", image: "/images/hero.png",
+      primary: { label: '배송대행 신청', href: '/delivery/request' },
+      secondary: { label: '배송 요금표', href: '/guide/shipping-fee' },
+    },
+    {
+      title: <>일본 쇼핑의 시작<br />미쿠짱과 함께하세요</>, subTitle: "최저가 구매대행 서비스",
+      desc: "상품 링크만 알려주시면 구매부터 배송까지 대신해 드려요.",
+      bgColor: "#FFF4CC", accent: "#c99612", image: "/images/hero.png",
+      primary: { label: '구매대행 신청', href: '/purchase/request' },
+      secondary: { label: '견적 문의', href: '/purchase/quote' },
+    },
+    {
+      title: <>메루카리·야후옥션<br />실시간 입찰 및 구매</>, subTitle: "간편한 일본 직구 솔루션",
+      desc: "원하는 상품을 찾아 입찰과 구매를 한 번에 신청하세요.",
+      bgColor: "#E1F5FE", accent: "#2f8fc4", image: "/images/hero.png",
+      primary: { label: '메루카리 둘러보기', href: '/main_shop/mercari' },
+      secondary: { label: '야후옥션', href: '/main_shop/yahoo_auction' },
+    },
+    {
+      title: <>다양한 혜택과 이벤트<br />회원 등급별 포인트 적립</>, subTitle: "신규 가입 시 적립금 증정",
+      desc: "등급이 오를수록 국제 배송비 할인 혜택이 커져요.",
+      bgColor: "#FFEBEE", accent: "#d27377", image: "/images/hero.png",
+      primary: { label: '등급별 혜택 보기', href: '/guide/membership' },
+      secondary: { label: '회원가입', href: '/auth/register' },
+    },
   ];
 
   const { showAlert } = useMikuAlert();
@@ -113,10 +148,31 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => { if (!isTransitioning) { const timer = setTimeout(() => setIsTransitioning(true), 50); return () => clearTimeout(timer); } }, [isTransitioning]);
-  useEffect(() => { if (isPaused) return; const timer = setInterval(nextSlide, 5000); return () => clearInterval(timer); }, [isTransitioning, isPaused]); 
+  // 🌟 화면에 보이는 배너 번호(0부터). 복제 슬라이드(0, 마지막)는 실제 번호로 환산합니다.
+  const activeBannerIndex =
+    currentBanner === 0 ? banners.length - 1 : currentBanner === banners.length + 1 ? 0 : currentBanner - 1;
+  // 🌟 PC에서 배너 위에 마우스를 올리면 자동 넘김을 잠시 멈춥니다.
+  const [isHeroHovered, setIsHeroHovered] = useState(false);
+  const isAutoplayPaused = isPaused || isHeroHovered;
+  // 슬라이드가 바뀔 때마다 타이머를 새로 시작해 진행 막대와 시간이 맞도록 setTimeout을 씁니다.
+  useEffect(() => {
+    if (isAutoplayPaused) return;
+    const timer = setTimeout(nextSlide, HERO_AUTOPLAY_MS);
+    return () => clearTimeout(timer);
+  }, [activeBannerIndex, isAutoplayPaused]);
 
-  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => { setDragStartX('touches' in e ? e.touches[0].clientX : e.clientX); setIsPaused(true); };
-  const handleDragMove = (e: React.MouseEvent | React.TouchEvent) => { if (dragStartX === null) return; setDragOffset(('touches' in e ? e.touches[0].clientX : e.clientX) - dragStartX); };
+  // 🌟 배너를 드래그해서 넘긴 경우엔 버튼 클릭(링크 이동)으로 처리하지 않습니다.
+  const heroDraggedRef = useRef(false);
+  const handleHeroLinkClick = (e: React.MouseEvent) => { if (heroDraggedRef.current) e.preventDefault(); };
+  const goToBanner = (index: number) => { if (isTransitioning) setCurrentBanner(index + 1); };
+
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => { heroDraggedRef.current = false; setDragStartX('touches' in e ? e.touches[0].clientX : e.clientX); setIsPaused(true); };
+  const handleDragMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (dragStartX === null) return;
+    const offset = ('touches' in e ? e.touches[0].clientX : e.clientX) - dragStartX;
+    if (Math.abs(offset) > 6) heroDraggedRef.current = true;
+    setDragOffset(offset);
+  };
   const handleDragEnd = () => { if (dragStartX === null) return; setIsPaused(false); if (Math.abs(dragOffset) > 100) { dragOffset > 0 ? prevSlide() : nextSlide(); } setDragStartX(null); setDragOffset(0); };
 
   const onScrollDragStart = (e: React.MouseEvent | React.TouchEvent) => {
@@ -155,7 +211,13 @@ export default function HomePage() {
       {/* 1. 프리미엄 Hero Banner Section */}
       <section 
         className="hero-banner-wrap"
-        onMouseDown={handleDragStart} onMouseMove={handleDragMove} onMouseUp={handleDragEnd} onMouseLeave={handleDragEnd}
+        aria-roledescription="carousel"
+        aria-label="미쿠짱 주요 안내"
+        onMouseDown={handleDragStart} onMouseMove={handleDragMove} onMouseUp={handleDragEnd}
+        onMouseLeave={handleDragEnd}
+        // 🌟 hover 일시정지는 마우스에서만 (터치 기기에서는 탭 후 mouseleave가 오지 않아 멈춘 채로 남음)
+        onPointerEnter={(e) => { if (e.pointerType === 'mouse') setIsHeroHovered(true); }}
+        onPointerLeave={(e) => { if (e.pointerType === 'mouse') setIsHeroHovered(false); }}
         onTouchStart={handleDragStart} onTouchMove={handleDragMove} onTouchEnd={handleDragEnd}
         style={styles.heroSection}
       >
@@ -170,27 +232,51 @@ export default function HomePage() {
           }}
         >
           {extendedBanners.map((banner, index) => (
-            <div key={index} style={{
-                width: `${100 / extendedBanners.length}%`, 
-                height: '100%', 
-                background: `radial-gradient(circle at 75% 50%, ${banner.bgColor} 0%, #ffffff 65%)`,
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                position: 'relative', 
-                overflow: 'hidden'
-            }}>
+            <div
+              key={index}
+              className="hero-slide"
+              aria-hidden={index !== currentBanner}
+              style={{
+                width: `${100 / extendedBanners.length}%`,
+                ['--hero-bg' as any]: banner.bgColor,
+                ['--hero-accent' as any]: banner.accent,
+              }}
+            >
+              <div className="hero-slide-pattern" aria-hidden="true"></div>
               <div className="bg-blur-circle" style={{ backgroundColor: banner.bgColor }}></div>
                 <div className="align-container banner-inner">
                     <div className="text-area">
                       <div className="premium-badge">
-                        <span className="badge-dot" style={{ backgroundColor: '#d27377' }}></span>
+                        <span className="badge-dot"></span>
                         {banner.subTitle}
                       </div>
                       <h1 className="premium-hero-title">{banner.title}</h1>
+                      <p className="hero-desc">{banner.desc}</p>
+                      <div className="hero-cta-row">
+                        <Link
+                          href={banner.primary.href}
+                          className="hero-cta hero-cta-primary"
+                          onClick={handleHeroLinkClick}
+                          onDragStart={(e) => e.preventDefault()}
+                          tabIndex={index === currentBanner ? 0 : -1}
+                        >
+                          {banner.primary.label} <ArrowRight weight="bold" />
+                        </Link>
+                        <Link
+                          href={banner.secondary.href}
+                          className="hero-cta hero-cta-secondary"
+                          onClick={handleHeroLinkClick}
+                          onDragStart={(e) => e.preventDefault()}
+                          tabIndex={index === currentBanner ? 0 : -1}
+                        >
+                          {banner.secondary.label}
+                        </Link>
+                      </div>
                     </div>
 
                     <div className="premium-image-area">
+                      <div className="hero-ring hero-ring-outer" aria-hidden="true"></div>
+                      <div className="hero-ring hero-ring-inner" aria-hidden="true"></div>
                       <div className="image-aura" style={{ backgroundColor: banner.bgColor }}></div>
                       <img src={banner.image} alt="Miku" className="premium-floating-img" draggable="false" />
                     </div>
@@ -199,20 +285,41 @@ export default function HomePage() {
           ))}
         </div>
 
-        {/* 하이엔드 리퀴드 슬라이딩 바 인디케이터 */}
-        <div className="premium-indicator-container">
-          <div className="indicator-track">
+        {/* 좌우 이동 버튼 (PC) */}
+        <button type="button" className="hero-nav-btn prev" aria-label="이전 배너"
+          onMouseDown={(e) => e.stopPropagation()} onClick={prevSlide}>
+          <CaretLeft weight="bold" />
+        </button>
+        <button type="button" className="hero-nav-btn next" aria-label="다음 배너"
+          onMouseDown={(e) => e.stopPropagation()} onClick={nextSlide}>
+          <CaretRight weight="bold" />
+        </button>
+
+        {/* 🌟 진행 표시: 번호 + 자동 넘김 진행 막대 (막대를 누르면 해당 배너로 이동) */}
+        <div className="hero-progress" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+          <span className="hero-progress-count">
+            <strong>{String(activeBannerIndex + 1).padStart(2, '0')}</strong>
+            <span> / {String(banners.length).padStart(2, '0')}</span>
+          </span>
+          <div className="hero-progress-track">
             {banners.map((_, i) => (
-              <div key={i} className="track-segment"></div>
+              <button
+                key={i}
+                type="button"
+                className={`hero-progress-seg ${i === activeBannerIndex ? 'active' : ''} ${i < activeBannerIndex ? 'done' : ''}`}
+                aria-label={`${i + 1}번째 배너 보기`}
+                aria-current={i === activeBannerIndex}
+                onClick={() => goToBanner(i)}
+              >
+                {i === activeBannerIndex && (
+                  <span
+                    key={`${activeBannerIndex}-${isAutoplayPaused}`}
+                    className={`hero-progress-fill ${isAutoplayPaused ? 'paused' : ''}`}
+                    style={{ animationDuration: `${HERO_AUTOPLAY_MS}ms` }}
+                  />
+                )}
+              </button>
             ))}
-            
-            <div 
-              className="sliding-active-bar"
-              style={{
-                width: `${100 / banners.length}%`,
-                left: `${(currentBanner === 0 ? banners.length - 1 : currentBanner === banners.length + 1 ? 0 : currentBanner - 1) * (100 / banners.length)}%`
-              }}
-            ></div>
           </div>
         </div>
       </section>
@@ -226,7 +333,7 @@ export default function HomePage() {
             <QuickIcon href="/delivery/request" label="배송대행신청" />
             <QuickIcon href="/guide/fee-guide" label="수수료 안내" />
             <QuickIcon href="/guide/shipping-fee" label="국제배송요금" />
-            <QuickIcon href="/contact" label="카톡문의" />
+            <QuickIcon href="/inquiry/kakaotalk" label="카톡문의" />
         </div>
       </section>
 
@@ -235,11 +342,11 @@ export default function HomePage() {
         <div className="align-container" style={{ display: 'flex', flexDirection: 'column' }}>
           <h2 className="home-section-title">자주 방문하는 사이트</h2>
           <div className="site-card-wrap">
-              <SiteCard shopId="mercari" logoSrc="merukari_logo" name="메루카리" desc="일본 최대 중고거래 사이트" />
-              <SiteCard shopId="rakuten" logoSrc="rakuten_logo" name="라쿠텐" desc="일본 대표 종합 쇼핑몰" />
-              <SiteCard shopId="yahoo_shopping" logoSrc="yahoo_shopping_logo" name="야후 쇼핑" desc="다양한 혜택의 야후 쇼핑"/>
+              <SiteCard shopId="mercari" logoSrc="merukari_logo" name="메루카리" desc="일본 최대 중고거래 사이트" tag="중고거래" brandRgb="255 51 63" />
+              <SiteCard shopId="rakuten" logoSrc="rakuten_logo" name="라쿠텐" desc="일본 대표 종합 쇼핑몰" tag="종합몰" brandRgb="191 0 0" />
+              <SiteCard shopId="yahoo_shopping" logoSrc="yahoo_shopping_logo" name="야후 쇼핑" desc="다양한 혜택의 야후 쇼핑" tag="종합몰" brandRgb="255 0 51" />
               {/* <SiteCard shopId="amazon" logoSrc="amazon_logo" name="아마존" desc="빠른 배송의 아마존 재팬" onClick={handleComingSoon}/> */}
-              <SiteCard shopId="yahoo_auction" logoSrc="yahoo_auction_logo" name="야후 옥션" desc="실시간 일본 옥션 입찰"/>
+              <SiteCard shopId="yahoo_auction" logoSrc="yahoo_auction_logo" name="야후 옥션" desc="실시간 일본 옥션 입찰" tag="경매" brandRgb="240 130 0" />
           </div>
         </div>
       </section>
@@ -267,68 +374,107 @@ export default function HomePage() {
               <SocialIcon url="www.toranoana.jp/" src="toranoana_logo" brandColor="#F39800" desc="토라노아나" isDragging={hasDragged} />
           </div>
           
-          <button className="scroll-arrow-btn left" onClick={() => handleManualScroll('left')}>
-            <i className="fa fa-chevron-left"></i>
+          <button className="scroll-arrow-btn left" aria-label="이전 쇼핑몰" onClick={() => handleManualScroll('left')}>
+            <CaretLeft weight="bold" />
           </button>
-          <button className="scroll-arrow-btn right" onClick={() => handleManualScroll('right')}>
-            <i className="fa fa-chevron-right"></i>
+          <button className="scroll-arrow-btn right" aria-label="다음 쇼핑몰" onClick={() => handleManualScroll('right')}>
+            <CaretRight weight="bold" />
           </button>
 
         </div>
       </section>
 
       {/* 5. Bottom Info Section */}
-      <section className="bottom-info-section anim-item delay-4" style={{ borderTop: '1px solid #f1f5f9', padding: '80px 0', backgroundColor: '#fff' }}>
+      <section className="bottom-info-section anim-item delay-4">
         <div className="align-container bottom-info-grid">
-            <div className="bottom-info-box" style={styles.infoBox}>
-                <div style={styles.infoHeaderWrap}><span className="cs-icon-badge"><i className="fa fa-headset" style={{ fontSize: '15px' }}></i></span><span style={styles.infoTitle}>CUSTOMER CENTER</span></div>
-                <h3 style={styles.csHeading}>1:1문의 <span style={styles.csHeadingAccent}>카카오톡</span></h3>
-                <div style={styles.csMetaRow}>
-                    <span style={styles.csTimeBadge}><i className="fa fa-clock" style={{ fontSize: '11px' }}></i> 10:00 ~ 24:00</span>
-                    <span style={styles.csDayBadge}>365일 연중무휴</span>
+
+            {/* 고객센터 */}
+            <div className="bottom-info-box info-card tone-indigo">
+                <div className="info-card-head">
+                    <span className="info-card-badge"><Headset weight="duotone" /></span>
+                    <span className="info-card-titles">
+                        <span className="info-card-eyebrow">CUSTOMER CENTER</span>
+                        <span className="info-card-title">고객센터</span>
+                    </span>
                 </div>
-                <p style={styles.csDesc}>실시간 대응으로 빠르게 도와드립니다</p>
-                <div style={styles.csBtnWrap}>
-                    <button
-                      className="cs-kakao-btn"
-                      style={styles.csKakaoBtn}
-                      onClick={() => window.location.href = '/contact'}
-                    >
-                      <img src="/images/kakao_icon/kakaotalk_sharing_btn_small_notBG.png" alt="" />
-                      카카오톡
-                    </button>
-                </div>
+
+                <h3 className="cs-heading">1:1 문의는 <span className="cs-heading-accent">카카오톡</span>으로</h3>
+                <p className="cs-desc">실시간 대응으로 빠르게 도와드립니다.</p>
+
+                <dl className="cs-meta">
+                    <div className="cs-meta-row">
+                        <dt><Clock weight="bold" /> 운영시간</dt>
+                        <dd>10:00 ~ 24:00</dd>
+                    </div>
+                    <div className="cs-meta-row">
+                        <dt><CalendarCheck weight="bold" /> 운영일</dt>
+                        <dd>365일 연중무휴</dd>
+                    </div>
+                </dl>
+
+                <button
+                  type="button"
+                  className="cs-kakao-btn"
+                  onClick={() => window.location.href = '/inquiry/kakaotalk'}
+                >
+                  <img src="/images/kakao_icon/kakaotalk_sharing_btn_small_notBG.png" alt="" />
+                  카카오톡 상담하기
+                </button>
             </div>
-            <div className="bottom-info-box" style={styles.infoBox}>
-                <div style={styles.infoHeaderWrap}><span className="info-icon-badge badge-notice"><i className="fa fa-bullhorn" style={{ fontSize: '15px' }}></i></span><span style={styles.infoTitle}>NOTICE</span></div>
-                <div style={styles.noticeListWrap}>
+
+            {/* 공지사항 */}
+            <div className="bottom-info-box info-card tone-amber">
+                <div className="info-card-head">
+                    <span className="info-card-badge"><Megaphone weight="duotone" /></span>
+                    <span className="info-card-titles">
+                        <span className="info-card-eyebrow">NOTICE</span>
+                        <span className="info-card-title">공지사항</span>
+                    </span>
+                    <Link href="#" className="info-card-more">전체보기 <CaretRight weight="bold" /></Link>
+                </div>
+                <ul className="notice-list">
                     <NoticeItem title="미쿠짱 2026년 3월 국제 발송일정 안내" date="03.01" />
                     <NoticeItem title="미쿠짱 2026년 2월 국제 발송일정 안내" date="02.06" />
                     <NoticeItem title="아마존재팬 일본내 배송비 무료 혜택" date="10.15" />
                     <NoticeItem title="일본 구매대행 [미쿠짱] 이용 가이드" date="09.19" />
-                </div>
-                <Link href="#" style={styles.noticeMoreLink}>전체보기 <i className="fa fa-arrow-right" style={styles.noticeMoreIcon}></i></Link>
+                </ul>
             </div>
-            <div className="bottom-info-box" style={styles.infoBox}>
-                <div style={styles.infoHeaderWrap}><span className="info-icon-badge badge-bank"><i className="fa fa-university" style={{ fontSize: '15px' }}></i></span><span style={styles.infoTitle}>BANK INFO</span></div>
-                <div style={styles.bankWrap}>
-                    <div style={styles.bankNameRow}>
-                        <img src="/images/sinhan_bank.png" alt="신한은행" style={styles.bankLogoDot} />
-                        <span style={styles.bankName}>신한은행</span>
+
+            {/* 입금 계좌 */}
+            <div className="bottom-info-box info-card tone-emerald">
+                <div className="info-card-head">
+                    <span className="info-card-badge"><Bank weight="duotone" /></span>
+                    <span className="info-card-titles">
+                        <span className="info-card-eyebrow">BANK INFO</span>
+                        <span className="info-card-title">입금 계좌</span>
+                    </span>
+                </div>
+
+                <div className="bank-panel">
+                    <div className="bank-panel-top">
+                        <span className="bank-panel-name">
+                            <span className="bank-panel-logo"><img src="/images/sinhan_bank.png" alt="" /></span>
+                            신한은행
+                        </span>
+                        <span className="bank-panel-chip" aria-hidden="true"></span>
                     </div>
-                    <div style={styles.bankAccountRow}>
-                        <span style={styles.bankAccount}>110-629-593784</span>
+                    <div className="bank-panel-account">110-629-593784</div>
+                    <div className="bank-panel-bottom">
+                        <span className="bank-panel-owner"><span>예금주</span> 미쿠짱</span>
                         <button
                           type="button"
                           className="bank-copy-btn"
                           onClick={() => { navigator.clipboard.writeText('110-629-593784'); showAlert('계좌번호가 복사되었습니다.', 'success'); }}
                         >
-                          <i className="fa fa-copy" style={{ fontSize: '11px' }}></i> 복사
+                          <Copy weight="bold" /> 복사
                         </button>
                     </div>
-                    <div style={styles.bankOwner}>예금주 · 미쿠짱</div>
                 </div>
-                <div style={styles.bankFooterWrap}><div style={styles.bankFooterText}><i className="fa fa-shield-halved" style={{ fontSize: '12px', marginRight: '6px' }}></i>입금 확인은 실시간으로 처리됩니다.</div></div>
+
+                <div className="bank-footer">
+                    <ShieldCheck weight="fill" />
+                    입금 확인은 실시간으로 처리됩니다.
+                </div>
             </div>
         </div>
       </section>
@@ -337,69 +483,105 @@ export default function HomePage() {
 }
 
 // --- 하위 컴포넌트 ---
+// 🌟 자주 사용하는 기능 아이콘
+// 일러스트 PNG 대신 벡터 아이콘 + 항목별 그라데이션 배지로 구성합니다.
+// from/to: 배지 그라데이션, rgb: 카드 아우라·호버 그림자 색 (rgb(var(--qi-rgb) / 0.2) 형태로 사용)
+const QUICK_ICONS: Record<string, { icon: React.ElementType; desc: string; from: string; to: string; rgb: string }> = {
+    '견적문의':     { icon: ChatCircleDots,     desc: '상품 금액 미리 확인', from: '#9aa8f6', to: '#5b6ee1', rgb: '107 125 230' },
+    '구매대행신청': { icon: ShoppingCartSimple, desc: '일본 상품 대신 구매', from: '#f7bd72', to: '#e08a2e', rgb: '230 150 60' },
+    '배송대행신청': { icon: AirplaneTilt,       desc: '도착 상품 국제 발송', from: '#f3a898', to: '#d9654f', rgb: '222 115 92' },
+    '수수료 안내':  { icon: Receipt,            desc: '대행 수수료 기준',   from: '#f0adc0', to: '#d27391', rgb: '215 125 155' },
+    '국제배송요금': { icon: Scales,             desc: '무게별 배송 요금',   from: '#88d6b1', to: '#3fa77a', rgb: '75 175 130' },
+    '카톡문의':     { icon: Headset,            desc: '실시간 상담 연결',   from: '#c3a9e8', to: '#8a68c9', rgb: '145 110 205' },
+};
+
 function QuickIcon({ href, label }: any) {
-    const getImageSrc = () => {
-        const basePath = '/images/main_icon';
-        const iconMap: Record<string, string> = { '견적문의': 'icon_0.png', '구매대행신청': 'icon_1.png', '배송대행신청': 'icon_2.png', '수수료 안내': 'icon_3.png', '국제배송요금': 'icon_4.png', '카톡문의': 'icon_5.png' };
-        return `${basePath}/${iconMap[label] || 'icon_0.png'}`;
-    };
+    const meta = QUICK_ICONS[label] ?? QUICK_ICONS['견적문의'];
+    const Icon = meta.icon;
     return (
-        <Link href={href} className="quick-link" style={styles.quickLink} onDragStart={(e) => e.preventDefault()}>
+        <Link
+            href={href}
+            className="quick-link"
+            style={{
+                ...styles.quickLink,
+                ['--qi-rgb' as any]: meta.rgb,
+                ['--qi-from' as any]: meta.from,
+                ['--qi-to' as any]: meta.to,
+            }}
+            onDragStart={(e) => e.preventDefault()}
+        >
             <div className="quick-icon-wrap">
-                <div className="quick-icon-box quick-box"><img src={getImageSrc()} alt={label} style={styles.quickImg} draggable="false" /></div>
-                <span className="quick-label">{label}</span>
+                <div className="quick-icon-box quick-box">
+                    <span className="quick-medallion" aria-hidden="true">
+                        <Icon className="quick-medallion-icon" weight="duotone" />
+                    </span>
+                    <span className="quick-go" aria-hidden="true"><ArrowRight weight="bold" /></span>
+                </div>
+                <span className="quick-copy">
+                    <span className="quick-label">{label}</span>
+                    <span className="quick-desc">{meta.desc}</span>
+                </span>
             </div>
         </Link>
     );
 }
 
-function SiteCard({ shopId, logoSrc, name, desc, onClick }: any) {
+// 🌟 자주 방문하는 사이트 카드 (brandRgb: 로고 뒤 은은한 배경·호버 테두리에 쓰는 브랜드 색)
+function SiteCard({ shopId, logoSrc, name, desc, tag, brandRgb = '148 163 184', onClick }: any) {
     return (
-        <Link 
-            href={`/main_shop/${shopId}`} 
-            className="site-card-link" 
-            style={styles.siteCardLink} 
+        <Link
+            href={`/main_shop/${shopId}`}
+            className="site-card-link"
+            style={{ ...styles.siteCardLink, ['--brand-rgb' as any]: brandRgb }}
             onDragStart={(e) => e.preventDefault()}
-            onClick={onClick} 
+            onClick={onClick}
         >
             <div className="site-card-box">
+                {tag && <span className="site-card-tag">{tag}</span>}
                 <div className="site-logo-wrap">
-                    <img src={`/images/${logoSrc}.png`} alt={name} style={styles.siteImg} draggable="false" />
+                    <div className="site-logo-plate">
+                        <img src={`/images/${logoSrc}.png`} alt={name} draggable="false" />
+                    </div>
                 </div>
-                <h3 style={styles.siteName}>{name}</h3>
-                <p style={styles.siteDesc}>{desc}</p>
+                <div className="site-card-body">
+                    <h3 className="site-card-name">{name}</h3>
+                    <p className="site-card-desc">{desc}</p>
+                </div>
+                <span className="site-card-cta">
+                    둘러보기 <ArrowRight weight="bold" />
+                </span>
             </div>
         </Link>
     );
 }
 
+// 🌟 일본 인기 쇼핑몰 (외부 공식몰 링크) — 호버 색은 CSS 변수(--brand)로 처리
 function SocialIcon({ url, src, brandColor, desc, isDragging }: any) {
-    const [isHover, setIsHover] = useState(false);
     return (
-        <Link 
-            href={`https://${url}`} target="_blank" className="social-link" style={styles.socialLink} title={""} 
+        <Link
+            href={`https://${url}`} target="_blank" rel="noopener noreferrer"
+            className="social-link" style={{ ...styles.socialLink, ['--brand' as any]: brandColor }}
             onClick={(e) => isDragging && e.preventDefault()} onDragStart={(e) => e.preventDefault()}
         >
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }} onMouseEnter={() => setIsHover(true)} onMouseLeave={() => setIsHover(false)}>
-                <div className="social-circle" style={{ border: `3px solid ${isHover ? brandColor : brandColor + '33'}`, boxShadow: isHover ? `0 20px 40px -10px ${brandColor + '44'}` : '0 10px 20px -5px rgba(0,0,0,0.05)', transform: isHover ? 'translateY(-10px)' : 'none', transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
-                    <img src={`/images/${src}.png`} alt={desc} style={styles.socialImg} draggable="false" /> 
+            <div className="social-item">
+                <div className="social-circle">
+                    <img src={`/images/${src}.png`} alt={desc} draggable="false" />
+                    <span className="social-ext" aria-hidden="true"><ArrowUpRight weight="bold" /></span>
                 </div>
-                <span style={{ fontSize: '18px', fontWeight: '800', color: isHover ? brandColor : '#1e293b', transition: 'color 0.3s ease', letterSpacing: '-0.5px' }}>{desc}</span>
+                <span className="social-name">{desc}</span>
+                <span className="social-sub">공식몰 바로가기</span>
             </div>
         </Link>
     );
 }
 
 function NoticeItem({ title, date }: any) {
-    const [isHovered, setIsHovered] = useState(false);
     return (
-        <div className="notice-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 10px', borderBottom: '1px solid #f8fafc', cursor: 'pointer', transition: 'all 0.2s ease', backgroundColor: isHovered ? '#f8fafc' : 'transparent', borderRadius: '8px' }} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, marginRight: '15px' }}>
-                <span className="notice-dot"></span>
-                <span style={{ color: isHovered ? '#0f172a' : '#334155', fontSize: '15px', fontWeight: isHovered ? '700' : '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', transition: 'color 0.2s' }}>{title}</span>
-            </span>
-            <span style={{ color: isHovered ? '#ea580c' : '#94a3b8', backgroundColor: isHovered ? '#fff7ed' : '#f8fafc', fontSize: '12px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', flexShrink: 0, transition: 'all 0.2s' }}>{date}</span>
-        </div>
+        <li className="notice-row">
+            <span className="notice-dot" aria-hidden="true"></span>
+            <span className="notice-title">{title}</span>
+            <span className="notice-date">{date}</span>
+        </li>
     );
 }
 
@@ -407,39 +589,12 @@ function NoticeItem({ title, date }: any) {
 // 🌟 스타일 객체
 // ==========================================
 const styles: Record<string, React.CSSProperties> = {
-  infoBox: { backgroundColor: '#fff', padding: '40px 30px', borderRadius: '24px', boxShadow: '0 10px 40px rgba(0,0,0,0.03)', border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column' },
-  infoHeaderWrap: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '25px', color: '#1e293b' },
-  infoTitle: { fontSize: '18px', fontWeight: 'bold', letterSpacing: '-0.5px' },
-  csHeading: { fontSize: '22px', fontWeight: '800', color: '#0f172a', marginBottom: '14px', letterSpacing: '-0.3px' },
-  csHeadingAccent: { backgroundImage: 'linear-gradient(135deg, #818cf8 0%, #4f46e5 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' },
-  csMetaRow: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' },
-  csTimeBadge: { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600', color: '#475569', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '6px 14px' },
-  csDayBadge: { display: 'inline-flex', alignItems: 'center', fontSize: '13px', fontWeight: '700', color: '#4f46e5', backgroundColor: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.16)', borderRadius: '20px', padding: '6px 14px' },
-  csDesc: { fontSize: '15px', color: '#64748b', lineHeight: '1.6', marginBottom: '30px' },
-  csBtnWrap: { display: 'flex', gap: '12px', marginTop: 'auto' },
-  csKakaoBtn: { flex: 1, padding: '14px', color: '#3c1e1e', border: 'none', borderRadius: '12px', fontWeight: '900', cursor: 'pointer' },
-  csReviewBtn: { flex: 1, padding: '14px', backgroundColor: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.3s' },
-  noticeListWrap: { display: 'flex', flexDirection: 'column' },
-  noticeMoreLink: { display: 'inline-block', marginTop: 'auto', paddingTop: '20px', fontSize: '14px', color: '#94a3b8', textDecoration: 'none', fontWeight: '600', transition: 'color 0.2s' },
-  noticeMoreIcon: { fontSize: '10px' },
-  bankWrap: { marginBottom: '20px' },
-  bankNameRow: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' },
-  bankLogoDot: { width: '18px', height: '18px', objectFit: 'contain', flexShrink: 0 },
-  bankName: { fontSize: '15px', color: '#64748b', fontWeight: 'bold' },
-  bankAccountRow: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' },
-  bankAccount: { fontSize: '26px', fontWeight: '900', letterSpacing: '0.5px', color: '#0f172a' },
-  bankOwner: { fontSize: '14px', color: '#94a3b8', fontWeight: '600', letterSpacing: '0.2px' },
-  bankFooterWrap: { marginTop: 'auto', paddingTop: '30px' },
-  bankFooterText: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px', backgroundColor: '#ecfdf5', borderRadius: '12px', textAlign: 'center', fontSize: '13px', color: '#059669', fontWeight: '600' },
   quickLink: { textDecoration: 'none' },
-  quickImg: { width: '65%', height: '65%', objectFit: 'contain' },
   siteCardLink: { textDecoration: 'none' },
-  siteImg: { maxWidth: '90%', maxHeight: '100%', objectFit: 'contain' },
-  siteName: { fontWeight: '900', color: '#0f172a', fontSize: '17px', marginBottom: '8px' },
-  siteDesc: { color: '#64748b', lineHeight: '1.4', fontWeight: '500', fontSize: '13px' },
   socialLink: { textDecoration: 'none' },
-  socialImg: { width: '65%', height: '65%', objectFit: 'contain' },
-  pageWrapper: { backgroundColor: '#fff', minHeight: '100vh', paddingBottom: '50px' },
-  heroSection: { position: 'relative', overflow: 'hidden', cursor: 'grab', userSelect: 'none', backgroundColor: '#eee' },
+  // 🌟 하단 정보 섹션(입금 계좌 등)과 Footer 사이가 빈 띠처럼 벌어져 보여 아래 여백을 없앴습니다
+  //    (Footer 위 여백도 globals.css 에서 홈 페이지에 한해 0 으로 둡니다)
+  pageWrapper: { backgroundColor: '#fff', minHeight: '100vh', paddingBottom: 0 },
+  heroSection: { position: 'relative', overflow: 'hidden', cursor: 'grab', userSelect: 'none', backgroundColor: '#ffffff' },
   popularSection: { backgroundColor: '#fff', padding: '40px 0 60px 0', borderTop: '1px solid #f1f5f9' },
 };

@@ -58,7 +58,16 @@ export default function OrderManagement() {
     const savedWidths = localStorage.getItem('admin_orders_column_widths');
     if (savedWidths) {
       try {
-        setColumnWidths(JSON.parse(savedWidths));
+        // 🐛 저장된 값으로 통째로 교체하면, 나중에 추가된 열(예: bidStatus)이 저장본에 없어
+        //    width가 undefined → NaN이 되고 그 NaN이 다시 저장됐습니다.
+        //    → 기본값 위에 저장본을 덮어쓰고, 숫자가 아닌 값은 버립니다.
+        const parsed = JSON.parse(savedWidths) as Record<string, unknown>;
+        const sanitized: Record<string, number> = {};
+        for (const [key, value] of Object.entries(parsed)) {
+          const n = Number(value);
+          if (Number.isFinite(n) && n > 0) sanitized[key] = n;
+        }
+        setColumnWidths({ ...defaultWidths, ...sanitized });
       } catch (e) {
         console.error("Failed to parse column widths", e);
       }
@@ -78,6 +87,11 @@ export default function OrderManagement() {
     cols.push('status', 'manage');
     return cols;
   };
+
+  // 🌟 표 전체 너비 = 현재 탭에서 보이는 열들의 너비 합.
+  //    (탭에 따라 packing/bidStatus 열이 붙었다 빠지므로 전체 합이 아니라 보이는 열만 더합니다)
+  const totalTableWidth = getVisibleColumns()
+    .reduce((sum, key) => sum + (Number(columnWidths[key]) || 0), 0);
 
   const onMouseDown = (key: string, side: 'left' | 'right', e: React.MouseEvent) => {
     let targetKey = key;
@@ -427,7 +441,12 @@ export default function OrderManagement() {
           if (bundleA !== bundleB) {
             return sortConfig.direction === 'asc' ? bundleA.localeCompare(bundleB) : bundleB.localeCompare(bundleA);
           }
-          return sortConfig.direction === 'asc' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date);
+          // 🐛 a.date는 "2026. 09. 15. 오후 12:05" 같은 한국어 표시 문자열이라 사전순으로 비교하면
+          //    '오전'과 '오후'가 뒤섞이고 오후 12:05가 오후 03:24보다 뒤로 갔습니다.
+          //    → 같은 행에 있는 원본 타임스탬프(registeredAt)로 비교합니다.
+          const timeA = new Date(a.registeredAt).getTime();
+          const timeB = new Date(b.registeredAt).getTime();
+          return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
         }
         return 0;
       });
@@ -541,7 +560,11 @@ export default function OrderManagement() {
 
       {/* 🌟 2. 테이블 영역 */}
       <div style={os.tableWrapper}>
-        <table className="admin-table-resizable">
+        {/* 🐛 table-layout: fixed는 표에 "확정된 너비"가 있어야 적용됩니다. CSS에는
+            width: max-content만 있어서 긴 상품명이 colgroup에 지정한 열 너비를 무시하고
+            열을 밀어냈고, 그래서 열 경계를 드래그해도 줄어들지 않았습니다.
+            → 현재 탭에서 보이는 열들의 너비 합을 표 너비로 직접 지정합니다. */}
+        <table className="admin-table-resizable" style={{ width: totalTableWidth }}>
           <colgroup>
             <col style={{ width: columnWidths.date }} />
             <col style={{ width: columnWidths.user }} />

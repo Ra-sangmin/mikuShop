@@ -6,6 +6,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       platformName="메루카리" 
       platformDesc="일본 최대 중고거래 사이트" 
       brandColor="#ff0021"
+      logoSrc="/images/merukari_logo.png"
     >
       {children}
     </GlobalLayout>

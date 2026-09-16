@@ -8,6 +8,7 @@ import GlobalShoppingView from "@/app/main_shop/components/GlobalShoppingView";
 import { GlobalFilterState } from "@/app/main_shop/components/GlobalSidebar";
 import { GlobalProduct } from "@/app/main_shop/components/GlobalProductDetail";
 import { useGlobalSearch } from "@/app/main_shop/components/GlobalSearchContext";
+import { useMikuAlert } from '@/app/context/MikuAlertContext';
 
 // --- 🛠️ 유틸리티 ---
 import { getTranslatedText } from '@/lib/search-utils';
@@ -58,6 +59,36 @@ function RakutenContent() {
   // page
   const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 100 });
 
+  // 🌟 상품 로딩 표시 (예전엔 false 고정이라 1~3초 걸리는 동안 빈 화면만 보여 재클릭을 유발했습니다)
+  //    메루카리와 같은 단계: 0.5초까진 아무것도 안 띄우고 → 전체 오버레이 → 3초 더 지나도 안 끝나면
+  //    오버레이를 내리고 카테고리는 그대로 둔 채 하단에 스켈레톤 로더(isStreaming)를 보여줍니다.
+  const [isItemLoading, setIsItemLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isBottomLoaderAllowed, setIsBottomLoaderAllowed] = useState(false);
+  const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { showAlert } = useMikuAlert();
+
+  const clearLoadingTimer = () => {
+    if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
+    loadingTimerRef.current = null;
+  };
+  const resetLoadingUI = () => {
+    clearLoadingTimer();
+    setIsItemLoading(false);
+    setIsStreaming(false);
+    setIsBottomLoaderAllowed(false);
+  };
+  useEffect(() => clearLoadingTimer, []);
+
+  // 🐛 카테고리를 빠르게 옮기면 앞 카테고리의 응답이 뒤늦게 도착해 현재 화면을 덮어썼습니다.
+  //    (URL 은 하위 카테고리인데 상위 카테고리 상품이 보이거나, 빈 목록으로 지워지는 현상)
+  //    → 요청마다 번호를 매기고, 가장 최근 번호의 응답만 화면에 반영합니다.
+  const loadSeqRef = useRef(0);
+
+  // 🌟 헤더 통합검색으로 들어온 검색어. 이후 카테고리를 클릭하면 이 검색어는 풀어줍니다.
+  //    (사이드바 입력칸에는 보이지 않는 검색어라, 남겨두면 이유 없이 상품이 0개로 나옵니다)
+  const headerKeywordRef = useRef<string | null>(null);
+
   // 🚀 [로직 1] 라쿠텐 데이터를 Global 규격으로 변환
   const mapToGlobal = (item: any): GlobalProduct => {
     const resizeImage = (url: string) => {
@@ -105,9 +136,11 @@ function RakutenContent() {
 
   // 🚀 [로직 4] 아이템 로드 함수 (필터 포함)
   const loadItems = async (catId: any, filters?: GlobalFilterState) => {
+    const seq = ++loadSeqRef.current;
+    const isLatest = () => seq === loadSeqRef.current;
 
     // 🚀 [수정] 모든 바구니를 확실히 비우고 시작합니다.
-    setItems([]); 
+    setItems([]);
     setProductDetail(null);
 
     const targetId = Number(catId);
@@ -117,16 +150,44 @@ function RakutenContent() {
     // 🌟 원래는 URL의 genreId만 봤는데, 그러면 헤더 통합검색(홈에서 카테고리 상관없이
     // 전체 검색, catId=0)을 호출해도 홈 화면 URL(genreId='0')에 막혀 아무 것도 안 불러왔습니다.
     // 실제로 요청받은 catId(targetId) 기준으로 판단하되, 키워드가 있으면 전체(0)여도 진행합니다.
-    if (targetId !== 0 || filters?.keyword) {
-      const itemRes = await fetch(`/api/rakuten/items?${queryString.toString()}`);
-      const itemData = await itemRes.json();
+    if (targetId === 0 && !filters?.keyword) { resetLoadingUI(); return; }
 
-      setPageInfo({ page: itemData.page, pageCount: itemData.pageCount });
+    // 🚀 0.5초 안에 끝나면 아무것도 띄우지 않습니다. (빠른 응답에서 깜빡임 방지)
+    resetLoadingUI();
+    setIsStreaming(true);
+    loadingTimerRef.current = setTimeout(() => {
+      if (!isLatest()) return;
+      setIsItemLoading(true);
+      // 오버레이를 3초 보여줘도 안 끝나면 오버레이를 내리고 하단 스켈레톤 로더로 전환합니다.
+      loadingTimerRef.current = setTimeout(() => {
+        if (!isLatest()) return;
+        setIsItemLoading(false);
+        setIsBottomLoaderAllowed(true);
+      }, 3000);
+    }, 500);
 
-      const mappedItems = itemData.items.map(mapToGlobal);
-      setItems(mappedItems);
+    try {
+      const itemRes = await fetch(`/api/rakuten/items?${queryString}`);
+      const itemData = await itemRes.json().catch(() => ({}));
+
+      // 🐛 이 응답보다 새 요청이 이미 나갔다면 (카테고리를 또 옮겼다면) 화면에 반영하지 않습니다.
+      if (!isLatest()) return;
+
+      // 🐛 서버가 500({ error }) 을 주면 예전엔 itemData.items.map 에서 터져 조용히 빈 화면이 됐습니다.
+      if (!itemRes.ok || !Array.isArray(itemData.items)) {
+        throw new Error(itemData.error || `HTTP ${itemRes.status}`);
+      }
+
+      setPageInfo({ page: Number(itemData.page) || 1, pageCount: Number(itemData.pageCount) || 0 });
+      setItems(itemData.items.map(mapToGlobal));
+    } catch (e) {
+      if (!isLatest()) return;
+      console.error('라쿠텐 상품 로드 실패:', e);
+      setItems([]);
+      showAlert('상품을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+    } finally {
+      if (isLatest()) resetLoadingUI();
     }
-
   };
 
   // 페이지 변경 핸들러
@@ -170,6 +231,7 @@ function RakutenContent() {
     (async () => {
       const translatedKeyword = await getTranslatedText(searchRequest.keyword);
       const updatedFilters = { ...currentFilters, keyword: translatedKeyword, page: 1 };
+      headerKeywordRef.current = translatedKeyword;
       setCurrentFilters(updatedFilters);
       setPageInfo(prev => ({ ...prev, page: 1 }));
       loadItems(0, updatedFilters); // genreId=0: 전체 카테고리 대상 검색
@@ -203,11 +265,17 @@ function RakutenContent() {
         return;
       
     setIsLeaf(false);
-    setItems([]); 
+    setItems([]);
     setProductDetail(null);
     setPageInfo(prev => ({ ...prev, page: 1 }));
 
-    if (!id || id === 0 ||  name === 'HOME') { 
+    // 🌟 헤더 통합검색 검색어는 카테고리를 고르는 순간 풀어줍니다. (사이드바에서 직접 입력한 검색어는 유지)
+    if (headerKeywordRef.current && currentFilters.keyword === headerKeywordRef.current) {
+      headerKeywordRef.current = null;
+      setCurrentFilters(prev => ({ ...prev, keyword: '', page: 1 }));
+    }
+
+    if (!id || id === 0 ||  name === 'HOME') {
       setPath([]); 
       router.push('/main_shop/rakuten'); 
       return; 
@@ -300,7 +368,9 @@ function RakutenContent() {
       selectedProduct={productDetail}
       sortOptions={RakutenSortOptions}
       isLoading={false}
-      isItemLoading={false}
+      isItemLoading={isItemLoading}
+      isStreaming={isStreaming}
+      isBottomLoaderAllowed={isBottomLoaderAllowed}
       isLeaf={isLeaf}
       onNavigate={updateNavigation}
       onSearch={OnSearch}

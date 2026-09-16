@@ -1,11 +1,16 @@
 import { NextResponse, NextRequest } from 'next/server';
 import * as cheerio from 'cheerio';
 import prisma from '@/lib/prisma';
+import { requireAdmin } from '@/lib/apiAuth';
 
 // 🚀 최근 처리된 부모 ID 5개를 보관하는 큐 (메모리 내 보관)
 let recentParentIds: number[] = [];
 
 export async function GET(request: NextRequest) {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   // 1. URL 파라미터 추출
   const searchParams = request.nextUrl.searchParams;
   const genreIdParam = searchParams.get('genreId') || searchParams.get('category');

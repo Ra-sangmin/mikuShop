@@ -1,111 +1,149 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 
 // ==========================================
-// 🎨 1. CSS 스타일 시스템 (모바일 가로 사이즈 대폭 축소)
+// 🎨 1. CSS 스타일 시스템
+// - 흰 카드 + 유형별 상단 액센트 라인 + 그라데이션 아이콘 배지
+// - 알림(alert)은 5초 뒤 자동으로 닫히며, 하단 진행 바로 남은 시간을 보여줍니다.
+// - ⚠️ color-mix()는 이 프로젝트 CSS 빌드에서 오류를 내므로 쓰지 않습니다.
+// - 채우기 색은 흰 글씨 대비(시작 4:1 이상, 끝 5.5:1 이상)에 맞춘 값입니다.
 // ==========================================
+const ALERT_AUTO_CLOSE_MS = 5000;
+
 const alertStyles = `
+  @keyframes mikuAlertFadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes mikuAlertPopIn {
-    0% { opacity: 0; transform: scale(0.9) translateY(10px); }
-    100% { opacity: 1; transform: scale(1) translateY(0); }
+    0% { opacity: 0; transform: translateY(18px) scale(0.96); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
   }
+  @keyframes mikuAlertIconIn {
+    0% { transform: scale(0.6); opacity: 0; }
+    60% { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); }
+  }
+  @keyframes mikuAlertProgress { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
   .miku-alert-overlay {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(8px);
+    position: fixed; inset: 0;
+    background: rgba(17, 20, 30, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
     display: flex; align-items: center; justify-content: center;
+    padding: 20px; box-sizing: border-box;
     z-index: 99999; pointer-events: auto;
+    animation: mikuAlertFadeIn 0.2s ease;
+    font-family: 'Pretendard', "Noto Sans KR", sans-serif;
   }
 
   .miku-alert-box {
-    padding: 40px; border-radius: 32px;
-    box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.4); 
-    display: flex; flex-direction: column; align-items: center; gap: 24px;
-    min-width: 380px; max-width: 500px; width: 90%;
-    animation: mikuAlertPopIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    box-sizing: border-box;
+    --ma-from: #d4781f; --ma-to: #9a5210; --ma-accent: #9a5210; --ma-soft: #fff6ea; --ma-line: #f6dcc8; --ma-shadow: rgba(154, 82, 16, 0.45);
+    position: relative; overflow: hidden;
+    width: 100%; max-width: 440px;
+    padding: 36px 32px 28px; border-radius: 28px;
+    background: #ffffff; color: #111827;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 30px 70px -24px rgba(15, 18, 30, 0.6);
+    display: flex; flex-direction: column; align-items: center; gap: 18px;
+    animation: mikuAlertPopIn 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box; outline: none;
+  }
+  .miku-alert-box.success { --ma-from: #2f9a72; --ma-to: #23845f; --ma-accent: #1f7a4a; --ma-soft: #ecfdf3; --ma-line: #c6ecd5; --ma-shadow: rgba(35, 132, 95, 0.45); }
+  .miku-alert-box.error   { --ma-from: #d64545; --ma-to: #b42318; --ma-accent: #b42318; --ma-soft: #fef3f2; --ma-line: #f3c7c1; --ma-shadow: rgba(180, 35, 24, 0.45); }
+  .miku-alert-box.warning { --ma-from: #d4781f; --ma-to: #9a5210; --ma-accent: #9a5210; --ma-soft: #fff6ea; --ma-line: #f6dcc8; --ma-shadow: rgba(154, 82, 16, 0.45); }
+
+  /* 상단 액센트 라인 + 은은한 배경 광채 */
+  .miku-alert-box::before {
+    content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, var(--ma-from) 20%, var(--ma-to) 50%, var(--ma-from) 80%, rgba(255,255,255,0) 100%);
+  }
+  .miku-alert-glow {
+    position: absolute; left: 50%; top: -120px; width: 320px; height: 240px; transform: translateX(-50%);
+    background: radial-gradient(circle, var(--ma-soft) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
   }
 
-  /* 🌟 테마별 박스 스타일 지정 */
-  .miku-alert-box.success { background-color: #f0fdf4; border: 2px solid #22c55e; color: #15803d; }
-  .miku-alert-box.error { background-color: #fef2f2; border: 2px solid #ef4444; color: #b91c1c; }
-  .miku-alert-box.warning { background-color: #fffbeb; border: 2px solid #f59e0b; color: #b45309; }
-
-  .miku-alert-icon {
-    font-size: 50px;
+  .miku-alert-icon-badge {
+    position: relative; width: 64px; height: 64px; border-radius: 20px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; color: #fff;
+    background: linear-gradient(135deg, var(--ma-from) 0%, var(--ma-to) 100%);
+    box-shadow: 0 16px 30px -12px var(--ma-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    animation: mikuAlertIconIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0.05s both;
+  }
+  .miku-alert-icon-badge::after {
+    content: ''; position: absolute; inset: -6px; border-radius: 26px;
+    border: 1px solid var(--ma-line);
   }
 
+  .miku-alert-text { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+  .miku-alert-eyebrow {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 11px; border-radius: 999px;
+    font-size: 11px; font-weight: 800; letter-spacing: 0.14em;
+    color: var(--ma-accent); background: var(--ma-soft); border: 1px solid var(--ma-line);
+  }
   .miku-alert-message {
-    line-height: 1.6; white-space: pre-wrap; text-align: center; 
-    font-size: 18px; font-weight: 700; word-break: keep-all;
+    line-height: 1.65; white-space: pre-wrap; text-align: center; width: 100%;
+    font-size: 17px; font-weight: 700; color: #111827; word-break: keep-all; letter-spacing: -0.2px;
   }
+  .miku-alert-message a { color: var(--ma-accent); }
 
   .miku-alert-btn-group {
-    display: flex; gap: 12px; width: 100%; justify-content: center;
+    position: relative; display: flex; gap: 8px; width: 100%; justify-content: center; margin-top: 4px;
   }
-
-  .miku-alert-btn-confirm {
-    flex: 1; padding: 14px; color: #fff; border: none; border-radius: 16px;
-    cursor: pointer; font-weight: 900; font-size: 16px;
-    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .miku-alert-btn-confirm:hover {
-    transform: scale(1.05);
-  }
-
-  /* 🌟 테마별 버튼 색상 및 그림자 지정 */
-  .miku-alert-btn-confirm.success { background-color: #22c55e; box-shadow: 0 8px 20px rgba(34, 197, 94, 0.25); }
-  .miku-alert-btn-confirm.error { background-color: #ef4444; box-shadow: 0 8px 20px rgba(239, 68, 68, 0.25); }
-  .miku-alert-btn-confirm.warning { background-color: #f59e0b; box-shadow: 0 8px 20px rgba(245, 158, 11, 0.25); }
-
-  /* 🌟 Confirm 모드 여부에 따른 버튼 최대 너비 지정 */
-  .miku-alert-btn-confirm.mode-confirm { max-width: 140px; }
-  .miku-alert-btn-confirm.mode-alert { max-width: 200px; }
-  .miku-alert-btn-confirm:disabled {
-    opacity: 0.4; cursor: not-allowed; filter: grayscale(0.3);
-  }
-  .miku-alert-btn-confirm:disabled:hover { transform: none; }
-
+  .miku-alert-btn-confirm,
   .miku-alert-btn-cancel {
-    flex: 1; max-width: 140px; padding: 14px; 
-    background-color: #e2e8f0; color: #475569; border: none; border-radius: 16px;
-    cursor: pointer; font-weight: 900; font-size: 16px;
-    transition: background-color 0.2s;
+    flex: 1; height: 50px; padding: 0 18px; border-radius: 15px; border: 1px solid transparent;
+    cursor: pointer; font-weight: 800; font-size: 15px; font-family: inherit; letter-spacing: -0.2px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease, background 0.2s ease;
   }
-  .miku-alert-btn-cancel:hover {
-    background-color: #cbd5e1;
+  .miku-alert-btn-confirm {
+    color: #ffffff;
+    background: linear-gradient(135deg, var(--ma-from) 0%, var(--ma-to) 100%);
+    box-shadow: 0 12px 24px -12px var(--ma-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.22);
   }
+  .miku-alert-btn-confirm:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.05); }
+  .miku-alert-btn-confirm:active:not(:disabled) { transform: translateY(0); }
+  .miku-alert-btn-confirm:focus-visible,
+  .miku-alert-btn-cancel:focus-visible { outline: 3px solid var(--ma-line); outline-offset: 2px; }
+  .miku-alert-btn-confirm.mode-alert { max-width: 220px; }
+  .miku-alert-btn-confirm.mode-confirm { max-width: 190px; }
+  .miku-alert-btn-confirm:disabled { background: #d1d5db; color: #4b5563; box-shadow: none; cursor: not-allowed; }
+  .miku-alert-btn-cancel {
+    max-width: 150px; background: #ffffff; color: #374151; border-color: #e2e5eb;
+  }
+  .miku-alert-btn-cancel:hover { background: #f8f9fb; border-color: #cfd4dc; color: #111827; }
 
-  /* 📱 모바일 환경 반응형 (가로 사이즈 대폭 축소) */
+  /* 자동 닫힘 진행 바 (alert 전용) */
+  .miku-alert-progress {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: #f0f1f4;
+  }
+  .miku-alert-progress span {
+    display: block; height: 100%; transform-origin: left center;
+    background: linear-gradient(90deg, var(--ma-from) 0%, var(--ma-to) 100%);
+    animation: mikuAlertProgress ${ALERT_AUTO_CLOSE_MS}ms linear forwards;
+  }
+  .miku-alert-box:hover .miku-alert-progress span { animation-play-state: paused; }
+
+  .miku-alert-close {
+    position: absolute; top: 14px; right: 14px; width: 32px; height: 32px; border-radius: 50%;
+    border: 1px solid #e6e8ee; background: #ffffff; color: #6b7280; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+    transition: all 0.2s ease;
+  }
+  .miku-alert-close:hover { background: #111827; border-color: #111827; color: #ffffff; }
+
+  /* 📱 모바일 */
   @media (max-width: 768px) {
-    .miku-alert-box {
-      min-width: auto;      /* 강제 최소 너비 해제 */
-      max-width: 300px;     /* 아무리 커도 300px을 넘지 않도록 제한 */
-      width: 75%;           /* 화면의 75%만 차지하게 줄임 (기존 85%) */
-      padding: 24px 16px;   /* 좌우 여백을 더 타이트하게 줄임 */
-      border-radius: 20px;
-      gap: 16px;
-    }
-
-    .miku-alert-icon {
-      font-size: 32px;      /* 아이콘 크기 더 축소 */
-    }
-
-    .miku-alert-message {
-      font-size: 14px;      /* 글자 크기 살짝 축소 */
-    }
-
-    .miku-alert-btn-group {
-      gap: 8px;             
-    }
-
-    .miku-alert-btn-confirm,
-    .miku-alert-btn-cancel {
-      padding: 12px;        
-      font-size: 14px;      
-      border-radius: 12px;  
-    }
+    /* 🌟 모바일에서도 화면 가운데에 표시 (예전엔 flex-end 로 하단 시트처럼 붙어 있었음) */
+    .miku-alert-overlay { padding: 16px; align-items: center; padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
+    .miku-alert-box { max-width: 420px; padding: 30px 20px 24px; border-radius: 24px; gap: 14px; }
+    .miku-alert-icon-badge { width: 54px; height: 54px; border-radius: 17px; font-size: 22px; }
+    .miku-alert-icon-badge::after { inset: -5px; border-radius: 22px; }
+    .miku-alert-message { font-size: 15px; }
+    .miku-alert-btn-confirm, .miku-alert-btn-cancel { height: 46px; font-size: 14px; border-radius: 13px; }
+    .miku-alert-btn-confirm.mode-alert { max-width: none; }
+    .miku-alert-btn-confirm.mode-confirm, .miku-alert-btn-cancel { max-width: none; }
   }
 `;
 
@@ -133,7 +171,7 @@ export function MikuAlertProvider({ children }: { children: ReactNode }) {
     setAlert({ message, type });
   }, []);
 
-  const showConfirm = useCallback((message: string): Promise<boolean> => {
+  const showConfirm = useCallback((message: React.ReactNode): Promise<boolean> => {
     setConfirmDisabled(false);
     return new Promise((resolve) => {
       setAlert({ message, type: 'warning', isConfirm: true });
@@ -185,53 +223,101 @@ interface MikuAlertComponentProps {
   onClose: (result: boolean) => void;
 }
 
+const TYPE_META: Record<AlertType, { icon: string; label: string; confirmLabel: string }> = {
+  success: { icon: 'fa-check', label: '완료', confirmLabel: '확인' },
+  error: { icon: 'fa-xmark', label: '오류', confirmLabel: '확인' },
+  warning: { icon: 'fa-triangle-exclamation', label: '알림', confirmLabel: '확인' },
+};
+
 function MikuAlertComponent({ message, type, isConfirm, confirmDisabled, onClose }: MikuAlertComponentProps) {
-  // 일반 Alert일 경우 5초 뒤 자동 닫기 (Confirm은 자동 닫기 방지)
+  const boxRef = useRef<HTMLDivElement>(null);
+  const meta = TYPE_META[type];
+  const eyebrow = isConfirm ? '확인이 필요해요' : meta.label;
+
+  // 🌟 일반 Alert는 5초 뒤 자동 닫기 (Confirm은 자동 닫기 방지). 마우스를 올리면 잠시 멈춥니다.
   useEffect(() => {
     if (isConfirm) return;
-    const timer = setTimeout(() => onClose(false), 5000);
-    return () => clearTimeout(timer);
+    let remaining = ALERT_AUTO_CLOSE_MS;
+    let startedAt = Date.now();
+    let timer = setTimeout(() => onClose(false), remaining);
+    const el = boxRef.current;
+    const pause = () => { clearTimeout(timer); remaining -= Date.now() - startedAt; };
+    const resume = () => { startedAt = Date.now(); timer = setTimeout(() => onClose(false), Math.max(remaining, 300)); };
+    el?.addEventListener('mouseenter', pause);
+    el?.addEventListener('mouseleave', resume);
+    return () => {
+      clearTimeout(timer);
+      el?.removeEventListener('mouseenter', pause);
+      el?.removeEventListener('mouseleave', resume);
+    };
   }, [onClose, isConfirm]);
 
-  const icons = {
-    success: '✅',
-    error: '❌',
-    warning: '⚠️'
-  };
+  // 🌟 키보드: Esc = 닫기(취소), Enter = 확인. 열려 있는 동안 뒤쪽 화면 스크롤을 막습니다.
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); onClose(false); }
+      if (e.key === 'Enter' && !confirmDisabled) {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+        e.preventDefault(); onClose(true);
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    boxRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [onClose, confirmDisabled]);
 
   return (
     <>
       <style>{alertStyles}</style>
 
-      <div className="miku-alert-overlay">
-        {/* 타입에 따른 클래스명 추가 */}
-        <div className={`miku-alert-box ${type}`}>
-          <span className="miku-alert-icon">{icons[type]}</span>
-          
-          <div className="miku-alert-message">
-            {message}
+      <div className="miku-alert-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(false); }}>
+        <div
+          ref={boxRef}
+          className={`miku-alert-box ${type}`}
+          role={isConfirm ? 'alertdialog' : 'alert'}
+          aria-modal="true"
+          tabIndex={-1}
+        >
+          <span className="miku-alert-glow" aria-hidden="true" />
+          <button type="button" className="miku-alert-close" onClick={() => onClose(false)} aria-label="닫기">
+            <i className="fa fa-xmark"></i>
+          </button>
+
+          <span className={`miku-alert-icon-badge ${type}`} aria-hidden="true">
+            <i className={`fa ${meta.icon}`}></i>
+          </span>
+
+          <div className="miku-alert-text">
+            <span className="miku-alert-eyebrow">{eyebrow}</span>
+            <div className="miku-alert-message">{message}</div>
           </div>
 
           <div className="miku-alert-btn-group">
-            {/* 타입 및 모드에 따른 클래스명 추가 (인라인 스타일 완전 대체) */}
+            {isConfirm && (
+              <button type="button" className="miku-alert-btn-cancel" onClick={() => onClose(false)}>
+                취소
+              </button>
+            )}
             <button
+              type="button"
               className={`miku-alert-btn-confirm ${type} ${isConfirm ? 'mode-confirm' : 'mode-alert'}`}
               onClick={() => onClose(true)}
               disabled={!!confirmDisabled}
             >
-              확인
+              {isConfirm && <i className="fa fa-check" style={{ fontSize: 13 }}></i>}
+              {meta.confirmLabel}
             </button>
-
-            {/* 취소 버튼 (Confirm 모드일 때만 렌더링) */}
-            {isConfirm && (
-              <button 
-                className="miku-alert-btn-cancel"
-                onClick={() => onClose(false)} 
-              >
-                취소
-              </button>
-            )}
           </div>
+
+          {!isConfirm && (
+            <div className="miku-alert-progress" aria-hidden="true"><span /></div>
+          )}
         </div>
       </div>
     </>

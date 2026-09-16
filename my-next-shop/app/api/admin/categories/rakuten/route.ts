@@ -4,10 +4,15 @@ import { rakutenBaseAPIOn } from '@/lib/rakuten';
 import puppeteer from 'puppeteer';
 import * as cheerio from 'cheerio';
 import { PrismaClient } from '@prisma/client';
+import { requireAdmin } from '@/lib/apiAuth';
 
 const prisma = new PrismaClient();
 
 export async function GET(request: Request) {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
 
   const { searchParams } = new URL(request.url);
   const genreId = searchParams.get('genreId');

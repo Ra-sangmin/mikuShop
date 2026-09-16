@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/authOptions";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
+import { validatePassword } from "@/lib/passwordPolicy";
 
 export async function POST(req: Request) {
   try {
     // 1. 현재 로그인한 세션 확인
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
     // 세션이 없거나 로그인 정보가 없는 경우 차단
     if (!session || !session.user?.email) {
@@ -17,6 +19,12 @@ export async function POST(req: Request) {
     }
 
     const { currentPassword, newPassword } = await req.json();
+
+    // 🔒 새 비밀번호 최소 요건 확인 (기존에는 1자리도 통과했습니다)
+    const policyError = validatePassword(newPassword);
+    if (policyError) {
+      return NextResponse.json({ success: false, message: policyError }, { status: 400 });
+    }
 
     // 2. DB에서 현재 유저 정보 조회
     const user = await prisma.user.findUnique({

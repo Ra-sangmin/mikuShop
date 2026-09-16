@@ -6,6 +6,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       platformName="야후 쇼핑" 
       platformDesc="다양한 혜택의 야후 쇼핑" 
       brandColor="#bf0000"
+      logoSrc="/images/yahoo_shopping_logo.png"
     >
       {children}
     </GlobalLayout>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 // 🌟 글로벌 상수 및 라벨 임포트
-import { DELIVERY_STATUS, DeliveryStatus } from '@/src/types/order';
+import { DELIVERY_STATUS, DeliveryStatus, ORDER_STATUS } from '@/src/types/order';
 import '../admin-common.css';
 
 // 🌟 Enum 키를 기반으로 옵션 생성
@@ -33,6 +33,9 @@ export default function DeliveryManagement() {
   });
 
   const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+
+  // 🌟 표 전체 너비 = 각 열 너비의 합. table-layout: fixed가 동작하려면 확정된 값이 필요합니다.
+  const totalTableWidth = Object.values(columnWidths).reduce((sum, w) => sum + (Number(w) || 0), 0);
 
   useEffect(() => {
     const isEnabled = localStorage.getItem('admin_persist_column_widths') !== 'false';
@@ -101,7 +104,9 @@ export default function DeliveryManagement() {
       const res = await fetch('/api/admin/orders');
       const data = await res.json();
       if (data.success) {
-        const deliveryOrders = data.orders.filter((dbOrder: any) => dbOrder.status === '국제배송');
+        // 🐛 status는 Prisma enum('SHIPPING')으로 내려옵니다. 한글 라벨('국제배송')과 비교하면
+        //    영원히 일치하지 않아 배송 현황 목록이 항상 비어 있었습니다.
+        const deliveryOrders = data.orders.filter((dbOrder: any) => dbOrder.status === ORDER_STATUS.SHIPPING);
         const formattedOrders = deliveryOrders.map((dbOrder: any) => ({
           id: dbOrder.orderId, 
           date: new Date(dbOrder.registeredAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
@@ -158,7 +163,15 @@ export default function DeliveryManagement() {
   const handleSaveChanges = async () => {
     if (changedOrderIds.size === 0) return;
     setIsSaving(true);
-    const updates = orders.filter(order => changedOrderIds.has(order.id));
+    // 🐛 trackingNo는 화면 표시용으로 null을 '-'로 바꿔 두었습니다. 그대로 보내면 '-'가
+    //    실제 송장번호로 DB에 저장되고, sync-tracking이 이를 유효한 송장으로 취급합니다.
+    //    저장할 때는 표시용 placeholder를 다시 null로 되돌립니다.
+    const updates = orders
+      .filter(order => changedOrderIds.has(order.id))
+      .map(order => ({
+        ...order,
+        trackingNo: order.trackingNo === '-' || order.trackingNo?.trim() === '' ? null : order.trackingNo,
+      }));
 
     try {
       const res = await fetch('/api/admin/orders', {
@@ -255,7 +268,13 @@ export default function DeliveryManagement() {
 
       {/* 🌟 테이블 영역 */}
       <div style={ds.tableWrapper}>
-        <table className="admin-table-resizable">
+        {/* 🐛 table-layout: fixed는 표에 "확정된 너비"가 있어야만 적용됩니다. CSS에는
+            width: max-content만 있어서 브라우저가 내용 기준으로 폭을 정했고, 그 결과
+            공백 없는 긴 일본어 상품명이 colgroup의 600px을 무시하고 열을 1270px까지
+            밀어냈습니다(그래서 핸들을 드래그해도 열이 줄지 않았습니다).
+            → 지정한 열 너비의 합을 표 너비로 직접 지정해 fixed 레이아웃을 활성화합니다.
+              (열이 고정되면 셀 안의 말줄임(text-overflow: ellipsis)도 비로소 동작합니다) */}
+        <table className="admin-table-resizable" style={{ width: totalTableWidth }}>
           <colgroup>
             <col style={{ width: columnWidths.date }} />
             <col style={{ width: columnWidths.user }} />

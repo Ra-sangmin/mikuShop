@@ -2,6 +2,8 @@ import { NextResponse, NextRequest } from 'next/server';
 import puppeteer from 'puppeteer';
 import * as cheerio from 'cheerio';
 import { PrismaClient } from '@prisma/client';
+import { requireAdmin } from '@/lib/apiAuth';
+import { SANDBOX_ARGS } from '@/lib/crawler/sandbox';
 
 const prisma = new PrismaClient();
 const CATEGORY_MAP: { [key: string]: string } = {
@@ -14,6 +16,10 @@ const CATEGORY_MAP: { [key: string]: string } = {
 };
 
 export async function GET(req: NextRequest) {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   const { searchParams } = new URL(req.url);
   const parentIdParam = searchParams.get('parentId');
   const parentId = Number(parentIdParam) || 0;
@@ -33,9 +39,10 @@ export async function GET(req: NextRequest) {
         ? `https://jp.mercari.com/categories?category_id=${parentId}`
         : 'https://jp.mercari.com/categories';
 
-    const browser = await puppeteer.launch({ 
-        headless: true, 
-        args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+    const browser = await puppeteer.launch({
+        headless: true,
+        // 🔒 샌드박스는 기본으로 켭니다 (lib/crawler/sandbox.ts 참고)
+        args: [...SANDBOX_ARGS],
     });
 
     const page = await browser.newPage();

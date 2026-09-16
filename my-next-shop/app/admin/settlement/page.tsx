@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import { DELIVERY_STATUS } from '@/src/types/order';
 import '../admin-common.css';
 
 export default function SettlementManagement() {
@@ -24,6 +25,10 @@ export default function SettlementManagement() {
   });
 
   const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+
+  // 🌟 표 전체 너비 = 각 열 너비의 합. table-layout: fixed는 확정된 너비가 있어야 적용됩니다.
+  //    (CSS의 width: max-content만으로는 긴 상품명이 지정한 열 너비를 무시하고 밀어냅니다)
+  const totalTableWidth = Object.values(columnWidths).reduce((sum, w) => sum + (Number(w) || 0), 0);
 
   useEffect(() => {
     const isEnabled = localStorage.getItem('admin_persist_column_widths') !== 'false';
@@ -91,8 +96,10 @@ export default function SettlementManagement() {
 
         if (data.success) {
           // 배송완료된 항목만 필터링
+          // 🐛 deliveryStatus는 Prisma enum('COMPLETED')입니다. 한글 라벨('배송완료')과
+          //    비교하면 항상 불일치라 정산 금액이 늘 ₩0으로 나왔습니다.
           const settledOrders = data.orders
-            .filter((dbOrder: any) => dbOrder.deliveryStatus === '배송완료')
+            .filter((dbOrder: any) => dbOrder.deliveryStatus === DELIVERY_STATUS.COMPLETED)
             .map((dbOrder: any) => ({
               id: dbOrder.orderId, 
               date: new Date(dbOrder.shippedAt || dbOrder.registeredAt).toLocaleDateString(),
@@ -148,7 +155,7 @@ export default function SettlementManagement() {
       <div className="admin-container">
         <h2 className="admin-section-title">정산 완료 내역 (배송 완료 건)</h2>
         <div style={ss.tableWrapper}>
-          <table className="admin-table-resizable">
+          <table className="admin-table-resizable" style={{ width: totalTableWidth }}>
             <colgroup>
               <col style={{ width: columnWidths.date }} />
               <col style={{ width: columnWidths.id }} />

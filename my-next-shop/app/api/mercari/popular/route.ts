@@ -346,56 +346,72 @@ export async function GET() {
 
 // 🌟 아래 세 함수는 /api/mercari/search/route.ts의 추출 로직과 동일합니다 (검색 결과 첫
 // 화면에서 상품을 뽑아내는, 이미 검증된 로직을 그대로 재사용).
-async function extractCategoryItems(page: any, limit: number = 150): Promise<PopularItem[]> {
-  return await page.evaluate((limit: number) => {
-    const cells = Array.from(document.querySelectorAll('[data-testid="item-cell"]'));
-    return cells.map(el => {
-      const anchor = el.querySelector('a');
-      const link = anchor?.getAttribute('href') || '';
-      const imgEl = el.querySelector('img');
-      const idMatch = link.match(/item\/(m\d+)/);
-      const id = idMatch ? idMatch[1] : link.split('/').pop() || '';
-
-      return {
-        id,
-        name: imgEl?.getAttribute('alt') || '상품명 없음',
-        thumbnail: imgEl?.src || '',
-        price: parseInt(el.querySelector('[class*="number"]')?.textContent?.replace(/[^0-9]/g, '') || '0', 10),
-        status: el.innerHTML.includes('売り切れ') ? 'sold_out' : 'on_sale',
-        url: `https://jp.mercari.com${link}`
-      };
-    }).filter(item => item.id);
-  }, limit).catch(() => []);
-}
-
-async function extractCategoryItemsAndCheckEnd(page: any, limit: number = 150): Promise<{ items: PopularItem[]; isEndOfPage: boolean }> {
-  return await page.evaluate((limit: number) => {
-    const cells = Array.from(document.querySelectorAll('[data-testid="item-cell"]'));
+// 🐛 mercari/search 와 같은 세 가지 문제를 여기서도 고칩니다.
+//    1) 가격: 메루카리가 클래스명을 해시로 바꿔 `[class*="number"]` 가 0개 → 가격 0 → isValidItem 에서 전부 탈락
+//    2) 썸네일: 목록 <img> 는 lazy 라 src 가 비어 있음 → 상품 id 로 CDN 썸네일 주소를 직접 생성
+//    3) 끝 판정: "次へ" 버튼은 처음부터 존재하므로 "화면에 들어왔는지" 로 판정
+//    ⚠️ 콜백은 브라우저 안에서 실행됩니다. 이름 있는 내부 함수를 두면 일부 번들러가 __name 헬퍼를 끼워
+//       넣어 ReferenceError 가 나므로 로직을 인라인으로 둡니다.
+async function extractCategoryCells(page: any, limit: number, checkEnd: boolean): Promise<{ items: PopularItem[]; isEndOfPage: boolean }> {
+  return await page.evaluate(({ limit, checkEnd }: { limit: number; checkEnd: boolean }) => {
+    const cells = Array.from(document.querySelectorAll('[data-testid="item-cell"]')).slice(0, limit);
     const items = cells.map(el => {
-      const anchor = el.querySelector('a');
+      const anchor = el.querySelector('a[href*="/item/"]') || el.querySelector('a');
       const link = anchor?.getAttribute('href') || '';
       const imgEl = el.querySelector('img');
       const idMatch = link.match(/item\/(m\d+)/);
       const id = idMatch ? idMatch[1] : link.split('/').pop() || '';
 
+      let price = 0;
+      const labelled = el.querySelector('[aria-label*="円"], [aria-label*="¥"], [data-testid*="price"]');
+      const fromLabel = (labelled?.getAttribute('aria-label') || labelled?.textContent || '').replace(/[^0-9]/g, '');
+      if (fromLabel) {
+        price = parseInt(fromLabel, 10);
+      } else {
+        const leaves = Array.from(el.querySelectorAll('span, div, p')).filter(n => n.childElementCount === 0);
+        for (const n of leaves) {
+          const t = (n.textContent || '').trim();
+          if (/^[¥￥]?\s*[0-9][0-9,]*$/.test(t)) {
+            const v = parseInt(t.replace(/[^0-9]/g, ''), 10);
+            if (v > 0) { price = v; break; }
+          }
+        }
+      }
+
+      const domThumb = imgEl?.getAttribute('src') || imgEl?.getAttribute('data-src') || '';
+      const thumbnail = domThumb || (/^m\d+$/.test(id) ? `https://static.mercdn.net/c!/w=240/thumb/photos/${id}_1.jpg` : '');
+
       return {
         id,
-        name: imgEl?.getAttribute('alt') || '상품명 없음',
-        thumbnail: imgEl?.src || '',
-        price: parseInt(el.querySelector('[class*="number"]')?.textContent?.replace(/[^0-9]/g, '') || '0', 10),
+        name: (imgEl?.getAttribute('alt') || '').replace(/のサムネイル$/, '') || '상품명 없음',
+        thumbnail,
+        price,
         status: el.innerHTML.includes('売り切れ') ? 'sold_out' : 'on_sale',
         url: `https://jp.mercari.com${link}`
       };
     }).filter(item => item.id);
+
+    if (!checkEnd) return { items, isEndOfPage: false };
 
     const bodyText = document.body.innerText;
     const hasRelatedAds = bodyText.includes('他のサイトの関連広告') || bodyText.includes('다른 사이트의 관련 광고');
     const nextButton = Array.from(document.querySelectorAll('a, button')).find(el =>
       el.textContent?.includes('次へ') || el.textContent?.includes('다음')
     );
+    const nextButtonVisible = !!nextButton && nextButton.getBoundingClientRect().top < window.innerHeight + 200;
+    return { items, isEndOfPage: hasRelatedAds || nextButtonVisible };
+  }, { limit, checkEnd }).catch((e: any) => {
+    console.error('❌ [mercari/popular] 상품 추출 실패:', e?.message || e);
+    return { items: [], isEndOfPage: false };
+  });
+}
 
-    return { items, isEndOfPage: hasRelatedAds || !!nextButton };
-  }, limit).catch(() => ({ items: [], isEndOfPage: false }));
+async function extractCategoryItems(page: any, limit: number = 150): Promise<PopularItem[]> {
+  return (await extractCategoryCells(page, limit, false)).items;
+}
+
+async function extractCategoryItemsAndCheckEnd(page: any, limit: number = 150): Promise<{ items: PopularItem[]; isEndOfPage: boolean }> {
+  return extractCategoryCells(page, limit, true);
 }
 
 function mapCategoryApiItems(json: any): PopularItem[] {

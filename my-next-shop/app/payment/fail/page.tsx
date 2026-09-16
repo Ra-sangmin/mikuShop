@@ -97,7 +97,7 @@ function FailContent() {
           </button>
           
           <button 
-            onClick={() => router.push('/contact')}
+            onClick={() => router.push('/inquiry/kakaotalk')}
             style={{ 
               width: '100%', 
               padding: '18px', 

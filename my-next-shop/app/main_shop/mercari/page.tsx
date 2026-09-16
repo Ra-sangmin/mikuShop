@@ -83,6 +83,11 @@ function MercariCategoryContent() {
   const { showAlert } = useMikuAlert(); 
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // 🐛 상품 수집은 카테고리 "클릭" 에서만 시작됐기 때문에, 주소로 바로 들어오거나 새로고침·뒤로가기로
+  //    돌아오면 카테고리만 뜨고 상품은 영영 안 불러왔습니다. 클릭으로 이미 요청한 카테고리를 기억해 두고,
+  //    URL 변경 effect 에서는 그 외의 경우(직접 진입/새로고침/뒤로가기)에만 수집을 시작합니다.
+  const requestedGenreRef = useRef<string | null>(null);
+
   // 🚀 [로직 1] 메루카리 아이템을 Global 규격으로 매핑
   const mappedDisplayItems = useMemo((): GlobalItem[] => {
     return displayItems.map(item => ({
@@ -229,18 +234,29 @@ function MercariCategoryContent() {
       return;
     }
 
-    if (!isCallAllowed()) {
-      setIsItemLoading(false); // 🚀 쿨다운일 때도 로딩 종료
-      return;
-    }
-
     setIsStreaming(true);
 
+    // 🐛 쿨다운(5초) 안에 카테고리를 또 누르면 예전엔 목록을 비운 채 "N초 후 다시 시도" 알림만 띄우고
+    //    끝나서, 사용자가 다시 누르지 않는 한 빈 화면으로 남았습니다.
+    //    → 거부하지 않고 남은 시간만큼 기다렸다가 진행합니다. (로더는 그대로 표시, 과부하 방지는 유지)
+    const cooldown = checkMercariCooldown();
+    if (!cooldown.canCall) {
+      await new Promise(r => setTimeout(r, cooldown.remainingTime * 1000));
+      if (abortControllerRef.current !== controller) return; // 기다리는 사이 다른 요청이 나감
+      checkMercariCooldown(); // 슬롯 갱신
+    }
+
+    // 🌟 서버가 마지막에 보내는 { success:false, error } / { done, total } 줄을 읽어
+    //    "조용한 빈 목록" 대신 안내를 띄우기 위한 집계
+    let received = 0;
+    let failMessage: string | null = null;
+
     try {
-      const res = await fetch(`/api/mercari/search?${queryString}`, { 
+      const res = await fetch(`/api/mercari/search?${queryString}`, {
         signal: controller.signal // 리모컨 연결
       });
-      
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (!res.body) throw new Error("ReadableStream not supported");
 
       const reader = res.body.getReader();
@@ -275,41 +291,40 @@ function MercariCategoryContent() {
             // 🚀 데이터 덩어리가 도착할 때마다 setDisplayItems를 호출합니다!
             // 여기서 items와 displayItems를 같이 업데이트해서 숫자가 올라가게 합니다.
             if (result.success && result.data) {
+              received += result.data.length;
               setItems(prev => [...prev, ...result.data]); // 숫자 카운트용
               setDisplayItems(prev => [...prev, ...result.data]); // 상품 리스트용
+            } else if (result.success === false && result.error) {
+              failMessage = result.error;
             }
           } catch (e) {
             console.error("JSON 파싱 에러:", e);
           }
         }
-      }   
+      }
     } catch (err: any) {
       // 🚀 [수정] 중단 에러(AbortError)인 경우 로딩을 끄지 않고 그냥 나갑니다.
       if (err.name === 'AbortError') {
         console.log("🤫 이전 요청은 조용히 사라집니다...");
-        return; 
+        return;
       }
       console.error("❌ 실제 통신 에러:", err);
+      failMessage = '상품을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.';
     } finally {
-
+      // 🚀 [수정 핵심] '내 요청'이 여전히 '최신 요청'일 때만 로딩을 끕니다.
       if (abortControllerRef.current === controller) {
-        
         setIsStreaming(false);
 
-        // 👈 타이머 정리 로직을 이 안으로 옮깁니다!
         if (loadingTimerRef.current) {
-          clearTimeout(loadingTimerRef.current); 
+          clearTimeout(loadingTimerRef.current);
           loadingTimerRef.current = null;
         }
 
         setIsItemLoading(false);
         console.log("🏁 최신 수집 작업 완료!");
-      }
 
-      // 🚀 [수정 핵심] '내 요청'이 여전히 '최신 요청'일 때만 로딩을 끕니다.
-      if (abortControllerRef.current === controller) {
-        setIsItemLoading(false);
-        console.log("🏁 최신 수집 작업 완료!");
+        // 🐛 예전엔 서버가 0개로 끝나도 아무 말 없이 빈 화면이었습니다.
+        if (received === 0 && failMessage) showAlert(failMessage, 'error');
       }
     }
   };
@@ -432,6 +447,7 @@ function MercariCategoryContent() {
 
     // 🚀 홈이 아닐 때만 아이템 수집을 즉시 시작합니다!
     // activeFilters는 부모가 들고 있는 현재 필터 상태입니다.
+    requestedGenreRef.current = String(id);
     loadItems(id, currentFilters);
   };
 
@@ -460,8 +476,13 @@ function MercariCategoryContent() {
           if (result.parents) {
             setPath(result.parents.map((p: any) => ({ id: p.parent.genreId, name: p.genreName })));
           }
-          
-        } 
+
+          // 🐛 직접 진입/새로고침/뒤로가기: 클릭으로 요청한 적 없는 카테고리면 여기서 상품 수집을 시작합니다.
+          if (genreId && genreId !== '0' && requestedGenreRef.current !== String(genreId)) {
+            requestedGenreRef.current = String(genreId);
+            loadItems(genreId, currentFilters);
+          }
+        }
       } catch (err) {
         console.error("❌ 통신 중 진짜 에러 발생:", err);
       } finally {

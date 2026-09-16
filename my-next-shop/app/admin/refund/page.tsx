@@ -2,15 +2,39 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import '../admin-common.css';
+import { useResizableColumns, ResizeHandles } from '../components/useResizableColumns';
+
+// 🌟 열 순서(= 화면에 보이는 순서)와 기본 너비. orders 처럼 드래그로 조절할 수 있습니다.
+const REFUND_COLUMNS = ['createdAt', 'type', 'user', 'amount', 'detail', 'status', 'manage'] as const;
+const REFUND_DEFAULT_WIDTHS = {
+  createdAt: 200,
+  type: 100,
+  user: 260,
+  amount: 140,
+  detail: 320,
+  status: 120,
+  manage: 160,
+};
 
 export default function MoneyRequestManagement() {
   const [requests, setRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const { columnWidths, totalTableWidth, onMouseDown } = useResizableColumns({
+    storageKey: 'admin_refund_column_widths',
+    defaultWidths: REFUND_DEFAULT_WIDTHS,
+    visibleColumns: [...REFUND_COLUMNS],
+  });
+
   // 🌟 데이터 불러오기
   const fetchRequests = useCallback(async () => {
-    const adminId = localStorage.getItem('admin_id'); 
-    if (!adminId) return;
+    // 🐛 adminId가 없을 때 try/finally 앞에서 그냥 return 해버려 isLoading이 영영 true로 남고
+    //    화면이 "불러오는 중"에서 멈췄습니다. 로딩 상태는 반드시 풀어줍니다.
+    const adminId = localStorage.getItem('admin_id');
+    if (!adminId) {
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch(`/api/money/request?adminId=${adminId}`);
@@ -78,16 +102,42 @@ export default function MoneyRequestManagement() {
       <h2 className="admin-section-title">머니 신청 대기 및 처리 내역</h2>
 
       <div style={mrs.tableWrapper}>
-        <table className="admin-table-simple">
+        {/* 🐛 table-layout: fixed 는 표에 확정된 너비가 있어야 적용됩니다.
+            보이는 열 너비의 합을 표 너비로 직접 지정해야 드래그로 열이 줄어듭니다. */}
+        <table className="admin-table-resizable" style={{ width: totalTableWidth }}>
+          <colgroup>
+            {REFUND_COLUMNS.map(key => <col key={key} style={{ width: columnWidths[key] }} />)}
+          </colgroup>
           <thead>
             <tr className="admin-table-head-row">
-              <th className="admin-base-th">일자</th>
-              <th className="admin-base-th">구분</th>
-              <th className="admin-base-th">신청자 (ID)</th>
-              <th className="admin-base-th" style={{ textAlign: 'right' }}>금액</th>
-              <th className="admin-base-th">상세 정보 (입금자/계좌)</th>
-              <th className="admin-base-th" style={{ textAlign: 'center' }}>상태</th>
-              <th className="admin-base-th" style={{ textAlign: 'center' }}>관리</th>
+              <th className="admin-th-resizable">
+                <ResizeHandles columnKey="createdAt" onMouseDown={onMouseDown} />
+                일자
+              </th>
+              <th className="admin-th-resizable">
+                <ResizeHandles columnKey="type" onMouseDown={onMouseDown} />
+                구분
+              </th>
+              <th className="admin-th-resizable">
+                <ResizeHandles columnKey="user" onMouseDown={onMouseDown} />
+                신청자 (ID)
+              </th>
+              <th className="admin-th-resizable" style={{ textAlign: 'right' }}>
+                <ResizeHandles columnKey="amount" onMouseDown={onMouseDown} />
+                금액
+              </th>
+              <th className="admin-th-resizable">
+                <ResizeHandles columnKey="detail" onMouseDown={onMouseDown} />
+                상세 정보 (입금자/계좌)
+              </th>
+              <th className="admin-th-resizable" style={{ textAlign: 'center' }}>
+                <ResizeHandles columnKey="status" onMouseDown={onMouseDown} />
+                상태
+              </th>
+              <th className="admin-th-resizable" style={{ textAlign: 'center' }}>
+                <ResizeHandles columnKey="manage" onMouseDown={onMouseDown} />
+                관리
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -182,7 +232,14 @@ const colors = {
   rejectedText: '#64748b',
 };
 
-const baseTd: React.CSSProperties = { padding: '16px 12px' };
+// 🌟 열 너비를 고정(table-layout: fixed)했으므로, 넘치는 값은 말줄임으로 처리합니다.
+const baseTd: React.CSSProperties = {
+  padding: '16px 12px',
+  borderRight: '1px solid #f1f5f9',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
 
 const mrs: Record<string, React.CSSProperties> = {
   // 테이블 구조

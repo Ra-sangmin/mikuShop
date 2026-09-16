@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import GuideLayout from '../../components/GuideLayout';
-import NoticePanel from '../../components/NoticePanel';
+import JapanAddressCard from '../../components/JapanAddressCard';
 import DaumPostcode from 'react-daum-postcode';
 import { useMikuAlert } from '../../context/MikuAlertContext';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import '../mypage-premium.css';
 
 // =================================================================
 // 1. 비즈니스 로직 영역 (Business Logic Layer)
@@ -21,15 +23,8 @@ function useProfileEditLogic() {
 
   const [user, setUser] = useState({
     id: '', name: '', email: '', phone: '', nickname: '', personalCustomsCode: '', defaultAddressId: null as number | null,
+    cyberMoney: 0,
   });
-
-  // 🌟 일본(미쿠짱) 창고 사서함 번호 — mypage(내 정보)에서 이 페이지로 옮겨온 값입니다.
-  const japanMailboxNumber = 'SRW-25168';
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    alert(`${label} 정보가 복사되었습니다.`);
-  };
 
   const fetchAddresses = useCallback(async (userId: string) => {
     try {
@@ -61,6 +56,7 @@ function useProfileEditLogic() {
               name: data.user.name || '', email: data.user.email || '', phone: data.user.phone || '',
               nickname: data.user.nickname || '', personalCustomsCode: data.user.personalCustomsCode || '',
               defaultAddressId: data.user.defaultAddressId || null,
+              cyberMoney: data.user.cyberMoney || 0,
             });
             fetchAddresses(data.user.id.toString());
           }
@@ -118,8 +114,8 @@ function useProfileEditLogic() {
   const closeAddressModal = () => setIsAddressModalOpen(false);
 
   return {
-    loading, user, addresses, isAddressModalOpen, editingAddress, japanMailboxNumber,
-    handleAddressAction, deleteAddress, openNewAddress, openEditAddress, closeAddressModal, copyToClipboard
+    loading, user, addresses, isAddressModalOpen, editingAddress,
+    handleAddressAction, deleteAddress, openNewAddress, openEditAddress, closeAddressModal
   };
 }
 
@@ -158,19 +154,6 @@ function useAddressModalLogic(address: any, isFirstAddress: boolean) {
 // 2. 화면 컴포넌트 영역 (View Layer)
 // 인라인 스타일 배제, 의미 있는 클래스명 적용
 // =================================================================
-// 🌟 일본 배송지 주소 아이템 (mypage에서 옮겨온 조회 전용 정보)
-function AddressItem({ label, value, isHighlight, onCopy }: { label: string, value: string, isHighlight?: boolean, onCopy: (val: string, lbl: string) => void }) {
-  return (
-    <div className="jp-address-item">
-      <span className="jp-address-label">{label}</span>
-      <div className={`jp-address-val-box ${isHighlight ? 'highlight' : ''}`}>
-        <span className="jp-address-val-text">{value}</span>
-        <button className="jp-address-copy-btn" onClick={() => onCopy(value, label)}>복사</button>
-      </div>
-    </div>
-  );
-}
-
 function InputGroup({ label, name, value, onChange, type = "text", placeholder = "", required = false, readOnly = false, inputRef = null }: any) {
   return (
     <div className="miku-profile-input-group">
@@ -242,8 +225,8 @@ function AddressModal({ address, onClose, onSave, isFirstAddress }: any) {
 
 function ProfileEditContent() {
   const {
-    loading, user, addresses, isAddressModalOpen, editingAddress, japanMailboxNumber,
-    handleAddressAction, deleteAddress, openNewAddress, openEditAddress, closeAddressModal, copyToClipboard
+    loading, user, addresses, isAddressModalOpen, editingAddress,
+    handleAddressAction, deleteAddress, openNewAddress, openEditAddress, closeAddressModal
   } = useProfileEditLogic();
 
   // 🌟 로딩 중엔 실제 콘텐츠(및 #jp-address-section)가 아직 DOM에 없어서 브라우저의
@@ -261,10 +244,48 @@ function ProfileEditContent() {
   const defaultAddress = addresses.find(a => a.id === user.defaultAddressId) || addresses.find(a => a.isDefault);
 
   return (
-    <div className="miku-profile-wrapper">
+    <div className="miku-profile-wrapper mp-skin">
+
+      {/* 🌟 배송지 요약 카드 */}
+      <section className="mp-hero is-compact mp-anim" aria-label="배송지 요약">
+        <div className="mp-hero-main">
+          <div className="mp-avatar" aria-hidden="true"><i className="fa fa-location-dot"></i></div>
+          <div className="mp-hero-text">
+            <span className="mp-eyebrow-dark">ADDRESS BOOK</span>
+            <h2 className="mp-hero-title"><em>{user?.name || '고객'}</em>님의 배송지 정보</h2>
+            <p className="mp-hero-desc">한국에서 받으실 배송지와, 일본 쇼핑몰에 입력할 미쿠짱 일본 배송주소를 관리하세요.</p>
+          </div>
+        </div>
+
+        {/* 🌟 마이페이지·주문 현황 히어로와 동일한 구성(머니 카드 포함)으로 맞춰 검은색 BG 크기를 통일합니다 */}
+        <div className="mp-hero-money">
+          <span className="mp-hero-money-label"><i className="fa fa-sack-dollar"></i> 미쿠짱머니</span>
+          <strong className="mp-hero-money-value" translate="no">{(user.cyberMoney || 0).toLocaleString()}<small>원</small></strong>
+          <div className="mp-hero-money-actions">
+            <Link href="/mypage/money/charge" className="is-primary"><i className="fa fa-plus"></i> 충전</Link>
+            <Link href="/mypage/money/history"><i className="fa fa-receipt"></i> 이용 내역</Link>
+          </div>
+        </div>
+
+        <div className="mp-hero-stats">
+          <div className="mp-hero-stat">
+            <span>등록된 배송지</span><strong>{addresses.length}<small>개</small></strong>
+          </div>
+          <div className="mp-hero-stat">
+            <span>기본 배송지</span><strong style={{ fontSize: '16px' }}>{defaultAddress ? defaultAddress.recipientName : '미설정'}</strong>
+          </div>
+          <button type="button" className="mp-hero-stat" onClick={openNewAddress}>
+            <span>새 배송지</span><strong style={{ fontSize: '16px' }}><i className="fa fa-plus"></i> 추가하기</strong>
+          </button>
+          <button type="button" className="mp-hero-stat" onClick={() => document.getElementById('jp-address-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+            <span>일본 배송주소</span><strong style={{ fontSize: '16px' }}>확인하기 <i className="fa fa-arrow-down"></i></strong>
+          </button>
+        </div>
+      </section>
 
       {/* 🌟 나의 한국 배송지 주소 제목 (나의 일본 배송지 주소와 동일한 스타일) */}
       <div className="address-outer-header anim-slide-up">
+        <span className="mp-eyebrow">Korea Address</span>
         <h2>나의 한국 배송지 주소 <span className="section-icon-badge badge-indigo"><i className="fa fa-location-dot"></i></span></h2>
       </div>
 
@@ -354,27 +375,10 @@ function ProfileEditContent() {
       {/* 🌟 나의 일본 배송지 주소 섹션 (내 정보 화면에서 이동) */}
       <div id="jp-address-section" className="jp-address-outer anim-slide-up delay-2">
         <div className="address-outer-header">
+          <span className="mp-eyebrow">Japan Address</span>
           <h2>나의 일본 배송지 주소 <span className="section-icon-badge badge-indigo"><i className="fa fa-location-dot"></i></span></h2>
         </div>
-        <section className="miku-profile-section">
-          <div className="jp-address-grid">
-            <div className="jp-address-col">
-              <AddressItem label="우편번호" value="123-0865" onCopy={copyToClipboard} />
-              <AddressItem label="도도부현" value="東京都 (Tokyo)" onCopy={copyToClipboard} />
-              <AddressItem label="구/군/시" value="足立区 (Adachi-ku)" onCopy={copyToClipboard} />
-              <AddressItem label="상세주소 1" value="新田 3-35-31 1008号" onCopy={copyToClipboard} />
-            </div>
-            <div className="jp-address-col">
-              <AddressItem label="상세주소 2" value={japanMailboxNumber} isHighlight onCopy={copyToClipboard} />
-              <AddressItem label="받는사람" value={`${user.name} ${japanMailboxNumber}`} isHighlight onCopy={copyToClipboard} />
-              <AddressItem label="전화번호" value="03-xxxx-xxxx" onCopy={copyToClipboard} />
-            </div>
-          </div>
-
-          <NoticePanel tone="amber">
-            상세주소 2(사서함번호)를 반드시 기입해 주셔야 빠른 입고 확인이 가능합니다.
-          </NoticePanel>
-        </section>
+        <JapanAddressCard userName={user.name} />
       </div>
 
       {/* 모달 렌더링 */}
@@ -391,7 +395,7 @@ function ProfileEditContent() {
       {/* ================================================================= */}
       <style jsx global>{`
         .miku-profile-wrapper {
-          max-width: 840px;
+          /* 🌟 마이페이지·주문 현황과 같은 폭(레이아웃 컨텐츠 영역 전체)을 쓰도록 max-width 제한을 뺐습니다 */
           margin: 0 auto;
           font-family: 'Pretendard', "Noto Sans KR", sans-serif;
           color: #0f172a;
@@ -429,16 +433,10 @@ function ProfileEditContent() {
         .miku-address-panel .miku-profile-section { margin-bottom: 24px; }
         .miku-address-panel .miku-profile-section--last { margin-bottom: 0; }
 
-        /* 🌟 Header의 "배송대행 > 일본 배송주소 확인" 링크(#jp-address-section)로 진입 시
+        /* 🌟 #jp-address-section 해시 링크로 진입 시
            고정 헤더에 섹션 상단이 가리지 않도록 여유를 둡니다 */
         #jp-address-section { scroll-margin-top: 100px; }
 
-        /* 🌟 나의 일본 배송지 주소 패널도 같은 상단 액센트 바로 통일감을 줍니다 */
-        .jp-address-outer .miku-profile-section { position: relative; overflow: hidden; }
-        .jp-address-outer .miku-profile-section::before {
-          content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
-          background: linear-gradient(90deg, #818cf8 0%, #4f46e5 50%, #818cf8 100%);
-        }
 
         .section-header {
           display: flex;
@@ -535,26 +533,6 @@ function ProfileEditContent() {
         /* 🌟 나의 일본 배송지 주소 (mypage 내 정보에서 이동 — 제목을 카드 밖으로 분리) */
         .address-outer-header { margin-bottom: 24px; }
         .address-outer-header h2 { font-size: 22px; font-weight: 900; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 10px; }
-        .jp-address-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 24px; }
-        .jp-address-col { display: flex; flex-direction: column; gap: 16px; }
-
-        .jp-address-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-        .jp-address-label { width: 90px; font-size: 14px; font-weight: 700; color: #64748b; flex-shrink: 0; }
-        .jp-address-val-box {
-          flex: 1; display: flex; justify-content: space-between; align-items: center;
-          padding: 12px 16px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; transition: all 0.2s;
-        }
-        .jp-address-val-box.highlight { background: #fff8f6; border-color: #ffedd5; }
-        .jp-address-val-text { font-size: 15px; font-weight: 700; color: #0f172a; }
-        .jp-address-val-box.highlight .jp-address-val-text { color: #ea580c; }
-
-        .jp-address-copy-btn {
-          padding: 6px 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px;
-          font-size: 12px; font-weight: 800; color: #475569; cursor: pointer; transition: all 0.2s;
-        }
-        .jp-address-copy-btn:hover { border-color: #ff4b2b; color: #ff4b2b; }
-        .jp-address-val-box.highlight .jp-address-copy-btn { border-color: #fdba74; color: #ea580c; }
-        .jp-address-val-box.highlight .jp-address-copy-btn:hover { background: #ff4b2b; color: #fff; border-color: #ff4b2b; }
 
         /* 🌟 프리미엄 모달 디자인 */
         .miku-profile-modal-overlay {
@@ -652,10 +630,6 @@ function ProfileEditContent() {
           .item-actions { border-top: 1px dashed #e2e8f0; padding-top: 16px; justify-content: flex-end; }
           .btn-edit, .btn-delete { flex: 1; padding: 12px; text-align: center; }
 
-          .jp-address-grid { grid-template-columns: 1fr; gap: 16px; }
-          .jp-address-item { flex-direction: column; align-items: flex-start; gap: 8px; }
-          .jp-address-label { width: 100%; }
-          .jp-address-val-box { width: 100%; box-sizing: border-box; }
 
           .miku-profile-modal-content { border-radius: 24px 24px 0 0; position: absolute; bottom: 0; max-height: 95vh; }
           .modal-body { padding: 24px 20px; }

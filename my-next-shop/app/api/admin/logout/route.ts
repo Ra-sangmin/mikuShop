@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { ADMIN_SESSION_COOKIE } from '@/lib/adminSession';
 
 export async function POST() {
-  const cookieStore = await cookies();
-  
-  // Remove the admin_session cookie
-  cookieStore.delete('admin_session');
-
-  return NextResponse.json({ success: true });
+  const response = NextResponse.json({ success: true });
+  // 관리자 세션 쿠키 삭제
+  response.cookies.set(ADMIN_SESSION_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 });
+  return response;
 }

@@ -1,29 +1,57 @@
 "use client";
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import GuideLayout from '../../components/GuideLayout';
 import '../guide-common.css';
+import { GuideDocHeader, GuideBackToTop } from '../components/GuideDocTools';
+import GuideTitle from '../components/GuideTitle';
+import GuidePremiumHero from '../components/GuidePremiumHero';
+import { FileText, Printer } from '@phosphor-icons/react';
+
+const TERMS_EFFECTIVE_DATE = '2026년 6월 1일';
 
 export default function GuideTermsPage() {
+  // 🌟 조항 수는 본문(.guide-section-block)을 세어 상단 검은색 카드에 표시합니다
+  const [articleCount, setArticleCount] = useState(0);
+  useEffect(() => {
+    setArticleCount(document.querySelectorAll('#terms-doc .guide-section-block').length);
+  }, []);
+
   return (
     <GuideLayout title="이용약관" type="guide">
       <div className="guide-page-container">
-        {/* 🌟 새로 추가된 큰 제목과 설명 영역 */}
-        <div className="guide-title-row">
-          <h2 className="guide-title">이용약관 <span className="guide-title-icon"><i className="fa fa-file-contract"></i></span></h2>
-          <p className="last-updated">시행일자: 2026년 6월 1일</p>
-        </div>
+        {/* 🌟 제목 — mypage/wishlist 와 같은 구성 (영문 눈썹 + 제목 + 로즈 아이콘 뱃지) */}
+        {/* 🌟 요약 카드 (다른 화면의 검은색 카드와 같은 톤) — 오른쪽에 시행일자·조항 수·인쇄 버튼을 함께 넣었습니다 */}
+        <GuidePremiumHero
+          className="is-slim"
+          ariaLabel="이용약관 안내"
+          eyebrow="TERMS OF SERVICE"
+          title={<>미쿠짱 서비스 <em>이용 규정</em>을 안내드려요</>}
+          desc="구매·배송대행 서비스를 이용하실 때 회사와 회원의 권리·의무를 정한 약관입니다."
+          icon={<FileText weight="duotone" />}
+          feature={{
+            label: <><i className="fa fa-calendar"></i> 시행일자</>,
+            value: <span className="gp-hero-date">{TERMS_EFFECTIVE_DATE}</span>,
+            sub: articleCount > 0 ? `조항 ${articleCount}개` : undefined,
+            actions: [
+              { onClick: () => window.print(), label: <><Printer size={13} weight="bold" /> 인쇄하기</> },
+            ],
+          }}
+        />
+        <GuideTitle eyebrow="Terms of Service" title="이용약관" icon="fa-file-contract" />
 
-        <div className="guide-doc-card">
+        <GuideDocHeader docId="terms-doc" effectiveDate={TERMS_EFFECTIVE_DATE} hideMeta />
+
+        <div className="guide-doc-card gp-doc" id="terms-doc">
           
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 1 조 (목적)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 1 조</span>목적</h2>
             <div className="doc-content">
               <p>이 약관은 미쿠짱이 운영하는 미쿠짱 인터넷 홈페이지(http://www.mikushop.co.kr/)에서 제공하는 "배송/결제대행형서비스”를 이용함에 있어 회사와 회원의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.</p>
             </div>
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 2 조 (정의)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 2 조</span>정의</h2>
             <div className="doc-content">
               <ol>
                 <li>미쿠짱이라 함은 회사가 본 약관에 의하여 재화나 용역을 회원에게 제공하기 위하여 컴퓨터 등 정보 통신설비를 이용하여 재화나 용역을 거래할 수 있도록 설정한 가상의 영업장을 말하며, 아울러 미쿠짱을 운영하는 회사의 의미로도 사용합니다.</li>
@@ -38,7 +66,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 3 조 (약관의 명시와 설명 및 개정)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 3 조</span>약관의 명시와 설명 및 개정</h2>
             <div className="doc-content">
               <ol>
                 <li>미쿠짱은 이 약관의 내용과 상호 및 대표자 성명, 영업소 소재지 주소(소비자의 불만을 처리할 수 있는 곳의 주소를 포함) 전화번호, 모사전송번호, 전자우편주소, 사업자등록번호, 통신판매업 신고번호, 개인정보 관리책임자 등을 회원이 쉽게 알 수 있도록 미쿠짱의 초기 서비스화면(전면)에 게시합니다. 다만, 약관의 내용은 회원이 연결화면을 통하여 볼 수 있도록 할 수 있습니다.</li>
@@ -52,7 +80,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 4 조 (서비스의 제공 및 변경)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 4 조</span>서비스의 제공 및 변경</h2>
             <div className="doc-content">
               <p>미쿠짱은 다음과 같은 업무를 수행합니다.</p>
               <ol>
@@ -71,7 +99,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 5 조 (서비스의 중단)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 5 조</span>서비스의 중단</h2>
             <div className="doc-content">
               <ol>
                 <li>미쿠짱은 컴퓨터 등 정보통신설비의 보수, 점검, 교체 및 고장, 통신의 두절 등의 사유가 발생한 경우에는 서비스의 제공을 일시적으로 중단할 수 있습니다.</li>
@@ -82,7 +110,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 6 조 (회원가입)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 6 조</span>회원가입</h2>
             <div className="doc-content">
               <ol>
                 <li>회원은 미쿠짱이 정한 가입양식에 따라 회원정보를 기입한 후 이 약관에 동의한다는 의사표시를 함으로서 회원가입을 신청합니다.</li>
@@ -103,7 +131,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 7 조 (회원탈퇴 및 자격상실 등)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 7 조</span>회원탈퇴 및 자격상실 등</h2>
             <div className="doc-content">
               <ol>
                 <li>회원은 미쿠짱에 언제든지 회원탈퇴를 요청할 수 있으며 미쿠짱은 즉시 회원탈퇴를 처리합니다.</li>
@@ -129,7 +157,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 8 조 (회원에 대한 통지)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 8 조</span>회원에 대한 통지</h2>
             <div className="doc-content">
               <ol>
                 <li>미쿠짱이 회원에 대한 통지를 하는 경우, 회원이 미쿠짱과 미리 약정하여 지정한 전자우편 주소로 할 수 있습니다.</li>
@@ -139,7 +167,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 9 조 (계약의 성립)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 9 조</span>계약의 성립</h2>
             <div className="doc-content">
               <p>미쿠짱 배송대행은 회원과 아래의 절차를 통해 배송/결제대행 계약을 체결합니다.</p>
               <ol>
@@ -156,7 +184,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 10 조 (서비스 대상 물품)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 10 조</span>서비스 대상 물품</h2>
             <div className="doc-content">
               <p>미쿠짱 배송대행은 회원이 자가 사용의 목적으로 구매하여 수입하는 경우에만 서비스를 제공합니다. 아래와 같은 상품의 경우 고객의 동의를 구한 후 한국으로 발송하거나 해당 발송자에게로 반송할 수 있으며 회원의 귀책사유로 인해 회원의 소재가 불명확한 경우 미쿠짱 배송대행은 당해 물품을 발송인에게 반송하고 이를 회원에게 통보하며, 소요비용은 회원으로부터 정산하거나 미쿠짱 배송대행 임의대로 물품을 처리하여 충당할 수 있습니다.</p>
               <ul>
@@ -196,7 +224,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 11 조 (지급방법)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 11 조</span>지급방법</h2>
             <div className="doc-content">
               <p>미쿠짱 서비스 이용에 대한 대금지급방법은 다음 각 호의 방법 중 가용한 방법으로 할 수 있습니다.</p>
               <ul>
@@ -209,7 +237,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 12 조 (수신확인통지, 배송신청 변경 및 취소)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 12 조</span>수신확인통지, 배송신청 변경 및 취소</h2>
             <div className="doc-content">
               <ol>
                 <li>미쿠짱은 회원의 운송 및 수입대행신청이 있는 경우 회원에게 수신확인통지를 합니다.</li>
@@ -220,7 +248,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 13 조 (서비스별 요금 결제, 재화등의 공급 및 보관)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 13 조</span>서비스별 요금 결제, 재화등의 공급 및 보관</h2>
             <div className="doc-content">
               <ol>
                 <li>회원이 미쿠짱에서 배송/결제대행을 의뢰할 경우에는 미쿠짱 내 각 상품에 구현된 물품의 가격을 제11조 각 항의 형태로 결제해야 합니다.</li>
@@ -233,7 +261,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 14 조 (운송 및 통관)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 14 조</span>운송 및 통관</h2>
             <div className="doc-content">
               <ol>
                 <li><span className="highlight-text">운송</span>
@@ -253,7 +281,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 15 조 (반품, 환급 등)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 15 조</span>반품, 환급 등</h2>
             <div className="doc-content">
               <ol>
                 <li><span className="highlight-text">수입대행 서비스</span>
@@ -279,7 +307,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 16 조 (차액정산)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 16 조</span>차액정산</h2>
             <div className="doc-content">
               <ol>
                 <li>상품 가격 변경, 관세율표 개정, 세번분류 변경, 전산시스템 오류, 환율차이 등으로 인해 회원이 지불한 금액과 미쿠짱의 결제대행 시 발생한 실제 비용이 차이가 발생하는 경우에 대해 과부족금액을 회원이 요청할 경우에 한해 미쿠짱은 회원과 사후 정산 할 수 있습니다.</li>
@@ -289,7 +317,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 17 조 (긴급조치)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 17 조</span>긴급조치</h2>
             <div className="doc-content">
               <ol>
                 <li>회원이 위법, 불법 또는 부당한 목적을 위해 서비스를 이용한다고 미쿠짱이 판단할 때에는 미쿠짱은 관련 물품의 수취나 배송을 거절할 권리를 가집니다.</li>
@@ -300,7 +328,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 18 조 (개인정보보호)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 18 조</span>개인정보보호</h2>
             <div className="doc-content">
               <ol>
                 <li>미쿠짱은 회원의 정보수집 시 구매계약 이행에 필요한 최소한의 정보를 수집합니다. 다음 사항을 필수 사항으로 하며 그 외 사항은 선택사항으로 합니다.
@@ -334,7 +362,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 19 조 (미쿠짱의 의무)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 19 조</span>미쿠짱의 의무</h2>
             <div className="doc-content">
               <ol>
                 <li>미쿠짱은 법령과 이 약관이 금지하거나 공서양속에 반하는 행위를 하지 않으며 이 약관이 정하는 바에 따라 지속적이고, 안정적으로 재화·용역을 제공하는데 최선을 다하여야 합니다.</li>
@@ -346,7 +374,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 20 조 (회원의 ID 및 비밀번호에 대한 의무)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 20 조</span>회원의 ID 및 비밀번호에 대한 의무</h2>
             <div className="doc-content">
               <ol>
                 <li>제19조의 경우를 제외한 ID와 비밀번호에 관한 관리책임은 회원에게 있습니다.</li>
@@ -357,7 +385,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 21 조 (회원의 의무)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 21 조</span>회원의 의무</h2>
             <div className="doc-content">
               <p>회원은 다음 각 호의 행위를 하여서는 안됩니다.</p>
               <ol>
@@ -373,7 +401,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 22 조 (연결 웹사이트와 피연결 웹사이트 간의 관계)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 22 조</span>연결 웹사이트와 피연결 웹사이트 간의 관계</h2>
             <div className="doc-content">
               <ol>
                 <li>상위 몰과 하위 몰이 하이퍼 링크(예: 하이퍼 링크의 대상에는 문자, 그림 및 동화상 등이 포함됨)방식 등으로 연결된 경우, 전자를 연결 몰(웹 사이트) 이라고 하고 후자를 피연결 몰(웹사이트)이라고 합니다.</li>
@@ -383,7 +411,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 23 조 (저작권의 귀속 및 이용제한)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 23 조</span>저작권의 귀속 및 이용제한</h2>
             <div className="doc-content">
               <ol>
                 <li>미쿠짱이 작성한 저작물에 대한 저작권 기타 지적재산권은 미쿠짱에 귀속합니다.</li>
@@ -394,7 +422,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 24 조 (분쟁해결)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 24 조</span>분쟁해결</h2>
             <div className="doc-content">
               <ol>
                 <li>미쿠짱은 회원이 제기하는 정당한 의견이나 불만을 반영하고 그 피해를 보상처리하기 위하여 피해보상 처리기구를 설치·운영합니다.</li>
@@ -405,7 +433,7 @@ export default function GuideTermsPage() {
           </div>
 
           <div className="guide-section-block">
-            <h2 className="guide-section-title"><span className="title-dot"></span>제 25 조 (재판권 및 준거법)</h2>
+            <h2 className="guide-section-title"><span className="gp-article-no">제 25 조</span>재판권 및 준거법</h2>
             <div className="doc-content">
               <ol>
                 <li>미쿠짱과 회원간에 발생한 전자상거래 분쟁에 관한 소송은 제소 당시의 회원의 주소에 의하고, 주소가 없는 경우에는 거소를 관할하는 지방법원의 전속관할로 합니다. 다만, 제소 당시 회원의 주소 또는 거소가 분명하지 않거나 외국 거주자의 경우에는 민사소송법상의 관할법원에 제기합니다.</li>
@@ -414,6 +442,7 @@ export default function GuideTermsPage() {
             </div>
           </div>
 
+          <GuideBackToTop />
         </div>
       </div>
     </GuideLayout>

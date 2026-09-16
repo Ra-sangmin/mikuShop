@@ -62,15 +62,37 @@ export default function AdminLayout({
     // "원래 가려던 페이지"가 로그인 페이지 자신으로 덮어써지는 자기 자신 리다이렉트 버그가 생깁니다.
     if (pathname === '/admin/login') return;
 
-    const storedId = localStorage.getItem('admin_id');
-    const storedName = localStorage.getItem('admin_name');
+    // 🐛 예전에는 localStorage의 admin_id로 로그인 여부를 판단했습니다. 지금은 서버가 서명한
+    //    httpOnly 쿠키가 유일한 기준이라 둘이 어긋날 수 있었습니다.
+    //      · 쿠키만 만료 → 화면은 그대로 뜨는데 모든 API가 401로 조용히 실패
+    //      · localStorage만 지움 → 멀쩡한 세션인데 로그인 화면으로 튕김
+    //    → 서버에 실제 세션을 물어봅니다.
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/admin/login', { cache: 'no-store' });
+        const data = await res.json();
+        if (cancelled) return;
 
-    if (!storedId) {
-      // 🌟 미들웨어와 동일하게, 원래 있던 페이지로 로그인 후 돌아갈 수 있도록 redirect 쿼리를 함께 넘깁니다.
-      router.push(`/admin/login?redirect=${encodeURIComponent(pathname)}`);
-    } else if (storedName) {
-      setAdminName(storedName);
-    }
+        if (!data.authenticated) {
+          localStorage.removeItem('admin_id');
+          localStorage.removeItem('admin_name');
+          // 🌟 미들웨어와 동일하게, 원래 있던 페이지로 로그인 후 돌아갈 수 있도록 redirect 쿼리를 함께 넘깁니다.
+          router.push(`/admin/login?redirect=${encodeURIComponent(pathname)}`);
+          return;
+        }
+
+        setAdminName(data.name || '');
+        // 화면 표시용 값은 서버가 알려준 최신 정보로 맞춰둡니다.
+        if (data.adminId) localStorage.setItem('admin_id', String(data.adminId));
+        if (data.name) localStorage.setItem('admin_name', data.name);
+      } catch {
+        // 네트워크 오류로 세션을 확인하지 못했을 때는 화면을 유지합니다.
+        // (여기서 로그인 화면으로 보내면 일시적인 통신 장애에 작업 중인 내용이 날아갑니다)
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [router, pathname]);
 
   const handleLogout = async () => {

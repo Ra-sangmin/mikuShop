@@ -1,10 +1,25 @@
 import { NextResponse } from "next/server";
 import prisma from '@/lib/prisma';
+import { requireUser } from '@/lib/apiAuth';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { orderId, amount, deposit } = body;
+    const { orderId } = body;
+    const amount = Number(body.amount);
+    const deposit = Number(body.deposit ?? 0);
+
+    // 🔒 로그인 회원 확인
+    const auth = await requireUser();
+    if (!auth.ok) return auth.response;
+
+    // 🔒 음수/비정상 금액 차단 (음수 보증금으로 잔액이 늘어나는 것 방지)
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(deposit) || deposit < 0) {
+      return NextResponse.json(
+        { success: false, error: "금액 값이 올바르지 않습니다." },
+        { status: 400 }
+      );
+    }
 
     if (!orderId || !amount) {
       return NextResponse.json(
@@ -16,10 +31,11 @@ export async function POST(req: Request) {
     // 1. 해당 주문 찾기 및 유저 정보 확인
     const order = await prisma.order.findUnique({
       where: { orderId: orderId },
-      include: { user: true }
+      include: { user: { omit: { password: true } } }
     });
 
-    if (!order) {
+    // 🔒 본인 주문만 추가 입찰 가능
+    if (!order || order.userId !== auth.userId) {
       return NextResponse.json(
         { success: false, error: "주문을 찾을 수 없습니다." },
         { status: 404 }

@@ -2,9 +2,14 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import * as cheerio from 'cheerio';
 import iconv from 'iconv-lite';
+import { requireAdmin, requireUser } from '@/lib/apiAuth';
 
 // 🟢 [GET] 1. 주문 목록 및 유저 정보 조회
 export async function GET() {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   try {
     const orders = await prisma.order.findMany({
       select: {
@@ -33,6 +38,7 @@ export async function GET() {
         secondPaymentAmount: true,
         bidStatus: true,
         user: {
+          omit: { password: true }, // 🔒 비밀번호 해시는 내려보내지 않음
           include: {
             addresses: true 
           }
@@ -87,7 +93,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { 
-      userId, 
+      userId: requestedUserId, 
       productName, 
       productPrice, 
       productCount, 
@@ -107,14 +113,24 @@ export async function POST(req: Request) {
     let finalTitle = productName;
     if (!finalTitle) finalTitle = "구매대행 요청 (상품명 추출 불가)";
 
-    if (!userId || !productUrl || !productPrice) {
+    // 🔒 로그인 회원 본인 명의로만 주문 생성 (userId는 세션 값을 사용)
+    const auth = await requireUser(requestedUserId);
+    if (!auth.ok) return auth.response;
+    const userId = auth.userId;
+
+    if (!productUrl || !productPrice) {
       return NextResponse.json({ error: '필수 정보(유저ID, URL, 가격)가 누락되었습니다.' }, { status: 400 });
+    }
+
+    // 🔒 음수 금액으로 잔액을 늘리는 요청 차단
+    if (Number(productPrice) <= 0 || Number(depositAmount || 0) < 0 || Number(myBidPrice || 0) < 0 || Number(productCount || 0) < 0) {
+      return NextResponse.json({ error: '금액/수량 값이 올바르지 않습니다.' }, { status: 400 });
     }
 
     // ====================================================================
     // 🌟 사전 검사: 유저 확인 및 잔액 체크 (Fail-Fast)
     // ====================================================================
-    const user = await prisma.user.findUnique({ where: { id: parseInt(userId) } });
+    const user = await prisma.user.findUnique({ where: { id: userId } });
 
     if (!user) {
       return NextResponse.json({ 
@@ -147,7 +163,7 @@ export async function POST(req: Request) {
       // 1. 공통 주문 생성 (장바구니, 일반 구매, 경매 상관없이 무조건 1번만 작성!)
       const newOrder = await tx.order.create({
         data: {
-          userId: parseInt(userId),
+          userId: userId,
           orderId: orderId,
           type: type || "PURCHASE",
           productName: finalTitle,
@@ -172,13 +188,13 @@ export async function POST(req: Request) {
       // 2. 경매 대행일 경우에만 추가 작업 진행 (사이버머니 차감 및 로그 기록)
       if (status === "BID_PENDING" && myBidPrice && myBidPrice > 0) {
         const updatedUser = await tx.user.update({
-          where: { id: parseInt(userId) },
+          where: { id: userId },
           data: { cyberMoney: { decrement: Number(depositAmount) } }
         });
 
         await tx.moneyLog.create({
           data: {
-            userId: parseInt(userId),
+            userId: userId,
             type: 'USE',
             content: `[경매 보증금] ${finalTitle.substring(0, 15)}...`, 
             amount: -Math.abs(Number(depositAmount)),
@@ -206,14 +222,30 @@ export async function POST(req: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { updates, type, userId, deductAmount, paymentTitle } = body; 
+    const { updates, type, userId: requestedUserId, deductAmount, paymentTitle } = body; 
+
+    // 🔒 로그인 회원 본인의 주문만 변경 가능 (userId는 세션 값을 사용)
+    const auth = await requireUser(requestedUserId);
+    if (!auth.ok) return auth.response;
+    const sessionUserId = auth.userId;
+
+    if (!Array.isArray(updates)) {
+      return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 });
+    }
+
+    // 🔒 변경 대상 주문이 모두 본인 주문인지 확인
+    const orderIds = updates.map((o: any) => String(o?.id ?? ''));
+    const ownedCount = await prisma.order.count({ where: { orderId: { in: orderIds }, userId: sessionUserId } });
+    if (ownedCount !== new Set(orderIds).size || orderIds.some((id: string) => !id)) {
+      return NextResponse.json({ error: '본인 주문만 변경할 수 있습니다.' }, { status: 403 });
+    }
 
     // ✅ 안전한 인터랙티브 트랜잭션 (모두 성공하거나 자동 롤백)
     await prisma.$transaction(async (tx) => {
       
       // 💰 [머니 결제 로직] 사이버머니 차감 및 로그 생성
-      if (userId && deductAmount && deductAmount > 0) {
-        const uid = parseInt(userId);
+      if (requestedUserId && deductAmount && Number(deductAmount) > 0) {
+        const uid = sessionUserId;
         const amount = Number(deductAmount);
 
         // 잔액 검증
@@ -284,6 +316,15 @@ export async function DELETE(request: Request) {
 
     if (!orderId) {
       return NextResponse.json({ error: '주문 ID(id)가 필요합니다.' }, { status: 400 });
+    }
+
+    // 🔒 본인 주문만 삭제 가능
+    const auth = await requireUser();
+    if (!auth.ok) return auth.response;
+
+    const target = await prisma.order.findUnique({ where: { orderId: orderId } });
+    if (!target || target.userId !== auth.userId) {
+      return NextResponse.json({ error: '주문을 찾을 수 없습니다.' }, { status: 404 });
     }
 
     await prisma.order.delete({

@@ -166,8 +166,13 @@ export default function DeveloperPage() {
         }
 
         const { nextId, nextName } = data;
-        if (!nextId && data.totalCount) {
-          addLog(`✅ [${platformLabel}] 모든 카테고리 수집이 완료되었습니다!`);
+        // 🐛 예전 조건은 `!nextId && data.totalCount`라, totalCount가 0(=아직 아무것도 수집되지
+        //    않은 상태)이면 다음 대상이 없어도 break하지 않고 계속 돌았습니다.
+        //    → 수집할 대상이 없으면 totalCount와 무관하게 멈춥니다.
+        if (!nextId) {
+          addLog(data.totalCount
+            ? `✅ [${platformLabel}] 모든 카테고리 수집이 완료되었습니다!`
+            : `⚠️ [${platformLabel}] 수집할 카테고리가 없습니다. 시작 카테고리를 먼저 등록해주세요.`);
           break;
         }
 
@@ -183,6 +188,11 @@ export default function DeveloperPage() {
           } else {
             addLog(`📦 ${displayName} 완료! (신규 자식: ${crawlResult.data?.length || 0}개)`);
           }
+        } else {
+          // 🐛 실패해도 로그도 남기지 않고 멈추지도 않아, 같은 카테고리를 500ms마다 무한히
+          //    다시 요청했습니다. 실패하면 알리고 중단합니다.
+          addLog(`❌ ${nextId}(${nextName}) 수집 실패: ${crawlResult.error || crawlRes.status}`);
+          break;
         }
 
         if (!isAutoRunningRef.current) break;

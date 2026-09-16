@@ -4,6 +4,9 @@ import React, { useState, useEffect, useRef } from 'react'; // 🌟 Hook 추가
 import GuideLayout from '../../components/GuideLayout';
 import PurchaseFormContainer from '../../components/PurchaseFormContainer';
 import '../../guide/guide-common.css';
+import GuideTitle from '@/app/guide/components/GuideTitle';
+import GuidePremiumHero from '@/app/guide/components/GuidePremiumHero';
+import { Truck } from '@phosphor-icons/react';
 import { useRouter } from 'next/navigation'; // 🌟 라우터 추가
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; // 🌟 미쿠짱 전용 Alert 추가
 
@@ -42,9 +45,18 @@ export default function DeliveryRequestPage() {
   }
 
   return (
-    <GuideLayout title="배송대행 신청" type={PAGE_TYPE} hideSidebar={true}>
-      <div style={{ maxWidth: '940px', margin: '0 auto', padding: '0 20px' }}>
-        <h2 className="guide-title">배송대행 신청 <span className="guide-title-icon"><i className="fa fa-truck-fast"></i></span></h2>
+    <GuideLayout title="배송대행 신청" type={PAGE_TYPE}>
+      <div className="order-form-page">
+        {/* 🌟 얇은 요약 카드 (다른 화면의 검은색 카드와 같은 톤, 폼이 밀리지 않도록 통계 없이) */}
+        <GuidePremiumHero
+          className="is-slim"
+          ariaLabel="배송대행 신청 안내"
+          eyebrow="SHIPPING SERVICE"
+          title={<>직접 구매한 상품을 <em>안전하게 한국으로</em></>}
+          desc="일본 주소로 도착한 상품 정보를 입력하면 미쿠짱 센터에서 받아 한국까지 보내드려요."
+          icon={<Truck weight="duotone" />}
+        />
+        <GuideTitle eyebrow="Shipping Service" title="배송대행 신청" icon="fa-truck-fast" />
         <div className="guide-panel">
           <PurchaseFormContainer type={PAGE_TYPE}/>
         </div>

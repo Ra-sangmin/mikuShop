@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { SANDBOX_ARGS } from './sandbox';
 
 if (!(puppeteer as any).plugins || (puppeteer as any).plugins.length === 0) {
   puppeteer.use(StealthPlugin());
@@ -11,8 +12,8 @@ if (!(puppeteer as any).plugins || (puppeteer as any).plugins.length === 0) {
 let sharedBrowser: any = null;
 
 const LAUNCH_ARGS = [
-  '--no-sandbox',
-  '--disable-setuid-sandbox',
+  // 🔒 샌드박스는 기본으로 켭니다. 끄려면 PUPPETEER_DISABLE_SANDBOX=1 (lib/crawler/sandbox.ts 참고)
+  ...SANDBOX_ARGS,
   '--disable-dev-shm-usage',
   '--disable-blink-features=AutomationControlled',
   // 🌟 크롬 경량화 옵션 (렌더링에 불필요한 기능 끄기)
@@ -24,8 +25,10 @@ const LAUNCH_ARGS = [
   '--disable-renderer-backgrounding',
 ];
 
+// 🐛 UA 의 크롬 버전(122)이 실제 번들 크롬(152)보다 한참 낮아 메루카리가 "お使いのブラウザが対応していない"
+//    (미지원 브라우저) 배너를 띄우는 축소 모드로 응답했습니다. 실제 버전에 맞춥니다.
 const DEFAULT_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
 
 // 🌟 이미지/폰트/미디어/스타일시트 + 광고·트래킹 스크립트를 공통으로 차단합니다.
 const BLOCKED_RESOURCE_TYPES = ['image', 'font', 'media', 'stylesheet'];

@@ -21,8 +21,7 @@ export default function AdminLoginPage() {
     });
 
     if (res.ok) {
-      // Set a temporary cookie for middleware
-      document.cookie = "admin_session=true; path=/";
+      // 🔒 관리자 세션 쿠키는 서버(/api/admin/login)가 httpOnly로 발급합니다.
 
       // 🌟 1. 백엔드에서 보낸 JSON 응답 데이터를 읽어옵니다.
       const data = await res.json();

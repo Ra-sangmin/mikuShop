@@ -125,6 +125,11 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
           });
         }
 
+        // 🐛 첫 화면에서 상품을 하나도 못 긁으면(사이트가 느리거나 첫 렌더가 늦어 선택자 대기가
+        //    타임아웃되는 "가끔" 케이스) 예전엔 그대로 0개로 끝났습니다. 한 번은 다시 시도합니다.
+        for (let round = 0; round < 2; round++) {
+        if (round > 0) console.log(`🔁 [재시도] 첫 시도에서 상품을 못 가져와 페이지를 다시 엽니다: ${targetUrl}`);
+
         // domcontentloaded로 설정하여 이미지 다운로드는 기다리지 않고 빠르게 통과합니다.
         await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
 
@@ -208,6 +213,10 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
             break;
           }
         }
+
+        // 하나라도 가져왔거나, 취소됐거나, 페이지가 닫혔으면 재시도하지 않습니다.
+        if (collectedItems.length > 0 || state.isStreamClosed || signal.aborted || !page || page.isClosed()) break;
+        }
       } catch (err) {
         console.error("Stream Error:", err);
       } finally {
@@ -217,6 +226,14 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
           cache.set(targetUrl, collectedItems);
         }
         if (!state.isStreamClosed) {
+          // 🌟 끝났다는 신호를 보냅니다. 재시도까지 했는데도 0개면 실패로 알려서 화면이
+          //    "조용한 빈 목록" 대신 안내 문구를 띄울 수 있게 합니다. (모르는 줄은 기존 클라이언트가 무시)
+          try {
+            if (collectedItems.length === 0 && !signal.aborted) {
+              controller.enqueue(encoder.encode(JSON.stringify({ success: false, error: '상품을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.' }) + '\n'));
+            }
+            controller.enqueue(encoder.encode(JSON.stringify({ done: true, total: collectedItems.length }) + '\n'));
+          } catch { /* 이미 닫힌 컨트롤러 */ }
           state.isStreamClosed = true;
           if (page) await page.close().catch(() => {});
           controller.close();

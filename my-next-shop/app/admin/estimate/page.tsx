@@ -85,8 +85,11 @@ export default function PremiumEstimatePage() {
         body: JSON.stringify({
           salePrice,
           quantityCount: quantity,
-          addRate: addRate, 
-          dailyTax
+          addRate: addRate,
+          dailyTax,
+          // 🐛 화면에서 수정할 수 있는 수수료가 전송되지 않아 서버가 제 값으로 다시 계산했습니다.
+          paymentFee,
+          agencyFee,
         })
       });
       
@@ -347,7 +350,9 @@ export default function PremiumEstimatePage() {
                       <span className="bracket">(</span>
                       <span className="c-rate" title="현재 환율">{exchangeRate.toFixed(4)}</span>
                       <span className="op">+</span>
-                      <span className="c-add" title="추가 증가액">{parseFloat((addRate * 0.01).toFixed(4))}</span>
+                      {/* 🐛 저장 경로는 설정값(rateBasisUnit)으로 나누는데 여기만 0.01이 하드코딩돼
+                          기준이 100이 아니면 수식 설명이 실제 계산과 어긋났습니다. */}
+                      <span className="c-add" title="추가 증가액">{parseFloat((addRate / rateBasisUnit).toFixed(4))}</span>
                       <span className="bracket">)</span>
 
                       <span className="multiply"> × </span>

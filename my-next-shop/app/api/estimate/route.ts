@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireAdmin, getAdminSession } from '@/lib/apiAuth';
+import {
+  calculateTieredPaymentFee,
+  calculateTieredAgencyFee,
+  DEFAULT_PAYMENT_FEE_RULE,
+  DEFAULT_AGENCY_FEE_RULE,
+} from '@/src/utils/feeCalculator';
 
 // 🌟 관리자가 DB 값을 언제든 바꿀 수 있고, 전역 변수 캐시는 그 변경을 놓치는 위험이 있어
 // 캐시 없이 매 요청마다 DB를 직접 조회합니다.
@@ -84,10 +91,15 @@ export async function POST(request: Request) {
     const { 
       salePrice = 0, 
       quantityCount = 1, 
-      addRate = 0, 
+      addRate = 0,
       dailyTax = 0,
-      forceRefresh = false // 🌟 새로고침 강제 여부 파라미터 추가
+      paymentFee: requestedPaymentFee,
+      agencyFee: requestedAgencyFee,
+      forceRefresh: requestedForceRefresh = false // 🌟 새로고침 강제 여부 파라미터 추가
     } = body;
+
+    // 🔒 forceRefresh는 DB의 현재 환율을 갱신하므로 관리자 세션일 때만 허용합니다.
+    const forceRefresh = requestedForceRefresh ? !!(await getAdminSession()) : false;
 
     const { additionalRate, rateBasisUnit: exchangeRateBasisUnit, currentExchangeRate } = await loadExchangeRateConfig();
 
@@ -103,20 +115,34 @@ export async function POST(request: Request) {
       baseExchangeRate = result.rate;
       exchangeRateFetchFailed = result.failed;
     }
+    // 사이트 전역이 참조하는 환율(저장된 가산액 포함) — 다른 소비처를 위해 그대로 둡니다.
     const exchangeRate = baseExchangeRate + additionalRate;
 
-    let paymentFee = 0;
-    if (salePrice > 0) {
-      paymentFee = salePrice < 30000 ? 220 : 330;
-    }
+    // 🐛 수수료가 30000/220/330, 4/300/100으로 하드코딩되어 있어 order_fee_rules 설정이
+    //    무시되고, 관리자 화면에서 입력한 수수료도 반영되지 않았습니다.
+    //    → DB 규칙(공용 계산식)을 쓰되, 요청에 값이 실려오면 그 값을 우선합니다.
+    const [paymentRule, agencyRule] = await Promise.all([
+      prisma.orderFeeRule.findUnique({ where: { feeType: 'PAYMENT' } }),
+      prisma.orderFeeRule.findUnique({ where: { feeType: 'AGENCY' } }),
+    ]);
+    const paymentFee = Number.isFinite(Number(requestedPaymentFee))
+      ? Number(requestedPaymentFee)
+      : calculateTieredPaymentFee(salePrice, paymentRule ?? DEFAULT_PAYMENT_FEE_RULE);
+    const agencyFee = Number.isFinite(Number(requestedAgencyFee))
+      ? Number(requestedAgencyFee)
+      : calculateTieredAgencyFee(quantityCount, agencyRule ?? DEFAULT_AGENCY_FEE_RULE);
 
-    let agencyFee = 0;
-    if (quantityCount > 0) {
-      agencyFee = quantityCount < 4 ? 300 : quantityCount * 100;
-    }
-
-    const addRateValue = addRate * 0.01;
-    const appliedRate = exchangeRate + addRateValue;
+    // 🐛 추가 증가액(addRate)이 두 번 더해지고 있었습니다.
+    //    exchangeRate에 이미 저장된 additionalRate가 포함돼 있는데, 관리자 화면은 그 값을
+    //    addRate 입력칸의 초깃값으로 읽어 다시 보내기 때문에 base + a + a가 됐습니다.
+    //    → addRate가 실려오면 "저장된 가산액을 대체하는 미리보기 값"으로 취급합니다.
+    //    (addRate를 보내지 않는 호출부 - ExchangeRateContext 등 - 는 이전과 완전히 동일)
+    //    아울러 하드코딩된 0.01 대신 설정값(rateBasisUnit)으로 나눕니다.
+    const hasAddRateOverride = addRate !== undefined && addRate !== null && addRate !== 0;
+    const effectiveAdditionalRate = hasAddRateOverride
+      ? Number(addRate) / exchangeRateBasisUnit
+      : additionalRate;
+    const appliedRate = baseExchangeRate + effectiveAdditionalRate;
 
     const totalJpy = salePrice + paymentFee + dailyTax + agencyFee;
 
@@ -153,6 +179,10 @@ export async function POST(request: Request) {
 
 // 🌟 admin/estimate의 "전역 적용" 버튼 - 추가 증가액(원 단위)을 DB(ExchangeRateConfig)에 저장합니다.
 export async function PUT(request: Request) {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   try {
     const body = await request.json();
     const { additionalRate } = body;

@@ -2,9 +2,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import GuideLayout from '@/app/components/GuideLayout';
+import '@/app/guide/guide-common.css';
 import { loadPaymentWidget, PaymentWidgetInstance } from "@tosspayments/payment-widget-sdk";
 import { useRouter } from 'next/navigation';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
+import { Landmark, CreditCard, Copy, Check, User, Info, Plus, RotateCcw, Loader2, Wallet, ArrowRight } from 'lucide-react';
+import MoneyBalanceCard from '../MoneyBalanceCard';
+import GuideTitle from '@/app/guide/components/GuideTitle';
 
 // ==========================================
 // 🎨 1. 디자인 및 스타일 시스템
@@ -12,7 +16,8 @@ import { useMikuAlert } from '@/app/context/MikuAlertContext';
 const s = {
   // 🌟 padding-top을 0으로: GuideLayout이 헤더와 콘텐츠 패널 사이 간격을 이미 없앴는데,
   // 이 컨테이너 자체의 위쪽 padding(48px)이 그 위에 또 여백을 만들고 있었음
-  container: { maxWidth: '672px', margin: '0 auto', padding: '0 16px 48px 16px', fontFamily: 'Pretendard, "Noto Sans KR", sans-serif' },
+  // 🌟 가로 폭: 다른 사이드바 페이지(inquiry/faq 등의 .guide-page-container)처럼 본문 영역 전체를 씁니다.
+  container: { width: '100%', padding: '0 0 48px 0', boxSizing: 'border-box' as const, fontFamily: 'Pretendard, "Noto Sans KR", sans-serif' },
   formWrapper: { display: 'flex', flexDirection: 'column' as const, gap: '28px' },
   
   label: { display: 'block', fontSize: '14px', fontWeight: '800', color: '#334155', marginBottom: '8px' },
@@ -45,61 +50,13 @@ const globalAnimation = `
   @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
   .anim { animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-  /* 🌟 mypage/guide 페이지들과 동일한 타이틀 + BG 패널 스타일 (통일감) */
-  .money-page-title {
-    display: flex; align-items: center; gap: 10px;
-    font-size: 20px; font-weight: 900; color: #0f172a;
-    letter-spacing: -0.4px; margin-bottom: 16px;
-  }
-  .money-title-icon {
-    width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0; color: #fff;
-    display: inline-flex; align-items: center; justify-content: center; font-size: 12px;
-    background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
-    box-shadow: 0 6px 14px -5px rgba(234, 88, 12, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
-  }
-  .money-panel {
-    position: relative;
-    overflow: hidden;
-    background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
-    border: 1px solid rgba(226, 232, 240, 0.7);
-    border-radius: 32px;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 14px 34px -14px rgba(15, 23, 42, 0.10);
-    padding: 40px;
-    box-sizing: border-box;
-  }
-  .money-panel::before {
-    content: '';
-    position: absolute; top: 0; left: 0; right: 0; height: 4px;
-    background: linear-gradient(90deg, #fb923c 0%, #ea580c 50%, #fb923c 100%);
-  }
-
-  /* 🌟 타이틀 오른쪽에 현재 보유 머니를 함께 보여주는 영역 */
-  .money-title-row {
-    display: flex; align-items: center; justify-content: space-between;
-    flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px;
-  }
-  .money-title-row .money-page-title { margin-bottom: 0; }
-  .money-title-balance {
-    display: inline-flex; align-items: center; gap: 8px;
-    margin: 0; padding: 9px 18px;
-    background: linear-gradient(135deg, #fff7ed 0%, #ffece0 100%);
-    border: 1px solid #fed7aa;
-    border-radius: 999px;
-    font-size: 13px; font-weight: 700; color: #9a3412;
-    white-space: nowrap;
-  }
-  .money-title-balance strong {
-    font-size: 19px; font-weight: 900; color: #ea580c;
-  }
+  /* 🌟 타이틀/아이콘/패널/잔액 배지는 guide-common.css의 공용 클래스
+     (.guide-title, .guide-title-icon, .guide-panel, .guide-title-row,
+     .guide-title-balance)를 그대로 씁니다 — 이 파일에서 따로 정의하지 않습니다. */
 
   /* 🌟 모바일: currentMenu(고정 바)와 카드 사이 여백 제거 */
   @media (max-width: 768px) {
     .money-charge-container { padding-top: 0 !important; }
-    .money-page-title { font-size: 16px; gap: 8px; }
-    .money-title-icon { width: 24px; height: 24px; border-radius: 8px; font-size: 11px; }
-    .money-title-balance { padding: 7px 14px; font-size: 11px; gap: 6px; }
-    .money-title-balance strong { font-size: 15px; }
-    .money-panel { padding: 16px; border-radius: 16px; }
   }
 `;
 
@@ -294,109 +251,218 @@ function useMoneyChargeLogic() {
 // ==========================================
 // 🖥️ 3. 메인 컴포넌트
 // ==========================================
+const BANK_ACCOUNT = { bank: '신한은행', number: '110-629-593784', owner: '미쿠짱' };
+const QUICK_AMOUNTS = [10000, 30000, 50000, 100000];
+const MIN_AMOUNT = 5000;
+const MAX_AMOUNT = 1000000;
+
 export default function MoneyChargePage() {
   const {
     isAuthChecking,
     amount, depositor, setDepositor, method, setMethod,
-    currentMoney, isFocused, setIsFocused, loading,
+    currentMoney, setIsFocused, loading,
     formatDisplay, handleChargeRequest, handleAmountChange
   } = useMoneyChargeLogic();
+  const [copied, setCopied] = useState(false);
 
   if (isAuthChecking) {
     return <div style={{ height: '100vh', backgroundColor: '#fdfdfd' }} />;
   }
 
+  const numAmount = parseInt(amount || '0') || 0;
+  const isTooSmall = numAmount > 0 && numAmount < MIN_AMOUNT;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(BANK_ACCOUNT.number.replace(/-/g, ''));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   return (
     <GuideLayout title="미쿠짱머니 충전 신청" type="money">
       <style jsx global>{globalAnimation}</style>
 
-      <div className="money-charge-container" style={s.container}>
-        <div className="money-title-row">
-          <h2 className="money-page-title">충전 신청 <span className="money-title-icon"><i className="fa fa-wallet"></i></span></h2>
-          <p className="money-title-balance">현재 보유 머니<strong>{currentMoney.toLocaleString()}원</strong></p>
-        </div>
+      <div className="money-charge-container mm-page">
+        {/* 🌟 요약 카드 + 제목 — mypage/wishlist 와 같은 구성 (카드가 제목 위) */}
+        <MoneyBalanceCard
+          current="charge"
+          balance={currentMoney}
+          stats={[
+            { label: '충전 신청 금액', value: `${numAmount.toLocaleString()}원`, tone: 'plus' },
+            { label: '충전 후 예상 잔액', value: `${(currentMoney + numAmount).toLocaleString()}원` },
+            { label: '최소 충전', value: `${MIN_AMOUNT.toLocaleString()}원` },
+            { label: '1회 최대', value: '100만원', text: true },
+          ]}
+        />
 
-        <div className="anim money-panel">
-          <div style={s.formWrapper}>
+        <GuideTitle eyebrow="Charge" title="충전 신청" icon="fa-wallet" />
 
-            <div>
-              <label style={s.label}>충전 신청 금액</label>
-              <div style={s.inputContainer}>
-                <input
-                  type={isFocused ? "number" : "text"}
-                  value={isFocused ? amount : formatDisplay(amount)}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value.replace(/[^0-9]/g, '') || '0');
-                    handleAmountChange(val);
-                  }}
-                  onFocus={() => setIsFocused(true)}
-                  onBlur={() => setIsFocused(false)}
-                  placeholder="최소 5,000원 이상"
-                  style={s.inputWrapper(isFocused)}
-                />
-                <span style={s.currencyUnit}>원</span>
+        <div className="guide-panel mm-anim">
+          <div className="mm-stack">
+
+            {/* 01 충전 금액 */}
+            <section className="mm-section">
+              <div className="mm-section-head">
+                <h3 className="mm-section-title"><span className="mm-step">01</span>충전 금액</h3>
+                <span className="mm-section-sub">최소 5,000원 · 1회 최대 100만원</span>
               </div>
-              <div style={s.quickBtnWrapper}>
-                {[10000, 30000, 50000, 100000].map((val) => (
+              <div className={`mm-amount-box ${isTooSmall ? 'is-error' : ''}`}>
+                <div className="mm-amount-row">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    aria-label="충전 신청 금액"
+                    className="mm-amount-input"
+                    value={numAmount ? numAmount.toLocaleString() : ''}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value.replace(/[^0-9]/g, '') || '0');
+                      handleAmountChange(val);
+                    }}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                    placeholder="금액 입력"
+                  />
+                  <span className="mm-amount-unit">원</span>
+                </div>
+                <div className="mm-amount-foot">
+                  <span className={`mm-amount-readout ${isTooSmall ? 'is-error' : numAmount ? '' : 'is-muted'}`}>
+                    {isTooSmall ? '최소 5,000원부터 신청할 수 있어요' : numAmount ? `${formatDisplay(amount)} 원` : '금액 버튼으로 빠르게 더할 수 있어요'}
+                  </span>
+                  <span className="mm-amount-limit">남은 한도 {(MAX_AMOUNT - numAmount).toLocaleString()}원</span>
+                </div>
+              </div>
+              <div className="mm-chips">
+                {QUICK_AMOUNTS.map((val) => (
                   <button
+                    type="button"
                     key={val}
-                    onClick={() => handleAmountChange(parseInt(amount || '0') + val)}
-                    style={s.quickBtn}
+                    className="mm-chip"
+                    onClick={() => handleAmountChange(numAmount + val)}
                   >
-                    +{val / 10000}만
+                    <Plus size={13} strokeWidth={2.6} />{val / 10000}만
                   </button>
                 ))}
+                <button type="button" className="mm-chip is-ghost" onClick={() => handleAmountChange(0)} aria-label="금액 초기화">
+                  <RotateCcw size={13} strokeWidth={2.4} />초기화
+                </button>
               </div>
-            </div>
+            </section>
 
-            <div>
-              <label style={s.label}>입금 방법 선택</label>
-              <div style={s.methodGrid}>
-                <button onClick={() => setMethod('transfer')} style={s.methodBtn(method === 'transfer')}>무통장 입금</button>
-                <button onClick={() => setMethod('card')} style={s.methodBtn(method === 'card')}>신용카드 결제</button>
+            {/* 02 결제 수단 */}
+            <section className="mm-section">
+              <div className="mm-section-head">
+                <h3 className="mm-section-title"><span className="mm-step">02</span>결제 수단</h3>
               </div>
-            </div>
+              <div className="mm-methods" role="radiogroup" aria-label="결제 수단">
+                <button type="button" role="radio" aria-checked={method === 'transfer'} className={`mm-method ${method === 'transfer' ? 'is-active' : ''}`} onClick={() => setMethod('transfer')}>
+                  <span className="mm-method-icon"><Landmark size={20} strokeWidth={2} /></span>
+                  <span className="mm-method-text">
+                    <strong>무통장 입금</strong>
+                    <span>입금 확인 후 운영자 승인</span>
+                  </span>
+                  <span className="mm-radio" aria-hidden="true" />
+                </button>
+                <button type="button" role="radio" aria-checked={method === 'card'} className={`mm-method ${method === 'card' ? 'is-active' : ''}`} onClick={() => setMethod('card')}>
+                  <span className="mm-method-icon"><CreditCard size={20} strokeWidth={2} /></span>
+                  <span className="mm-method-text">
+                    <strong>신용카드 결제</strong>
+                    <span>결제 즉시 충전</span>
+                  </span>
+                  <span className="mm-radio" aria-hidden="true" />
+                </button>
+              </div>
+            </section>
 
+            {/* 03 입금 정보 */}
             {method === 'transfer' && (
-              <div style={s.animatedSection}>
-                <div style={s.accountInfoBox}>
-                  <p style={s.accountInfoLabel}>입금 계좌 안내</p>
-                  <p style={s.accountNumber}>신한은행 110-629-593784</p>
-                  <p style={s.accountOwner}>예금주: 미쿠짱</p>
+              <section className="mm-section" style={s.animatedSection}>
+                <div className="mm-section-head">
+                  <h3 className="mm-section-title"><span className="mm-step">03</span>입금 정보</h3>
+                </div>
+                <div className="mm-bank">
+                  <span className="mm-bank-icon"><Landmark size={20} strokeWidth={2} /></span>
+                  <div className="mm-bank-text">
+                    <span className="mm-bank-eyebrow">입금 계좌 · {BANK_ACCOUNT.bank}</span>
+                    <span className="mm-bank-number" translate="no">{BANK_ACCOUNT.number}</span>
+                    <span className="mm-bank-owner">예금주 {BANK_ACCOUNT.owner}</span>
+                  </div>
+                  <button type="button" className={`mm-copy-btn ${copied ? 'is-done' : ''}`} onClick={handleCopy}>
+                    {copied ? <Check size={14} strokeWidth={2.6} /> : <Copy size={14} strokeWidth={2.2} />}
+                    {copied ? '복사됨' : '계좌번호 복사'}
+                  </button>
                 </div>
 
-                <label style={s.label}>실제 입금자명</label>
-                <input
-                  type="text"
-                  value={depositor}
-                  onChange={(e) => setDepositor(e.target.value)}
-                  placeholder="입금하신 분의 성함을 입력해주세요"
-                  style={s.inputWrapper(false)}
-                />
-              </div>
+                <label className="mm-label" htmlFor="mm-depositor">실제 입금자명</label>
+                <div className="mm-input-wrap">
+                  <User size={17} strokeWidth={2} className="mm-input-icon" aria-hidden="true" />
+                  <input
+                    id="mm-depositor"
+                    type="text"
+                    value={depositor}
+                    onChange={(e) => setDepositor(e.target.value)}
+                    placeholder="입금하시는 분 성함"
+                    className="mm-input has-icon"
+                  />
+                </div>
+              </section>
             )}
 
-            <div style={s.cardWidgetWrapper(method === 'card')}>
+            {method === 'card' && (
+              <section className="mm-section">
+                <div className="mm-section-head">
+                  <h3 className="mm-section-title"><span className="mm-step">03</span>카드 결제 정보</h3>
+                </div>
+              </section>
+            )}
+            <div className={method === 'card' ? 'mm-widget' : undefined} style={s.cardWidgetWrapper(method === 'card')}>
               <div id="payment-widget" style={s.fullWidth} />
               <div id="agreement" style={s.agreementWrapper} />
             </div>
 
             {method === 'transfer' && (
-              <div style={s.warningBox}>
-                <ul style={s.warningList}>
-                  <li>신청하신 <b>입금자명</b>과 실제 송금자명이 일치해야 합니다.</li>
-                  <li>운영자가 입금 확인 후 수동으로 승인해 드립니다.</li>
-                  <li>승인 완료 시 카카오톡/문자로 알림이 발송됩니다.</li>
-                </ul>
+              <div className="mm-notice">
+                <span className="mm-notice-icon" aria-hidden="true"><Info size={17} strokeWidth={2.2} /></span>
+                <div className="mm-notice-body">
+                  <strong className="mm-notice-title">무통장 입금 안내</strong>
+                  <ul>
+                    <li>신청하신 <b>입금자명</b>과 실제 송금자명이 일치해야 합니다.</li>
+                    <li>운영자가 입금 확인 후 수동으로 승인해 드립니다.</li>
+                    <li>승인 완료 시 카카오톡/문자로 알림이 발송됩니다.</li>
+                  </ul>
+                </div>
               </div>
             )}
 
+            <div className="mm-summary" translate="no">
+              <div className="mm-summary-item">
+                <span>충전 신청 금액</span>
+                <strong className={isTooSmall ? 'is-error' : 'is-accent'}>{numAmount.toLocaleString()}원</strong>
+              </div>
+              <div className="mm-summary-item">
+                <span>충전 후 예상 잔액</span>
+                <strong>{(currentMoney + numAmount).toLocaleString()}원</strong>
+              </div>
+            </div>
+
             <button
+              type="button"
+              className="mm-submit"
               onClick={handleChargeRequest}
               disabled={loading}
-              style={s.submitBtn(loading)}
             >
-              {loading ? '처리 중...' : (method === 'card' ? `${parseInt(amount || '0').toLocaleString()}원 결제하기` : '충전 신청하기')}
+              {loading ? (
+                <><Loader2 size={18} strokeWidth={2.4} className="mm-spin" />처리 중...</>
+              ) : (
+                <>
+                  {method === 'card' ? <CreditCard size={19} strokeWidth={2.2} /> : <Wallet size={19} strokeWidth={2.2} />}
+                  {method === 'card' ? `${numAmount.toLocaleString()}원 결제하기` : '충전 신청하기'}
+                  <span className="mm-submit-arrow"><ArrowRight size={14} strokeWidth={2.6} /></span>
+                </>
+              )}
             </button>
 
           </div>

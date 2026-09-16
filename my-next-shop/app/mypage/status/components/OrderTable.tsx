@@ -572,7 +572,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         .tr-row { transition: all 0.2s ease; }
         .tr-row.clickable { cursor: pointer; }
         .tr-row:hover { background: #f8fafc; }
-        .tr-row.selected { background: linear-gradient(90deg, #fff8f6 0%, #fffaf9 100%); box-shadow: inset 3px 0 0 var(--color-orange, #f97316); }
+        .tr-row.selected { background: linear-gradient(90deg, #fdf4f4 0%, #fffafa 100%); box-shadow: inset 3px 0 0 #c0606a; }
 
         .empty-row { padding: 60px; text-align: center; color: #94a3b8; font-weight: 600; }
 
@@ -603,7 +603,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .custom-checkbox svg { width: 12px; height: 12px; color: white; opacity: 0; transform: scale(0.5); transition: all 0.2s; }
-        .custom-checkbox.checked { border-color: transparent; background: linear-gradient(135deg, #ff4b2b 0%, #e63e1f 100%); box-shadow: 0 2px 6px rgba(255, 75, 43, 0.3); }
+        .custom-checkbox.checked { border-color: transparent; background: linear-gradient(135deg, #c0606a 0%, #a94a53 100%); box-shadow: 0 2px 6px rgba(169, 74, 83, 0.3); }
         .custom-checkbox.checked svg { opacity: 1; transform: scale(1); }
 
         /* 🌟 전체내역 상태 뱃지 (고정 크기 적용) */
@@ -637,7 +637,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         .bundle-group-badge {
           display: inline-flex; align-items: center; gap: 6px;
           height: 24px; padding: 0 12px; margin-right: 8px; flex-shrink: 0;
-          border-radius: 999px; background: #f97316; color: #fff;
+          border-radius: 999px; background: #a94a53; color: #fff;
           font-size: 12px; font-weight: 800; white-space: nowrap;
         }
         .btn-bundle-toggle {

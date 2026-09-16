@@ -1,13 +1,17 @@
 "use client";
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
-import { useCart } from '@/app/context/CartContext';
 import { useRouter } from 'next/navigation';
 // 🌟 MikuAlertContext 임포트 경로 확인
-import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
+import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { ORDER_TYPE, OrderType, ORDER_STATUS } from '@/src/types/order';
 import { calculateTieredPaymentFee, calculateTieredAgencyFee, DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule } from '@/src/utils/feeCalculator';
-import { Camera, PackageCheck, ImagePlus } from 'lucide-react';
+import {
+  Camera, PackageCheck, ImagePlus, Link2, Trash2, RotateCcw, Plus, Minus, PenLine, Loader2,
+  ShoppingCart, Truck, Lightbulb, Wallet, ChevronRight, ClipboardList, CreditCard, RefreshCw,
+  CircleCheck, CircleAlert, Info,
+} from 'lucide-react';
 import './purchase-form-container.css';
 
 // 상품 1개의 초기 데이터 구조 정의
@@ -55,9 +59,12 @@ interface Props {
 export default function PurchaseFormContainer({ type, hideDomesticShippingFee }: Props) {
   const [products, setProducts] = useState<ProductForm[]>([{ ...initialProduct }]);
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const { showAlert, showConfirm } = useMikuAlert(); 
+  const { showAlert, showConfirm } = useMikuAlert();
   const { exchangeRate } = useExchangeRate();
   const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const isPurchase = type === ORDER_TYPE.PURCHASE;
 
   // 🌟 mypage/status의 "내 미쿠짱 머니" 잔액 표시와 동일하게, 이 견적 화면에서도
   // 결제 예상액과 나란히 현재 잔액을 보여주기 위해 동일한 방식(/api/users?id=)으로 조회합니다.
@@ -90,51 +97,37 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
       .catch(() => {});
   }, []);
 
-  // 🌟 실시간 금액 계산 로직 (useMemo로 최적화)
-  // 🌟 [버그 수정] 예전엔 DB 설정값(feeSettings.TRANSFER/AGENCY)에 "상품 개수"를 곱하는
-  // 전혀 다른 공식을 썼는데, 정작 장바구니에 담긴 뒤(mypage/status)에는 상품 1건의
-  // 가격/수량 구간에 따라 정액 부과하는 계산식(calculateTieredPaymentFee/AgencyFee)이
-  // 적용돼 있어서, 이 견적 화면에서 본 금액과 실제 결제 화면에서 청구되는 금액이 서로
-  // 어긋났습니다. mypage/status와 동일한 계산식을 그대로 가져다 씁니다.
+  // 🌟 상품 1건(=입력 폼 한 장)마다의 금액. 수수료는 mypage/status와 같은 구간 정액 계산식입니다.
+  const itemSummaries = useMemo(() => products.map(p => {
+    const priceTotal = (parseFloat(p.price) || 0) * (parseInt(p.quantity) || 0);
+    const shipping = parseFloat(p.domesticShippingFee) || 0;
+    const transfer = calculateTieredPaymentFee(priceTotal, paymentFeeRule);
+    const agency = calculateTieredAgencyFee(parseInt(p.quantity) || 0, agencyFeeRule);
+    return { priceTotal, shipping, transfer, agency, total: priceTotal + shipping + transfer + agency };
+  }), [products, paymentFeeRule, agencyFeeRule]);
+
+  // 🌟 실시간 금액 계산 로직 (상품별 금액의 합)
   const {
     totalProductPrice,
-    totalDomesticShipping,
     totalTransferFee,
     totalAgencyFee,
-    totalFees,
     totalJPY,
     totalKRW
   } = useMemo(() => {
-    // 순수 상품가 합계 (가격 * 수량)
-    const productPriceSum = products.reduce((sum, p) =>
-      sum + ((parseFloat(p.price) || 0) * (parseInt(p.quantity) || 0)), 0);
-
-    // 일본내 배송료 합계
-    const shippingSum = products.reduce((sum, p) =>
-      sum + (parseFloat(p.domesticShippingFee) || 0), 0);
-
-    // 🌟 수수료는 상품 1건(=한 줄의 입력 폼, 실제로도 주문 1건으로 저장됨)마다 각자의
-    // 가격 총액/수량 구간을 기준으로 계산한 뒤 합산합니다 (개수 곱하기가 아닙니다).
-    const transferSum = products.reduce((sum, p) => {
-      const priceTotal = (parseFloat(p.price) || 0) * (parseInt(p.quantity) || 0);
-      return sum + calculateTieredPaymentFee(priceTotal, paymentFeeRule);
-    }, 0);
-    const agencySum = products.reduce((sum, p) =>
-      sum + calculateTieredAgencyFee(parseInt(p.quantity) || 0, agencyFeeRule), 0);
-
-    const feesSum = shippingSum + transferSum + agencySum;
-    const jpySum = productPriceSum + feesSum;
-
+    const sum = (key: 'priceTotal' | 'shipping' | 'transfer' | 'agency' | 'total') =>
+      itemSummaries.reduce((acc, s) => acc + s[key], 0);
+    const jpySum = sum('total');
     return {
-      totalProductPrice: productPriceSum,
-      totalDomesticShipping: shippingSum,
-      totalTransferFee: transferSum,
-      totalAgencyFee: agencySum,
-      totalFees: feesSum,
+      totalProductPrice: sum('priceTotal'),
+      totalTransferFee: sum('transfer'),
+      totalAgencyFee: sum('agency'),
       totalJPY: jpySum,
       totalKRW: Math.floor(jpySum * exchangeRate)
     };
-  }, [products, exchangeRate, paymentFeeRule, agencyFeeRule]);
+  }, [itemSummaries, exchangeRate]);
+
+  const filledCount = products.filter(p => p.url && parseFloat(p.price) > 0).length;
+  const isMoneyShort = totalKRW > 0 && myMoney < totalKRW;
 
   const updateProduct = (index: number, field: keyof ProductForm, value: any) => {
     setProducts(prev => {
@@ -142,6 +135,11 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
       newProducts[index] = { ...newProducts[index], [field]: value };
       return newProducts;
     });
+  };
+
+  const changeQuantity = (index: number, delta: number) => {
+    const current = parseInt(products[index].quantity) || 0;
+    updateProduct(index, 'quantity', String(Math.max(1, current + delta)));
   };
 
   const handleAddProductForm = () => {
@@ -163,12 +161,12 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
     updateProduct(index, 'isAutoFetching', true);
     try {
       const response = await fetch('/api/translate', {
-        method: 'POST', 
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productUrl: inputUrl, characterLimit: 50 }),
       });
       const data = await response.json();
-      
+
       if (data.success && data.productName) {
         updateProduct(index, 'name', data.productName);
         updateProduct(index, 'lastFetchedUrl', inputUrl);
@@ -192,7 +190,7 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (data.success) updateProduct(index, 'image', data.url);
-      else showAlert('이미지 업로드에 실패했습니다.', 'error');
+      else showAlert(data.error || data.message || '이미지 업로드에 실패했습니다.', 'error');
     } catch (error) {
       console.error("Image Upload Error:", error);
     } finally {
@@ -202,6 +200,7 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
 
   // 🌟 async 함수로 명확하게 정의
   const handleAddToCart = async () => {
+    if (isSubmitting) return;
     // 1. 유효성 검사
     for (let i = 0; i < products.length; i++) {
       const p = products[i];
@@ -229,18 +228,19 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
     }
 
     // 🌟 2. Miku 스타일의 showConfirm 적용 및 await 필수
-    const confirmMsg = type === ORDER_TYPE.PURCHASE 
+    const confirmMsg = isPurchase
       ? `총 ${products.length}개의 상품을 장바구니에 담으시겠습니까?`
       : `총 ${products.length}개의 상품에 대해 배송 신청을 하시겠습니까?`;
 
     try {
       const isConfirmed = await showConfirm(confirmMsg);
       if (!isConfirmed) return; // '취소' 클릭 시 중단
+      setIsSubmitting(true);
 
       // 3. 주문 생성 로직
       const promises = products.map((p, idx) => {
         const totalPrice = parseFloat(p.price) * (parseInt(p.quantity) || 1);
-        const initialStatus = type === ORDER_TYPE.PURCHASE ? ORDER_STATUS.CART : ORDER_STATUS.PAID;
+        const initialStatus = isPurchase ? ORDER_STATUS.CART : ORDER_STATUS.PAID;
         // 🌟 상품 이름을 입력하지 않았다면 카드 헤더에 표시되는 순번(예: "1")과 동일한
         // 기준으로 "상품 N"을 자동으로 채워줍니다.
         const productName = p.name.trim() || `상품 ${idx + 1}`;
@@ -266,229 +266,374 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
               ...(p.packingService === 'apply' ? ['포장 보완'] : [])
             ].join(', '),
             productRequest: p.request,
-            status: initialStatus 
+            status: initialStatus
           }),
         });
       });
 
       const responses = await Promise.all(promises);
-      let allSuccess = responses.every(async (res) => (await res.json()).success);
+      // 🌟 [버그 수정] 예전엔 every(async ...)라 Promise(항상 truthy)를 검사해서 실패해도
+      // 성공으로 처리됐습니다. 응답 본문을 모두 읽은 뒤 실제 success 값으로 판단합니다.
+      const results = await Promise.all(responses.map(res => res.json().catch(() => ({ success: false }))));
+      const allSuccess = results.every((r: any) => r && r.success);
 
       if (allSuccess) {
-        showAlert(type === ORDER_TYPE.PURCHASE ? '🛒 모든 상품이 장바구니에 담겼습니다!' : '🚀 배송 신청이 완료되었습니다!', 'success');
-        setTimeout(() => router.push(`/mypage/status?tab=${type === ORDER_TYPE.PURCHASE ? ORDER_STATUS.CART : ORDER_STATUS.PAID}`), 1500);
+        showAlert(isPurchase ? '🛒 모든 상품이 장바구니에 담겼습니다!' : '🚀 배송 신청이 완료되었습니다!', 'success');
+        setTimeout(() => router.push(`/mypage/status?tab=${isPurchase ? ORDER_STATUS.CART : ORDER_STATUS.PAID}`), 1500);
       } else {
         showAlert(`일부 상품 저장 중 오류가 발생했습니다.`, 'error');
+        setIsSubmitting(false);
       }
 
     } catch (error) {
       console.error("Add to cart error:", error);
       showAlert("서버 통신 중 오류가 발생했습니다.", 'error');
+      setIsSubmitting(false);
     }
   };
 
-  return (
-    <>
-      <div className="premium-container" style={{ maxWidth: '900px', margin: '0 auto', padding: '30px 20px', fontFamily: '"Noto Sans KR", sans-serif' }}>
-        
-        <p className="quote-notice">
-          <span className="quote-notice-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 18h6" />
-              <path d="M10 22h4" />
-              <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z" />
-            </svg>
-          </span>
-          <span>
-            <strong>구매대행 유의사항</strong><br/>
-            <strong>사이버머니 충전</strong> 이후 신청 가능하며, 여러 상품을 한 번에 추가하여 장바구니에 담을 수 있습니다.
-          </span>
-        </p>
+  const steps = isPurchase
+    ? [
+        { icon: ClipboardList, title: '상품 정보 입력', desc: 'URL · 가격 · 수량' },
+        { icon: ShoppingCart, title: '장바구니 담기', desc: '여러 상품 한 번에' },
+        { icon: CreditCard, title: '머니로 결제', desc: '마이페이지에서 진행' },
+      ]
+    : [
+        { icon: ClipboardList, title: '상품 정보 입력', desc: 'URL · 가격 · 배송비' },
+        { icon: Truck, title: '배송대행 신청', desc: '신청 즉시 접수' },
+        { icon: PackageCheck, title: '입고 · 발송', desc: '진행 상황 알림' },
+      ];
 
-        {products.map((product, index) => (
-          <div key={product.id} className="quote-product-card">
-            <div className="quote-product-header">
-              <div className="quote-product-header-left">
-                <span className="quote-product-badge">{index + 1}</span>
+  return (
+    <div className={`premium-container pf-root ${isPurchase ? 'pf-theme-purchase' : 'pf-theme-delivery'}`}>
+
+      {/* 🌟 진행 단계 */}
+      <ol className="pf-steps" aria-label="신청 진행 단계">
+        {steps.map((step, i) => {
+          const Icon = step.icon;
+          return (
+            <li key={step.title} className={`pf-step ${i === 0 ? 'is-current' : ''}`}>
+              <span className="pf-step-icon"><Icon size={17} strokeWidth={2.1} /></span>
+              <span className="pf-step-text">
+                <span className="pf-step-no">STEP {i + 1}</span>
+                <strong>{step.title}</strong>
+                <span className="pf-step-desc">{step.desc}</span>
+              </span>
+              {i < steps.length - 1 && <ChevronRight className="pf-step-arrow" size={16} strokeWidth={2.2} aria-hidden="true" />}
+            </li>
+          );
+        })}
+      </ol>
+
+      {/* 🌟 유의사항 */}
+      <div className="pf-notice">
+        <span className="pf-notice-icon" aria-hidden="true"><Lightbulb size={18} strokeWidth={2.1} /></span>
+        <div className="pf-notice-body">
+          <strong className="pf-notice-title">{isPurchase ? '구매대행 유의사항' : '배송대행 유의사항'}</strong>
+          <ul>
+            {isPurchase ? (
+              <>
+                <li><b>미쿠짱 머니 충전</b> 이후 결제할 수 있어요. 담은 상품은 마이페이지 장바구니에서 결제합니다.</li>
+                <li>여러 상품을 한 번에 추가해 장바구니에 담을 수 있어요.</li>
+              </>
+            ) : (
+              <>
+                <li>일본 현지에서 이미 구매하신 상품의 정보를 정확히 입력해주세요.</li>
+                <li>사진 검수 · 포장 보완이 필요하면 상품별 부가 서비스에서 선택해주세요.</li>
+              </>
+            )}
+          </ul>
+        </div>
+        {isPurchase && (
+          <Link href="/mypage/money/charge" className="pf-notice-link">
+            <Wallet size={14} strokeWidth={2.2} />머니 충전
+          </Link>
+        )}
+      </div>
+
+      <div className="pf-section-head">
+        <div>
+          <span className="pf-eyebrow">Products</span>
+          <h3 className="pf-section-title">신청 상품 정보</h3>
+        </div>
+        <span className="pf-count-chip">
+          총 <b>{products.length}</b>건{filledCount < products.length ? ` · 입력 완료 ${filledCount}건` : ''}
+        </span>
+      </div>
+
+      {products.map((product, index) => {
+        const summary = itemSummaries[index];
+        const priceKrw = Math.floor(summary.priceTotal * exchangeRate);
+        return (
+          <div key={product.id} className="quote-product-card pf-card">
+            <div className="pf-card-head">
+              <span className="pf-card-no">{String(index + 1).padStart(2, '0')}</span>
+              <label className="pf-name-field">
+                <PenLine size={15} strokeWidth={2} className="pf-name-icon" aria-hidden="true" />
                 <input
                   type="text" value={product.name}
                   onChange={(e) => updateProduct(index, 'name', e.target.value)}
-                  placeholder="상품 이름을 입력해주세요"
-                  className="quote-product-name-input"
+                  placeholder="상품 이름 (선택)"
+                  className="pf-name-input"
+                  aria-label={`${index + 1}번째 상품 이름`}
                 />
-              </div>
-              <button className="quote-product-remove-btn" onClick={() => handleRemoveProductForm(index)}>
-                {products.length === 1 ? '초기화' : '삭제'}
+              </label>
+              <button type="button" className="pf-remove-btn" onClick={() => handleRemoveProductForm(index)} aria-label={products.length === 1 ? '입력 초기화' : '상품 삭제'} title={products.length === 1 ? '입력 초기화' : '상품 삭제'}>
+                {products.length === 1
+                  ? <><RotateCcw size={13} strokeWidth={2.2} /><span className="pf-remove-text">초기화</span></>
+                  : <><Trash2 size={13} strokeWidth={2.2} /><span className="pf-remove-text">삭제</span></>}
               </button>
             </div>
 
-            <div className="product-card-inner" style={{ padding: '24px', display: 'flex', gap: '30px' }}>
-              <div className="image-upload-wrapper" style={{ width: '140px', flexShrink: 0 }}>
-                <div className="quote-image-upload-box"
+            <div className="pf-card-body">
+              <div className="pf-image-col">
+                <button
+                  type="button"
+                  className={`pf-image-box ${product.image ? 'has-image' : ''}`}
                   onClick={() => fileInputRefs.current[index]?.click()}
+                  aria-label="상품 이미지 추가"
                 >
                   {product.image ? (
-                    <img src={product.image} alt="product" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                    <>
+                      <img src={product.image} alt="상품 이미지" />
+                      <span className="pf-image-overlay"><RefreshCw size={14} strokeWidth={2.2} />변경</span>
+                    </>
                   ) : (
-                    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#9ca3af' }}>
-                      <ImagePlus size={20} strokeWidth={1.75} />
-                      이미지 추가
+                    <span className="pf-image-empty">
+                      <span className="pf-image-empty-icon"><ImagePlus size={20} strokeWidth={1.9} /></span>
+                      <strong>이미지 추가</strong>
+                      <span>선택 사항</span>
                     </span>
                   )}
-                </div>
+                </button>
                 <input type="file" accept="image/*" style={{ display: 'none' }} ref={el => { fileInputRefs.current[index] = el }} onChange={(e) => {
-                  const file = e.target.files?.[0]; 
+                  const file = e.target.files?.[0];
                   if (file) processImageFile(index, file);
+                  e.target.value = '';
                 }} />
               </div>
 
-              <div style={{ flex: 1 }}>
-                <div className="input-grid" style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px 1fr', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
-                  <Label required>상품 URL</Label>
-                  <div style={{ gridColumn: 'span 3' }}>
-                    <input type="text" placeholder="https://" className="premium-input" value={product.url} onChange={(e) => updateProduct(index, 'url', e.target.value)} onBlur={(e) => fetchProductName(index, e.target.value)} />
-                    {product.isAutoFetching && <span style={{ fontSize: '11px', color: '#6366f1', fontWeight: '700' }}>정보 수집 중...</span>}
+              <div className="pf-fields">
+                <div className="pf-field pf-span-2">
+                  <FieldLabel required>상품 URL</FieldLabel>
+                  <div className="pf-input-wrap">
+                    <Link2 size={16} strokeWidth={2} className="pf-input-icon" aria-hidden="true" />
+                    <input type="text" inputMode="url" placeholder="https:// 일본 쇼핑몰 상품 주소를 붙여넣어 주세요" className="premium-input pf-input has-icon" value={product.url} onChange={(e) => updateProduct(index, 'url', e.target.value)} onBlur={(e) => fetchProductName(index, e.target.value)} />
+                    {product.isAutoFetching && (
+                      <span className="pf-fetching"><Loader2 size={13} strokeWidth={2.4} className="pf-spin" />정보 수집 중</span>
+                    )}
                   </div>
-
-                  <Label required>상품 가격(¥)</Label>
-                  <input type="text" placeholder="0" className="premium-input" value={product.price} onChange={(e) => updateProduct(index, 'price', e.target.value.replace(/[^0-9.]/g, ''))} />
-
-                  <Label required>수량</Label>
-                  <input type="text" className="premium-input" value={product.quantity} onChange={(e) => updateProduct(index, 'quantity', e.target.value.replace(/[^0-9]/g, ''))} />
-
-                  {/* 🌟 구매대행(PURCHASE)일 때만 '일본내 배송료' 항목 노출 (견적문의에서는 숨김) */}
-                  {type === ORDER_TYPE.PURCHASE && !hideDomesticShippingFee && (
-                    <>
-                      <Label>일본내 배송료</Label>
-                      <div style={{ gridColumn: 'span 3' }}>
-                        <input 
-                          type="text" 
-                          placeholder="일본 현지 배송비 ( 필수 항목 아님 , 없으면 0) " 
-                          className="premium-input" 
-                          value={product.domesticShippingFee} 
-                          onChange={(e) => updateProduct(index, 'domesticShippingFee', e.target.value.replace(/[^0-9.]/g, ''))} 
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  <Label>옵션</Label>
-                  <div style={{ gridColumn: 'span 3' }}><input type="text" placeholder="색상, 사이즈 등" className="premium-input" value={product.option} onChange={(e) => updateProduct(index, 'option', e.target.value)} /></div>
-
-                  <Label>요청사항</Label>
-                  <div style={{ gridColumn: 'span 3' }}><input type="text" placeholder="포장 등 요청사항" className="premium-input" value={product.request} onChange={(e) => updateProduct(index, 'request', e.target.value)} /></div>
                 </div>
 
-                <div className="service-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div
-                    className={`quote-service-box ${product.photoService === 'apply' ? 'active' : ''}`}
-                    onClick={() => updateProduct(index, 'photoService', product.photoService === 'none' ? 'apply' : 'none')}
-                  >
-                    <span className="quote-service-icon icon-sky">
-                      <Camera size={17} strokeWidth={2.2} />
-                    </span>
-                    <div className="quote-service-text">
-                      <strong>사진 검수</strong>
-                      <span>현지 도착 후 촬영</span>
-                    </div>
-                    <span className="quote-service-check">
-                      {product.photoService === 'apply' && (
-                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      )}
-                    </span>
+                <div className="pf-field">
+                  <FieldLabel required>상품 가격</FieldLabel>
+                  <div className="pf-input-wrap">
+                    <span className="pf-input-prefix" aria-hidden="true">¥</span>
+                    <input type="text" inputMode="decimal" placeholder="0" className="premium-input pf-input has-prefix" value={product.price} onChange={(e) => updateProduct(index, 'price', e.target.value.replace(/[^0-9.]/g, ''))} />
                   </div>
+                  <span className="pf-field-hint" translate="no">
+                    {summary.priceTotal > 0 ? `합계 ¥${summary.priceTotal.toLocaleString()} · 약 ${priceKrw.toLocaleString()}원` : '1개 가격을 엔화로 입력'}
+                  </span>
+                </div>
 
-                  <div
-                    className={`quote-service-box ${product.packingService === 'apply' ? 'active' : ''}`}
-                    onClick={() => updateProduct(index, 'packingService', product.packingService === 'none' ? 'apply' : 'none')}
-                  >
-                    <span className="quote-service-icon icon-emerald">
-                      <PackageCheck size={17} strokeWidth={2.2} />
-                    </span>
-                    <div className="quote-service-text">
-                      <strong>포장 보완</strong>
-                      <span>안전한 재포장</span>
+                <div className="pf-field">
+                  <FieldLabel required>수량</FieldLabel>
+                  <div className="pf-stepper">
+                    <button type="button" aria-label="수량 줄이기" onClick={() => changeQuantity(index, -1)} disabled={(parseInt(product.quantity) || 0) <= 1}>
+                      <Minus size={15} strokeWidth={2.4} />
+                    </button>
+                    <input type="text" inputMode="numeric" aria-label="수량" value={product.quantity} onChange={(e) => updateProduct(index, 'quantity', e.target.value.replace(/[^0-9]/g, ''))} />
+                    <button type="button" aria-label="수량 늘리기" onClick={() => changeQuantity(index, 1)}>
+                      <Plus size={15} strokeWidth={2.4} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 🌟 구매대행(PURCHASE)일 때만 '일본내 배송료' 항목 노출 (견적문의에서는 숨김) */}
+                {type === ORDER_TYPE.PURCHASE && !hideDomesticShippingFee && (
+                  <div className="pf-field pf-span-2">
+                    <FieldLabel>일본내 배송료</FieldLabel>
+                    <div className="pf-input-wrap">
+                      <span className="pf-input-prefix" aria-hidden="true">¥</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="일본 현지 배송비 (필수 항목 아님, 없으면 0)"
+                        className="premium-input pf-input has-prefix"
+                        value={product.domesticShippingFee}
+                        onChange={(e) => updateProduct(index, 'domesticShippingFee', e.target.value.replace(/[^0-9.]/g, ''))}
+                      />
                     </div>
-                    <span className="quote-service-check">
-                      {product.packingService === 'apply' && (
-                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      )}
-                    </span>
+                  </div>
+                )}
+
+                <div className="pf-field">
+                  <FieldLabel>옵션</FieldLabel>
+                  <input type="text" placeholder="색상, 사이즈 등" className="premium-input pf-input" value={product.option} onChange={(e) => updateProduct(index, 'option', e.target.value)} />
+                </div>
+
+                <div className="pf-field">
+                  <FieldLabel>요청사항</FieldLabel>
+                  <input type="text" placeholder="판매자·검수 관련 요청사항" className="premium-input pf-input" value={product.request} onChange={(e) => updateProduct(index, 'request', e.target.value)} />
+                </div>
+
+                <div className="pf-field pf-span-2">
+                  <FieldLabel>부가 서비스 <span className="pf-label-sub">필요한 항목을 선택하세요</span></FieldLabel>
+                  <div className="pf-service-grid">
+                    <ServiceOption
+                      active={product.photoService === 'apply'}
+                      onToggle={() => updateProduct(index, 'photoService', product.photoService === 'none' ? 'apply' : 'none')}
+                      iconClass="icon-sky"
+                      icon={<Camera size={17} strokeWidth={2.2} />}
+                      title="사진 검수"
+                      desc="현지 도착 후 상품 촬영"
+                    />
+                    <ServiceOption
+                      active={product.packingService === 'apply'}
+                      onToggle={() => updateProduct(index, 'packingService', product.packingService === 'none' ? 'apply' : 'none')}
+                      iconClass="icon-emerald"
+                      icon={<PackageCheck size={17} strokeWidth={2.2} />}
+                      title="포장 보완"
+                      desc="파손 방지 안전 재포장"
+                    />
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '30px' }}>
-          <button className="premium-btn btn-dark" onClick={handleAddProductForm}>➕ 상품 추가</button>
-        </div>
-
-        {type === ORDER_TYPE.PURCHASE && (
-          <div className="quote-payment-wrapper">
-            <div className="quote-payment-content-flex">
-              <div className="quote-detail-grid">
-                <div className="quote-detail-item">
-                  <span className="quote-item-label">상품 가격</span>
-                  <span className="quote-item-val"><span translate="no">¥{totalProductPrice.toLocaleString()}</span></span>
-                </div>
-                <div className="quote-detail-item">
-                  <span className="quote-item-label">결제 수수료</span>
-                  <span className="quote-item-val"><span translate="no">¥{totalTransferFee.toLocaleString()}</span></span>
-                </div>
-                <div className="quote-detail-item">
-                  <span className="quote-item-label">대행 수수료</span>
-                  <span className="quote-item-val"><span translate="no">¥{totalAgencyFee.toLocaleString()}</span></span>
-                </div>
-              </div>
-
-              <div className="quote-total-box">
-                <span className="quote-total-label">최종 결제예상액 (원화)</span>
-                <span className="quote-total-value"><span translate="no">₩{totalKRW.toLocaleString()}</span></span>
-                <span className={`quote-my-money-info ${myMoney < totalKRW ? 'insufficient' : ''}`}>
-                  내 미쿠짱 머니 <span translate="no">₩{myMoney.toLocaleString()}</span>
+            {isPurchase && (
+              <div className="pf-card-foot" translate="no">
+                <span className="pf-foot-label">이 상품 예상 금액</span>
+                <span className="pf-foot-detail">
+                  상품 ¥{summary.priceTotal.toLocaleString()} + 수수료 ¥{(summary.transfer + summary.agency + summary.shipping).toLocaleString()}
                 </span>
+                <strong className="pf-foot-total">¥{summary.total.toLocaleString()}</strong>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      <button type="button" className="pf-add-btn" onClick={handleAddProductForm}>
+        <span className="pf-add-icon"><Plus size={16} strokeWidth={2.6} /></span>
+        상품 추가하기
+        <span className="pf-add-sub">여러 상품을 한 번에 신청할 수 있어요</span>
+      </button>
+
+      {isPurchase && (
+        <div className="quote-payment-wrapper pf-summary">
+          <div className="pf-section-head pf-summary-head">
+            <div>
+              <span className="pf-eyebrow">Estimate</span>
+              <h3 className="pf-section-title">결제 예상 금액</h3>
+            </div>
+            {exchangeRate > 0 && (
+              <span className="pf-rate-chip" translate="no">적용 환율 ¥100 = {(Math.round(exchangeRate * 100 * 100) / 100).toLocaleString()}원</span>
+            )}
+          </div>
+          <div className="quote-payment-content-flex">
+            <div className="quote-detail-grid">
+              <div className="quote-detail-item">
+                <span className="quote-item-label">상품 가격</span>
+                <span className="quote-item-val"><span translate="no">¥{totalProductPrice.toLocaleString()}</span></span>
+              </div>
+              <div className="quote-detail-item">
+                <span className="quote-item-label">결제 수수료</span>
+                <span className="quote-item-val"><span translate="no">¥{totalTransferFee.toLocaleString()}</span></span>
+              </div>
+              <div className="quote-detail-item">
+                <span className="quote-item-label">대행 수수료</span>
+                <span className="quote-item-val"><span translate="no">¥{totalAgencyFee.toLocaleString()}</span></span>
               </div>
             </div>
-          </div>
-        )}
 
-        <div className="bottom-btn-wrap" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '30px' }}>
-          {type === ORDER_TYPE.PURCHASE ? (
-            <button className="quote-cart-btn" onClick={handleAddToCart}>
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="9" cy="20" r="1.4" />
-                <circle cx="18" cy="20" r="1.4" />
-                <path d="M2.5 3h2l2.6 12.6a2 2 0 0 0 2 1.6h8.3a2 2 0 0 0 2-1.6L21 8H6" />
-              </svg>
-              장바구니 담기
-            </button>
+            <div className="quote-total-box">
+              <span className="pf-total-accent" aria-hidden="true" />
+              <span className="quote-total-label">최종 결제예상액</span>
+              <span className="quote-total-value"><span translate="no">₩{totalKRW.toLocaleString()}</span></span>
+              <span className="pf-total-jpy" translate="no">¥{totalJPY.toLocaleString()}</span>
+              <span className={`quote-my-money-info pf-money ${isMoneyShort ? 'insufficient' : ''}`}>
+                {isMoneyShort ? <CircleAlert size={13} strokeWidth={2.4} /> : <CircleCheck size={13} strokeWidth={2.4} />}
+                내 미쿠짱 머니 <b translate="no">₩{myMoney.toLocaleString()}</b>
+              </span>
+            </div>
+          </div>
+          <p className="pf-summary-note">
+            <Info size={14} strokeWidth={2.2} aria-hidden="true" />
+            <span>국제 배송비는 상품이 일본 창고에 도착해 무게를 측정한 뒤 2차 결제로 청구됩니다.</span>
+          </p>
+        </div>
+      )}
+
+      <div className="bottom-btn-wrap pf-action-bar">
+        <div className="pf-action-info">
+          {isPurchase ? (
+            isMoneyShort ? (
+              <>
+                <span className="pf-action-title is-warn"><CircleAlert size={15} strokeWidth={2.3} />머니가 부족해요</span>
+                <span className="pf-action-desc">장바구니에는 담을 수 있고, 결제 전에 <Link href="/mypage/money/charge">머니를 충전</Link>하면 됩니다.</span>
+              </>
+            ) : (
+              <>
+                <span className="pf-action-title"><ShoppingCart size={15} strokeWidth={2.3} />상품 {products.length}건을 장바구니에 담아요</span>
+                <span className="pf-action-desc">결제는 마이페이지 › 장바구니에서 진행됩니다.</span>
+              </>
+            )
           ) : (
-            <button className="quote-delivery-btn" onClick={handleAddToCart}>
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="1" y="6" width="14" height="11" rx="1.5" />
-                <path d="M15 10h3.5a1.5 1.5 0 0 1 1.3.75L22 14v3h-7" />
-                <circle cx="6" cy="19" r="1.6" />
-                <circle cx="17.5" cy="19" r="1.6" />
-              </svg>
-              배송대행 신청
-            </button>
+            <>
+              <span className="pf-action-title"><Truck size={15} strokeWidth={2.3} />상품 {products.length}건을 배송대행 신청해요</span>
+              <span className="pf-action-desc">신청 후 마이페이지에서 진행 상황을 확인할 수 있어요.</span>
+            </>
           )}
         </div>
+        {isPurchase ? (
+          <button type="button" className="quote-cart-btn pf-submit-btn" onClick={handleAddToCart} disabled={isSubmitting}>
+            {isSubmitting ? <Loader2 size={18} strokeWidth={2.4} className="pf-spin" /> : <ShoppingCart size={18} strokeWidth={2.2} />}
+            장바구니 담기
+          </button>
+        ) : (
+          <button type="button" className="quote-delivery-btn pf-submit-btn" onClick={handleAddToCart} disabled={isSubmitting}>
+            {isSubmitting ? <Loader2 size={18} strokeWidth={2.4} className="pf-spin" /> : <Truck size={18} strokeWidth={2.2} />}
+            배송대행 신청
+          </button>
+        )}
       </div>
-    </>
+    </div>
   );
 }
 
-function Label({ children, required }: { children: React.ReactNode, required?: boolean }) {
+function FieldLabel({ children, required }: { children: React.ReactNode, required?: boolean }) {
   return (
-    <div className="label-cell" style={{ fontSize: '13px', fontWeight: '700', color: '#4b5563' }}>
-      {children} {required && <span style={{ color: '#ef4444' }}>*</span>}
-    </div>
+    <span className="pf-label">
+      {children}
+      {required && <span className="pf-required" aria-label="필수">필수</span>}
+    </span>
+  );
+}
+
+function ServiceOption({ active, onToggle, iconClass, icon, title, desc }: {
+  active: boolean; onToggle: () => void; iconClass: string; icon: React.ReactNode; title: string; desc: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      className={`quote-service-box pf-service ${active ? 'active' : ''}`}
+      onClick={onToggle}
+    >
+      <span className={`quote-service-icon ${iconClass}`}>{icon}</span>
+      <span className="quote-service-text">
+        <strong>{title}</strong>
+        <span>{desc}</span>
+      </span>
+      <span className="quote-service-check">
+        {active && (
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        )}
+      </span>
+    </button>
   );
 }

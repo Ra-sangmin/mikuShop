@@ -2,6 +2,25 @@
 
 import { useState } from 'react';
 import '../admin-common.css';
+import { useResizableColumns, ResizableTableHead, type ResizableColumn } from '../components/useResizableColumns';
+
+// 🌟 열 순서와 기본 너비. orders 처럼 헤더 경계를 드래그해 너비를 조절할 수 있습니다.
+const CS_COLUMNS: readonly ResizableColumn[] = [
+  { key: 'type', label: '분류' },
+  { key: 'title', label: '제목' },
+  { key: 'user', label: '작성자' },
+  { key: 'date', label: '등록일' },
+  { key: 'status', label: '상태', align: 'center' },
+  { key: 'manage', label: '관리', align: 'center' },
+];
+const CS_DEFAULT_WIDTHS = {
+  type: 120,
+  title: 360,
+  user: 140,
+  date: 140,
+  status: 120,
+  manage: 140,
+};
 
 // 가짜 문의 데이터
 const dummyInquiries = [
@@ -13,6 +32,12 @@ const dummyInquiries = [
 export default function CSManagement() {
   // 실제 서비스 시 API 연동용 State 자리
   const [inquiries] = useState(dummyInquiries);
+
+  const { columnWidths, totalTableWidth, onMouseDown } = useResizableColumns({
+    storageKey: 'admin_cs_column_widths',
+    defaultWidths: CS_DEFAULT_WIDTHS,
+    visibleColumns: CS_COLUMNS.map(c => c.key),
+  });
 
   // 통계 계산 (가짜 데이터 기반)
   const pendingCount = inquiries.filter(q => q.status === '대기중').length;
@@ -49,17 +74,11 @@ export default function CSManagement() {
       <div className="admin-container">
         <h2 className="admin-section-title">문의 목록</h2>
 
-        <table className="admin-table-simple">
-          <thead>
-            <tr className="admin-table-head-row">
-              <th style={css.th}>분류</th>
-              <th style={css.th}>제목</th>
-              <th style={css.th}>작성자</th>
-              <th style={css.th}>등록일</th>
-              <th style={css.thCenter}>상태</th>
-              <th style={css.thCenter}>관리</th>
-            </tr>
-          </thead>
+        {/* 🐛 table-layout: fixed 는 표에 확정된 너비가 있어야 적용됩니다.
+            보이는 열 너비의 합을 표 너비로 직접 지정해야 드래그로 열이 줄어듭니다. */}
+        <div style={css.tableWrapper}>
+        <table className="admin-table-resizable" style={{ width: totalTableWidth }}>
+          <ResizableTableHead columns={CS_COLUMNS} columnWidths={columnWidths} onMouseDown={onMouseDown} />
           <tbody>
             {inquiries.map((inquiry) => {
               const statusStyle = getStatusStyle(inquiry.status);
@@ -89,6 +108,7 @@ export default function CSManagement() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
@@ -116,8 +136,14 @@ const colors = {
   completedText: '#16a34a',
 };
 
-const baseTh: React.CSSProperties = { padding: '16px 12px' };
-const baseTd: React.CSSProperties = { padding: '16px 12px' };
+// 🌟 열 너비를 고정(table-layout: fixed)했으므로, 넘치는 값은 말줄임으로 처리합니다.
+const baseTd: React.CSSProperties = {
+  padding: '16px 12px',
+  borderRight: '1px solid #f1f5f9',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+};
 
 const css: Record<string, React.CSSProperties> = {
   // 메인 컨테이너
@@ -138,8 +164,10 @@ const css: Record<string, React.CSSProperties> = {
   },
 
   // 테이블 셀
-  th: { ...baseTh },
-  thCenter: { ...baseTh, textAlign: 'center' },
+  tableWrapper: {
+    width: '100%',
+    overflowX: 'auto',
+  },
   td: { ...baseTd },
   tdBold: { ...baseTd, fontWeight: '500' },
   tdCenter: { ...baseTd, textAlign: 'center' },

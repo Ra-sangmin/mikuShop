@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, Suspense, useMemo, useRef, useCallback } from 'react';
 import GuideLayout from '../../components/GuideLayout';
+import Link from 'next/link';
 import NoticePanel from '../../components/NoticePanel';
 import { useSearchParams, useRouter } from 'next/navigation';
 import OrderTable from './components/OrderTable';
@@ -10,6 +11,7 @@ import PaymentSummary from './components/PaymentSummary';
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
+import '../mypage-premium.css';
 import { calculateTieredPaymentFee, calculateTieredAgencyFee, DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule } from '@/src/utils/feeCalculator';
 
 // 🌟 "현재 진행중인 현황" = 국제 배송(도착 완료 전 단계)을 제외한 나머지 모든 주문
@@ -91,9 +93,20 @@ function usePurchaseStatusLogic() {
     setActiveTabRaw(value);
   }, []);
   const [userData, setUserData] = useState<any>(null);
-  const [orders, setOrders] = useState<any[]>([]);
+  const [allOrders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  // 🌟 서비스별 내역 필터: /mypage/status?type=PURCHASE(구매대행) | DELIVERY(배송대행)
+  // Header/사이드바의 "구매 내역"·"배송 내역" 메뉴가 이 쿼리로 진입합니다. 없으면 전체.
+  const typeParam = (searchParams.get('type') || '').toUpperCase();
+  const orderTypeFilter: 'PURCHASE' | 'DELIVERY' | null =
+    typeParam === 'PURCHASE' || typeParam === 'DELIVERY' ? typeParam : null;
+  const orders = useMemo(
+    () => (orderTypeFilter ? allOrders.filter((o: any) => o.type === orderTypeFilter) : allOrders),
+    [allOrders, orderTypeFilter]
+  );
+  // 필터가 바뀌면 이전 필터에서 선택했던 항목은 해제
+  useEffect(() => { setSelectedItems([]); }, [orderTypeFilter]);
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   // 🌟 고정값(9.05) 대신 /api/estimate의 실제 환율을 참조합니다.
   const { exchangeRate } = useExchangeRate();
@@ -547,7 +560,8 @@ function usePurchaseStatusLogic() {
     isAuthChecking, isLoading, shippingPhases, activeTab, setActiveTab, items, orders, userData,
     selectedItems, setSelectedItems, selectedAddress, setSelectedAddress, exchangeRate,
     totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus,
-    progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected
+    progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected,
+    orderTypeFilter, allOrders
   };
 }
 
@@ -620,7 +634,8 @@ function MyPurchaseStatusContent() {
     isAuthChecking, isLoading, shippingPhases, activeTab, setActiveTab, items, orders, userData,
     selectedItems, setSelectedItems, selectedAddress, setSelectedAddress, exchangeRate,
     totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus,
-    progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected
+    progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected,
+    orderTypeFilter, allOrders
   } = usePurchaseStatusLogic();
 
   const sliderRef = useRef<HTMLDivElement>(null);
@@ -798,12 +813,80 @@ function MyPurchaseStatusContent() {
   if (isAuthChecking) return <div style={{ height: '100vh', backgroundColor: '#f8fafc' }} />;
   if (isLoading) return <div style={{ padding: '100px', textAlign: 'center', color: '#64748b' }}>데이터를 불러오는 중입니다...</div>;
 
+  const actionTotal = actionRequiredItems.reduce((sum: number, item: any) => sum + (item?.count || 0), 0);
+  const typeLabel = orderTypeFilter === 'PURCHASE' ? '구매대행' : orderTypeFilter === 'DELIVERY' ? '배송대행' : '전체';
+
   return (
-    <div className="miku-status-wrapper">
+    <div className="miku-status-wrapper mp-skin">
+
+      {/* 🌟 주문 현황 요약 카드 */}
+      <section className="mp-hero is-compact mp-anim" aria-label="주문 현황 요약">
+        <div className="mp-hero-main">
+          <div className="mp-avatar" aria-hidden="true"><i className="fa fa-box-open"></i></div>
+          <div className="mp-hero-text">
+            <span className="mp-eyebrow-dark">ORDER STATUS</span>
+            <h2 className="mp-hero-title">나의 <em>{typeLabel}</em> 주문 현황</h2>
+            <p className="mp-hero-desc">
+              {actionTotal > 0
+                ? `확인이 필요한 주문이 ${actionTotal}건 있어요. 아래에서 결제·요청을 진행해 주세요.`
+                : '진행 단계를 눌러 주문을 확인하고, 결제와 포장 요청을 한 곳에서 처리하세요.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="mp-hero-money">
+          <span className="mp-hero-money-label"><i className="fa fa-sack-dollar"></i> 미쿠짱머니</span>
+          <strong className="mp-hero-money-value" translate="no">{(userData?.cyberMoney || 0).toLocaleString()}<small>원</small></strong>
+          <div className="mp-hero-money-actions">
+            <Link href="/mypage/money/charge" className="is-primary"><i className="fa fa-plus"></i> 충전</Link>
+            <Link href="/mypage/money/history"><i className="fa fa-receipt"></i> 이용 내역</Link>
+          </div>
+        </div>
+
+        <div className="mp-hero-stats">
+          <button type="button" className="mp-hero-stat" onClick={() => handleShowAllOverview()}>
+            <span>{typeLabel} 주문</span><strong>{totalCount}<small>건</small></strong>
+          </button>
+          <div className={`mp-hero-stat ${actionTotal > 0 ? 'is-warn' : ''}`}>
+            <span>확인 필요</span><strong>{actionTotal}<small>건</small></strong>
+          </div>
+          <button type="button" className="mp-hero-stat" onClick={() => handleTabChange(ORDER_STATUS.ARRIVED)}>
+            <span>입고 완료</span><strong>{orders.filter((o: any) => o.status === ORDER_STATUS.ARRIVED).length}<small>건</small></strong>
+          </button>
+          <button type="button" className="mp-hero-stat" onClick={() => handleTabChange(ORDER_STATUS.SHIPPING)}>
+            <span>국제 배송 중</span><strong>{internationalShipments.length}<small>건</small></strong>
+          </button>
+        </div>
+      </section>
+
+      {/* 🌟 서비스별 내역 필터 (전체 / 구매대행 / 배송대행) */}
+      <nav className="miku-order-type-filter anim-slide-up" aria-label="서비스별 내역">
+        {([
+          { key: null, label: '전체', href: '/mypage/status' },
+          { key: 'PURCHASE', label: '구매대행', href: '/mypage/status?type=PURCHASE' },
+          { key: 'DELIVERY', label: '배송대행', href: '/mypage/status?type=DELIVERY' },
+        ] as const).map(opt => {
+          const count = opt.key ? allOrders.filter((o: any) => o.type === opt.key).length : allOrders.length;
+          const isActive = orderTypeFilter === opt.key;
+          return (
+            <Link
+              key={opt.label}
+              href={opt.href}
+              scroll={false}
+              className={`type-filter-btn ${isActive ? 'active' : ''}`}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              {opt.label}
+              <span className="type-filter-count">{count}</span>
+            </Link>
+          );
+        })}
+      </nav>
       
       {actionRequiredItems.length > 0 && (
         <>
         <div className="miku-status-section-header anim-slide-up">
+          <span className="mp-eyebrow" style={{ flexBasis: '100%', marginBottom: '-10px' }}>Action Required</span>
           <h2>결제 및 요청 대기 <span className="section-icon-badge badge-amber"><i className="fa fa-credit-card"></i></span></h2>
         </div>
         <div className="miku-action-required-container anim-slide-up">
@@ -823,7 +906,7 @@ function MyPurchaseStatusContent() {
                   <h4 className="card-title">{item.title} <span className="card-count">{item.count}</span></h4>
                   <p className="card-desc">{item.desc}</p>
                 </div>
-                <button className="card-action-btn">확인 ➔</button>
+                <button className="card-action-btn">확인 →</button>
               </div>
             ))}
           </div>
@@ -832,6 +915,7 @@ function MyPurchaseStatusContent() {
       )}
 
       <div className="miku-status-section-header anim-slide-up delay-1">
+        <span className="mp-eyebrow" style={{ flexBasis: '100%', marginBottom: '-10px' }}>Progress</span>
         <h2>전체 진행 현황 <span className="section-icon-badge badge-blue"><i className="fa fa-chart-line"></i></span></h2>
         <button
           type="button"
@@ -848,14 +932,6 @@ function MyPurchaseStatusContent() {
       <div className="miku-unified-pipeline-container anim-slide-up delay-1">
 
         <div className="pipeline-slider-shell">
-          <div
-            className={`pipeline-fade pipeline-fade-left ${scrollEdges.left ? 'visible' : ''}`}
-            aria-hidden="true"
-          />
-          <div
-            className={`pipeline-fade pipeline-fade-right ${scrollEdges.right ? 'visible' : ''}`}
-            aria-hidden="true"
-          />
           <span className={`pipeline-arrow pipeline-arrow-left ${scrollEdges.left ? 'visible' : ''}`} aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
           </span>
@@ -863,7 +939,7 @@ function MyPurchaseStatusContent() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
           </span>
           <div 
-            className={`pipeline-modules-wrapper ${isMouseDown ? 'is-dragging' : ''}`}
+            className={`pipeline-modules-wrapper ${isMouseDown ? 'is-dragging' : ''} ${scrollEdges.left ? 'edge-left' : ''} ${scrollEdges.right ? 'edge-right' : ''}`}
             ref={sliderRef}
             onMouseDown={startDragging}
             onMouseLeave={stopDragging}
@@ -967,6 +1043,7 @@ function MyPurchaseStatusContent() {
       </div>
 
       <div className="miku-status-section-header anim-slide-up delay-3">
+        <span className="mp-eyebrow" style={{ flexBasis: '100%', marginBottom: '-10px' }}>Shipment</span>
         <h2>국제 배송 현황 <span className="section-icon-badge badge-amber"><i className="fa fa-plane"></i></span></h2>
       </div>
 
@@ -1037,6 +1114,34 @@ function MyPurchaseStatusContent() {
           /* 🌟 파이프라인 카드 전용의 매우 은은한 그림자 (기본/호버/활성 모두 동일하게 사용) */
           --shadow-module: 0 1px 3px -1px rgba(15, 23, 42, 0.06), 0 3px 8px -4px rgba(15, 23, 42, 0.06);
           --border-subtle: rgba(226, 232, 240, 0.7);
+        }
+
+        /* 🌟 서비스별 내역 필터 */
+        .miku-order-type-filter {
+          display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 28px;
+          background: #ffffff; border: 1px solid #eee4e3; border-radius: 14px;
+          box-shadow: 0 4px 14px -8px rgba(181, 97, 95, 0.25);
+        }
+        .miku-order-type-filter .type-filter-btn {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 9px 18px; border-radius: 10px;
+          font-size: 14px; font-weight: 700; color: #64748b; text-decoration: none;
+          transition: background-color 0.2s ease, color 0.2s ease;
+        }
+        .miku-order-type-filter .type-filter-btn:hover { background: #fff8f7; color: #1e293b; }
+        .miku-order-type-filter .type-filter-btn.active {
+          background: linear-gradient(145deg, #e3868a 0%, #c9686c 100%);
+          color: #ffffff;
+          box-shadow: 0 6px 12px -6px rgba(181, 97, 95, 0.6);
+        }
+        .miku-order-type-filter .type-filter-count {
+          min-width: 22px; padding: 1px 7px; border-radius: 999px; text-align: center; box-sizing: border-box;
+          font-size: 12px; font-weight: 800; background: #f1f5f9; color: #64748b;
+        }
+        .miku-order-type-filter .type-filter-btn.active .type-filter-count { background: rgba(255,255,255,0.25); color: #ffffff; }
+        @media (max-width: 768px) {
+          .miku-order-type-filter { display: flex; margin-bottom: 20px; }
+          .miku-order-type-filter .type-filter-btn { flex: 1; justify-content: center; padding: 9px 8px; font-size: 13px; }
         }
 
         .miku-status-wrapper {
@@ -1198,24 +1303,39 @@ function MyPurchaseStatusContent() {
           position: relative;
           min-width: 0;
         }
-        .pipeline-fade {
-          position: absolute;
-          top: 0;
-          bottom: 0;
-          width: 42px;
-          opacity: 0;
-          pointer-events: none;
-          transition: opacity 0.2s ease;
-          z-index: 4;
+        /* 🌟 좌/우로 더 스크롤할 수 있을 때 가장자리의 카드가 자연스럽게 사라지도록
+           덧칠(회색 그라데이션 박스) 대신 스크롤 영역 자체에 마스크를 씌웁니다.
+           카드가 배경색과 상관없이 투명하게 페이드되고, 마스크 위치를 애니메이션해 부드럽게 켜지고 꺼집니다. */
+        .pipeline-modules-wrapper {
+          --edge-fade: 56px;
+          -webkit-mask-image:
+            linear-gradient(90deg, transparent 0, #000 var(--edge-fade), #000 100%),
+            linear-gradient(270deg, transparent 0, #000 var(--edge-fade), #000 100%);
+          mask-image:
+            linear-gradient(90deg, transparent 0, #000 var(--edge-fade), #000 100%),
+            linear-gradient(270deg, transparent 0, #000 var(--edge-fade), #000 100%);
+          -webkit-mask-size: calc(100% + var(--edge-fade)) 100%;
+          mask-size: calc(100% + var(--edge-fade)) 100%;
+          -webkit-mask-repeat: no-repeat;
+          mask-repeat: no-repeat;
+          /* 기본(양쪽 끝): 투명한 구간을 화면 밖으로 밀어 두어 마스크가 보이지 않습니다 */
+          -webkit-mask-position: calc(-1 * var(--edge-fade)) 0, calc(100% + var(--edge-fade)) 0;
+          mask-position: calc(-1 * var(--edge-fade)) 0, calc(100% + var(--edge-fade)) 0;
+          -webkit-mask-composite: source-in;
+          mask-composite: intersect;
+          transition: -webkit-mask-position 0.3s ease, mask-position 0.3s ease;
         }
-        .pipeline-fade.visible { opacity: 1; }
-        .pipeline-fade-left {
-          left: 0;
-          background: linear-gradient(90deg, rgba(248,250,252,0.92), rgba(248,250,252,0));
+        .pipeline-modules-wrapper.edge-left {
+          -webkit-mask-position: 0 0, calc(100% + var(--edge-fade)) 0;
+          mask-position: 0 0, calc(100% + var(--edge-fade)) 0;
         }
-        .pipeline-fade-right {
-          right: 0;
-          background: linear-gradient(270deg, rgba(248,250,252,0.92), rgba(248,250,252,0));
+        .pipeline-modules-wrapper.edge-right {
+          -webkit-mask-position: calc(-1 * var(--edge-fade)) 0, 100% 0;
+          mask-position: calc(-1 * var(--edge-fade)) 0, 100% 0;
+        }
+        .pipeline-modules-wrapper.edge-left.edge-right {
+          -webkit-mask-position: 0 0, 100% 0;
+          mask-position: 0 0, 100% 0;
         }
 
         /* 🌟 좌/우로 더 스크롤할 수 있을 때만 나타나는 방향 화살표. 카드와 겹치지 않도록
@@ -1454,7 +1574,8 @@ function MyPurchaseStatusContent() {
         .address-change-warning { margin: 0 0 32px 0; }
 
         @media (max-width: 768px) {
-          .miku-status-wrapper { padding: 0 12px 40px; box-sizing: border-box; width: 100%; overflow-x: hidden; }
+          /* 🌟 마이페이지·배송지 화면과 같은 폭이 되도록 좌우 12px 여백을 뺐습니다 */
+          .miku-status-wrapper { padding: 0 0 40px; box-sizing: border-box; width: 100%; overflow-x: hidden; }
           .miku-status-section-header { margin-bottom: 10px; }
           .miku-status-section-header h2 { font-size: 16px; }
           .progress-only-toggle .toggle-label { font-size: 12px; }

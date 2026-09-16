@@ -1,21 +1,49 @@
 "use client";
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import GuideLayout from '../../components/GuideLayout';
 import '../guide-common.css';
+import { GuideDocHeader, GuideBackToTop } from '../components/GuideDocTools';
+import GuideTitle from '../components/GuideTitle';
+import GuidePremiumHero from '../components/GuidePremiumHero';
+import { ShieldCheck, Printer } from '@phosphor-icons/react';
+
+const PRIVACY_EFFECTIVE_DATE = '2026년 6월 1일';
 
 export default function GuidePrivacyPage() {
+  // 🌟 항목 수는 본문의 조항 제목(.guide-section-title)을 세어 상단 검은색 카드에 표시합니다 (목차와 같은 기준)
+  const [itemCount, setItemCount] = useState(0);
+  useEffect(() => {
+    setItemCount(document.querySelectorAll('#privacy-doc .guide-section-block .guide-section-title').length);
+  }, []);
+
   return (
     <GuideLayout title="개인정보처리방침" type="guide">
       <div className="guide-page-container">
-        {/* 🌟 새로 추가된 큰 제목과 설명 영역 */}
-        <div className="guide-title-row">
-          <h2 className="guide-title">개인정보처리방침 <span className="guide-title-icon"><i className="fa fa-shield-halved"></i></span></h2>
-          <p className="last-updated">시행일자: 2026년 6월 1일</p>
-        </div>
+        {/* 🌟 제목 — mypage/wishlist 와 같은 구성 (영문 눈썹 + 제목 + 로즈 아이콘 뱃지) */}
+        {/* 🌟 요약 카드 (다른 화면의 검은색 카드와 같은 톤) — 오른쪽에 시행일자·항목 수·인쇄 버튼을 함께 넣었습니다 */}
+        <GuidePremiumHero
+          className="is-slim"
+          ariaLabel="개인정보처리방침 안내"
+          eyebrow="PRIVACY POLICY"
+          title={<>회원님의 <em>개인정보</em>, 이렇게 보호합니다</>}
+          desc="어떤 정보를 수집하고 어디에 쓰며 얼마나 보관하는지 항목별로 안내합니다."
+          icon={<ShieldCheck weight="duotone" />}
+          feature={{
+            label: <><i className="fa fa-calendar"></i> 시행일자</>,
+            value: <span className="gp-hero-date">{PRIVACY_EFFECTIVE_DATE}</span>,
+            sub: itemCount > 0 ? `항목 ${itemCount}개` : undefined,
+            actions: [
+              { onClick: () => window.print(), label: <><Printer size={13} weight="bold" /> 인쇄하기</> },
+            ],
+          }}
+        />
+        <GuideTitle eyebrow="Privacy Policy" title="개인정보처리방침" icon="fa-shield-halved" />
 
-        <div className="guide-doc-card">
+        <GuideDocHeader docId="privacy-doc" effectiveDate={PRIVACY_EFFECTIVE_DATE} numbered hideMeta />
+
+        <div className="guide-doc-card gp-doc is-counted" id="privacy-doc">
           
-          <div className="guide-section-block">
+          <div className="guide-section-block gp-doc-intro">
             <div className="doc-content">
               <p>안전한 온라인 문화의 정착을 위하여 <span className="highlight-text">미쿠짱</span>에서는 다음과 같이 개인정보 보호정책(Privacy Policy)을 명시합니다. 본 보호정책은 관련 법률 및 정부지침의 변경과 미쿠짱의 내부 방침에 의해 변경될 수 있으므로, 사이트를 방문하실 때마다 적절히 확인하여 주시기 바랍니다.</p>
             </div>
@@ -158,6 +186,7 @@ export default function GuidePrivacyPage() {
             </div>
           </div>
 
+          <GuideBackToTop />
         </div>
       </div>
     </GuideLayout>

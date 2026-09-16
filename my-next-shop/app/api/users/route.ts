@@ -1,11 +1,18 @@
 // app/api/users/route.ts
 import { NextResponse } from 'next/server';
+import { validatePassword } from '@/lib/passwordPolicy';
 import prisma from '@/lib/prisma';
+import { requireUser } from '@/lib/apiAuth';
 import bcrypt from 'bcrypt';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get('id');
+  const requestedId = searchParams.get('id');
+
+  // 🔒 본인(로그인 회원) 또는 관리자만 조회 가능
+  const auth = await requireUser(requestedId, { allowAdmin: true });
+  if (!auth.ok) return auth.response;
+  const userId = auth.userId;
 
   if (!userId) {
     return NextResponse.json({ error: '유저 ID가 필요합니다.' }, { status: 400 });
@@ -13,7 +20,7 @@ export async function GET(request: Request) {
 
   try {
     const user = await prisma.user.findUnique({
-      where: { id: parseInt(userId) },
+      where: { id: userId },
       include: {
         orders: true,
         addresses: true,
@@ -39,10 +46,12 @@ export async function PUT(request: Request) {
   try {
     const { id, addressId, addressMode } = await request.json();
 
-    if (!id) return NextResponse.json({ error: '유저 ID가 필요합니다.' }, { status: 400 });
+    // 🔒 본인만 수정 가능
+    const auth = await requireUser(id);
+    if (!auth.ok) return auth.response;
 
     const updateData: any = {};
-    const userId = parseInt(id);
+    const userId = auth.userId;
 
     // 🏠 주소 업데이트 로직만 남김
     if (addressId !== undefined) {
@@ -61,7 +70,8 @@ export async function PUT(request: Request) {
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: updateData
+      data: updateData,
+      omit: { password: true },
     });
 
     return NextResponse.json({ success: true, user: updatedUser });
@@ -77,6 +87,12 @@ export async function POST(request: Request) {
 
     if (!email || !password || !name || !loginId) {
       return NextResponse.json({ error: '모든 필드를 입력해주세요.' }, { status: 400 });
+    }
+
+    // 🔒 비밀번호 최소 요건 확인 (기존에는 1자리도 가입이 가능했습니다)
+    const policyError = validatePassword(password);
+    if (policyError) {
+      return NextResponse.json({ success: false, error: policyError }, { status: 400 });
     }
 
     // 이메일 중복 체크
@@ -110,7 +126,8 @@ export async function POST(request: Request) {
         name,
         membershipGrade: 0,
         cyberMoney: 0
-      }
+      },
+      omit: { password: true }, // 🔒 비밀번호 해시는 응답에 포함하지 않음
     });
 
     return NextResponse.json({ success: true, user: newUser });

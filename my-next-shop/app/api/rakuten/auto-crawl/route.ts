@@ -1,10 +1,15 @@
 // app/api/mercari/auto-crawl/route.ts
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { requireAdmin } from '@/lib/apiAuth';
 
 const prisma = new PrismaClient();
 
 export async function GET() {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   try {
     // 💡 핵심 로직: 자식 카테고리가 아직 DB에 없는 항목을 먼저 찾습니다.
     // Raw Query를 사용하면 '자식이 0개인 부모'를 정확히 찾을 수 있습니다.

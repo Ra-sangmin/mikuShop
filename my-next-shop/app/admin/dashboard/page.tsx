@@ -2,7 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ORDER_STATUS, DELIVERY_STATUS } from '@/src/types/order';
 import '../admin-common.css';
+
+// 🐛 이 화면은 주문 상태를 한글 라벨('장바구니', '국제배송' …)과 비교하고 있었지만 API는
+//    Prisma enum('CART', 'SHIPPING' …)을 내려줍니다. 조건이 한 번도 참이 되지 않아
+//    장바구니·실패 주문이 "처리 중"에 섞이고, 배송 중/누적 정산액은 0에 고정돼 있었습니다.
+//    "처리 중"에서 제외할 상태: 아직 접수 전(장바구니)·종료된 건(실패)·배송 단계로 넘어간 건
+const EXCLUDED_FROM_PROCESSING: string[] = [
+  ORDER_STATUS.CART,
+  ORDER_STATUS.FAILED,
+  ORDER_STATUS.SHIPPING,
+];
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -26,7 +37,7 @@ export default function AdminDashboard() {
         if (data.success) {
           // 1. 최신 주문 5개 (관리 대상만 필터링)
           const formatted = data.orders
-            .filter((order: any) => !['장바구니', '구매실패', '국제배송', '국내통관중', '국내배송중', '배송완료'].includes(order.status))
+            .filter((order: any) => !EXCLUDED_FROM_PROCESSING.includes(order.status))
             .slice(0, 5)
             .map((dbOrder: any) => ({
               id: dbOrder.orderId,
@@ -39,14 +50,14 @@ export default function AdminDashboard() {
 
           // 2. 배송 상태 필터링
           const shippingOrders = data.orders
-            .filter((order: any) => 
-              ['국제배송', '국내통관중', '국내배송중'].includes(order.status) && 
-              order.deliveryStatus !== '배송완료'
+            .filter((order: any) =>
+              order.status === ORDER_STATUS.SHIPPING &&
+              order.deliveryStatus !== DELIVERY_STATUS.COMPLETED
             )
             .map((dbOrder: any) => ({
               id: dbOrder.orderId,
               user: dbOrder.user?.name || '알 수 없음',
-              status: dbOrder.deliveryStatus || '배송전',
+              status: dbOrder.deliveryStatus || DELIVERY_STATUS.PREPARING,
             }));
           setDbShippingOrders(shippingOrders);
 
@@ -58,25 +69,25 @@ export default function AdminDashboard() {
               orderDate.getFullYear() === now.getFullYear() &&
               orderDate.getMonth() === now.getMonth() &&
               orderDate.getDate() === now.getDate() &&
-              !['장바구니', '구매실패'].includes(order.status)
+              ![ORDER_STATUS.CART, ORDER_STATUS.FAILED].includes(order.status)
             );
           });
           setTodayOrderCount(todayOrders.length);
 
           // 4. 처리 중 & 배송 중 카운트
-          const processing = data.orders.filter((order: any) => 
-            !['장바구니', '구매실패', '국제배송', '국내통관중', '국내배송중', '배송완료'].includes(order.status)
+          const processing = data.orders.filter((order: any) =>
+            !EXCLUDED_FROM_PROCESSING.includes(order.status)
           ).length;
           setProcessingCount(processing);
 
-          const shipping = data.orders.filter((order: any) => 
-            order.status === '국제배송' && order.deliveryStatus !== '배송완료'
+          const shipping = data.orders.filter((order: any) =>
+            order.status === ORDER_STATUS.SHIPPING && order.deliveryStatus !== DELIVERY_STATUS.COMPLETED
           ).length;
           setShippingCount(shipping);
 
           // 5. 누적 정산액
           const totalKRW = data.orders
-            .filter((order: any) => order.deliveryStatus === '배송완료')
+            .filter((order: any) => order.deliveryStatus === DELIVERY_STATUS.COMPLETED)
             .reduce((sum: number, order: any) => sum + (order.productPrice * 9.05), 0);
           setTotalSettlement(Math.round(totalKRW));
         }

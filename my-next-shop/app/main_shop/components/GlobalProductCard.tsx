@@ -1,6 +1,24 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useMikuAlert } from '@/app/context/MikuAlertContext';
+import { Star } from '@phosphor-icons/react';
+import { getShopTheme } from './shopTheme';
+
+// 🌟 관심상품 저장소. mypage/wishlist와 FloatingButtons가 같은 키를 읽습니다.
+const WISHLIST_KEY = 'rakutenWishlist';
+
+const readWishlist = (): any[] => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(WISHLIST_KEY) || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+};
+
+// 저장된 항목은 itemId(관심상품 목록용)와 id(상세보기용)를 모두 가질 수 있어 둘 다 확인합니다.
+const wishlistKeyOf = (entry: any) => String(entry?.itemId ?? entry?.id ?? '');
 
 const getAuctionRemainingSeconds = (timeLeft?: string) => {
   const value = (timeLeft || '').trim();
@@ -38,25 +56,65 @@ interface GlobalProductCardProps {
   // 🌟 'compact': 관심등록 버튼을 숨기고 이미지/여백/글자 크기를 줄인 더 작은 카드로 표시합니다.
   // (예: 홈 화면의 "실시간 인기 상품" 섹션). 기본값은 기존과 동일한 'default'입니다.
   variant?: 'default' | 'compact';
+  // 🌟 인기 상품 순위(1부터). 주면 이미지 왼쪽 위에 순위 배지를 표시합니다.
+  rank?: number;
 }
 
-export default function GlobalProductCard({ item, onClick, variant = 'default' }: GlobalProductCardProps) {
+export default function GlobalProductCard({ item, onClick, variant = 'default', rank }: GlobalProductCardProps) {
   const isCompact = variant === 'compact';
   const [isHovered, setIsHovered] = useState(false);
+  const { showAlert } = useMikuAlert();
+
+  // 🌟 이미 관심등록된 상품인지 반영 (다른 카드/페이지에서 바뀌어도 wishlistUpdate로 동기화)
+  // 🌟 이미지 로드 실패 시 기본 이미지로 대체 (상품이 바뀌면 다시 시도)
+  const [isImageBroken, setIsImageBroken] = useState(false);
+  useEffect(() => { setIsImageBroken(false); }, [item.thumbnail]);
+
+  const [isWished, setIsWished] = useState(false);
+  useEffect(() => {
+    const sync = () => setIsWished(readWishlist().some(w => wishlistKeyOf(w) === String(item.id)));
+    sync();
+    window.addEventListener('wishlistUpdate', sync);
+    return () => window.removeEventListener('wishlistUpdate', sync);
+  }, [item.id]);
+
+  const toggleWishlist = useCallback(() => {
+    const list = readWishlist();
+    const exists = list.some(w => wishlistKeyOf(w) === String(item.id));
+
+    const next = exists
+      ? list.filter(w => wishlistKeyOf(w) !== String(item.id))
+      : [
+          {
+            ...item,
+            // 관심상품 목록(mypage/wishlist)이 읽는 필드명
+            itemId: item.id,
+            itemName: item.name,
+            imageUrl: item.thumbnail,
+            priceYen: item.price,
+            // 상세보기(GlobalProductDetail)는 이 값들을 그대로 사용하므로,
+            // 카드에는 없는 필드를 비워두면 렌더링 중 오류가 납니다(images.map 등).
+            images: item.thumbnail ? [item.thumbnail] : [],
+            description: '',
+            categories: [],
+            savedAt: Date.now(),
+          },
+          ...list,
+        ];
+
+    localStorage.setItem(WISHLIST_KEY, JSON.stringify(next));
+    // FloatingButtons의 관심상품 개수 배지 등 다른 화면도 즉시 갱신
+    window.dispatchEvent(new Event('wishlistUpdate'));
+    setIsWished(!exists);
+    showAlert(exists ? '관심상품에서 삭제되었습니다.' : '관심상품에 등록되었습니다. ✨', exists ? 'warning' : 'success');
+  }, [item, showAlert]);
   const [isMobile, setIsMobile] = useState(false);
 
   // 1시간 미만 카운트다운을 위한 로컬 초침 상태
   const [localSeconds, setLocalSeconds] = useState<number | null>(null);
 
-  const themeColor = useMemo(() => {
-    switch(item.platform) {
-      case 'mercari': return '#ff007f';
-      case 'rakuten': return '#bf0000';
-      case 'amazon':  return '#ff9900';
-      case 'yahoo_auction': return '#ff0033'; 
-      default: return '#ff007f';
-    }
-  }, [item.platform]);
+  // 🌟 포인트 컬러: 원색 대신 부드러운 톤(shopTheme.ts)의 글자색을 씁니다.
+  const themeColor = useMemo(() => getShopTheme(item.platform).accent, [item.platform]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -188,15 +246,15 @@ export default function GlobalProductCard({ item, onClick, variant = 'default' }
       maxWidth: '100%',
       boxSizing: 'border-box' as const,
       backgroundColor: 'white',
-      border: '1px solid #f3f4f6',
-      borderRadius: isCompact ? '14px' : (isMobile ? '16px' : '20px'),
+      border: `1px solid ${isHovered && !isMobile ? '#e3e7ed' : '#eef0f4'}`,
+      borderRadius: isCompact ? '16px' : (isMobile ? '16px' : '20px'),
       overflow: 'hidden',
       cursor: 'pointer',
       transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
-      transform: isHovered && !isMobile ? 'translateY(-8px)' : 'translateY(0)',
+      transform: isHovered && !isMobile ? (isCompact ? 'translateY(-6px)' : 'translateY(-8px)') : 'translateY(0)',
       boxShadow: isHovered && !isMobile
-        ? `0 20px 40px -12px ${themeColor}20` 
-        : '0 1px 3px rgba(0, 0, 0, 0.05)',
+        ? '0 24px 44px -24px rgba(15, 23, 42, 0.4)'
+        : '0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 18px -16px rgba(15, 23, 42, 0.3)',
       display: 'flex',
       flexDirection: 'column' as const,
       height: '100%',
@@ -208,16 +266,33 @@ export default function GlobalProductCard({ item, onClick, variant = 'default' }
       width: '100%',
       minWidth: 0,
       boxSizing: 'border-box' as const,
-      aspectRatio: isCompact ? '16/10' : '1/1',
+      aspectRatio: isCompact ? '1/1' : '1/1',
       overflow: 'hidden',
       backgroundColor: '#f9fafb',
+    },
+    imageFallback: {
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '8px',
+      color: '#cbd5e1',
+      background: 'linear-gradient(180deg, #fafafa 0%, #f1f3f5 100%)',
+    },
+    imageFallbackText: {
+      fontSize: isMobile ? '10px' : '11px',
+      fontWeight: 700,
+      color: '#aab2bd',
+      letterSpacing: '-0.3px',
     },
     image: {
       width: '100%',
       height: '100%',
       objectFit: 'cover' as const,
       transition: 'transform 0.5s ease, filter 0.3s',
-      transform: isHovered && !isMobile ? 'scale(1.1)' : 'scale(1)',
+      transform: isHovered && !isMobile ? 'scale(1.06)' : 'scale(1)',
       filter: item.status === 'sold_out' ? 'grayscale(100%)' : 'none',
     },
     soldOutOverlay: {
@@ -243,7 +318,7 @@ export default function GlobalProductCard({ item, onClick, variant = 'default' }
       minWidth: 0,
       maxWidth: '100%',
       boxSizing: 'border-box' as const,
-      padding: isCompact ? (isMobile ? '8px' : '10px 12px') : (isMobile ? '12px 10px' : '16px'),
+      padding: isCompact ? (isMobile ? '10px 10px 12px' : '12px 14px 14px') : (isMobile ? '12px 10px' : '16px'),
       display: 'flex',
       flexDirection: 'column' as const,
       flex: 1,
@@ -251,8 +326,8 @@ export default function GlobalProductCard({ item, onClick, variant = 'default' }
       opacity: item.status === 'sold_out' ? 0.6 : 1,
     },
     title: {
-      fontSize: isCompact ? '12px' : (isMobile ? '12px' : '13px'),
-      color: isHovered && !isMobile ? themeColor : '#374151',
+      fontSize: isCompact ? '12.5px' : (isMobile ? '12.5px' : '13.5px'),
+      color: isHovered && !isMobile ? '#0f172a' : '#475569',
       lineHeight: '1.4',
       margin: '0',
       display: '-webkit-box',
@@ -260,7 +335,7 @@ export default function GlobalProductCard({ item, onClick, variant = 'default' }
       WebkitBoxOrient: 'vertical' as const,
       overflow: 'hidden',
       textOverflow: 'ellipsis',
-      height: isCompact ? '32px' : (isMobile ? '34px' : '36px'),
+      height: isCompact ? '35px' : (isMobile ? '35px' : '38px'),
       transition: 'color 0.3s ease',
       fontWeight: 500,
     },
@@ -271,9 +346,11 @@ export default function GlobalProductCard({ item, onClick, variant = 'default' }
       marginTop: 'auto',
     },
     price: {
-      fontSize: isCompact ? '14px' : (isMobile ? '15px' : '18px'),
+      fontSize: isCompact ? '16px' : (isMobile ? '16px' : '19px'),
       fontWeight: 900,
-      color: item.status === 'sold_out' ? '#9ca3af' : '#111827',
+      color: item.status === 'sold_out' ? '#9ca3af' : '#0f172a',
+      letterSpacing: '-0.3px',
+      fontVariantNumeric: 'tabular-nums' as const,
       textDecoration: item.status === 'sold_out' ? 'line-through' : 'none',
     },
     currency: {
@@ -282,13 +359,16 @@ export default function GlobalProductCard({ item, onClick, variant = 'default' }
       fontWeight: 400,
     },
     wishButton: {
-      fontSize: isMobile ? '9px' : '10px',
-      fontWeight: 'bold',
-      color: '#9ca3af',
-      backgroundColor: 'white',
-      border: '1px solid #e5e7eb',
-      padding: isMobile ? '5px 8px' : '6px 12px',
-      borderRadius: '8px',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '4px',
+      fontSize: isMobile ? '10.5px' : '11.5px',
+      fontWeight: 700,
+      color: '#64748b',
+      backgroundColor: '#f7f8fa',
+      border: '1px solid #e8ebf0',
+      padding: isMobile ? '5px 8px' : '6px 11px',
+      borderRadius: '999px',
       cursor: 'pointer',
       transition: 'all 0.3s ease',
       opacity: item.status === 'sold_out' ? 0 : 1,
@@ -313,6 +393,21 @@ export default function GlobalProductCard({ item, onClick, variant = 'default' }
           50% { transform: scale(1.2); opacity: 1; } 
           100% { transform: scale(0.8); opacity: 0.5; } 
         }
+        .pc-rank {
+          position: absolute; top: 10px; left: 10px; z-index: 5;
+          min-width: 26px; height: 26px; padding: 0 7px; box-sizing: border-box;
+          border-radius: 9px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums;
+          color: #ffffff;
+          background: rgba(15, 23, 42, 0.62);
+          backdrop-filter: blur(6px);
+          box-shadow: 0 4px 10px -4px rgba(15, 23, 42, 0.45);
+        }
+        .pc-rank-top { min-width: 30px; height: 30px; font-size: 14px; border-radius: 10px; }
+        .pc-rank-1 { background: linear-gradient(145deg, #f6cf5d 0%, #d99a1e 100%); box-shadow: 0 6px 14px -6px rgba(217, 154, 30, 0.8), inset 0 1px 0 rgba(255,255,255,0.45); }
+        .pc-rank-2 { background: linear-gradient(145deg, #c9d1db 0%, #8d99a8 100%); box-shadow: 0 6px 14px -6px rgba(100, 116, 139, 0.7), inset 0 1px 0 rgba(255,255,255,0.45); }
+        .pc-rank-3 { background: linear-gradient(145deg, #e3a57a 0%, #b56d3f 100%); box-shadow: 0 6px 14px -6px rgba(181, 109, 63, 0.7), inset 0 1px 0 rgba(255,255,255,0.4); }
         .live-dot {
           width: 6px;
           height: 6px;
@@ -323,12 +418,33 @@ export default function GlobalProductCard({ item, onClick, variant = 'default' }
       `}</style>
 
       <div style={styles.imageContainer}>
-        {item.thumbnail ? (
-          <img src={item.thumbnail} alt={item.name} style={styles.image} loading="lazy" />
+        {/* 🌟 thumbnail이 아예 없는 경우뿐 아니라, URL은 있지만 로드에 실패한 경우
+            (외부 쇼핑몰 이미지 서버가 404/차단하는 일이 잦음)에도 같은 기본 이미지를
+            보여줍니다. 별도 이미지 파일 대신 인라인 SVG를 써서 폴백 자체가 다시
+            로드에 실패하는 일이 없도록 했습니다. */}
+        {item.thumbnail && !isImageBroken ? (
+          <img
+            src={item.thumbnail}
+            alt={item.name}
+            style={styles.image}
+            loading="lazy"
+            onError={() => setIsImageBroken(true)}
+          />
         ) : (
-          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d1d5db', fontSize: '12px' }}>
-            No Image
+          <div style={styles.imageFallback}>
+            <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="3" />
+              <circle cx="8.5" cy="9.5" r="1.6" />
+              <path d="M21 16l-4.5-4.5L8 20" />
+            </svg>
+            <span style={styles.imageFallbackText}>이미지 준비 중</span>
           </div>
+        )}
+
+        {typeof rank === 'number' && (
+          <span className={`pc-rank ${rank <= 3 ? `pc-rank-top pc-rank-${rank}` : ''}`} aria-label={`인기 ${rank}위`}>
+            {rank}
+          </span>
         )}
 
         {item.status === 'sold_out' && (
@@ -355,23 +471,31 @@ export default function GlobalProductCard({ item, onClick, variant = 'default' }
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  alert("관심상품에 등록되었습니다. ✨");
+                  toggleWishlist();
                 }}
                 onMouseOver={(e) => {
-                  if (isMobile) return;
+                  if (isMobile || isWished) return;
                   e.currentTarget.style.color = themeColor;
                   e.currentTarget.style.borderColor = themeColor + '80';
                   e.currentTarget.style.backgroundColor = themeColor + '05';
                 }}
                 onMouseOut={(e) => {
-                  if (isMobile) return;
-                  e.currentTarget.style.color = '#9ca3af';
-                  e.currentTarget.style.borderColor = '#e5e7eb';
-                  e.currentTarget.style.backgroundColor = 'white';
+                  if (isMobile || isWished) return;
+                  e.currentTarget.style.color = '#64748b';
+                  e.currentTarget.style.borderColor = '#e8ebf0';
+                  e.currentTarget.style.backgroundColor = '#f7f8fa';
                 }}
-                style={styles.wishButton}
+                style={{
+                  ...styles.wishButton,
+                  // 🌟 등록된 상품은 눌린 상태가 한눈에 보이도록 플랫폼 색으로 채웁니다
+                  ...(isWished
+                    ? { color: themeColor, borderColor: themeColor + '80', backgroundColor: themeColor + '12' }
+                    : null),
+                }}
+                aria-pressed={isWished}
               >
-                ★ 관심등록
+                <Star size={12} weight={isWished ? 'fill' : 'bold'} />
+                {isWished ? '관심상품' : '관심등록'}
               </button>
             )}
           </div>

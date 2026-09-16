@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { requireAdmin } from '@/lib/apiAuth';
 
 const prisma = new PrismaClient();
 
 export async function GET(request: Request) {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   const { searchParams } = new URL(request.url);
   // 프론트엔드 매크로에서 넘어온 부모 카테고리 ID
   const parentId = searchParams.get('parentId'); 

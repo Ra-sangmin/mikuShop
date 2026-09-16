@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './global-shop-common.css';
+import { CaretRight, CaretDown, CaretUp, FlagCheckered } from '@phosphor-icons/react';
+import { getShopTheme, shopThemeVars } from './shopTheme';
 
 // --- 모바일 감지 커스텀 훅 ---
 function useIsMobile() {
@@ -16,7 +18,7 @@ function useIsMobile() {
 }
 
 // --- 플랫폼별 타입 및 인터페이스 ---
-export type ShoppingPlatform = 'mercari' | 'rakuten' | 'amazon' | 'yahoo' | 'default';
+export type ShoppingPlatform = 'mercari' | 'rakuten' | 'amazon' | 'yahoo' | 'yahoo_shopping' | 'yahoo_auction' | 'default';
 
 export interface GlobalCategory {
   genreId: number;
@@ -40,6 +42,9 @@ const PLATFORM_THEMES: Record<ShoppingPlatform, { color: string; bg: string }> =
   rakuten: { color: '#bf0000', bg: '#fef2f2' },
   amazon: { color: '#ff9900', bg: '#fff7ed' },
   yahoo: { color: '#ff0033', bg: '#fff1f2' },
+  // 🌟 실제로 넘어오는 값은 yahoo_shopping / yahoo_auction이라 기본(보라)색으로 떨어지던 문제 수정
+  yahoo_shopping: { color: '#bf0000', bg: '#fef2f2' },
+  yahoo_auction: { color: '#f08c00', bg: '#fff7ed' },
   default: { color: '#6366f1', bg: '#f5f3ff' }
 };
 
@@ -55,6 +60,28 @@ export default function GlobalCategoryGrid({
 
   // 🚀 [추가] 더보기 상태 관리
   const [isExpanded, setIsExpanded] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // 🌟 더보기/접기 토글. 접을 때는 펼쳐진 목록 아래쪽까지 스크롤해 내려온 상태라 접는 순간
+  // 화면에 상품 목록만 남아 버리므로, 카테고리 패널 맨 위(고정 헤더·쇼핑몰 패널 바로 아래)로 자동 스크롤합니다.
+  const handleToggleExpanded = () => {
+    const next = !isExpanded;
+    setIsExpanded(next);
+    if (next) return;
+    const root = rootRef.current;
+    if (!root) return;
+    const card = (root.closest('.shop-category-card') as HTMLElement | null) ?? root;
+    const shopHeader = document.querySelector('.global-shop-header') as HTMLElement | null;
+    const siteHeader = document.querySelector('.miku-header-wrapper') as HTMLElement | null;
+    const fixedBottom = Math.max(
+      shopHeader?.getBoundingClientRect().bottom ?? 0,
+      siteHeader?.getBoundingClientRect().bottom ?? 0,
+    );
+    const targetY = card.getBoundingClientRect().top + window.scrollY - fixedBottom - 12;
+    if (window.scrollY > targetY) {
+      window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+    }
+  };
 
   // 🚀 [추가] 모바일일 경우 초기 8개만 노출, PC는 전체 노출
   const initialCount = isMobile ? 8 : categories.length;
@@ -114,102 +141,66 @@ export default function GlobalCategoryGrid({
   );
 
   return (
-    <div style={{ width: '100%' }}>
-      <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-      
+    <div ref={rootRef} className="shop-cat" style={shopThemeVars('shop', getShopTheme(platform)) as React.CSSProperties}>
       {/* 카테고리 리스트 표시 */}
       {!isLoading && !isLeaf && categories.length > 0 && (
        <>
-          <div style={styles.gridContainer}>
-            {/* 🚀 visibleCategories를 사용하여 렌더링 */}
-            {visibleCategories.map((cat) => (
+          <div className="shop-cat-grid">
+            {visibleCategories.map((cat, idx) => (
               <GlobalCategoryItem 
                 key={cat.genreId} 
                 name={cat.genreName} 
+                index={idx}
                 onClick={() => onMove(cat.genreId, cat.genreName , cat.genreLevel)} 
-                isMobile={isMobile}
-                theme={theme}
               />
             ))}
           </div>
 
-          {/* 🚀 [추가] 더보기 / 접기 버튼 */}
           {hasMore && (
-            <button 
-              style={styles.expandButton} 
-              onClick={() => setIsExpanded(!isExpanded)}
-            >
+            <button type="button" className="shop-cat-more" onClick={handleToggleExpanded}>
               {isExpanded ? (
-                <>접기 <span style={{fontSize: '10px'}}>▲</span></>
+                <>카테고리 접기 <span className="shop-cat-more-count">{categories.length}개</span> <CaretUp weight="bold" /></>
               ) : (
-                <>카테고리 더보기 (+{categories.length - initialCount}) <span style={{fontSize: '10px'}}>▼</span></>
+                <>카테고리 더보기 <span className="shop-cat-more-count">+{categories.length - initialCount}</span> <CaretDown weight="bold" /></>
               )}
             </button>
           )}
         </>
       )}
 
-      {/* 2. 최하위 판정 (로딩 중이 아닐 때) */}
+      {/* 최하위 카테고리 */}
       {!isLoading && isLeaf && categories.length === 0 && (
-        <div style={styles.messageText}>최하위 카테고리입니다. 왼쪽 상세 검색의 [검색하기] 버튼을 눌러주세요.</div>
+        <div className="shop-cat-message">
+          <span className="shop-cat-message-icon"><FlagCheckered weight="fill" /></span>
+          <div>
+            <strong>마지막 카테고리입니다.</strong>
+            <p>왼쪽 상세검색에서 조건을 정한 뒤 <b>조건으로 검색하기</b>를 눌러주세요.</p>
+          </div>
+        </div>
       )}
       
-      {/* 3. 데이터 없음 판정 (로딩 중이 아닐 때 + 잎새 노드도 아닐 때) */}
+      {/* 데이터 없음 */}
       {!isLoading && !isLeaf && categories.length === 0 && (
-        <div style={styles.emptyText}>데이터가 없습니다.</div>
+        <div className="shop-cat-empty">표시할 하위 카테고리가 없습니다.</div>
       )}
     </div>
   );
 }
 
 // --- 내부 아이템 컴포넌트 ---
-function GlobalCategoryItem({ 
-  name, 
-  onClick, 
-  isMobile, 
-  theme 
-}: { 
-  name: string, 
-  onClick: () => void, 
-  isMobile: boolean,
-  theme: { color: string; bg: string }
-}) {
-  const [isHovered, setIsHovered] = useState(false);
-
+function GlobalCategoryItem({ name, index, onClick }: { name: string; index: number; onClick: () => void }) {
   return (
-    <div 
-      onClick={onClick} 
-      onMouseEnter={() => setIsHovered(true)} 
-      onMouseLeave={() => setIsHovered(false)} 
-      translate="no" 
-      className="notranslate"
-      style={{ 
-        fontSize: isMobile ? '13px' : '14px', 
-        color: (isHovered && !isMobile) ? theme.color : '#4b5563', // 플랫폼 컬러 적용
-        cursor: 'pointer', 
-        padding: isMobile ? '3px 12px' : '12px 16px', 
-        borderRadius: '12px', 
-        border: `1px solid ${(isHovered && !isMobile) ? `${theme.color}30` : '#f9fafb'}`, 
-        backgroundColor: (isHovered && !isMobile) ? theme.bg : 'transparent', // 플랫폼 배경색 적용
-        transition: 'all 0.2s ease', 
-        display: 'flex', 
-        alignItems: 'center',
-        minWidth: 0,
-        maxWidth: '100%',
-        overflow: 'hidden',
-        whiteSpace: 'nowrap',
-        textOverflow: 'ellipsis'
-      }}
+    <button
+      type="button"
+      onClick={onClick}
+      translate="no"
+      className="notranslate shop-cat-item"
+      style={{ animationDelay: `${Math.min(index, 20) * 18}ms` }}
+      title={name}
     >
-      <span style={{ 
-        width: '6px', 
-        height: '6px', 
-        backgroundColor: (isHovered && !isMobile) ? theme.color : '#e5e7eb', 
-        borderRadius: '50%', 
-        marginRight: '8px', 
-        transition: 'background-color 0.2s' 
-      }} />
-      {name}
-    </div>
+      <span className="shop-cat-dot" aria-hidden="true" />
+      <span className="shop-cat-name">{name}</span>
+      <CaretRight className="shop-cat-arrow" weight="bold" aria-hidden="true" />
+    </button>
   );
 }

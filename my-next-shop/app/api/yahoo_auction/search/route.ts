@@ -217,7 +217,11 @@ async function extractItems(page: any, limit: number = 150): Promise<AuctionItem
         status: timeLeft.includes('終了') || hasClosedMarker ? 'sold_out' : 'on_sale'
       };
     }).filter(item => item !== null && item.id !== '');
-  }, limit).catch(() => []);
+  }, limit).catch((e: any) => {
+    // 🐛 예전엔 여기서 에러를 조용히 삼켜, 추출 코드가 깨져도 "상품 0개" 로만 보였습니다.
+    console.error('❌ [yahoo_auction] 상품 추출 실패:', e?.message || e);
+    return [];
+  });
 }
 
 // 🚀 [속도 개선] 아이템 추출과 "끝 페이지 감지"를 한 번의 page.evaluate 호출로 합쳤습니다.
@@ -262,7 +266,13 @@ async function extractItemsAndCheckEnd(page: any, limit: number = 150): Promise<
     const nextButton = Array.from(document.querySelectorAll('a, button')).find(el =>
       el.textContent?.includes('次へ') || el.textContent?.includes('다음')
     );
+    // 🐛 "次へ" 버튼은 처음부터 DOM 에 있으므로 "존재" 가 아니라 "화면에 들어왔는지" 로 끝을 판정합니다.
+    //    (첫 회차에 상품이 아직 안 그려진 상태에서 곧바로 끝으로 오판해 0개로 끝나는 것을 막습니다)
+    const nextButtonVisible = !!nextButton && nextButton.getBoundingClientRect().top < window.innerHeight + 200;
 
-    return { items, isEndOfPage: hasRelatedAds || !!nextButton };
-  }, limit).catch(() => ({ items: [], isEndOfPage: false }));
+    return { items, isEndOfPage: hasRelatedAds || nextButtonVisible };
+  }, limit).catch((e: any) => {
+    console.error('❌ [yahoo_auction] 상품 추출 실패:', e?.message || e);
+    return { items: [], isEndOfPage: false };
+  });
 }

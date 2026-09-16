@@ -38,7 +38,7 @@ export default function FloatingButtons() {
   return (
     <div style={{ position: 'fixed', bottom: '40px', right: '40px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '15px' }}>
       <button 
-        onClick={() => router.push('/wishlist')} 
+        onClick={() => router.push('/mypage/wishlist')} 
         style={{
           backgroundColor: '#f0ad4e',
           color: '#fff',

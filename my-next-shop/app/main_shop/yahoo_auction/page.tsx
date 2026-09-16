@@ -207,12 +207,18 @@ function YahooAuctionContent() {
       }
   
       setIsStreaming(true);
-  
+
+      // 🌟 서버가 마지막에 보내는 { success:false, error } / { done, total } 줄을 읽어
+      //    "조용한 빈 목록" 대신 안내를 띄우기 위한 집계
+      let received = 0;
+      let failMessage: string | null = null;
+
       try {
-        const res = await fetch(`/api/yahoo_auction/search?${queryString}`, { 
-          signal: controller.signal 
+        const res = await fetch(`/api/yahoo_auction/search?${queryString}`, {
+          signal: controller.signal
         });
-        
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         if (!res.body) throw new Error("ReadableStream not supported");
   
         const reader = res.body.getReader();
@@ -241,32 +247,39 @@ function YahooAuctionContent() {
               const result = JSON.parse(line);
               
               if (result.success && result.data) {
-                setItems(prev => [...prev, ...result.data]); 
-                setDisplayItems(prev => [...prev, ...result.data]); 
+                received += result.data.length;
+                setItems(prev => [...prev, ...result.data]);
+                setDisplayItems(prev => [...prev, ...result.data]);
+              } else if (result.success === false && result.error) {
+                failMessage = result.error;
               }
             } catch (e) {
               console.error("JSON 파싱 에러:", e);
             }
           }
-        }   
+        }
       } catch (err: any) {
         if (err.name === 'AbortError') {
           console.log("🤫 이전 요청은 조용히 사라집니다...");
-          return; 
+          return;
         }
         console.error("❌ 실제 통신 에러:", err);
+        failMessage = '상품을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.';
       } finally {
-  
+
         if (abortControllerRef.current === controller) {
           setIsStreaming(false);
-  
+
           if (loadingTimerRef.current) {
-            clearTimeout(loadingTimerRef.current); 
+            clearTimeout(loadingTimerRef.current);
             loadingTimerRef.current = null;
           }
-  
+
           setIsItemLoading(false);
           console.log("🏁 최신 수집 작업 완료!");
+
+          // 🐛 예전엔 서버가 0개로 끝나도 아무 말 없이 빈 화면이었습니다.
+          if (received === 0 && failMessage) showAlert(failMessage, 'error');
         }
       }
     };

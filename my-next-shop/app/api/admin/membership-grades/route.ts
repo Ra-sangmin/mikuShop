@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireAdmin } from '@/lib/apiAuth';
 
 export async function GET() {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   try {
     const grades = await prisma.membershipGrade.findMany({
       orderBy: { id: 'asc' }
@@ -14,6 +19,10 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   try {
     const { id, name, discountRate, requiredOrders, sortOrder, description } = await req.json();
 

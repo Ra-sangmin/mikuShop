@@ -435,16 +435,16 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
         }
         
         .btn-payment.premium-btn.active {
-          background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+          background: linear-gradient(135deg, #c0606a 0%, #a94a53 100%);
           color: #ffffff;
           cursor: pointer;
-          box-shadow: 0 8px 24px -4px rgba(234, 88, 12, 0.4);
+          box-shadow: 0 8px 24px -4px rgba(169, 74, 83, 0.4);
           border: none;
         }
         
         .btn-payment.premium-btn.active:hover {
           transform: translateY(-2px);
-          box-shadow: 0 12px 32px -6px rgba(234, 88, 12, 0.5);
+          box-shadow: 0 12px 32px -6px rgba(169, 74, 83, 0.5);
           filter: brightness(1.05);
         }
         .btn-payment.full-width { width: 100%; text-align: center; }

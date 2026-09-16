@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireAdmin } from '@/lib/apiAuth';
 
 // 🌟 1. GET: DB에서 주문 목록과 유저 정보를 함께 가져옵니다.
 export async function GET() {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   try {
     const orders = await prisma.order.findMany({
       select: {
@@ -31,6 +36,7 @@ export async function GET() {
         secondPaymentAmount: true,
         bidStatus: true,
         user: {
+          omit: { password: true }, // 🔒 비밀번호 해시는 내려보내지 않음
           include: {
             addresses: true 
           }
@@ -50,6 +56,10 @@ export async function GET() {
 
 // 🌟 2. PUT: 변경된 주문 상태 저장 및 💸 머니 결제/이용내역 기록
 export async function PUT(request: Request) {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   try {
     const body = await request.json();
     // 프론트에서 보낸 paymentTitle(이용내역 제목)도 함께 받습니다.
@@ -148,6 +158,10 @@ export async function PUT(request: Request) {
 
 // 🌟 3. DELETE: 주문 삭제
 export async function DELETE(request: Request) {
+  // 🔒 관리자 전용
+  const adminAuth = await requireAdmin();
+  if (!adminAuth.ok) return adminAuth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const orderId = searchParams.get('id'); 
