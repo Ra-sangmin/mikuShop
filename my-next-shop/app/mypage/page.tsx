@@ -28,6 +28,8 @@ function useMyPageLogic() {
   const [isSnsUser, setIsSnsUser] = useState(false);
   // 🌟 SNS 로그인에서 받아온 프로필 사진 (동의 안 했거나 일반 회원이면 null → 이니셜 표시)
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  // 🌟 로그인 계정(이메일). SNS 회원은 카카오·네이버에서 받아온 값입니다.
+  const [userEmail, setUserEmail] = useState('');
 
   useEffect(() => {
     const storedId = localStorage.getItem('user_id');
@@ -43,6 +45,7 @@ function useMyPageLogic() {
             setUserOrders(data.user.orders || []);
             setIsSnsUser(!!data.user.isSnsUser);
             setProfileImage(data.user.profileImage || null);
+            setUserEmail(data.user.email || '');
           }
         })
         .catch(error => console.error("유저 정보 불러오기 실패:", error));
@@ -56,7 +59,8 @@ function useMyPageLogic() {
     level: userLevel,
     money: userMoney,
     isSnsUser,
-    profileImage
+    profileImage,
+    email: userEmail
   };
 
   // 🌟 누락되었던 12개 모든 상태 항목 추가 및 진행 흐름에 맞춘 순서 정렬
@@ -245,6 +249,13 @@ export default function MyPage() {
                   </button>
                 )}
               </div>
+              {/* 🌟 로그인에 사용 중인 계정(이메일). SNS 로그인 회원은 카카오·네이버에서 받아온 이메일입니다. */}
+              {userInfo.email && (
+                <p className="mp-hero-email" translate="no">
+                  <i className="fa fa-envelope" aria-hidden="true"></i>
+                  <span>{userInfo.email}</span>
+                </p>
+              )}
             </div>
           </div>
 
