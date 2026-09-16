@@ -78,6 +78,16 @@
   background: linear-gradient(135deg, #de8088 0%, #a94a53 100%);
   box-shadow: 0 14px 28px -12px rgba(222, 128, 136, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
+/* 🌟 SNS(카카오 등) 프로필 사진. 없거나 로드에 실패하면 이름 첫 글자가 대신 보입니다. */
+.mp-avatar-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+  display: block;
+}
 .mp-avatar-grade {
   position: absolute;
   right: -6px;

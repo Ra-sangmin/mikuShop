@@ -25,6 +25,8 @@ model User {
   password            String
   name                String
   nickname            String?
+  // 🌟 카카오·네이버 등 SNS 로그인에서 받아온 프로필 이미지 URL (직접 업로드는 아직 없음)
+  profileImage        String?  @map("profile_image") @db.Text
   email               String?  @unique
   phone               String?
   

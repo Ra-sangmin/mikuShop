@@ -8,6 +8,29 @@ import prisma from "@/lib/prisma";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
 
+// 🌟 SNS 로그인 회원 찾기 (signIn·jwt 콜백이 반드시 이 함수를 함께 써야 합니다)
+//
+// 🐛 예전엔 이메일만으로 찾았습니다. 그런데 카카오에서 "카카오계정(이메일)" 동의를 켜는 순간
+//    내려오는 이메일이 `kakao_<회원번호>@mikuchan.local`(임시값) → 실제 이메일로 바뀝니다.
+//    그러면 그 이메일을 쓰는 "전혀 다른 기존 회원"이 검색돼 그 계정으로 로그인돼 버렸습니다.
+//    (실제로 카카오 로그인이 테스트 계정에 붙어 미쿠짱머니가 0원으로 보이는 문제가 있었습니다)
+//
+//    → SNS 회원번호(loginId = `kakao_12345`)를 1순위로 봅니다. 이 값은 이메일 동의 여부나
+//      동의항목 변경과 무관하게 항상 같은 사람을 가리킵니다.
+//      이메일은 "SNS로는 처음이지만 같은 이메일로 이미 가입한 회원"을 이어주기 위한 2순위입니다.
+async function findSocialUser(provider: string, providerUserId: string, email?: string | null) {
+  const byLoginId = await prisma.user.findUnique({
+    where: { loginId: `${provider}_${providerUserId}` },
+  });
+
+  if (byLoginId) return byLoginId;
+
+  if (email) {
+    return prisma.user.findUnique({ where: { email } });
+  }
+  return null;
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     // 🌟 1. 일반 로그인: 이메일 대신 '아이디(loginId)'로 검증하도록 수정
@@ -73,9 +96,10 @@ export const authOptions: NextAuthOptions = {
       const userEmail = user.email || `${safeProvider}_${user.id}@mikuchan.local`;
 
       try {
-        const existingUser = await prisma.user.findUnique({
-          where: { email: userEmail },
-        });
+        const existingUser = await findSocialUser(safeProvider, user.id, user.email);
+
+        // 🌟 SNS가 내려준 프로필 이미지(카카오 프로필 사진 등). 동의하지 않았으면 비어 있습니다.
+        const snsProfileImage = (user.image || '').trim() || null;
 
         // 유저가 없으면 새로 생성 (소셜 회원가입)
         if (!existingUser) {
@@ -84,6 +108,7 @@ export const authOptions: NextAuthOptions = {
               loginId: `${safeProvider}_${user.id}`, // SNS 유저 전용 식별 아이디
               email: userEmail,
               name: user.name || `${safeProvider} 사용자`,
+              profileImage: snsProfileImage,
               password: "", // SNS 로그인이므로 비밀번호는 비워둠
               membershipGrade: 0,
               cyberMoney: 0,
@@ -91,6 +116,26 @@ export const authOptions: NextAuthOptions = {
           });
           console.log(`새로운 ${safeProvider} 유저 생성 완료:`, userEmail);
         } else {
+          // 🐛 예전엔 기존 회원이 다시 로그인해도 아무것도 갱신하지 않아서, 닉네임 동의를 나중에
+          //    켜도 이름이 "kakao 사용자" 같은 임시값에 머물러 있었습니다. 프로필 사진도 마찬가지입니다.
+          const updates: { name?: string; profileImage?: string | null } = {};
+
+          // 이름은 "아직 임시값인 경우"에만 SNS 닉네임으로 채웁니다.
+          // (나중에 회원이 직접 이름을 바꾸는 기능이 생겨도 로그인할 때마다 덮어쓰지 않도록)
+          const isPlaceholderName = !existingUser.name?.trim() || /^(kakao|naver|social)\s*사용자$/.test(existingUser.name.trim());
+          if (user.name && isPlaceholderName && user.name !== existingUser.name) {
+            updates.name = user.name;
+          }
+
+          // 프로필 사진은 직접 올리는 기능이 없어 SNS 값이 유일한 출처이므로 항상 최신으로 맞춥니다.
+          if (snsProfileImage && snsProfileImage !== existingUser.profileImage) {
+            updates.profileImage = snsProfileImage;
+          }
+
+          if (Object.keys(updates).length > 0) {
+            await prisma.user.update({ where: { id: existingUser.id }, data: updates });
+            console.log(`기존 유저 프로필 갱신 (${safeProvider}):`, Object.keys(updates).join(', '));
+          }
           console.log(`기존 유저 로그인 (${safeProvider}):`, userEmail);
         }
 
@@ -112,13 +157,9 @@ export const authOptions: NextAuthOptions = {
           token.id = user.id;
         } 
         // SNS 로그인이면 DB에서 다시 조회해서 고유 ID를 가져옴
+        // ⚠️ signIn 콜백과 반드시 같은 기준으로 찾아야 합니다. (다르면 A 계정에 저장하고 B 계정으로 로그인됨)
         else {
-          const safeProvider = provider || 'social';
-          const userEmail = user.email || `${safeProvider}_${user.id}@mikuchan.local`;
-          
-          const dbUser = await prisma.user.findUnique({
-            where: { email: userEmail },
-          });
+          const dbUser = await findSocialUser(provider || 'social', user.id, user.email);
           if (dbUser) {
             token.id = dbUser.id;
           }

@@ -26,6 +26,8 @@ function useMyPageLogic() {
   const [userMoney, setUserMoney] = useState(0);
   const [userOrders, setUserOrders] = useState<any[]>([]);
   const [isSnsUser, setIsSnsUser] = useState(false);
+  // 🌟 SNS 로그인에서 받아온 프로필 사진 (동의 안 했거나 일반 회원이면 null → 이니셜 표시)
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   useEffect(() => {
     const storedId = localStorage.getItem('user_id');
@@ -40,6 +42,7 @@ function useMyPageLogic() {
             setUserMoney(data.user.cyberMoney);
             setUserOrders(data.user.orders || []);
             setIsSnsUser(!!data.user.isSnsUser);
+            setProfileImage(data.user.profileImage || null);
           }
         })
         .catch(error => console.error("유저 정보 불러오기 실패:", error));
@@ -52,7 +55,8 @@ function useMyPageLogic() {
     name: userName,
     level: userLevel,
     money: userMoney,
-    isSnsUser
+    isSnsUser,
+    profileImage
   };
 
   // 🌟 누락되었던 12개 모든 상태 항목 추가 및 진행 흐름에 맞춘 순서 정렬
@@ -196,6 +200,7 @@ export default function MyPage() {
   const { userInfo, purchaseStatus } = useMyPageLogic();
   const gradeMeta = GRADE_META[userInfo.level] || GRADE_META.NEW;
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false); // 프로필 사진 로드 실패 시 이니셜로 대체
 
   const byKey = (key: string) => purchaseStatus.find(s => s.key === key);
   const countOf = (keys: string[]) => keys.reduce((sum, k) => sum + (byKey(k)?.count || 0), 0);
@@ -213,7 +218,17 @@ export default function MyPage() {
         <section className="mp-hero mp-anim" aria-label="나의 회원 정보">
           <div className="mp-hero-main">
             <div className="mp-avatar" aria-hidden="true">
-              {initial}
+              {/* 🌟 카카오 등 SNS 프로필 사진이 있으면 보여주고, 없으면 기존처럼 이름 첫 글자를 씁니다.
+                  이미지가 깨지면(만료된 CDN 주소 등) 이니셜 표시로 되돌립니다. */}
+              {userInfo.profileImage && !avatarFailed
+                ? <img
+                    src={userInfo.profileImage}
+                    alt=""
+                    className="mp-avatar-img"
+                    referrerPolicy="no-referrer"
+                    onError={() => setAvatarFailed(true)}
+                  />
+                : initial}
               <span className="mp-avatar-grade" style={{ background: gradeMeta.gradient }}>{gradeMeta.icon}</span>
             </div>
             <div className="mp-hero-text">
