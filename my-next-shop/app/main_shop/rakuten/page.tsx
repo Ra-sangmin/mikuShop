@@ -9,6 +9,8 @@ import { GlobalFilterState } from "@/app/main_shop/components/GlobalSidebar";
 import { GlobalProduct } from "@/app/main_shop/components/GlobalProductDetail";
 import { useGlobalSearch } from "@/app/main_shop/components/GlobalSearchContext";
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
+import { readPopularCache, writePopularCache } from "@/app/main_shop/components/popularCache";
+import { isPureCategoryQuery, categoryCacheKey, readCategoryListCache, writeCategoryListCache } from "@/app/main_shop/components/categoryListCache";
 
 // --- 🛠️ 유틸리티 ---
 import { getTranslatedText } from '@/lib/search-utils';
@@ -31,6 +33,9 @@ const RakutenSortOptions = [
   { id: '-itemPrice', label: '가격높은순' },
   { id: '+itemPrice', label: '가격낮은순' },
 ];
+
+// 🌟 카테고리 목록 캐시(하루) 판별 규칙: genreId + page + 기본 정렬(standard) 만 있으면 "순수 카테고리 조회"
+const RAKUTEN_CACHE_RULE = { categoryKey: 'genreId', pageKeys: ['page'], sortKey: 'sort', defaultSort: RakutenSortOptions[0].id };
 
 // 1. 실제 로직을 담당하는 Content 컴포넌트
 function RakutenContent() {
@@ -152,6 +157,19 @@ function RakutenContent() {
     // 실제로 요청받은 catId(targetId) 기준으로 판단하되, 키워드가 있으면 전체(0)여도 진행합니다.
     if (targetId === 0 && !filters?.keyword) { resetLoadingUI(); return; }
 
+    // 🌟 카테고리만 골라 본 목록은 페이지별로 하루 동안 캐시합니다 (검색·상세검색·비기본 정렬은 제외).
+    //    캐시가 있으면 라쿠텐 API(1초 1회 제한)를 부르지 않고 바로 보여줍니다. (categoryListCache.ts)
+    const cacheKey = isPureCategoryQuery(params, RAKUTEN_CACHE_RULE) ? categoryCacheKey('rakuten', params, RAKUTEN_CACHE_RULE) : null;
+    if (cacheKey) {
+      const cached = readCategoryListCache<GlobalProduct>(cacheKey);
+      if (cached) {
+        if (cached.pageInfo) setPageInfo(cached.pageInfo);
+        setItems(cached.items);
+        resetLoadingUI();
+        return;
+      }
+    }
+
     // 🚀 0.5초 안에 끝나면 아무것도 띄우지 않습니다. (빠른 응답에서 깜빡임 방지)
     resetLoadingUI();
     setIsStreaming(true);
@@ -170,16 +188,22 @@ function RakutenContent() {
       const itemRes = await fetch(`/api/rakuten/items?${queryString}`);
       const itemData = await itemRes.json().catch(() => ({}));
 
-      // 🐛 이 응답보다 새 요청이 이미 나갔다면 (카테고리를 또 옮겼다면) 화면에 반영하지 않습니다.
-      if (!isLatest()) return;
-
       // 🐛 서버가 500({ error }) 을 주면 예전엔 itemData.items.map 에서 터져 조용히 빈 화면이 됐습니다.
       if (!itemRes.ok || !Array.isArray(itemData.items)) {
         throw new Error(itemData.error || `HTTP ${itemRes.status}`);
       }
 
-      setPageInfo({ page: Number(itemData.page) || 1, pageCount: Number(itemData.pageCount) || 0 });
-      setItems(itemData.items.map(mapToGlobal));
+      const nextPageInfo = { page: Number(itemData.page) || 1, pageCount: Number(itemData.pageCount) || 0 };
+      const mapped: GlobalProduct[] = itemData.items.map(mapToGlobal);
+      // 🌟 응답이 오기 전에 다른 카테고리로 옮겨 갔더라도 받은 결과는 그 카테고리의 캐시로 남겨,
+      //    다시 돌아왔을 때 API 를 다시 부르지 않게 합니다.
+      if (cacheKey) writeCategoryListCache(cacheKey, mapped, nextPageInfo);
+
+      // 🐛 이 응답보다 새 요청이 이미 나갔다면 (카테고리를 또 옮겼다면) 화면에 반영하지 않습니다.
+      if (!isLatest()) return;
+
+      setPageInfo(nextPageInfo);
+      setItems(mapped);
     } catch (e) {
       if (!isLatest()) return;
       console.error('라쿠텐 상품 로드 실패:', e);
@@ -327,6 +351,14 @@ function RakutenContent() {
 
   // 🚀 [로직 6] 실시간 인기 상품 로드 (홈 화면 진입 시 한 번만 조회)
   useEffect(() => {
+    // 🌟 10분 안에 다시 들어오면(카테고리·상세·다른 페이지 갔다 오기, 새로고침) API 를 다시 부르지 않고
+    //    세션 캐시에서 바로 보여줍니다. (app/main_shop/components/popularCache.ts)
+    const cached = readPopularCache('rakuten');
+    if (cached) {
+      setPopularProducts(cached);
+      return;
+    }
+
     const fetchPopular = async () => {
       try {
         const res = await fetch('/api/rakuten/popular?limit=100');
@@ -347,8 +379,11 @@ function RakutenContent() {
             shopUrl: row.url,
             status: 'on_sale',
             shopName: row.shopName || undefined,
+            // 🌟 회원 클릭이 아니라 라쿠텐 인기 상품으로 채운 항목 (순위 배지 제외용)
+            isPopularFiller: !!row.isFiller,
           }));
           setPopularProducts(mapped);
+          writePopularCache('rakuten', mapped);
         }
       } catch (e) {
         console.error('인기 상품 로드 실패', e);

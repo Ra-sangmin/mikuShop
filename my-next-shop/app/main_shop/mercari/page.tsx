@@ -12,6 +12,8 @@ import { useGlobalSearch } from "@/app/main_shop/components/GlobalSearchContext"
 
 // --- 🛠️ 유틸리티 ---
 import { checkMercariCooldown, lastCallTimestamp } from "./mercariApi";
+import { readPopularCache, writePopularCache } from "@/app/main_shop/components/popularCache";
+import { isPureCategoryQuery, categoryCacheKey, readCategoryListCache, writeCategoryListCache } from "@/app/main_shop/components/categoryListCache";
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
 import { getTranslatedText } from '@/lib/search-utils';
 import '@/app/main_shop/platform-pages-common.css';
@@ -42,7 +44,9 @@ const MercariSortOptions = [
   { id: '최신순', label: '최신순' },
 ];
 
-let globalItemsCache: { [key: string]: any[] } = {};
+// 🌟 카테고리 목록 캐시(하루) 판별 규칙: category_id + page_token 만 있으면 "순수 카테고리 조회"
+//    (정렬은 기본순이 아닐 때만 sort 키가 붙으므로, sort 가 있으면 자동으로 제외됩니다)
+const MERCARI_CACHE_RULE = { categoryKey: 'category_id', pageKeys: ['page_token'] };
 let globalProductDetailCache: { [key: string]: GlobalProduct } = {};
 
 // 1. 실제 로직을 담당하는 Content 컴포넌트
@@ -144,8 +148,13 @@ function MercariCategoryContent() {
     if (filters.keyword) params.append("keyword", filters.keyword);
     if (filters.excludeKeyword) params.append("exclude_keyword", filters.excludeKeyword);
 
+    // 🐛 필터를 한 번도 고르지 않은 상태(값이 undefined)에서도 `!== '모두'` 가 참이 되어
+    //    빈 값·기본값 파라미터(item_types= / shipping_payer_id=1 / hasDiscount=… 등)가 붙었습니다.
+    //    서버는 이 키들을 무시하므로 결과는 같지만, "카테고리만 고른 조회" 판별(캐시)을 방해해서
+    //    실제로 값을 고른 경우에만 붙입니다.
+    const isChosen = (v?: string) => !!v && v !== '모두';
     const getSellerId = (val: string) => (val === '개인' ? 'mercari' : val === '메루카리샵' ? 'beyond' : '');
-    if (filters.sellerType !== '모두') params.append("item_types", getSellerId(filters.sellerType));
+    if (isChosen(filters.sellerType)) params.append("item_types", getSellerId(filters.sellerType));
 
     if (filters.minPrice) params.append("price_min", filters.minPrice);
     if (filters.maxPrice) params.append("price_max", filters.maxPrice);
@@ -154,11 +163,11 @@ function MercariCategoryContent() {
       const map: { [key: string]: string } = { '신품, 미사용': '1', '미사용에 가까움': '2', '눈에 띄는 흠집 없음': '3', '다소 흠집 있음': '4', '전반적으로 나쁨': '6' };
       return map[val] || '';
     };
-    if (filters.condition !== '모두') params.append("item_condition_id", getCondition(filters.condition));
+    if (isChosen(filters.condition)) params.append("item_condition_id", getCondition(filters.condition));
 
-    if (filters.shippingPayer !== '모두') params.append("shipping_payer_id", filters.shippingPayer === '배송비 포함' ? '2' : '1');
-    if (filters.hasDiscount !== '모두') params.append("hasDiscount", '9df96424-a8c2-414a-bbab-74bd11bd20aa');
-    if (filters.listingType !== '모두') params.append("listingType", '3b6eac8c-7be5-4c9c-b537-7c05cd3c4905');
+    if (isChosen(filters.shippingPayer)) params.append("shipping_payer_id", filters.shippingPayer === '배송비 포함' ? '2' : '1');
+    if (isChosen(filters.hasDiscount)) params.append("hasDiscount", '9df96424-a8c2-414a-bbab-74bd11bd20aa');
+    if (isChosen(filters.listingType)) params.append("listingType", '3b6eac8c-7be5-4c9c-b537-7c05cd3c4905');
 
     const getColorId = (val: string) => {
       const map: { [key: string]: string } = { '화이트계열': '2', '블랙계열': '1', '그레이계열': '3', '브라운계열': '4', '베이지계열': '9', '그린계열': '10', '블루계열': '8', '퍼플계열': '7', '옐로우계열': '11', '핑크계열': '6', '레드계열': '5', '오렌지계열': '12' };
@@ -170,7 +179,7 @@ function MercariCategoryContent() {
       const map: { [key: string]: string } = { '익명 배송': 'anonymous', '수취 옵션': 'japan_post', '옵션 없음': 'no_option' };
       return map[val] || '';
     };
-    if (filters.shippingOption !== '모두') params.append("shipping_method", getShippingOption(filters.shippingOption));
+    if (isChosen(filters.shippingOption)) params.append("shipping_method", getShippingOption(filters.shippingOption));
     if (filters.status !== '모두')
     {
       /*
@@ -184,6 +193,9 @@ function MercariCategoryContent() {
 
     return params;
   };
+
+  // 🌟 목록을 받는 도중 이 페이지를 떠나면 요청을 끊어(서버 크롤링도 중단) 받은 만큼만 미완성 캐시로 남깁니다
+  useEffect(() => () => { abortControllerRef.current?.abort(); }, []);
 
   const loadItems = async (catId: any, filters?: GlobalFilterState) => {
     // 1. 이전 요청 중단
@@ -199,6 +211,8 @@ function MercariCategoryContent() {
     // 2. 새 요청을 위한 리모컨 생성
     const controller = new AbortController();
     abortControllerRef.current = controller;
+    const receivedRows: MercariItem[] = []; // 🌟 캐시 저장용으로 수신 상품을 모아 둡니다
+    const seenIds = new Set<string>(); // 🌟 같은 상품이 두 번 오면(이어받기·서버 캐시) 한 번만 붙입니다
 
     // 🚀 [수정] 모든 바구니를 확실히 비우고 시작합니다.
     setItems([]); 
@@ -224,14 +238,32 @@ function MercariCategoryContent() {
 
     const targetId = Number(catId);
     const params = GetParams(targetId, filters);
-    const queryString = params.toString();
+    let queryString = params.toString();
 
-    // 캐시 확인 로직
-    if (globalItemsCache[queryString]) {
-      setItems([...globalItemsCache[queryString]]);
-      setDisplayItems([...globalItemsCache[queryString]]);
-      setIsItemLoading(false); // 🚀 캐시일 땐 바로 로딩 종료
-      return;
+    // 🌟 카테고리만 골라 본 목록은 페이지별로 하루 동안 캐시합니다 (검색·상세검색·비기본 정렬은 제외).
+    //    캐시가 있으면 쿨다운·크롤링 없이 바로 보여줍니다. (app/main_shop/components/categoryListCache.ts)
+    const cacheKey = isPureCategoryQuery(params, MERCARI_CACHE_RULE) ? categoryCacheKey('mercari', params, MERCARI_CACHE_RULE) : null;
+    if (cacheKey) {
+      const cached = readCategoryListCache<MercariItem>(cacheKey);
+      if (cached && cached.complete === false) {
+        // 🌟 받는 도중 다른 카테고리로 옮겨 가 중간까지만 저장된 목록: 받은 만큼 먼저 보여주고,
+        //    서버에 그 상품 id 들을 알려 "아직 못 받은 나머지" 만 이어서 받습니다.
+        receivedRows.push(...cached.items);
+        cached.items.forEach(row => seenIds.add(row.id));
+        setItems([...cached.items]);
+        setDisplayItems([...cached.items]);
+        params.append('known', cached.items.map(row => row.id).join(','));
+        queryString = params.toString();
+      } else if (cached) {
+        if (loadingTimerRef.current) {
+          clearTimeout(loadingTimerRef.current);
+          loadingTimerRef.current = null;
+        }
+        setItems([...cached.items]);
+        setDisplayItems([...cached.items]);
+        setIsItemLoading(false); // 🚀 캐시일 땐 바로 로딩 종료
+        return;
+      }
     }
 
     setIsStreaming(true);
@@ -291,9 +323,13 @@ function MercariCategoryContent() {
             // 🚀 데이터 덩어리가 도착할 때마다 setDisplayItems를 호출합니다!
             // 여기서 items와 displayItems를 같이 업데이트해서 숫자가 올라가게 합니다.
             if (result.success && result.data) {
-              received += result.data.length;
-              setItems(prev => [...prev, ...result.data]); // 숫자 카운트용
-              setDisplayItems(prev => [...prev, ...result.data]); // 상품 리스트용
+              const fresh: MercariItem[] = result.data.filter((row: MercariItem) => !seenIds.has(row.id));
+              fresh.forEach(row => seenIds.add(row.id));
+              if (fresh.length === 0) continue;
+              received += fresh.length;
+              receivedRows.push(...fresh);
+              setItems(prev => [...prev, ...fresh]); // 숫자 카운트용
+              setDisplayItems(prev => [...prev, ...fresh]); // 상품 리스트용
             } else if (result.success === false && result.error) {
               failMessage = result.error;
             }
@@ -306,6 +342,9 @@ function MercariCategoryContent() {
       // 🚀 [수정] 중단 에러(AbortError)인 경우 로딩을 끄지 않고 그냥 나갑니다.
       if (err.name === 'AbortError') {
         console.log("🤫 이전 요청은 조용히 사라집니다...");
+        // 🌟 다른 카테고리로 옮겨 가며 중단됐다면 지금까지 받은 만큼을 "미완성" 으로 저장해 두었다가,
+        //    다시 돌아왔을 때 나머지만 이어서 받습니다.
+        if (cacheKey && receivedRows.length > 0) writeCategoryListCache(cacheKey, receivedRows, undefined, { complete: false });
         return;
       }
       console.error("❌ 실제 통신 에러:", err);
@@ -324,7 +363,12 @@ function MercariCategoryContent() {
         console.log("🏁 최신 수집 작업 완료!");
 
         // 🐛 예전엔 서버가 0개로 끝나도 아무 말 없이 빈 화면이었습니다.
-        if (received === 0 && failMessage) showAlert(failMessage, 'error');
+        if (received === 0 && receivedRows.length === 0 && failMessage) showAlert(failMessage, 'error');
+
+        // 🌟 끝까지 정상 수신한 순수 카테고리 조회만 캐시에 저장합니다 (중단·실패·0개는 저장 안 함)
+        if (cacheKey && !controller.signal.aborted && !failMessage && receivedRows.length > 0) {
+          writeCategoryListCache(cacheKey, receivedRows);
+        }
       }
     }
   };
@@ -416,6 +460,9 @@ function MercariCategoryContent() {
     if(id.toString() === genreId.toString())
         return;
       
+    // 🌟 목록을 받는 도중 다른 카테고리(홈 포함)로 옮기면 요청을 끊어, 받은 만큼만 미완성 캐시로 남기고
+    //    이전 카테고리 상품이 새 화면에 계속 덧붙는 것도 막습니다
+    abortControllerRef.current?.abort();
     setIsLeaf(false);
 
     setItems([]); 
@@ -500,8 +547,19 @@ function MercariCategoryContent() {
   // 계속 append하다가 똑같은 상품이 두 번씩 쌓여 "동일 key" 에러가 났습니다. 이전 요청을
   // AbortController로 취소하고, 취소된 인스턴스는 상태 갱신도 멈추게 합니다.
   useEffect(() => {
+    // 🌟 10분 안에 다시 들어오면(카테고리·상세·다른 페이지 갔다 오기, 새로고침) 수십 초 걸리는
+    //    크롤링을 다시 하지 않고 세션 캐시에서 바로 보여줍니다. (components/popularCache.ts)
+    const cached = readPopularCache('mercari');
+    if (cached) {
+      setPopularProducts(cached);
+      setIsPopularLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
     let ignore = false;
+    // 스트림이 끝까지 정상 완료됐을 때만 캐시에 저장하기 위한 누적분 (중단되면 저장하지 않습니다)
+    const received: GlobalProduct[] = [];
 
     const mapRow = (row: any): GlobalProduct => ({
       id: row.id,
@@ -547,7 +605,9 @@ function MercariCategoryContent() {
                 // 도착하는 순간 영영 꺼진 채로 남아, 뒤이은 추천 섹션/카테고리 2~10위 단계의
                 // 하단 로딩 바가 다시는 뜨지 않았습니다. 전체 스트림이 끝날 때(finally)만 꺼서,
                 // 100개를 다 모으거나 모든 단계가 끝날 때까지 계속 보이게 합니다.
-                setPopularProducts(prev => [...prev, ...result.data.map(mapRow)]);
+                const rows: GlobalProduct[] = result.data.map(mapRow);
+                received.push(...rows);
+                setPopularProducts(prev => [...prev, ...rows]);
               }
             } catch (e) {
               console.error("인기 상품 JSON 파싱 에러:", e);
@@ -557,7 +617,11 @@ function MercariCategoryContent() {
       } catch (e: any) {
         if (e?.name !== 'AbortError') console.error('인기 상품 로드 실패', e);
       } finally {
-        if (!ignore) setIsPopularLoading(false);
+        if (!ignore) {
+          setIsPopularLoading(false);
+          // 끝까지 받은 결과만 캐시합니다 (StrictMode 첫 인스턴스나 이탈로 중단된 경우는 ignore=true 라 제외)
+          writePopularCache('mercari', received);
+        }
       }
     };
     fetchPopular();

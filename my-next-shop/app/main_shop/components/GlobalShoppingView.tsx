@@ -359,8 +359,11 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
                     <span className="shop-popular-eyebrow">TRENDING NOW</span>
                     <h3 className="shop-popular-title">실시간 인기 상품</h3>
                     <p className="shop-popular-desc">
+                      {/* 🌟 회원 클릭이 아직 적어 플랫폼 인기 상품으로 채운 항목이 섞여 있으면 문구를 바꿉니다 */}
                       {showPopularRank
-                        ? '미쿠짱 회원들이 많이 본 상품 순서예요'
+                        ? (props.popularProducts.some((p: any) => p.isPopularFiller)
+                            ? '미쿠짱 회원들이 많이 본 상품에, 지금 인기 있는 상품을 더했어요'
+                            : '미쿠짱 회원들이 많이 본 상품 순서예요')
                         : '지금 많이 찾는 카테고리의 상품을 모았어요'}
                     </p>
                   </div>
@@ -376,7 +379,7 @@ export default function GlobalShoppingView(props: GlobalShoppingViewProps) {
                       item={item}
                       onClick={() => props.onCardClick(item)}
                       variant="compact"
-                      rank={showPopularRank ? idx + 1 : undefined}
+                      rank={showPopularRank && !item.isPopularFiller ? idx + 1 : undefined}
                     />
                   ))}
                 </div>

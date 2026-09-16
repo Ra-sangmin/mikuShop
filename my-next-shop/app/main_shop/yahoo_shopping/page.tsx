@@ -1,5 +1,8 @@
 "use client";
 
+import { readPopularCache, writePopularCache } from "@/app/main_shop/components/popularCache";
+import { isPureCategoryQuery, categoryCacheKey, readCategoryListCache, writeCategoryListCache } from "@/app/main_shop/components/categoryListCache";
+
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
@@ -20,6 +23,9 @@ const YahooSortOptions = [
   { id: '-review_count', label: '리뷰많은순' },
   { id: '-sold', label: '판매량순' },
 ];
+
+// 🌟 카테고리 목록 캐시(하루) 판별 규칙: genreId + page + 기본 정렬(-score) 만 있으면 "순수 카테고리 조회"
+const YAHOO_CACHE_RULE = { categoryKey: 'genreId', pageKeys: ['page'], sortKey: 'sort', defaultSort: YahooSortOptions[0].id };
 
 function YahooContent() {
 
@@ -42,6 +48,9 @@ function YahooContent() {
 
   const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 1 });
 
+  // 🌟 카테고리를 연달아 누르면 먼저 보낸 요청의 응답이 나중에 도착해 화면을 덮어쓸 수 있어, 마지막 요청만 반영합니다
+  const loadSeqRef = useRef(0);
+
   // 🚀 [로직 1] 야후 데이터를 Global 규격으로 변환
   const mapToGlobal = (item: any): GlobalProduct => {
 
@@ -55,7 +64,10 @@ function YahooContent() {
     const highResImageUrl = getHighResImage(item.image?.medium);
 
     return {
-      id: item.index,
+      // 🐛 예전엔 검색 결과 순번(index: 1, 2, 3…)을 id 로 써서, 서로 다른 상품이 같은 id 로
+      //    묶였고 trackView 의 인기 집계가 "몇 번째 칸"을 세는 꼴이었습니다.
+      //    → 야후 상품 고유 코드(code, 예: meiseishop_246)를 씁니다. (없으면 순번으로 폴백)
+      id: item.code || String(item.index),
       platform: 'yahoo_shopping',
       name: item.name,
       price: item.price,
@@ -95,6 +107,7 @@ function YahooContent() {
 
   // 🚀 [로직 2] 상품 로드 함수
   const loadItems = async (catId: any, filters?: GlobalFilterState) => {
+    const seq = ++loadSeqRef.current;
 
     setItems([]);
     setProductDetail(null);
@@ -104,11 +117,29 @@ function YahooContent() {
 
     if (targetId !== 1) {
 
+      // 🌟 카테고리만 골라 본 목록은 페이지별로 하루 동안 캐시합니다 (검색·상세검색·비기본 정렬은 제외).
+      //    (app/main_shop/components/categoryListCache.ts)
+      const cacheKey = isPureCategoryQuery(params, YAHOO_CACHE_RULE) ? categoryCacheKey('yahoo_shopping', params, YAHOO_CACHE_RULE) : null;
+      if (cacheKey) {
+        const cached = readCategoryListCache<GlobalProduct>(cacheKey);
+        if (cached) {
+          if (cached.pageInfo) setPageInfo(cached.pageInfo);
+          setItems(cached.items);
+          return;
+        }
+      }
+
       const res = await fetch(`/api/yahoo_shopping/items?${params.toString()}`);
       const data = await res.json();
 
-      setPageInfo({ page: data.page, pageCount: data.pageCount });
-      setItems(data.items.map(mapToGlobal));
+      const nextPageInfo = { page: data.page, pageCount: data.pageCount };
+      const mapped: GlobalProduct[] = data.items.map(mapToGlobal);
+      // 🌟 응답이 오기 전에 다른 카테고리로 옮겨 갔더라도 받은 결과는 그 카테고리의 캐시로 남깁니다
+      if (cacheKey) writeCategoryListCache(cacheKey, mapped, nextPageInfo);
+
+      if (seq !== loadSeqRef.current) return; // 그 사이 다른 카테고리를 눌렀다면 화면에는 반영하지 않습니다
+      setPageInfo(nextPageInfo);
+      setItems(mapped);
     }
   };
 
@@ -231,6 +262,14 @@ function YahooContent() {
 
   // 🚀 [로직 6] 실시간 인기 상품 로드 (홈 화면 진입 시 한 번만 조회)
   useEffect(() => {
+    // 🌟 10분 안에 다시 들어오면(카테고리·상세·다른 페이지 갔다 오기, 새로고침) API 를 다시 부르지 않고
+    //    세션 캐시에서 바로 보여줍니다. (app/main_shop/components/popularCache.ts)
+    const cached = readPopularCache('yahoo_shopping');
+    if (cached) {
+      setPopularProducts(cached);
+      return;
+    }
+
     const fetchPopular = async () => {
       try {
         const res = await fetch('/api/yahoo_shopping/popular?limit=100');
@@ -251,8 +290,11 @@ function YahooContent() {
             shopUrl: row.url,
             status: 'on_sale',
             shopName: row.shopName || undefined,
+            // 🌟 회원 클릭이 아니라 야후 쇼핑 인기 상품으로 채운 항목 (순위 배지 제외용)
+            isPopularFiller: !!row.isFiller,
           }));
           setPopularProducts(mapped);
+          writePopularCache('yahoo_shopping', mapped);
         }
       } catch (e) {
         console.error('인기 상품 로드 실패', e);

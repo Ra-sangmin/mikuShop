@@ -30,6 +30,11 @@ const MAX_ITEMS = 100;
 // 합쳐서 가져올 수 있는 최대 개수.
 const REST_MAX_ITEMS = 20;
 const CHUNK_SIZE = 4;
+// 🌟 채우기 단계(12번): 위 예산으로는 약 28개에서 끝나 섹션이 휑해서, 남은 자리를 100개까지 채웁니다.
+//    카테고리당 FILL_PER_CATEGORY 개까지(첫 화면 + 스크롤 FILL_MAX_ATTEMPTS 회), FILL_CONCURRENCY 개씩 병렬.
+const FILL_PER_CATEGORY = 30;
+const FILL_MAX_ATTEMPTS = 2;
+const FILL_CONCURRENCY = 3;
 // 🌟 카테고리 1개당 "빠르게 몇 개만" 가져오는 게 목적이라 넉넉히 잡지 않습니다.
 const CATEGORY_QUICK_LIMIT = 8;
 // 🌟 1~5위는 추천 섹션과 번갈아 하나씩, 6~10위는 5차 시도까지 다 실패했을 때 한꺼번에 씁니다.
@@ -125,7 +130,15 @@ export async function GET() {
       // collected/cat1Count를 기준으로 실시간 계산하므로, 6~10위처럼 여러 카테고리를 동시에
       // 병렬로 돌려도(Promise.all) 합계 기준으로 정확히 제한됩니다. 1번(카테고리 1위) 호출
       // 시엔 생략해 MAX_ITEMS(100)로만 제한됩니다.
-      const crawlCategoryFast = async (categoryId: number, respectRestBudget = false) => {
+      const crawlCategoryFast = async (
+        categoryId: number,
+        respectRestBudget = false,
+        opts: { limit?: number; maxAttempts?: number } = {},
+      ) => {
+        // 🌟 기본은 "빠르게 몇 개만"(첫 화면, 스크롤 없음). 채우기 단계(12번)에서는 카테고리당 한도와
+        //    스크롤 횟수를 넘겨받아 더 많이 가져옵니다.
+        const limit = opts.limit ?? CATEGORY_QUICK_LIMIT;
+        const maxAttempts = opts.maxAttempts ?? 0;
         if (isClosed || collected.length >= MAX_ITEMS) return;
         if (respectRestBudget && collected.length - cat1Count >= REST_MAX_ITEMS) return;
 
@@ -143,12 +156,12 @@ export async function GET() {
             matchesUrl: url => url.includes('api/v1/search') || url.includes('search_index'),
             mapResponseItems: json => mapCategoryApiItems(json),
           },
-          maxItems: CATEGORY_QUICK_LIMIT,
+          maxItems: limit,
           chunkSize: CHUNK_SIZE,
-          // 🌟 [속도 개선] "빠르게 몇 개만" 보여주고 곧바로 다음 단계로 넘어가는 게 목적이라,
-          // 스크롤은 아예 하지 않고 페이지를 열자마자 첫 화면에 이미 렌더링된 상품만 긁습니다
-          // (0으로 두면 createSearchStream이 스크롤 루프를 한 번도 돌지 않습니다).
-          maxAttempts: 0,
+          // 🌟 [속도 개선] 빠른 단계(1~11번)는 "몇 개만" 보여주고 곧바로 다음 단계로 넘어가는 게
+          // 목적이라 스크롤 없이(maxAttempts 0) 첫 화면에 이미 렌더링된 상품만 긁습니다.
+          // 채우기 단계(12번)는 FILL_MAX_ATTEMPTS 만큼 스크롤해 카테고리당 더 많이 가져옵니다.
+          maxAttempts,
         });
 
         // 🌟 [버그 수정] createSearchStream의 maxItems 옵션은 "스크롤을 계속할지" 판단에만
@@ -165,7 +178,7 @@ export async function GET() {
         while (true) {
           const { done, value } = await reader.read();
           if (
-            done || isClosed || takenFromThisCategory >= CATEGORY_QUICK_LIMIT || collected.length >= MAX_ITEMS ||
+            done || isClosed || takenFromThisCategory >= limit || collected.length >= MAX_ITEMS ||
             (respectRestBudget && collected.length - cat1Count >= REST_MAX_ITEMS)
           ) break;
 
@@ -179,7 +192,7 @@ export async function GET() {
               const result = JSON.parse(line);
               if (result.success && result.data?.length) {
                 const remaining = Math.min(
-                  CATEGORY_QUICK_LIMIT - takenFromThisCategory,
+                  limit - takenFromThisCategory,
                   MAX_ITEMS - collected.length,
                   respectRestBudget ? REST_MAX_ITEMS - (collected.length - cat1Count) : Infinity,
                 );
@@ -307,6 +320,29 @@ export async function GET() {
               console.log('🔁 [메루카리 인기상품] 추천 섹션 5회 연속 0건 — 나머지 인기 카테고리로 대체합니다.');
               await Promise.all(restCats.map(id => crawlCategoryFast(id, true)));
             }
+          }
+        }
+
+        // 12) 채우기 — 위 단계들은 "빠르게 몇 개만" 보여주는 예산(1위 8개 + 나머지 20개 ≈ 28개)이라
+        //     그대로 두면 섹션이 휑합니다. 남은 자리는 회원 클릭 카테고리 → 루트 카테고리 순으로
+        //     돌며 100개까지 채웁니다 (카테고리당 첫 화면 + 스크롤 2회, 3개씩 병렬). 결과는 5분 캐시라
+        //     첫 방문자만 기다리고, 그동안에도 청크 단위로 화면에 계속 쌓입니다.
+        if (hasBudget()) {
+          const roots = await prisma.mercariCategory.findMany({
+            where: { parentId: 0 },
+            orderBy: { genreId: 'asc' },
+            select: { genreId: true },
+          });
+          const fillOrder = [
+            ...sourceCategories,
+            ...roots.map(r => r.genreId).filter(id => !sourceCategories.includes(id)),
+          ];
+          for (let i = 0; i < fillOrder.length && hasBudget(); i += FILL_CONCURRENCY) {
+            await Promise.all(
+              fillOrder.slice(i, i + FILL_CONCURRENCY).map(id =>
+                crawlCategoryFast(id, false, { limit: FILL_PER_CATEGORY, maxAttempts: FILL_MAX_ATTEMPTS })
+              )
+            );
           }
         }
       } catch (error) {

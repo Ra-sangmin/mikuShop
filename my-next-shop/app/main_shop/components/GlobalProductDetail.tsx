@@ -18,6 +18,10 @@ export interface GlobalProduct {
   
   // 🌟 [추가] AI 간단 요약 (선택적 속성)
   aiSummary?: string;
+
+  // 🌟 "실시간 인기 상품"에서, 회원 클릭 집계가 아니라 플랫폼 API 의 인기 상품으로 자리를 채운
+  //    항목인지 여부. 순위 배지를 달지 않는 용도로만 씁니다. (rakuten/yahoo_shopping popular 라우트)
+  isPopularFiller?: boolean;
   
   condition?: string;
   size?: string;

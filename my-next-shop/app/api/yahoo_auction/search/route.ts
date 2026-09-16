@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest } from 'next/server';
-import { createSearchStream, createCachedSearchStream } from '@/lib/crawler/searchStream';
+import { createSearchStream, createCachedSearchStream, parseKnownIds } from '@/lib/crawler/searchStream';
 import { createTtlCache } from '@/lib/crawler/ttlCache';
 
 // 🚀 [설계도] 아이템 형식 정의
@@ -66,10 +66,14 @@ export async function GET(req: NextRequest) {
 
   const targetUrl = generateYahooTargetUrl(searchParams);
 
+  // 🌟 프론트가 이미 갖고 있는(중단돼 일부만 캐시된) 상품 id. 이 상품들은 빼고 나머지만 보냅니다.
+  const knownIds = parseKnownIds(searchParams);
+  if (knownIds.size > 0) console.log(`↩️ [이어받기] 이미 받은 ${knownIds.size}개는 건너뜁니다`);
+
   const cached = searchCache.get(targetUrl);
   if (cached) {
     console.log(`\n⚡ [CACHE HIT] ${targetUrl} (${cached.length}개, 스크래핑 생략)`);
-    return new Response(createCachedSearchStream(cached), {
+    return new Response(createCachedSearchStream(cached.filter(item => !knownIds.has(item.id))), {
       headers: {
         'Content-Type': 'application/x-ndjson',
         'Cache-Control': 'no-cache, no-transform',
@@ -87,6 +91,7 @@ export async function GET(req: NextRequest) {
     signal,
     startTime,
     cache: searchCache,
+    knownIds,
     // 🌟 [버그 수정] 기존에는 메루카리 선택자('[data-testid="item-cell"]')를 그대로 써서
     // 야후 옥션 페이지에서는 절대 매칭되지 않아, 매 검색마다 5초 타임아웃을 그대로 다 쓴 뒤에야
     // 다음 단계로 넘어가던 문제가 있었습니다. 실제 야후 옥션 상품 그리드 선택자로 교체합니다.

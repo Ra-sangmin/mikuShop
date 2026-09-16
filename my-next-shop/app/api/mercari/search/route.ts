@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest } from 'next/server';
-import { createSearchStream, createCachedSearchStream } from '@/lib/crawler/searchStream';
+import { createSearchStream, createCachedSearchStream, parseKnownIds } from '@/lib/crawler/searchStream';
 import { createTtlCache } from '@/lib/crawler/ttlCache';
 
 // 🚀 [설계도] 아이템 형식 정의
@@ -30,10 +30,14 @@ export async function GET(req: NextRequest) {
 
   const targetUrl = generateMercariTargetUrl(searchParams);
 
+  // 🌟 프론트가 이미 갖고 있는(중단돼 일부만 캐시된) 상품 id. 이 상품들은 빼고 나머지만 보냅니다.
+  const knownIds = parseKnownIds(searchParams);
+  if (knownIds.size > 0) console.log(`↩️ [이어받기] 이미 받은 ${knownIds.size}개는 건너뜁니다`);
+
   const cached = searchCache.get(targetUrl);
   if (cached) {
     console.log(`\n⚡ [CACHE HIT] ${targetUrl} (${cached.length}개, 스크래핑 생략)`);
-    return new Response(createCachedSearchStream(cached), {
+    return new Response(createCachedSearchStream(cached.filter(item => !knownIds.has(item.id))), {
       headers: {
         'Content-Type': 'application/x-ndjson',
         'Cache-Control': 'no-cache, no-transform',
@@ -51,6 +55,7 @@ export async function GET(req: NextRequest) {
     signal,
     startTime,
     cache: searchCache,
+    knownIds,
     domReadySelector: '[data-testid="item-cell"]',
     extractItems: (page, limit) => extractItems(page, limit),
     extractItemsAndCheckEnd: (page, limit) => extractItemsAndCheckEnd(page, limit),

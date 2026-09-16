@@ -1,5 +1,8 @@
 "use client";
 
+import { readPopularCache, writePopularCache } from "@/app/main_shop/components/popularCache";
+import { isPureCategoryQuery, categoryCacheKey, readCategoryListCache, writeCategoryListCache } from "@/app/main_shop/components/categoryListCache";
+
 import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
@@ -45,7 +48,8 @@ const YahooAuctionSortOptions = [
   { id: 'd-price', label: '현재가격높은순' },
 ];
 
-let globalItemsCache: { [key: string]: any[] } = {};
+// 🌟 카테고리 목록 캐시(하루) 판별 규칙: category_id + page + 기본 정렬(new) 만 있으면 "순수 카테고리 조회"
+const YAHOO_AUCTION_CACHE_RULE = { categoryKey: 'category_id', pageKeys: ['page'], sortKey: 'sort', defaultSort: YahooAuctionSortOptions[0].id };
 
 function YahooAuctionContent() {
 
@@ -157,6 +161,9 @@ function YahooAuctionContent() {
       }));
   }, [displayItems, currentFilters.sortOrder]);
   
+  // 🌟 목록을 받는 도중 이 페이지를 떠나면 요청을 끊어(서버 크롤링도 중단) 받은 만큼만 미완성 캐시로 남깁니다
+  useEffect(() => () => { abortControllerRef.current?.abort(); }, []);
+
   const loadItems = async (catId: any, filters?: GlobalFilterState) => {
       // 1. 이전 요청 중단
       if (abortControllerRef.current) {
@@ -171,6 +178,8 @@ function YahooAuctionContent() {
       // 2. 새 요청을 위한 리모컨 생성
       const controller = new AbortController();
       abortControllerRef.current = controller;
+      const receivedRows: YahooAuctionItem[] = []; // 🌟 캐시 저장용으로 수신 상품을 모아 둡니다
+      const seenIds = new Set<string>(); // 🌟 같은 상품이 두 번 오면(이어받기·서버 캐시) 한 번만 붙입니다
   
       // 모든 바구니 비우기
       setItems([]); 
@@ -196,14 +205,32 @@ function YahooAuctionContent() {
   
       const targetId = Number(catId);
       const params = GetParams(targetId, filters);
-      const queryString = params.toString();
+      let queryString = params.toString();
   
-      // 캐시 확인
-      if (globalItemsCache[queryString]) {
-        setItems([...globalItemsCache[queryString]]);
-        setDisplayItems([...globalItemsCache[queryString]]);
-        setIsItemLoading(false);
-        return;
+      // 🌟 카테고리만 골라 본 목록은 페이지별로 하루 동안 캐시합니다 (검색·상세검색·비기본 정렬은 제외).
+      //    캐시가 있으면 크롤링 없이 바로 보여줍니다. (app/main_shop/components/categoryListCache.ts)
+      const cacheKey = isPureCategoryQuery(params, YAHOO_AUCTION_CACHE_RULE) ? categoryCacheKey('yahoo_auction', params, YAHOO_AUCTION_CACHE_RULE) : null;
+      if (cacheKey) {
+        const cached = readCategoryListCache<YahooAuctionItem>(cacheKey);
+        if (cached && cached.complete === false) {
+          // 🌟 받는 도중 다른 카테고리로 옮겨 가 중간까지만 저장된 목록: 받은 만큼 먼저 보여주고,
+          //    서버에 그 상품 id 들을 알려 "아직 못 받은 나머지" 만 이어서 받습니다.
+          receivedRows.push(...cached.items);
+          cached.items.forEach(row => seenIds.add(row.id));
+          setItems([...cached.items]);
+          setDisplayItems([...cached.items]);
+          params.append('known', cached.items.map(row => row.id).join(','));
+          queryString = params.toString();
+        } else if (cached) {
+          if (loadingTimerRef.current) {
+            clearTimeout(loadingTimerRef.current);
+            loadingTimerRef.current = null;
+          }
+          setItems([...cached.items]);
+          setDisplayItems([...cached.items]);
+          setIsItemLoading(false);
+          return;
+        }
       }
   
       setIsStreaming(true);
@@ -247,9 +274,13 @@ function YahooAuctionContent() {
               const result = JSON.parse(line);
               
               if (result.success && result.data) {
-                received += result.data.length;
-                setItems(prev => [...prev, ...result.data]);
-                setDisplayItems(prev => [...prev, ...result.data]);
+                const fresh: YahooAuctionItem[] = result.data.filter((row: YahooAuctionItem) => !seenIds.has(row.id));
+                fresh.forEach(row => seenIds.add(row.id));
+                if (fresh.length === 0) continue;
+                received += fresh.length;
+                receivedRows.push(...fresh);
+                setItems(prev => [...prev, ...fresh]);
+                setDisplayItems(prev => [...prev, ...fresh]);
               } else if (result.success === false && result.error) {
                 failMessage = result.error;
               }
@@ -261,6 +292,9 @@ function YahooAuctionContent() {
       } catch (err: any) {
         if (err.name === 'AbortError') {
           console.log("🤫 이전 요청은 조용히 사라집니다...");
+          // 🌟 다른 카테고리로 옮겨 가며 중단됐다면 지금까지 받은 만큼을 "미완성" 으로 저장해 두었다가,
+          //    다시 돌아왔을 때 나머지만 이어서 받습니다.
+          if (cacheKey && receivedRows.length > 0) writeCategoryListCache(cacheKey, receivedRows, undefined, { complete: false });
           return;
         }
         console.error("❌ 실제 통신 에러:", err);
@@ -279,7 +313,12 @@ function YahooAuctionContent() {
           console.log("🏁 최신 수집 작업 완료!");
 
           // 🐛 예전엔 서버가 0개로 끝나도 아무 말 없이 빈 화면이었습니다.
-          if (received === 0 && failMessage) showAlert(failMessage, 'error');
+          if (received === 0 && receivedRows.length === 0 && failMessage) showAlert(failMessage, 'error');
+
+          // 🌟 끝까지 정상 수신한 순수 카테고리 조회만 캐시에 저장합니다 (중단·실패·0개는 저장 안 함)
+          if (cacheKey && !controller.signal.aborted && !failMessage && receivedRows.length > 0) {
+            writeCategoryListCache(cacheKey, receivedRows);
+          }
         }
       }
     };
@@ -327,8 +366,19 @@ function YahooAuctionContent() {
   // 계속 append하다가 똑같은 상품이 두 번씩 쌓여 "동일 key" 에러가 났습니다. 이전 요청을
   // AbortController로 취소하고, 취소된 인스턴스는 상태 갱신도 멈추게 합니다.
   useEffect(() => {
+    // 🌟 10분 안에 다시 들어오면(카테고리·상세·다른 페이지 갔다 오기, 새로고침) 수십 초 걸리는
+    //    크롤링을 다시 하지 않고 세션 캐시에서 바로 보여줍니다. (components/popularCache.ts)
+    const cached = readPopularCache('yahoo_auction');
+    if (cached) {
+      setPopularProducts(cached);
+      setIsPopularLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
     let ignore = false;
+    // 스트림이 끝까지 정상 완료됐을 때만 캐시에 저장하기 위한 누적분 (중단되면 저장하지 않습니다)
+    const received: GlobalProduct[] = [];
 
     const mapRow = (row: any): GlobalProduct => ({
       id: row.id,
@@ -377,7 +427,9 @@ function YahooAuctionContent() {
                 // 🌟 [버그 수정] 여기서 로딩 상태를 꺼버리면 첫 청크가 도착하는 순간 영영 꺼진
                 // 채로 남아, 뒤이은 카테고리 단계들의 하단 로딩 바가 다시는 뜨지 않았습니다.
                 // 전체 스트림이 끝날 때(finally)만 꺼지도록 합니다.
-                setPopularProducts(prev => [...prev, ...result.data.map(mapRow)]);
+                const rows: GlobalProduct[] = result.data.map(mapRow);
+                received.push(...rows);
+                setPopularProducts(prev => [...prev, ...rows]);
               }
             } catch (e) {
               console.error("인기 상품 JSON 파싱 에러:", e);
@@ -387,7 +439,11 @@ function YahooAuctionContent() {
       } catch (e: any) {
         if (e?.name !== 'AbortError') console.error('인기 상품 로드 실패', e);
       } finally {
-        if (!ignore) setIsPopularLoading(false);
+        if (!ignore) {
+          setIsPopularLoading(false);
+          // 끝까지 받은 결과만 캐시합니다 (StrictMode 첫 인스턴스나 이탈로 중단된 경우는 ignore=true 라 제외)
+          writePopularCache('yahoo_auction', received);
+        }
       }
     };
     fetchPopular();
@@ -403,6 +459,9 @@ function YahooAuctionContent() {
     if(id.toString() === genreId.toString())
         return;
       
+    // 🌟 목록을 받는 도중 다른 카테고리(홈 포함)로 옮기면 요청을 끊어, 받은 만큼만 미완성 캐시로 남기고
+    //    이전 카테고리 상품이 새 화면에 계속 덧붙는 것도 막습니다
+    abortControllerRef.current?.abort();
     setIsLeaf(false);
     setItems([]); 
     setProductDetail(null);

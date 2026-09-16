@@ -26,6 +26,9 @@ export interface SearchStreamOptions<TItem> {
   isValidItem: (item: TItem) => boolean;
   /** 아이템 고유 id 추출 (중복 전송 방지용) */
   getItemId: (item: TItem) => string;
+  /** (선택) 프론트가 이미 갖고 있는 상품 id. 이 상품들은 다시 보내지 않고 나머지만 이어서 보냅니다.
+   *  (받는 도중 다른 카테고리로 옮겨 가 중간까지만 캐시된 목록을 이어받을 때 사용) */
+  knownIds?: Set<string>;
   /** (선택) 검색 API 응답을 직접 가로채 더 빨리 데이터를 낚아채는 플랫폼용 */
   apiListener?: {
     matchesUrl: (url: string) => boolean;
@@ -46,6 +49,7 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
     targetUrl, signal, startTime, cache,
     domReadySelector, extractItems, extractItemsAndCheckEnd,
     isValidItem, getItemId, apiListener,
+    knownIds = new Set<string>(),
     maxAttempts = DEFAULT_MAX_ATTEMPTS,
     maxItems = DEFAULT_MAX_ITEMS,
     minWaitCount = DEFAULT_MIN_WAIT_COUNT,
@@ -59,21 +63,29 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
     async start(controller) {
       const state = { apiDataCaptured: false, isStreamClosed: false };
       const sentItems = new Set<string>();
+      // 🌟 이번 크롤링에서 마주친 모든 상품 id (프론트가 이미 가진 것 포함). 이어받기 때 "진행 중인지" 판단용
+      const seenIds = new Set<string>();
       // 🚀 이번 검색에서 실제로 전송한 아이템을 모아뒀다가, 스크래핑이 끝나면 캐시에 저장해
       // 다음 번 같은 검색은 재스크래핑 없이 즉시 응답할 수 있게 합니다.
       const collectedItems: TItem[] = [];
       let page: any = null;
 
-      const processAndSend = async (rawItems: TItem[]): Promise<number> => {
+      const processAndSend = async (rawItems: TItem[]): Promise<{ sent: number; encountered: number }> => {
         // 🌟 [버그 수정] 아래 apiListener 핸들러는 `await response.json()`으로 넘어가기 전에만
         // isStreamClosed를 확인합니다. 그 await 도중에 메인 흐름(특히 maxAttempts:0처럼 아주
         // 빨리 끝나는 경우)이 먼저 끝나 controller.close()를 호출해버리면, json 디코딩이 끝난
         // 뒤 여기로 들어와 이미 닫힌 controller에 enqueue를 시도해 "Controller is already
         // closed" 에러로 죽었습니다. 매 시점마다 다시 확인해 조용히 무시합니다.
-        if (state.isStreamClosed) return 0;
+        if (state.isStreamClosed) return { sent: 0, encountered: 0 };
 
-        const filtered = rawItems.filter(item => isValidItem(item) && !sentItems.has(getItemId(item)));
-        if (filtered.length === 0) return 0;
+        const valid = rawItems.filter(isValidItem);
+        let encountered = 0;
+        for (const item of valid) {
+          const id = getItemId(item);
+          if (!seenIds.has(id)) { seenIds.add(id); encountered++; }
+        }
+        const filtered = valid.filter(item => !sentItems.has(getItemId(item)) && !knownIds.has(getItemId(item)));
+        if (filtered.length === 0) return { sent: 0, encountered };
 
         for (let i = 0; i < filtered.length; i += chunkSize) {
           if (state.isStreamClosed) break;
@@ -92,7 +104,7 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
           }
           await new Promise(r => setTimeout(r, 10)); // 렌더링 틈 주기
         }
-        return filtered.length;
+        return { sent: filtered.length, encountered };
       };
 
       const abortHandler = async () => {
@@ -115,7 +127,7 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
               const json = await response.json().catch(() => ({}));
               const mapped = apiListener.mapResponseItems(json);
               if (mapped.length > 0) {
-                const sentCount = await processAndSend(mapped);
+                const { sent: sentCount } = await processAndSend(mapped);
                 if (sentCount > 0) {
                   state.apiDataCaptured = true;
                   console.log(`✅ [API 낚시 성공] ${sentCount}개 전송`);
@@ -159,7 +171,7 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
 
         // 🚀 대기가 끝나면 (누가 이겼든 상관없이) 화면에 있는 걸 싹 긁어 프론트로 보냅니다.
         const firstScreenItems = await extractItems(page, 150);
-        const capturedFirstCount = await processAndSend(firstScreenItems);
+        const { sent: capturedFirstCount } = await processAndSend(firstScreenItems);
 
         const elapsedTime = ((performance.now() - startTime) / 1000).toFixed(2);
         console.log(`📡 [초기 수집] ${capturedFirstCount}개 확보 완료! (소요시간: ${elapsedTime}초)`);
@@ -168,7 +180,8 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
         let attempt = 0;
         let consecutiveEmpty = 0;
 
-        while (attempt < maxAttempts && sentItems.size < maxItems && !state.isStreamClosed && !signal.aborted) {
+        // 🌟 상한은 "마주친 상품 수" 기준 (이어받기 땐 프론트가 이미 가진 것도 포함되므로 예전과 같은 총량에서 멈춥니다)
+        while (attempt < maxAttempts && seenIds.size < maxItems && !state.isStreamClosed && !signal.aborted) {
           attempt++;
 
           try {
@@ -188,12 +201,17 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
             }
 
             const { items: currentItems, isEndOfPage } = await extractItemsAndCheckEnd(page, 150);
-            const addedCount = await processAndSend(currentItems);
+            const { sent: addedCount, encountered } = await processAndSend(currentItems);
 
-            if (addedCount > 0) {
+            // 🐛 이어받기 중엔 "프론트가 이미 가진 상품" 구간을 지나는 동안 전송량이 0이라, 전송량으로만 보면
+            //    "연속 데이터 없음" 으로 오판해 새 상품에 닿기 전에 멈췄습니다.
+            //    → 새로 마주친 상품(이미 가진 것 포함) 기준으로 진행 여부를 판단합니다.
+            if (encountered > 0) {
               consecutiveEmpty = 0;
-              const elapsedTime3 = ((performance.now() - startTime) / 1000).toFixed(2);
-              console.log(`✨ [${attempt}회차] ${addedCount}개 추가 (총: ${sentItems.size}개) (소요시간: ${elapsedTime3}초)`);
+              if (addedCount > 0) {
+                const elapsedTime3 = ((performance.now() - startTime) / 1000).toFixed(2);
+                console.log(`✨ [${attempt}회차] ${addedCount}개 추가 (총: ${sentItems.size}개) (소요시간: ${elapsedTime3}초)`);
+              }
             } else {
               if (isEndOfPage) {
                 console.log("🏁 [종료 신호 포착] 광고 섹션 또는 '다음' 버튼에 도달했습니다. 루프를 종료합니다!");
@@ -222,14 +240,15 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
       } finally {
         signal.removeEventListener('abort', abortHandler);
         // 🚀 중간에 취소(abort)되지 않았다면 이번 결과를 캐시에 저장합니다.
-        if (!signal.aborted && collectedItems.length > 0) {
+        //    (이어받기는 일부만 모은 것이므로 서버 캐시에는 넣지 않습니다)
+        if (!signal.aborted && collectedItems.length > 0 && knownIds.size === 0) {
           cache.set(targetUrl, collectedItems);
         }
         if (!state.isStreamClosed) {
           // 🌟 끝났다는 신호를 보냅니다. 재시도까지 했는데도 0개면 실패로 알려서 화면이
           //    "조용한 빈 목록" 대신 안내 문구를 띄울 수 있게 합니다. (모르는 줄은 기존 클라이언트가 무시)
           try {
-            if (collectedItems.length === 0 && !signal.aborted) {
+            if (collectedItems.length === 0 && !signal.aborted && knownIds.size === 0) {
               controller.enqueue(encoder.encode(JSON.stringify({ success: false, error: '상품을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.' }) + '\n'));
             }
             controller.enqueue(encoder.encode(JSON.stringify({ done: true, total: collectedItems.length }) + '\n'));
@@ -241,6 +260,12 @@ export function createSearchStream<TItem>(options: SearchStreamOptions<TItem>): 
       }
     }
   });
+}
+
+/** 프론트가 보낸 `known=id1,id2,…` (이미 갖고 있는 상품) 을 Set 으로 읽습니다. */
+export function parseKnownIds(searchParams: URLSearchParams, max = 1000): Set<string> {
+  const raw = searchParams.get('known') || '';
+  return new Set(raw.split(',').map(s => s.trim()).filter(Boolean).slice(0, max));
 }
 
 // 🚀 캐시 적중 시 Puppeteer 없이 즉시 청크로 흘려보내는 스트림

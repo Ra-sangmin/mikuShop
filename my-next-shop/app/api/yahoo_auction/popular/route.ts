@@ -94,6 +94,9 @@ const CHUNK_SIZE = 5;
 // 10개 × 페이지당 수 초) 체감 속도가 매우 느렸습니다. 동시에 몇 개씩 병렬로 열어 전체 대기
 // 시간을 줄이고, 각 카테고리가 끝나는 대로 결과를 청크로 바로바로 흘려보냅니다.
 const CATEGORY_CONCURRENCY = 3;
+// 🌟 채우기 단계: 클릭 기록이 적으면 카테고리 몇 개 × 20개로 끝나 섹션이 휑해서, 루트 카테고리를
+//    돌며 100개까지 채웁니다. 이때는 카테고리당 더 많이(첫 화면 50개 중 40개) 가져옵니다.
+const FILL_PER_CATEGORY = 40;
 
 export async function GET() {
   const cached = popularCache.get(CACHE_KEY);
@@ -126,7 +129,8 @@ export async function GET() {
         }
       };
 
-      const fetchCategory = async (categoryId: number) => {
+      // limit: 카테고리 한 개에서 가져올 최대 개수 (기본 단계 20개, 채우기 단계 FILL_PER_CATEGORY)
+      const fetchCategory = async (categoryId: number, limit: number = PER_CATEGORY_LIMIT) => {
         if (isClosed || collected.length >= MAX_ITEMS) return;
 
         let page: any = null;
@@ -140,7 +144,7 @@ export async function GET() {
           await page.waitForSelector('.Products--grid .Product', { timeout: 5000 }).catch(() => {});
           if (isClosed) return;
 
-          const items = await extractItems(page, PER_CATEGORY_LIMIT);
+          const items = await extractItems(page, limit);
           const valid: PopularItem[] = [];
           for (const item of items) {
             if (collected.length + valid.length >= MAX_ITEMS) break;
@@ -169,7 +173,25 @@ export async function GET() {
         for (let i = 0; i < sourceCategories.length && !isClosed; i += CATEGORY_CONCURRENCY) {
           if (collected.length >= MAX_ITEMS) break;
           const batch = sourceCategories.slice(i, i + CATEGORY_CONCURRENCY);
-          await Promise.all(batch.map(fetchCategory));
+          // (map(fetchCategory) 로 넘기면 배열 index 가 limit 자리에 들어가므로 명시적으로 호출합니다)
+          await Promise.all(batch.map(id => fetchCategory(id)));
+        }
+
+        // 🌟 채우기 — 클릭 기록이 적으면 카테고리 몇 개 × 20개로 끝나 섹션이 휑합니다.
+        //    남은 자리는 (아직 안 돈) 루트 카테고리를 돌며 카테고리당 FILL_PER_CATEGORY 개씩
+        //    100개까지 채웁니다. 결과는 5분 캐시라 첫 방문자만 기다립니다.
+        if (!isClosed && collected.length < MAX_ITEMS) {
+          const roots = await prisma.yahooAuctionCategory.findMany({
+            where: { parentId: 0 },
+            orderBy: { genreId: 'asc' },
+            select: { genreId: true },
+          });
+          const fillOrder = roots.map(r => r.genreId).filter(id => !sourceCategories.includes(id));
+          for (let i = 0; i < fillOrder.length && !isClosed && collected.length < MAX_ITEMS; i += CATEGORY_CONCURRENCY) {
+            await Promise.all(
+              fillOrder.slice(i, i + CATEGORY_CONCURRENCY).map(id => fetchCategory(id, FILL_PER_CATEGORY))
+            );
+          }
         }
       } catch (error) {
         console.error('yahoo_auction popular stream error:', error);
