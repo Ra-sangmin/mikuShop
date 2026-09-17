@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import * as cheerio from 'cheerio';
 import iconv from 'iconv-lite';
 import { requireAdmin, requireUser } from '@/lib/apiAuth';
+import { ORDER_STATUS } from '@/src/types/order';
 
 // 🟢 [GET] 1. 주문 목록 및 유저 정보 조회
 export async function GET() {
@@ -240,6 +241,16 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: '본인 주문만 변경할 수 있습니다.' }, { status: 403 });
     }
 
+    // 입고·발송 시각을 이미 찍어 둔 주문은 건드리지 않기 위해 변경 전 값을 읽어 둡니다.
+    const previousOrders = new Map<string, { receivedAt: Date | null; shippedAt: Date | null }>();
+    if (type !== 'delivery') {
+      const before = await prisma.order.findMany({
+        where: { orderId: { in: orderIds } },
+        select: { orderId: true, receivedAt: true, shippedAt: true },
+      });
+      before.forEach(o => previousOrders.set(o.orderId, { receivedAt: o.receivedAt, shippedAt: o.shippedAt }));
+    }
+
     // ✅ 안전한 인터랙티브 트랜잭션 (모두 성공하거나 자동 롤백)
     await prisma.$transaction(async (tx) => {
       
@@ -281,9 +292,13 @@ export async function PUT(request: Request) {
           updateData.deliveryStatus = order.status;
         } else {
           updateData.status = order.status;
-          
-          if (order.status === '입고완료') updateData.receivedAt = new Date();
-          if (order.status === '국제배송') updateData.shippedAt = new Date();
+
+          // 🐛 관리자 라우트와 같은 문제였습니다 — 한글 라벨과 비교해 조건이 참이 되지 않았습니다.
+          //    (회원이 직접 이 두 상태로 바꾸는 경로는 없지만, 두 라우트의 규칙을 같게 둡니다)
+          //    이미 찍혀 있으면 덮어쓰지 않습니다.
+          const previous = previousOrders.get(order.id);
+          if (order.status === ORDER_STATUS.ARRIVED && !previous?.receivedAt) updateData.receivedAt = new Date();
+          if (order.status === ORDER_STATUS.SHIPPING && !previous?.shippedAt) updateData.shippedAt = new Date();
         }
 
         if (order.secondPaymentAmount !== undefined) updateData.secondPaymentAmount = order.secondPaymentAmount;

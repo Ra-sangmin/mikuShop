@@ -763,6 +763,14 @@ function MyPurchaseStatusContent() {
 
   // 🌟 "국제 배송 현황" 패널: 국제 배송(SHIPPING) 상태 주문을 합포장 묶음 기준으로 정리하고,
   // 각 배송의 물류 단계(deliveryStatus)를 함께 보여줍니다.
+  // 🚚 운송장 번호를 누르면 그 주문에 저장된 배송 업체(Order.shippingCarrierId)의 사이트를 새 창으로 엽니다.
+  //    업체 이름·주소는 /api/users 가 shippingCarrier 로 함께 내려줍니다.
+  const openCarrierSite = (shipment: any) => {
+    const url = shipment?.shippingCarrier?.url;
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const internationalShipments = useMemo(() => {
     const shippingOrders = orders.filter((o: any) => o.status === ORDER_STATUS.SHIPPING);
     const seenBundles = new Set<string>();
@@ -1054,7 +1062,7 @@ function MyPurchaseStatusContent() {
               <tr>
                 <th className="th-cell th-product">상품명</th>
                 <th className="th-cell th-recipient">주소</th>
-                <th className="th-cell th-tracking">운송장 번호</th>
+                <th className="th-cell th-tracking">배송 조회</th>
               </tr>
             </thead>
             <tbody>
@@ -1084,10 +1092,34 @@ function MyPurchaseStatusContent() {
                         <span className="recipient-address">({getLastRoadAddressPart(shipment.address.address)})</span>
                       )}
                     </td>
+                    {/* 🚚 배송 조회: 배송업체(Order.shippingCarrierId → /api/users 의 shippingCarrier) + 운송장 번호를 한 카드로.
+                        누르면 배송업체 조회 사이트를 새 창으로 엽니다. */}
                     <td className="td-cell td-shipment-tracking">
-                      <button type="button" className="btn-shipment-inquiry" onClick={(e) => e.stopPropagation()}>
-                        {shipment.trackingNo || '준비중'}
-                      </button>
+                      {(() => {
+                        const carrierName = shipment.shippingCarrier?.name;
+                        const canOpen = !!shipment.shippingCarrier?.url;
+                        const isReady = !!(carrierName || shipment.trackingNo);
+                        return (
+                          <button
+                            type="button"
+                            className={`ship-track ${isReady ? '' : 'is-pending'} ${canOpen ? 'is-link' : ''}`}
+                            onClick={(e) => { e.stopPropagation(); openCarrierSite(shipment); }}
+                            disabled={!canOpen}
+                            title={carrierName
+                              ? `${carrierName} 배송 조회 (새 창)`
+                              : '배송 업체가 아직 등록되지 않았습니다.'}
+                          >
+                            <span className="ship-track-icon" aria-hidden="true"><i className="fa fa-truck-fast"></i></span>
+                            <span className="ship-track-body">
+                              <span className="ship-track-carrier">{carrierName || '배송업체 준비중'}</span>
+                              <span className="ship-track-no">{shipment.trackingNo || '운송장 준비중'}</span>
+                            </span>
+                            {canOpen && (
+                              <span className="ship-track-go" aria-hidden="true"><i className="fa fa-arrow-up-right-from-square"></i></span>
+                            )}
+                          </button>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))
@@ -1216,15 +1248,68 @@ function MyPurchaseStatusContent() {
         .miku-shipment-panel .th-recipient,
         .miku-shipment-panel .td-shipment-recipient { width: 100px; text-align: center; padding-right: 4px !important; }
         .miku-shipment-panel .th-tracking,
-        .miku-shipment-panel .td-shipment-tracking { width: 90px; text-align: center; padding-left: 4px !important; }
-        /* 🌟 운송장 번호 자체를 버튼화해서 클릭 시 배송 조회가 가능하도록 합니다. */
-        .btn-shipment-inquiry {
-          padding: 7px 14px; border-radius: 8px; border: 1px solid #cbd5e1;
-          background: #f8fafc; color: #334155; font-size: 12px; font-weight: 700;
-          cursor: pointer; white-space: nowrap; transition: all 0.2s var(--smooth-easing);
-          text-align: center;
+        .miku-shipment-panel .td-shipment-tracking { width: 236px; text-align: center; padding-left: 6px !important; padding-right: 12px !important; }
+        /* 🌟 배송 조회 카드: 배송업체 + 운송장 번호를 한 버튼으로 (누르면 업체 조회 사이트) */
+        .ship-track {
+          position: relative; overflow: hidden;
+          display: inline-flex; align-items: center; gap: 10px;
+          width: 100%; max-width: 224px; box-sizing: border-box;
+          padding: 8px 10px 8px 8px; border-radius: 14px;
+          background: linear-gradient(135deg, #ffffff 0%, #fbfbfd 100%);
+          border: 1px solid #e6e9ef;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 18px -14px rgba(15, 23, 42, 0.35);
+          text-align: left; font-family: inherit; cursor: default;
+          transition: transform 0.25s var(--smooth-easing), box-shadow 0.25s ease, border-color 0.25s ease;
         }
-        .btn-shipment-inquiry:hover { background: #f1f5f9; border-color: #94a3b8; color: #0f172a; }
+        .ship-track::before {
+          content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+          background: linear-gradient(180deg, #fb923c 0%, #ea580c 100%);
+        }
+        .ship-track.is-link { cursor: pointer; }
+        .ship-track.is-link:hover {
+          transform: translateY(-2px); border-color: #fdba74;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 14px 26px -16px rgba(234, 88, 12, 0.55);
+        }
+        .ship-track-icon {
+          width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center;
+          margin-left: 4px;
+          color: #ffffff; font-size: 13px;
+          background: linear-gradient(135deg, #fb923c 0%, #c2410c 100%);
+          box-shadow: 0 6px 12px -6px rgba(194, 65, 12, 0.7), inset 0 1px 0 rgba(255,255,255,0.3);
+        }
+        .ship-track-body { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
+        .ship-track-carrier {
+          font-size: 11px; font-weight: 800; color: #9a3412; letter-spacing: -0.1px;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .ship-track-no {
+          font-size: 13px; font-weight: 800; color: #0f172a; letter-spacing: 0.02em;
+          font-variant-numeric: tabular-nums;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .ship-track-go {
+          width: 24px; height: 24px; border-radius: 8px; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center;
+          background: #fff7ed; color: #c2410c; font-size: 10px;
+          transition: transform 0.2s ease, background 0.2s ease;
+        }
+        .ship-track.is-link:hover .ship-track-go { background: #ffedd5; transform: translate(1px, -1px); }
+        /* 🌟 업체·운송장이 아직 없는 주문: 회색 톤 */
+        .ship-track.is-pending { background: #f8fafc; box-shadow: none; }
+        .ship-track.is-pending::before { background: #e2e8f0; }
+        .ship-track.is-pending .ship-track-icon { background: #e2e8f0; color: #94a3b8; box-shadow: none; }
+        .ship-track.is-pending .ship-track-carrier,
+        .ship-track.is-pending .ship-track-no { color: #94a3b8; }
+        .ship-track:disabled { opacity: 1; }
+        /* 🌟 사이드바가 있는 중간 폭(769~1100px): 상품명이 너무 좁아지지 않도록 조회 카드를 압축 */
+        @media (min-width: 769px) and (max-width: 1100px) {
+          .miku-shipment-panel .th-tracking,
+          .miku-shipment-panel .td-shipment-tracking { width: 140px; padding-right: 8px !important; }
+          .ship-track { gap: 6px; padding: 7px 8px 7px 9px; }
+          .ship-track-icon, .ship-track-go { display: none; }
+          .ship-track-no { font-size: 12px; letter-spacing: 0; }
+        }
 
         /* 🌟 "전체 진행 현황" 하위의 파이프라인/테이블/결제요약을 하나의 패널처럼 감싸는 배경 */
         .miku-progress-panel {
@@ -1599,9 +1684,15 @@ function MyPurchaseStatusContent() {
           .miku-shipment-panel .th-recipient,
           .miku-shipment-panel .td-shipment-recipient { width: 74px !important; padding-right: 2px !important; font-size: 11px !important; }
           .miku-shipment-panel .th-tracking,
-          .miku-shipment-panel .td-shipment-tracking { width: 64px !important; padding-left: 2px !important; }
+          .miku-shipment-panel .td-shipment-tracking { width: 108px !important; padding-left: 2px !important; padding-right: 4px !important; }
+          .ship-track { gap: 6px; padding: 6px 6px 6px 7px; border-radius: 11px; }
+          .ship-track-icon { display: none; }
+          .ship-track-go { display: none; }
+          .ship-track-carrier { font-size: 10px; }
+          /* 모바일: 운송장 번호는 잘리지 않도록 줄바꿈해서 전부 보여줍니다 */
+          .ship-track-no { font-size: 11px; letter-spacing: 0; line-height: 1.3; white-space: normal; word-break: break-all; overflow: visible; }
+          .ship-track-carrier { white-space: normal; word-break: keep-all; line-height: 1.3; }
           .miku-shipment-panel .recipient-address { font-size: 10px; }
-          .miku-shipment-panel .btn-shipment-inquiry { padding: 5px 6px !important; font-size: 10px !important; }
 
           .miku-action-required-container { padding: 10px; border-radius: 12px; margin-bottom: 16px; width: 100%; box-sizing: border-box; overflow: hidden; }
           .container-header { margin-bottom: 10px; }

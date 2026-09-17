@@ -131,6 +131,10 @@ model Order {
   orderId             String         @unique @map("order_id")
   productId           String?        @map("product_id")
   trackingNo          String?        @map("tracking_no")
+  // 🚚 국제배송으로 넘길 때 관리자가 고른 배송 업체 (shipping_carriers.id)
+  //    업체 이름·주소가 바뀌어도 주문은 id 로만 가리키므로 따라갑니다.
+  shippingCarrierId   Int?           @map("shipping_carrier_id")
+  shippingCarrier     ShippingCarrier? @relation(fields: [shippingCarrierId], references: [id])
 
   // 4. 상품 상세 정보
   productImageUrl     String?        @db.Text @map("product_image_url")
@@ -165,6 +169,25 @@ model Order {
   bidStatus           BidStatus?     @default(PENDING) @map("bid_status") 
 
   @@map("orders")
+}
+
+// 🔔 주문 알림 발송 이력
+// - 같은 주문의 같은 상태로 두 번 보내지 않기 위한 중복 차단용으로 씁니다.
+//   (관리자가 상태를 되돌렸다가 다시 바꾸는 경우가 실제로 자주 있습니다)
+// - 나중에 알림톡을 붙일 때 채널별 발송량·실패율 집계에도 그대로 쓸 수 있습니다.
+model NotificationLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  orderId   String?  @map("order_id")  // orders.order_id (주문번호 문자열)
+  status    String                     // 발송을 유발한 주문 상태 (OrderStatus 값)
+  channel   String   @default("EMAIL") // EMAIL | ALIMTALK | SMS …
+  success   Boolean  @default(true)
+  error     String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([orderId, status])
+  @@index([userId, status, createdAt])
+  @@map("notification_logs")
 }
 
 enum FeeType {
@@ -259,38 +282,76 @@ model OrderFeeRule {
   @@map("order_fee_rules")
 }
 
+// 🚚 국제 배송 업체 (관리자 > 국제 배송 업체 정보 관리에서 추가·수정)
+// 배송 조회 링크를 안내에 걸기 위한 목록입니다. 업체가 늘거나 주소가 바뀌어도 코드 수정 없이 관리자가 바꿉니다.
+model ShippingCarrier {
+  id        Int      @id @default(autoincrement())
+  name      String                                   // 업체 이름 (예: EMS, 우체국 해운)
+  url       String   @db.Text                        // 업체 홈페이지 또는 배송 조회 주소
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  orders    Order[]                                  // 이 업체로 발송한 주문들 (Order.shippingCarrierId 역참조)
+
+  @@map("shipping_carriers")
+}
+
 model MercariCategory {
   id          Int      @id @default(autoincrement())  // 메루카리 고유 ID
   genreId     Int      @unique                        // 메루카리 카테고리 ID
-  genreName   String                                  // 카테고리 이름
+  // 🌟 이름은 Translation 한 곳에만 둡니다: 원문(일본어)은 translation.jp, 한국어는 translation.ko.
+  //    번역을 못 받은 경우에도 ko=jp 인 행을 만들어 참조를 보장합니다 (lib/mercariCategories.ts).
+  translationId Int?
+  translation   Translation? @relation(fields: [translationId], references: [id])
   genreLevel  Int?     @default(1)                    // 1:대분류, 2:중분류, 3:소분류...
-  parentId    Int                                     // 부모 카테고리 ID
+  parentId    Int                                     // 부모 카테고리 ID (루트는 0)
   isLeaf      Boolean  @default(false)                // 💡 최하위 카테고리 여부 저장 (기본값 false)
+  // 🌟 이 카테고리의 "자식 목록"을 메루카리에서 마지막으로 받아온 시각. null 이면 아직 한 번도 안 받아온 것.
+  //    사용자 요청은 DB 를 먼저 쓰고, 비어 있으면 그 자리에서 한 번, 오래됐으면 응답 후 백그라운드로 갱신합니다.
+  //    (lib/mercariCategories.ts)
+  childrenSyncedAt DateTime?
   updatedAt   DateTime @updatedAt                     // 데이터 갱신일 (자동)
 
   @@map("MercariCategory")
 }
 
 model RakutenCategory {
-  id          Int      @id @default(autoincrement())  // 메루카리 고유 ID
-  genreId     Int      @unique                        // 메루카리 카테고리 ID
-  genreName   String                                  // 카테고리 이름
+  id          Int      @id @default(autoincrement())  // 내부 고유 ID
+  genreId     Int      @unique                        // 라쿠텐 장르 ID (라쿠텐 쪽에서 안정적으로 유지됨)
+  // 🌟 이름은 Translation 한 곳에만 둡니다: 원문(일본어)은 translation.jp, 한국어는 translation.ko.
+  //    같은 일본어 원문은 플랫폼을 가리지 않고 번역 한 번만 하고 재사용합니다. 번역을 못 받은 경우에도
+  //    ko=jp 인 행을 만들어 참조를 보장합니다 (lib/rakutenGenres.ts · lib/categoryTranslation.ts).
+  //    FK 가 ON DELETE SET NULL 이라 컬럼은 nullable 이지만, 코드는 항상 값을 넣습니다.
+  translationId Int?
+  translation   Translation? @relation(fields: [translationId], references: [id])
   genreLevel  Int?     @default(1)                    // 1:대분류, 2:중분류, 3:소분류...
-  parentId    Int                                     // 부모 카테고리 ID
-  isLeaf      Boolean  @default(false)                // 💡 최하위 카테고리 여부 저장 (기본값 false)
+  parentId    Int                                     // 부모 카테고리 ID (루트는 0)
+  isLeaf      Boolean  @default(false)                // 최하위 카테고리 여부 (자식을 조회해 0개일 때 true)
+  // 🌟 이 장르의 "자식 목록"을 라쿠텐에서 마지막으로 받아온 시각. null 이면 아직 한 번도 안 받아온 것.
+  //    사용자 요청은 DB 를 먼저 쓰고, 이 값이 오래됐으면 응답 후 백그라운드로 갱신합니다. (lib/rakutenGenres.ts)
+  childrenSyncedAt DateTime?
+  // 🌟 라쿠텐에서 사라진 장르. 주문·인기 집계가 참조할 수 있어 지우지 않고 숨깁니다.
+  isActive    Boolean  @default(true)
   updatedAt   DateTime @updatedAt                     // 데이터 갱신일 (자동)
 
+  @@index([parentId, isActive])
   @@map("RakutenCategory")
 }
 
 model YahooAuctionCategory {
   id         Int      @id @default(autoincrement())
   genreId    Int      @unique
-  listId     Int?     @default(0) 
-  genreName  String
-  genreLevel Int?     @default(1) 
-  parentId   Int
+  listId     Int?     @default(0)
+  // 🌟 이름은 Translation 한 곳에만 둡니다: 원문(일본어)은 translation.jp, 한국어는 translation.ko.
+  //    번역을 못 받은 경우에도 ko=jp 인 행을 만들어 참조를 보장합니다 (lib/yahooAuctionCategories.ts).
+  translationId Int?
+  translation   Translation? @relation(fields: [translationId], references: [id])
+  genreLevel Int?     @default(1)
+  parentId   Int                                      // 부모 카테고리 ID (루트는 0)
   isLeaf     Boolean  @default(false)
+  // 🌟 이 카테고리의 "자식 목록"을 야후옥션에서 마지막으로 받아온 시각. null 이면 아직 한 번도 안 받아온 것.
+  //    (lib/yahooAuctionCategories.ts — 라쿠텐 childrenSyncedAt 과 같은 역할)
+  childrenSyncedAt DateTime?
   updatedAt  DateTime @updatedAt
 
   @@map("YahooAuctionCategory")
@@ -299,10 +360,17 @@ model YahooAuctionCategory {
 model YahooShoppingCategory {
   id         Int      @id @default(autoincrement())
   genreId    Int      @unique
-  genreName  String
-  genreLevel Int?     @default(1) 
-  parentId   Int
+  // 🌟 이름은 Translation 한 곳에만 둡니다: 원문(일본어)은 translation.jp, 한국어는 translation.ko.
+  //    번역을 못 받은 경우에도 ko=jp 인 행을 만들어 참조를 보장합니다 (lib/yahooShoppingCategories.ts).
+  translationId Int?
+  translation   Translation? @relation(fields: [translationId], references: [id])
+  genreLevel Int?     @default(1)
+  parentId   Int                                      // 부모 카테고리 ID (최상위는 1 = 야후 "Shopping" 루트)
   isLeaf     Boolean  @default(false)
+  // 🌟 이 카테고리의 "자식 목록"을 야후에서 마지막으로 받아온 시각. null 이면 아직 한 번도 안 받아온 것.
+  //    사용자 요청은 DB 를 먼저 쓰고, 비어 있으면 그 자리에서 한 번, 오래됐으면 응답 후 백그라운드로 갱신합니다.
+  //    (lib/yahooShoppingCategories.ts — 라쿠텐 childrenSyncedAt 과 같은 역할)
+  childrenSyncedAt DateTime?
   updatedAt  DateTime @updatedAt
 
   @@map("YahooShoppingCategory")
@@ -401,6 +469,12 @@ model Translation {
   ko        String   // 번역된 한국어
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // 🌟 이 번역을 이름으로 쓰는 각 플랫폼 카테고리들 (translationId 역참조)
+  rakutenCategories       RakutenCategory[]
+  mercariCategories       MercariCategory[]
+  yahooShoppingCategories YahooShoppingCategory[]
+  yahooAuctionCategories  YahooAuctionCategory[]
 
   @@index([jp]) // 검색 성능을 위한 인덱스 추가
 }

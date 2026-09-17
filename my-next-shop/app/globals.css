@@ -606,9 +606,91 @@ body {
   object-fit: contain;     
   flex-shrink: 0;          
   position: relative; 
-  z-index: 2; 
-  filter: drop-shadow(0 30px 40px rgba(15, 23, 42, 0.14)); 
+  z-index: 3; 
+  /* 🌟 흰 림라이트 + 배너 포인트색 그림자로 캐릭터를 배경에서 또렷하게 띄웁니다 */
+  filter:
+    drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.95))
+    drop-shadow(0 0 10px rgba(255, 255, 255, 0.7))
+    drop-shadow(0 26px 30px rgba(var(--hero-accent-rgb, 210, 115, 119), 0.28));
   animation: floatPremium 4s ease-in-out infinite; 
+}
+
+/* 🌟 캐릭터 스테이지 장식 ------------------------------------------------ */
+/* 회전하는 점선 궤도 + 궤도를 도는 포인트 점 */
+.hero-orbit {
+  width: 350px; height: 350px;
+  border: 1.5px dashed rgba(var(--hero-accent-rgb, 210, 115, 119), 0.32);
+  animation: heroOrbitSpin 26s linear infinite;
+}
+.hero-orbit-dot {
+  position: absolute; top: -6px; left: 50%; width: 11px; height: 11px; margin-left: -5.5px; border-radius: 50%;
+  background: var(--hero-accent, #d27377);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.9), 0 0 16px var(--hero-accent, #d27377);
+}
+@keyframes heroOrbitSpin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+/* 안쪽 유리 원판: 포인트색 테두리 광 */
+.hero-ring-inner {
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.5) 55%, rgba(255, 255, 255, 0) 72%),
+    radial-gradient(circle, rgba(var(--hero-accent-rgb, 210, 115, 119), 0.10) 0%, transparent 70%) !important;
+  box-shadow:
+    0 30px 60px -30px rgba(15, 23, 42, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.95),
+    0 0 0 8px rgba(var(--hero-accent-rgb, 210, 115, 119), 0.06) !important;
+}
+/* 받침대: 캐릭터 발밑의 타원 그림자 (캐릭터가 뜰 때 함께 옅어짐) */
+.hero-stage {
+  position: absolute; left: 50%; bottom: 14px; z-index: 2;
+  width: 220px; height: 30px; margin-left: -110px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(var(--hero-accent-rgb, 210, 115, 119), 0.34) 0%, transparent 100%);
+  filter: blur(2px);
+  animation: heroStageBreath 4s ease-in-out infinite;
+}
+@keyframes heroStageBreath { 0%, 100% { transform: scaleX(1); opacity: 0.85; } 50% { transform: scaleX(0.82); opacity: 0.5; } }
+/* 반짝임 */
+.hero-sparkle {
+  position: absolute; z-index: 4; line-height: 0;
+  color: var(--hero-accent, #d27377);
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.95));
+  animation: heroTwinkle 2.8s ease-in-out infinite;
+}
+.hero-sparkle.s1 { top: 14%; left: 8%; font-size: 22px; }
+.hero-sparkle.s2 { top: 30%; right: 4%; font-size: 14px; animation-delay: 0.9s; }
+.hero-sparkle.s3 { bottom: 22%; left: 2%; font-size: 12px; animation-delay: 1.7s; }
+@keyframes heroTwinkle { 0%, 100% { transform: scale(0.6) rotate(0deg); opacity: 0.25; } 50% { transform: scale(1.1) rotate(20deg); opacity: 1; } }
+/* 캐릭터 주변 유리 칩 */
+.hero-chip {
+  position: absolute; z-index: 4;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 13px 7px 7px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 26px -14px rgba(15, 23, 42, 0.35), inset 0 1px 0 #ffffff;
+  font-size: 12.5px; font-weight: 800; color: #1e293b; white-space: nowrap;
+  animation: heroChipFloat 5s ease-in-out infinite;
+}
+.hero-chip i {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-style: normal;
+  color: #ffffff;
+  background: linear-gradient(145deg, rgba(var(--hero-accent-rgb, 210, 115, 119), 0.72) 0%, var(--hero-accent, #d27377) 100%);
+  box-shadow: 0 4px 10px -4px var(--hero-accent, #d27377);
+}
+.hero-chip.c1 { top: 16%; left: -22%; }
+.hero-chip.c2 { top: 48%; right: -24%; animation-delay: 1.2s; }
+.hero-chip.c3 { bottom: 12%; left: -14%; animation-delay: 2.4s; }
+@keyframes heroChipFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+/* 화면이 좁아지면 칩이 배너 밖으로 잘리지 않도록 캐릭터 쪽으로 당깁니다 */
+@media (max-width: 1280px) {
+  .hero-chip.c1 { left: -14%; }
+  .hero-chip.c2 { right: -6%; top: 56%; }
+  .hero-chip.c3 { left: -8%; }
+}
+@media (max-width: 1024px) {
+  .hero-chip { font-size: 11.5px; padding: 6px 11px 6px 6px; }
+  .hero-chip i { width: 20px; height: 20px; font-size: 11px; }
+  .hero-chip.c2 { right: 2%; top: 60%; }
 }
 
 .align-container.banner-inner {
@@ -690,6 +772,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .premium-floating-img, .image-aura { animation: none; }
+  .hero-orbit, .hero-stage, .hero-sparkle, .hero-chip { animation: none; }
   .hero-progress-fill { animation: none; transform: translateY(-50%) scaleX(1); }
 }
 
@@ -1292,6 +1375,13 @@ body {
   .hero-cta-secondary { display: none; }
   .hero-ring-outer { width: 240px; height: 240px; }
   .hero-ring-inner { width: 180px; height: 180px; }
+  /* 좁은 화면: 칩은 숨기고 궤도·받침대·반짝임만 작게 */
+  .hero-chip { display: none; }
+  .hero-orbit { width: 210px; height: 210px; }
+  .hero-orbit-dot { width: 8px; height: 8px; margin-left: -4px; top: -4px; }
+  .hero-stage { width: 130px; height: 18px; margin-left: -65px; bottom: 6px; }
+  .hero-sparkle.s1 { font-size: 16px; }
+  .hero-sparkle.s2, .hero-sparkle.s3 { font-size: 10px; }
   .hero-nav-btn { display: none; }
   .hero-progress { bottom: 14px; gap: 10px; padding: 5px 12px; }
   .hero-progress-count { font-size: 11px; }

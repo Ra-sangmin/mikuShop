@@ -11,6 +11,7 @@ import { useGlobalSearch } from "@/app/main_shop/components/GlobalSearchContext"
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { readPopularCache, writePopularCache } from "@/app/main_shop/components/popularCache";
 import { isPureCategoryQuery, categoryCacheKey, readCategoryListCache, writeCategoryListCache } from "@/app/main_shop/components/categoryListCache";
+import { readCategoryTreeCache, writeCategoryTreeCache } from "@/app/main_shop/components/categoryTreeCache";
 
 // --- 🛠️ 유틸리티 ---
 import { getTranslatedText } from '@/lib/search-utils';
@@ -48,6 +49,8 @@ function RakutenContent() {
   const genreId = searchParams.get('genreId') || '0';
 
   // 카테고리
+  // 🌟 카테고리를 서버에서 가져오는 동안 true (캐시 적중 시엔 바로 false)
+  const [isCategoryLoading, setIsCategoryLoading] = useState(false);
   const [categories, setCategories] = useState<RakutenCategory[]>([]);
   const [isLeaf, setIsLeaf] = useState(false); 
   const [path, setPath] = useState<{id: number, name: string}[]>([]);
@@ -208,7 +211,11 @@ function RakutenContent() {
       if (!isLatest()) return;
       console.error('라쿠텐 상품 로드 실패:', e);
       setItems([]);
-      showAlert('상품을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+      // 🌟 라쿠텐에서 사라진 카테고리면 서버가 이유를 보내주므로 그 문구를 그대로 씁니다
+      const message = e instanceof Error && e.message.includes('카테고리')
+        ? e.message
+        : '상품을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.';
+      showAlert(message, 'error');
     } finally {
       if (isLatest()) resetLoadingUI();
     }
@@ -314,39 +321,57 @@ function RakutenContent() {
 
   // 🚀 [로직 3] 데이터 페칭 (카테고리 & 아이템)
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLeaf(false);
-      setCategories([]); 
+    // 🌟 상품은 URL 의 genreId 만 있으면 되므로 카테고리 응답을 기다리지 않고 먼저 시작합니다.
+    //    (예전엔 카테고리 → 상품 순서로 직렬이라, 카테고리가 느리면 상품까지 같이 밀렸습니다)
+    if (genreId !== '0') {
+      loadItems(genreId, currentFilters);
+    }
 
+    const applyCategories = (result: { data?: any[]; isLeaf?: boolean; parents?: { genreId: number; genreName: string }[] }) => {
+      setCategories(result.data || []);
+      setIsLeaf(!!result.isLeaf);
+      if (result.parents) {
+        setPath(result.parents.map((p) => ({ id: p.genreId, name: p.genreName })));
+      }
+    };
+
+    // 🌟 하루 안에 본 카테고리는 브라우저 캐시에서 즉시 (서버 요청 0건)
+    const cached = readCategoryTreeCache('rakuten', genreId);
+    if (cached) {
+      applyCategories(cached);
+      setIsCategoryLoading(false);
+      return;
+    }
+
+    setIsLeaf(false);
+    setCategories([]);
+    setIsCategoryLoading(true);
+
+    let cancelled = false;
+    (async () => {
       try {
-        const apiUrl = `/api/rakuten/categories?genreId=${genreId}`;
-
-        const res = await fetch(apiUrl);
+        const res = await fetch(`/api/rakuten/categories?genreId=${genreId}`);
         const result = await res.json();
+        if (cancelled) return;
 
         if (result.success) {
-
-          const serverData = result.data || [];
-          const serverIsLeaf = !!result.isLeaf;
-          
-          setCategories(serverData);
-          setIsLeaf(serverIsLeaf);
-
-          if (result.parents) {
-            setPath(result.parents.map((p: any) => ({ id: p.genreId, name: p.genreName })));
-          }
-
-          if (genreId !== '0') {
-            console.log(`📦 장르 변경 감지: ${genreId}번 카테고리 상품 로드 시작`);
-            await loadItems(genreId, currentFilters);
-          }
+          applyCategories(result);
+          writeCategoryTreeCache('rakuten', genreId, {
+            data: result.data || [],
+            isLeaf: !!result.isLeaf,
+            parents: result.parents || [],
+          });
+        } else if (result.staleGenre) {
+          showAlert(result.error, 'error');
         }
-      } catch (e) { 
-        console.error("Data Load Error", e); 
+      } catch (e) {
+        if (!cancelled) console.error("Data Load Error", e);
       } finally {
+        if (!cancelled) setIsCategoryLoading(false);
       }
-    }
-    fetchData();
+    })();
+
+    return () => { cancelled = true; };
   }, [genreId]);
 
   // 🚀 [로직 6] 실시간 인기 상품 로드 (홈 화면 진입 시 한 번만 조회)
@@ -402,7 +427,7 @@ function RakutenContent() {
       pageInfo={pageInfo}
       selectedProduct={productDetail}
       sortOptions={RakutenSortOptions}
-      isLoading={false}
+      isLoading={isCategoryLoading}
       isItemLoading={isItemLoading}
       isStreaming={isStreaming}
       isBottomLoaderAllowed={isBottomLoaderAllowed}

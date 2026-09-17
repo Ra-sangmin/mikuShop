@@ -22,7 +22,13 @@ export async function GET(request: Request) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
-        orders: true,
+        orders: {
+          // 🚚 마이페이지 "국제 배송 현황"에서 운송장 번호를 누르면 배송 업체 사이트를 새 창으로 엽니다.
+          //    주문에는 업체 ID(shippingCarrierId)만 있으므로 여기서 이름·주소를 함께 읽어 내려보냅니다.
+          include: {
+            shippingCarrier: { select: { id: true, name: true, url: true } },
+          },
+        },
         addresses: true,
         grade: true
       }

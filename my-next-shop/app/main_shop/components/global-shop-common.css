@@ -643,3 +643,57 @@
   .shop-loader-ring::before, .shop-overlay-mascot, .shop-overlay-mascot::before, .shop-overlay-mascot::after,
   .shop-skel-line, .shop-skel-img, .shop-loader-dots i, .shop-overlay-bar::after { animation: none; }
 }
+
+/* ============================================================
+   🌟 카테고리 로딩 (GlobalCategoryGrid isLoading) — 상품 로딩 오버레이와 같은 미쿠짱 마스코트 톤
+   ============================================================ */
+.shop-cat-loading { position: relative; overflow: hidden; padding: 6px 2px 2px; }
+.shop-cat-loading-head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px 14px; margin-bottom: 14px; border-radius: 18px;
+  background: linear-gradient(135deg, var(--shop-brand-bg, #fef2f2) 0%, #ffffff 70%);
+  border: 1px solid #f0f1f4;
+}
+.shop-cat-loading-mascot {
+  width: 64px; height: 64px; flex-shrink: 0;
+  display: flex; align-items: flex-end; justify-content: center;
+  border-radius: 20px; background: #ffffff; border: 1px solid #f0f1f4;
+  box-shadow: 0 10px 22px -14px var(--shop-shadow, rgba(15,23,42,0.3)), inset 0 1px 0 #fff;
+  overflow: hidden;
+}
+.shop-cat-loading-mascot img { width: 54px; height: auto; display: block; }
+.shop-cat-loading-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.shop-cat-loading-eyebrow { font-size: 10px; font-weight: 800; letter-spacing: 0.2em; color: var(--shop-brand, #bf0000); }
+.shop-cat-loading-title { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 15.5px; font-weight: 900; color: #0f172a; letter-spacing: -0.2px; }
+.shop-cat-loading-sub { margin: 0; font-size: 12.5px; font-weight: 600; color: #6b7280; word-break: keep-all; }
+.shop-cat-skel-grid { pointer-events: none; }
+.shop-cat-skel {
+  display: flex; align-items: center; gap: 10px;
+  height: 46px; padding: 0 14px; border-radius: 13px; border: 1px solid #eef0f4; background: #fbfbfd;
+  animation: shopCatIn 0.4s ease both;
+}
+.shop-cat-skel-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(90deg, #e7e9ee 0%, #d9dce3 45%, #e7e9ee 90%); background-size: 1200px 100%;
+  animation: shopLoaderShimmer 1.6s linear infinite;
+}
+.shop-cat-skel-line {
+  height: 11px; border-radius: 6px;
+  background: linear-gradient(90deg, #eef0f4 0%, #e2e5eb 45%, #eef0f4 90%); background-size: 1200px 100%;
+  animation: shopLoaderShimmer 1.6s linear infinite;
+}
+.shop-cat-loading-bar { position: relative; height: 3px; margin-top: 14px; border-radius: 999px; background: #f0f1f4; overflow: hidden; }
+.shop-cat-loading-bar::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: -40%; width: 40%; border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--shop-brand, #bf0000), transparent);
+  animation: shopCatLoadingBar 1.4s ease-in-out infinite;
+}
+@keyframes shopCatLoadingBar { 0% { left: -40%; } 100% { left: 100%; } }
+@media (max-width: 768px) {
+  .shop-cat-loading-head { gap: 12px; padding: 10px 12px 12px; border-radius: 16px; }
+  .shop-cat-loading-mascot { width: 54px; height: 54px; border-radius: 16px; }
+  .shop-cat-loading-mascot img { width: 46px; }
+  .shop-cat-loading-title { font-size: 14.5px; }
+  .shop-cat-loading-sub { font-size: 12px; }
+  .shop-cat-skel { height: 42px; }
+}

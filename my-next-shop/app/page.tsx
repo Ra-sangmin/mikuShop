@@ -5,7 +5,7 @@ import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import {
   ChatCircleDots, ShoppingCartSimple, AirplaneTilt, Receipt, Scales, Headset, ArrowRight,
   ArrowUpRight, CaretLeft, CaretRight,
-  Megaphone, Bank, Clock, CalendarCheck, Copy, ShieldCheck,
+  Megaphone, Bank, Clock, CalendarCheck, Copy, ShieldCheck, Medal, Sparkle,
 } from '@phosphor-icons/react';
 
 const HERO_AUTOPLAY_MS = 5000;
@@ -23,6 +23,13 @@ interface Banner {
   primary: { label: string; href: string };
   secondary: { label: string; href: string };
 }
+
+// 🌟 "#d27377" → "210, 115, 119"
+const hexToRgb = (hex: string) => {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+};
 
 export default function HomePage() {
   const banners: Banner[] = [
@@ -240,6 +247,8 @@ export default function HomePage() {
                 width: `${100 / extendedBanners.length}%`,
                 ['--hero-bg' as any]: banner.bgColor,
                 ['--hero-accent' as any]: banner.accent,
+                // 🌟 color-mix() 대신 rgba(var(--hero-accent-rgb), a) 로 투명도를 주기 위한 RGB 값
+                ['--hero-accent-rgb' as any]: hexToRgb(banner.accent),
               }}
             >
               <div className="hero-slide-pattern" aria-hidden="true"></div>
@@ -274,11 +283,20 @@ export default function HomePage() {
                       </div>
                     </div>
 
+                    {/* 🌟 캐릭터 스테이지: 회전 궤도 링 + 유리 원판 + 받침대 그림자 + 반짝임 + 서비스 칩 */}
                     <div className="premium-image-area">
                       <div className="hero-ring hero-ring-outer" aria-hidden="true"></div>
+                      <div className="hero-ring hero-orbit" aria-hidden="true"><span className="hero-orbit-dot"></span></div>
                       <div className="hero-ring hero-ring-inner" aria-hidden="true"></div>
                       <div className="image-aura" style={{ backgroundColor: banner.bgColor }}></div>
+                      <div className="hero-stage" aria-hidden="true"></div>
+                      <span className="hero-sparkle s1" aria-hidden="true"><Sparkle weight="fill" /></span>
+                      <span className="hero-sparkle s2" aria-hidden="true"><Sparkle weight="fill" /></span>
+                      <span className="hero-sparkle s3" aria-hidden="true"><Sparkle weight="fill" /></span>
                       <img src={banner.image} alt="Miku" className="premium-floating-img" draggable="false" />
+                      <span className="hero-chip c1" aria-hidden="true"><i><Medal weight="fill" /></i>14년 노하우</span>
+                      <span className="hero-chip c2" aria-hidden="true"><i><AirplaneTilt weight="fill" /></i>항공 · EMS · 해운</span>
+                      <span className="hero-chip c3" aria-hidden="true"><i><ShieldCheck weight="fill" /></i>기본 검수 무료</span>
                     </div>
                   </div>
               </div>

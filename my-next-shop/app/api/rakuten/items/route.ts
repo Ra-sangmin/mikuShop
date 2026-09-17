@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { rakutenBaseAPIOn } from '@/lib/rakuten';
+import { isGenreNotFoundError, markGenreStale } from '@/lib/rakutenGenres';
 
 export async function GET(request: Request) {
   try {
@@ -31,6 +32,15 @@ export async function GET(request: Request) {
       });
 
   } catch (error) {
+    // 🌟 라쿠텐에서 사라진 장르로 검색한 경우: 화면에 이유를 알려주고, 그 장르는 숨긴 뒤 부모 목록을 뒤에서 갱신합니다.
+    if (isGenreNotFoundError(error)) {
+      const staleId = Number(new URL(request.url).searchParams.get('genreId')) || 0;
+      if (staleId) void markGenreStale(staleId);
+      return NextResponse.json(
+        { error: '이 카테고리는 더 이상 라쿠텐에 존재하지 않습니다. 상위 카테고리에서 다시 선택해 주세요.', staleGenre: true },
+        { status: 404 },
+      );
+    }
     console.error('❌ [DEBUG ERROR] Rakuten Item API Error:', error);
     return NextResponse.json(
       { error: '상품 정보를 불러오는데 실패했습니다.' }, 

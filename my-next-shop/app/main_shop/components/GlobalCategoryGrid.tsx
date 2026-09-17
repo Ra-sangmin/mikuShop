@@ -134,9 +134,29 @@ export default function GlobalCategoryGrid({
     setIsExpanded(false);
   }, [categories]);
 
+  // 🌟 카테고리를 가져오는 동안: 상품 로딩과 같은 미쿠짱 마스코트 로더 + 곧 채워질 자리(스켈레톤 칩)
   if (isLoading) return (
-    <div style={styles.loadingWrapper}>
-      <div style={styles.spinner} />
+    <div className="shop-cat-loading notranslate" translate="no" style={shopThemeVars('shop', getShopTheme(platform)) as React.CSSProperties} role="status" aria-live="polite">
+      <div className="shop-cat-loading-head">
+        <span className="shop-cat-loading-mascot" aria-hidden="true"><img src="/miku-run.gif" alt="" /></span>
+        <div className="shop-cat-loading-text">
+          <span className="shop-cat-loading-eyebrow">MIKUCHAN IS WORKING</span>
+          <h4 className="shop-cat-loading-title">
+            카테고리를 불러오는 중
+            <span className="shop-loader-dots" aria-hidden="true"><i /><i /><i /></span>
+          </h4>
+          <p className="shop-cat-loading-sub">쇼핑몰에서 하위 카테고리 목록을 가져오고 있어요. 잠시만 기다려 주세요.</p>
+        </div>
+      </div>
+      <div className="shop-cat-grid shop-cat-skel-grid" aria-hidden="true">
+        {Array.from({ length: isMobile ? 6 : 8 }).map((_, i) => (
+          <div key={i} className="shop-cat-skel" style={{ animationDelay: `${i * 0.08}s` }}>
+            <span className="shop-cat-skel-dot" />
+            <span className="shop-cat-skel-line" style={{ width: `${48 + ((i * 17) % 40)}%` }} />
+          </div>
+        ))}
+      </div>
+      <div className="shop-cat-loading-bar" aria-hidden="true" />
     </div>
   );
 

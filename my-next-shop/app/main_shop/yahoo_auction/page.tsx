@@ -1,6 +1,7 @@
 "use client";
 
 import { readPopularCache, writePopularCache } from "@/app/main_shop/components/popularCache";
+import { readCategoryTreeCache, writeCategoryTreeCache } from "@/app/main_shop/components/categoryTreeCache";
 import { isPureCategoryQuery, categoryCacheKey, readCategoryListCache, writeCategoryListCache } from "@/app/main_shop/components/categoryListCache";
 
 import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
@@ -324,40 +325,45 @@ function YahooAuctionContent() {
     };
   
   useEffect(() => {
-    const fetchCategories = async () => {
-      setIsLeaf(false);
-      setCategories([]);
+    // 🌟 상품은 URL 의 genreId 만 있으면 되므로 카테고리 응답을 기다리지 않고 먼저 시작합니다.
+    if (genreId !== '0') {
+      console.log(`📦 장르 변경 감지: ${genreId}번 카테고리 상품 로드 시작`);
+      loadItems(genreId, currentFilters);
+    }
 
+    const applyCategories = (result: { data?: any[]; isLeaf?: boolean; parents?: { genreId: number; genreName: string }[]; path?: { id: number; name: string }[] }) => {
+      setCategories(result.data || []);
+      setIsLeaf(!!result.isLeaf);
+      if (result.parents) setPath(result.parents.map((p) => ({ id: p.genreId, name: p.genreName })));
+      else if (result.path) setPath(result.path.map((p) => ({ id: p.id, name: p.name })));
+    };
+
+    // 🌟 하루 안에 본 카테고리는 브라우저 캐시에서 즉시 (서버 요청 0건)
+    const cached = readCategoryTreeCache('yahoo_auction', genreId);
+    if (cached) { applyCategories(cached); setLoading(false); return; }
+
+    setIsLeaf(false);
+    setCategories([]);
+    setLoading(true);
+
+    let cancelled = false;
+    (async () => {
       try {
         const res = await fetch(`/api/yahoo_auction/categories?genre=${genreId}`);
         const result = await res.json();
-
+        if (cancelled) return;
         if (result.success) {
-          console.log("🛠️ [Debug] 야후 옥션 카테고리 로드 완료:", result.data);
-
-          const serverData = result.data || [];
-          const serverIsLeaf = !!result.isLeaf;
-
-          setCategories(serverData);
-          setIsLeaf(serverIsLeaf);
-
-          if (result.path) {
-            setPath(result.path.map((p: any) => ({ id: p.id, name: p.name })));
-          }
-
-          if (genreId !== '0') {
-            console.log(`📦 장르 변경 감지: ${genreId}번 카테고리 상품 로드 시작`);
-            await loadItems(genreId, currentFilters);
-          }
+          applyCategories(result);
+          writeCategoryTreeCache('yahoo_auction', genreId, { data: result.data || [], isLeaf: !!result.isLeaf, parents: result.parents || [] });
         }
       } catch (e) {
-        console.error("Yahoo Auction Category Load Error", e);
+        if (!cancelled) console.error("Yahoo Auction Category Load Error", e);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    };
+    })();
 
-    fetchCategories();
+    return () => { cancelled = true; };
   }, [genreId]);
 
   // 🚀 실시간 인기 상품 로드 (홈 화면 진입 시 한 번만 조회)

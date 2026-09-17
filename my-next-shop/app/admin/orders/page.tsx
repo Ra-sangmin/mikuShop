@@ -50,6 +50,13 @@ export default function OrderManagement() {
   const [feeModalIntl, setFeeModalIntl] = useState('');
   const [feeModalDomestic, setFeeModalDomestic] = useState('');
 
+  // 🚚 배송비 결제 완료 -> 국제배송 전환 시, 배송 업체와 송장번호를 한 팝업에서 함께 입력받습니다.
+  //    업체 목록은 관리자 > 국제 배송 업체 정보 관리(shipping_carriers)에서 가져옵니다.
+  const [carriers, setCarriers] = useState<{ id: number; name: string; url: string }[]>([]);
+  const [shipModal, setShipModal] = useState<{ orderId: string; bundleId: string | null; count: number } | null>(null);
+  const [shipModalCarrierId, setShipModalCarrierId] = useState('');
+  const [shipModalTrackingNo, setShipModalTrackingNo] = useState('');
+
   const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
@@ -126,6 +133,14 @@ export default function OrderManagement() {
     document.body.style.userSelect = 'auto';
   };
 
+  // 🚚 배송 업체 목록은 화면에 들어올 때 한 번만 받아 둡니다 (국제배송 팝업의 드롭다운용)
+  useEffect(() => {
+    fetch('/api/admin/shipping-carriers')
+      .then(res => res.json())
+      .then(data => { if (data.success) setCarriers(data.carriers); })
+      .catch(err => console.error('배송 업체 목록 조회 실패:', err));
+  }, []);
+
   useEffect(() => {
     const fetchOrders = async () => {
       try {
@@ -150,6 +165,7 @@ export default function OrderManagement() {
             secondPaymentAmount: dbOrder.secondPaymentAmount || 0,
             domesticShippingFee: dbOrder.domesticShippingFee || 0,
             trackingNo: dbOrder.trackingNo || '',
+            shippingCarrierId: dbOrder.shippingCarrierId ?? null,
             option: dbOrder.productOption || '-',
             productUrl: dbOrder.productUrl || '',
             productRequest: dbOrder.productRequest || '-',
@@ -228,21 +244,14 @@ export default function OrderManagement() {
       return;
     }
 
+    // 🚚 국제배송으로 넘길 때는 배송비 요청 때처럼 팝업에서 두 값(배송 업체 + 송장번호)을 받습니다.
     if (newStatus === ORDER_STATUS.SHIPPING) {
-      const trackingNo = prompt("송장번호를 입력해주세요:", currentOrder.trackingNo || '');
-      if (trackingNo === null) return;
-
-      // 🌟 합포장 주문은 같은 송장번호로 그룹 전체를 함께 변경합니다.
-      const bundleIds = currentOrder.bundleId
-        ? orders.filter(o => o.bundleId === currentOrder.bundleId).map(o => o.id)
-        : [orderId];
-
-      setOrders(orders.map(order => bundleIds.includes(order.id) ? { ...order, status: newStatus, trackingNo: trackingNo } : order));
-      setChangedOrderIds(prev => {
-        const newSet = new Set(prev);
-        bundleIds.forEach(id => newSet.add(id));
-        return newSet;
-      });
+      const bundleCount = currentOrder.bundleId
+        ? orders.filter(o => o.bundleId === currentOrder.bundleId).length
+        : 1;
+      setShipModalCarrierId(currentOrder.shippingCarrierId ? String(currentOrder.shippingCarrierId) : '');
+      setShipModalTrackingNo(currentOrder.trackingNo || '');
+      setShipModal({ orderId, bundleId: currentOrder.bundleId || null, count: bundleCount });
       return;
     }
 
@@ -305,6 +314,39 @@ export default function OrderManagement() {
   };
 
   const cancelFeeModal = () => setFeeModal(null);
+
+  // 🚚 shipModal(배송 업체 + 송장번호 입력 팝업)에서 확인을 눌렀을 때 상태 변경을 적용합니다.
+  //    실제 DB 반영은 다른 변경과 마찬가지로 "변경사항 저장" 버튼에서 한 번에 이뤄집니다.
+  const confirmShipModal = () => {
+    if (!shipModal) return;
+    if (!shipModalCarrierId) {
+      alert('배송 업체를 선택해주세요.');
+      return;
+    }
+    const trackingNo = shipModalTrackingNo.trim();
+    if (!trackingNo) {
+      alert('송장번호를 입력해주세요.');
+      return;
+    }
+
+    // 🌟 합포장 주문은 같은 업체·송장번호로 그룹 전체를 함께 변경합니다.
+    const bundleIds = shipModal.bundleId
+      ? orders.filter(o => o.bundleId === shipModal.bundleId).map(o => o.id)
+      : [shipModal.orderId];
+
+    setOrders(orders.map(order => bundleIds.includes(order.id)
+      ? { ...order, status: ORDER_STATUS.SHIPPING, trackingNo, shippingCarrierId: Number(shipModalCarrierId) }
+      : order));
+    setChangedOrderIds(prev => {
+      const newSet = new Set(prev);
+      bundleIds.forEach(id => newSet.add(id));
+      return newSet;
+    });
+
+    setShipModal(null);
+  };
+
+  const cancelShipModal = () => setShipModal(null);
 
   const handleSecondPaymentChange = (orderId: string, value: string) => {
     const numValue = parseInt(value.replace(/[^0-9]/g, '')) || 0;
@@ -968,6 +1010,52 @@ export default function OrderManagement() {
         </div>
       </div>
     )}
+
+    {/* 🚚 배송비 결제 완료 -> 국제배송 전환: 배송 업체와 송장번호를 한 팝업에서 함께 입력 */}
+    {shipModal && (
+      <div style={os.feeModalOverlay}>
+        <div style={os.feeModalBox}>
+          <h3 style={os.feeModalTitle}>국제배송 정보 입력</h3>
+          <p style={os.feeModalDesc}>
+            {shipModal.bundleId
+              ? `합배송 그룹 전체에 적용됩니다. (그룹 내 상품 수: ${shipModal.count}개)`
+              : '이 주문에 적용됩니다.'}
+          </p>
+
+          <label style={os.feeModalLabel}>배송 업체</label>
+          <select
+            autoFocus
+            value={shipModalCarrierId}
+            onChange={(e) => setShipModalCarrierId(e.target.value)}
+            style={os.feeModalInput}
+          >
+            <option value="">선택해주세요</option>
+            {carriers.map(carrier => (
+              <option key={carrier.id} value={carrier.id}>{carrier.name}</option>
+            ))}
+          </select>
+          {carriers.length === 0 && (
+            <p style={os.shipModalEmptyHint}>
+              등록된 배송 업체가 없습니다. 관리자 &gt; 국제 배송 업체 정보 관리에서 먼저 등록해주세요.
+            </p>
+          )}
+
+          <label style={os.feeModalLabel}>송장번호</label>
+          <input
+            type="text"
+            value={shipModalTrackingNo}
+            onChange={(e) => setShipModalTrackingNo(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') confirmShipModal(); }}
+            style={os.feeModalInput}
+          />
+
+          <div style={os.feeModalButtonRow}>
+            <button onClick={cancelShipModal} style={os.feeModalCancelBtn}>취소</button>
+            <button onClick={confirmShipModal} style={os.feeModalConfirmBtn}>확인</button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 }
@@ -1034,6 +1122,13 @@ const os: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     color: colors.textDark,
     marginBottom: '6px',
+  },
+  // 🚚 배송 업체가 하나도 없을 때 드롭다운 아래에 띄우는 안내
+  shipModalEmptyHint: {
+    fontSize: '12px',
+    color: '#ef4444',
+    margin: '-8px 0 16px',
+    lineHeight: 1.5,
   },
   feeModalInput: {
     width: '100%',

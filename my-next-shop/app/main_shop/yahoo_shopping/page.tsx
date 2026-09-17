@@ -1,6 +1,7 @@
 "use client";
 
 import { readPopularCache, writePopularCache } from "@/app/main_shop/components/popularCache";
+import { readCategoryTreeCache, writeCategoryTreeCache } from "@/app/main_shop/components/categoryTreeCache";
 import { isPureCategoryQuery, categoryCacheKey, readCategoryListCache, writeCategoryListCache } from "@/app/main_shop/components/categoryListCache";
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
@@ -35,6 +36,8 @@ function YahooContent() {
   const searchParams = useSearchParams();
   const genreId = searchParams.get('genreId') || '1';
 
+  // 🌟 카테고리를 서버에서 가져오는 동안 true (캐시 적중 시엔 바로 false)
+  const [isCategoryLoading, setIsCategoryLoading] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [isLeaf, setIsLeaf] = useState(false); 
   const [path, setPath] = useState<{id: number, name: string}[]>([]);
@@ -212,52 +215,43 @@ function YahooContent() {
 
   // 🚀 [로직 4] 카테고리 로드 및 초기 페칭
   useEffect(() => {
-    const fetchData = async () => {
+    // 🌟 상품은 URL 의 genreId 만 있으면 되므로 카테고리 응답을 기다리지 않고 먼저 시작합니다.
+    if (genreId !== '0') {
+      loadItems(genreId, currentFilters);
+    }
 
-      setIsLeaf(false);
-      setCategories([]); 
-
-      try {
-        const apiUrl = `/api/yahoo_shopping/categories?genreId=${genreId}`;
-
-        const res = await fetch(apiUrl);
-        const result = await res.json();
-
-        if (result.success) {
-
-          const serverData = result.data || [];
-          const serverIsLeaf = !!result.isLeaf;
-
-          setCategories(serverData);
-          setIsLeaf(serverIsLeaf);
-
-          if (result.parents) {
-            setPath(result.parents.map((p: any) => ({ id: p.genreId, name: p.genreName })));
-          }
-
-          if (genreId !== '0') {
-            console.log(`📦 장르 변경 감지: ${genreId}번 카테고리 상품 로드 시작`);
-            await loadItems(genreId, currentFilters);
-          }
-        }
-      } catch (e) { 
-        console.error("Data Load Error", e); 
-      } finally { 
-      }
-
-      // 카테고리 로드 로직 (API 연동 필요)
-      // const res = await fetch(`/api/yahoo_shopping/categories?categoryId=${categoryId}`);
-      // const result = await res.json();
-      
-      // if (result.success) {
-
-      //   console.log(JSON.stringify(result, null, 2));
-
-      //   setCategories(result.categories);
-      //   //if (categoryId !== '0') await loadItems(categoryId, currentFilters);
-      // }
+    const applyCategories = (result: { data?: any[]; isLeaf?: boolean; parents?: { genreId: number; genreName: string }[] }) => {
+      setCategories(result.data || []);
+      setIsLeaf(!!result.isLeaf);
+      if (result.parents) setPath(result.parents.map((p) => ({ id: p.genreId, name: p.genreName })));
     };
-    fetchData();
+
+    // 🌟 하루 안에 본 카테고리는 브라우저 캐시에서 즉시 (서버 요청 0건)
+    const cached = readCategoryTreeCache('yahoo_shopping', genreId);
+    if (cached) { applyCategories(cached); setIsCategoryLoading(false); return; }
+
+    setIsLeaf(false);
+    setCategories([]);
+    setIsCategoryLoading(true);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/yahoo_shopping/categories?genreId=${genreId}`);
+        const result = await res.json();
+        if (cancelled) return;
+        if (result.success) {
+          applyCategories(result);
+          writeCategoryTreeCache('yahoo_shopping', genreId, { data: result.data || [], isLeaf: !!result.isLeaf, parents: result.parents || [] });
+        }
+      } catch (e) {
+        if (!cancelled) console.error("Data Load Error", e);
+      } finally {
+        if (!cancelled) setIsCategoryLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [genreId]);
 
   // 🚀 [로직 6] 실시간 인기 상품 로드 (홈 화면 진입 시 한 번만 조회)
@@ -313,7 +307,7 @@ function YahooContent() {
       pageInfo={pageInfo}
       selectedProduct={productDetail}
       sortOptions={YahooSortOptions}
-      isLoading={false}
+      isLoading={isCategoryLoading}
       isItemLoading={false}
       isLeaf={isLeaf}
       onNavigate={updateNavigation}

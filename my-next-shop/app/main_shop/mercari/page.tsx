@@ -13,6 +13,7 @@ import { useGlobalSearch } from "@/app/main_shop/components/GlobalSearchContext"
 // --- 🛠️ 유틸리티 ---
 import { checkMercariCooldown, lastCallTimestamp } from "./mercariApi";
 import { readPopularCache, writePopularCache } from "@/app/main_shop/components/popularCache";
+import { readCategoryTreeCache, writeCategoryTreeCache } from "@/app/main_shop/components/categoryTreeCache";
 import { isPureCategoryQuery, categoryCacheKey, readCategoryListCache, writeCategoryListCache } from "@/app/main_shop/components/categoryListCache";
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; 
 import { getTranslatedText } from '@/lib/search-utils';
@@ -60,6 +61,8 @@ function MercariCategoryContent() {
   const genreId = searchParams.get('cat') || '';
 
   // 카테고리
+  // 🌟 카테고리를 서버에서 가져오는 동안 true (캐시 적중 시엔 바로 false)
+  const [isCategoryLoading, setIsCategoryLoading] = useState(false);
   const [categories, setCategories] = useState<MercariCategory[]>([]);
   const [isLeaf, setIsLeaf] = useState(false); 
   const [path, setPath] = useState<{id: number, name: string}[]>([]);
@@ -500,43 +503,46 @@ function MercariCategoryContent() {
 
   // 🚀 [로직 6] 카테고리 로드 및 초기 데이터 세팅
   useEffect(() => {
-    const fetchData = async () => {
-      // 1. 시작하자마자 상태 초기화 (이전 기억 삭제)
-      setIsLeaf(false);
-      setCategories([]); 
+    // 🐛 직접 진입/새로고침/뒤로가기: 클릭으로 요청한 적 없는 카테고리면 상품 수집을 시작합니다.
+    //    🌟 카테고리 응답을 기다리지 않고 먼저 시작합니다 (카테고리가 느려도 상품이 밀리지 않도록)
+    if (genreId && genreId !== '0' && requestedGenreRef.current !== String(genreId)) {
+      requestedGenreRef.current = String(genreId);
+      loadItems(genreId, currentFilters);
+    }
 
-      try {
-        const apiUrl = `/api/mercari/categories${genreId ? `?parentId=${genreId}` : ''}`;
-
-        const res = await fetch(apiUrl);
-        const result = await res.json();
-
-        if (result.success) {
-
-          const serverData = result.data || [];
-          const serverIsLeaf = !!result.isLeaf;
-
-          setCategories(serverData);
-          setIsLeaf(serverIsLeaf);
-
-          // 경로 업데이트
-          if (result.parents) {
-            setPath(result.parents.map((p: any) => ({ id: p.parent.genreId, name: p.genreName })));
-          }
-
-          // 🐛 직접 진입/새로고침/뒤로가기: 클릭으로 요청한 적 없는 카테고리면 여기서 상품 수집을 시작합니다.
-          if (genreId && genreId !== '0' && requestedGenreRef.current !== String(genreId)) {
-            requestedGenreRef.current = String(genreId);
-            loadItems(genreId, currentFilters);
-          }
-        }
-      } catch (err) {
-        console.error("❌ 통신 중 진짜 에러 발생:", err);
-      } finally {
-      }
+    const cacheId = genreId || '0';
+    const applyCategories = (result: { data?: any[]; isLeaf?: boolean; parents?: { genreId: number; genreName: string }[] }) => {
+      setCategories(result.data || []);
+      setIsLeaf(!!result.isLeaf);
+      if (result.parents) setPath(result.parents.map((p) => ({ id: p.genreId, name: p.genreName })));
     };
 
-    fetchData();
+    // 🌟 하루 안에 본 카테고리는 브라우저 캐시에서 즉시 (서버 요청 0건)
+    const cached = readCategoryTreeCache('mercari', cacheId);
+    if (cached) { applyCategories(cached); setIsCategoryLoading(false); return; }
+
+    setIsLeaf(false);
+    setCategories([]);
+    setIsCategoryLoading(true);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/mercari/categories${genreId ? `?parentId=${genreId}` : ''}`);
+        const result = await res.json();
+        if (cancelled) return;
+        if (result.success) {
+          applyCategories(result);
+          writeCategoryTreeCache('mercari', cacheId, { data: result.data || [], isLeaf: !!result.isLeaf, parents: result.parents || [] });
+        }
+      } catch (err) {
+        if (!cancelled) console.error("❌ 통신 중 진짜 에러 발생:", err);
+      } finally {
+        if (!cancelled) setIsCategoryLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [genreId]);
 
   // 🚀 [로직 7] 실시간 인기 상품 로드 (홈 화면 진입 시 한 번만 조회)
@@ -643,7 +649,7 @@ function MercariCategoryContent() {
       pageInfo={pageInfo}
       selectedProduct={productDetail}
       sortOptions={MercariSortOptions}
-      isLoading={false}
+      isLoading={isCategoryLoading}
       isItemLoading={isItemLoading}
       isStreaming={isStreaming}
       isBottomLoaderAllowed={isBottomLoaderAllowed}
