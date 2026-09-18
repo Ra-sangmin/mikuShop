@@ -41,6 +41,9 @@ export default function OrderManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [changedOrderIds, setChangedOrderIds] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
+  // 💬 입고 일괄 처리처럼 한 회원에게 여러 건이 몰릴 때, 이번 저장의 알림톡만 끕니다.
+  //    (서버도 회원당 1통으로 자동 제한하지만, 아예 안 보내고 싶을 때 쓰는 스위치입니다)
+  const [skipAlimtalk, setSkipAlimtalk] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   // 🌟 합포장(bundleId) 그룹을 mypage/status처럼 한 행으로 펼쳐보기 위한 상태
   const [expandedBundles, setExpandedBundles] = useState<Set<string>>(new Set());
@@ -412,7 +415,7 @@ export default function OrderManagement() {
       const res = await fetch('/api/admin/orders', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates })
+        body: JSON.stringify({ updates, skipAlimtalk })
       });
 
       if (res.ok) {
@@ -587,6 +590,16 @@ export default function OrderManagement() {
         </div>
 
         <div style={os.buttonGroup}>
+          {/* 💬 알림톡은 건당 비용이 들고 같은 내용이 연달아 오면 고객도 불편합니다.
+              입고 일괄 처리처럼 한 번에 많이 바꿀 때 꺼 두세요. 메일은 그대로 나갑니다. */}
+          <label style={os.skipTalkLabel} title="체크하면 이번 저장에서는 알림톡을 보내지 않습니다. 이메일 안내는 그대로 발송됩니다.">
+            <input
+              type="checkbox"
+              checked={skipAlimtalk}
+              onChange={(e) => setSkipAlimtalk(e.target.checked)}
+            />
+            알림톡 보내지 않기
+          </label>
           <button onClick={() => setShowDebug(!showDebug)} style={os.btnDebug}>
             🛠️ 디버그 {showDebug ? '끄기' : '켜기'}
           </button>
@@ -1085,6 +1098,18 @@ const os: Record<string, React.CSSProperties> = {
   buttonGroup: {
     display: 'flex',
     gap: '12px',
+    alignItems: 'center',
+  },
+
+  // 💬 "알림톡 보내지 않기" 체크박스
+  skipTalkLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '13px',
+    color: colors.emptyText,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
   },
 
   // 🌟 배송비 입력 팝업 (feeModal)

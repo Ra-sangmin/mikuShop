@@ -111,6 +111,12 @@ export async function notifyOrderStatusByAlimtalk(
     });
     const sentKeys = new Set(alreadySent.map(r => `${r.orderId}:${r.status}`));
 
+    // 🌟 이번 호출에서 한 회원에게 같은 상태로 이미 보냈는지. (회원당 1통 제한)
+    //    입고를 일괄 처리하면 한 사람에게 10통이 갈 수 있습니다. 알림톡은 건당 비용이 들고
+    //    같은 내용이 연달아 오면 고객에게도 불편합니다. 메일은 회원당 한 통으로 묶여 나가므로
+    //    나머지 주문도 안내 자체는 받습니다. (orderStatusMail.ts)
+    const batchUserKeys = new Set<string>();
+
     for (const target of targets) {
       const order = orderMap.get(target.orderId);
       if (!order) {
@@ -123,6 +129,12 @@ export async function notifyOrderStatusByAlimtalk(
       }
       if (sentKeys.has(`${target.orderId}:${target.status}`)) {
         console.log(`[알림톡] 건너뜀 (${target.orderId}) — 같은 상태로 이미 보낸 기록이 있습니다. (중복 발송 방지)`);
+        result.skipped++; continue;
+      }
+
+      const userKey = `${order.userId}:${target.status}`;
+      if (batchUserKeys.has(userKey)) {
+        console.log(`[알림톡] 건너뜀 (${target.orderId}) — 이번 저장에서 같은 회원에게 ${target.status} 알림톡을 이미 보냈습니다. (회원당 1통)`);
         result.skipped++; continue;
       }
 
@@ -151,6 +163,9 @@ export async function notifyOrderStatusByAlimtalk(
         variables: Object.fromEntries(Object.entries(variables).map(([k, v]) => [`#{${k}}`, v])),
         buttonUrl: orderDetailUrl(order.orderId),
       });
+
+      // 성공했을 때만 표시합니다. 첫 건이 실패하면 같은 회원의 다음 건이 다시 시도해야 하니까요.
+      if (sendResult.success) batchUserKeys.add(userKey);
 
       if (sendResult.success) result.sent++;
       else if (sendResult.skipped) result.skipped++;

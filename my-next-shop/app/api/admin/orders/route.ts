@@ -67,7 +67,10 @@ export async function PUT(request: Request) {
   try {
     const body = await request.json();
     // 프론트에서 보낸 paymentTitle(이용내역 제목)도 함께 받습니다.
-    const { updates, type, userId, deductAmount, paymentTitle } = body; 
+    // skipAlimtalk: 관리자가 "이번 저장은 알림톡 보내지 않기"를 체크한 경우.
+    //   입고 일괄 처리처럼 한 회원에게 여러 건이 몰릴 때 쓰라고 만든 스위치입니다.
+    //   메일은 회원당 한 통으로 묶여 나가므로 이 스위치의 영향을 받지 않습니다.
+    const { updates, type, userId, deductAmount, paymentTitle, skipAlimtalk } = body; 
 
     // 🔔 알림 대상 판별용: 변경 '전' 상태를 미리 읽어둡니다.
     //    (이미 같은 상태였다면 실제 변경이 아니므로 알림을 보내지 않습니다)
@@ -189,8 +192,12 @@ export async function PUT(request: Request) {
         console.log('[알림] 주문 상태 메일:', mailResult);
 
         // 💬 낙찰 성공 등 검수를 통과한 상태만 알림톡이 나갑니다. (lib/notifications/orderStatusAlimtalk.ts)
-        const talkResult = await notifyOrderStatusByAlimtalk(changes);
-        console.log('[알림] 주문 상태 알림톡:', talkResult);
+        if (skipAlimtalk) {
+          console.log(`[알림] 알림톡 건너뜀 ${changes.length}건 — 관리자가 '알림톡 보내지 않기'를 선택했습니다.`);
+        } else {
+          const talkResult = await notifyOrderStatusByAlimtalk(changes);
+          console.log('[알림] 주문 상태 알림톡:', talkResult);
+        }
       } else {
         // 📋 이미 같은 상태였던 주문을 다시 저장하면 알림이 나가지 않습니다.
         //    "바꿨는데 안 왔다"의 상당수가 이 경우라, 이유를 남겨 둡니다.
