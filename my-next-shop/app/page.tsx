@@ -160,6 +160,19 @@ export default function HomePage() {
     currentBanner === 0 ? banners.length - 1 : currentBanner === banners.length + 1 ? 0 : currentBanner - 1;
   // 🌟 PC에서 배너 위에 마우스를 올리면 자동 넘김을 잠시 멈춥니다.
   const [isHeroHovered, setIsHeroHovered] = useState(false);
+
+  // 📢 공지사항 — 관리자 > 고객 센터에서 등록한 글을 최근 4건까지 보여줍니다.
+  const [notices, setNotices] = useState<{ id: number; title: string; content: string; createdAt: string }[]>([]);
+  const [isNoticeLoading, setIsNoticeLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/notices?limit=4')
+      .then(res => res.json())
+      .then(data => { if (!cancelled && data.success) setNotices(data.notices); })
+      .catch(err => console.error('공지사항 조회 실패:', err))
+      .finally(() => { if (!cancelled) setIsNoticeLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
   const isAutoplayPaused = isPaused || isHeroHovered;
   // 슬라이드가 바뀔 때마다 타이머를 새로 시작해 진행 막대와 시간이 맞도록 setTimeout을 씁니다.
   useEffect(() => {
@@ -451,10 +464,20 @@ export default function HomePage() {
                     <Link href="#" className="info-card-more">전체보기 <CaretRight weight="bold" /></Link>
                 </div>
                 <ul className="notice-list">
-                    <NoticeItem title="미쿠짱 2026년 3월 국제 발송일정 안내" date="03.01" />
-                    <NoticeItem title="미쿠짱 2026년 2월 국제 발송일정 안내" date="02.06" />
-                    <NoticeItem title="아마존재팬 일본내 배송비 무료 혜택" date="10.15" />
-                    <NoticeItem title="일본 구매대행 [미쿠짱] 이용 가이드" date="09.19" />
+                    {isNoticeLoading ? (
+                        <li className="notice-row"><span className="notice-title">불러오는 중...</span></li>
+                    ) : notices.length > 0 ? (
+                        notices.map(notice => (
+                            <NoticeItem
+                                key={notice.id}
+                                title={notice.title}
+                                date={formatNoticeDate(notice.createdAt)}
+                                content={notice.content}
+                            />
+                        ))
+                    ) : (
+                        <li className="notice-row"><span className="notice-title">등록된 공지사항이 없습니다.</span></li>
+                    )}
                 </ul>
             </div>
 
@@ -593,9 +616,17 @@ function SocialIcon({ url, src, brandColor, desc, isDragging }: any) {
     );
 }
 
-function NoticeItem({ title, date }: any) {
+// 🌟 공지 등록일은 카드가 좁아 "03.01" 처럼 월.일만 보여줍니다.
+function formatNoticeDate(value: string) {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    return `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function NoticeItem({ title, date, content }: any) {
     return (
-        <li className="notice-row">
+        // 🌟 목록에는 제목만 들어가므로, 본문은 마우스를 올렸을 때 보이도록 title 속성에 넣습니다.
+        <li className="notice-row" title={content || undefined}>
             <span className="notice-dot" aria-hidden="true"></span>
             <span className="notice-title">{title}</span>
             <span className="notice-date">{date}</span>

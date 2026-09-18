@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAdmin } from '@/lib/apiAuth';
 import { notifyOrderStatusChanged, shouldNotify } from '@/lib/notifications/orderStatusMail';
+import { notifyOrderStatusByAlimtalk, shouldSendAlimtalk } from '@/lib/notifications/orderStatusAlimtalk';
 import { ORDER_STATUS } from '@/src/types/order';
 
 // 🌟 1. GET: DB에서 주문 목록과 유저 정보를 함께 가져옵니다.
@@ -175,15 +176,20 @@ export async function PUT(request: Request) {
     });
 
     // 🔔 주문 저장이 끝난 뒤(트랜잭션 밖에서) 상태 변경 알림을 보냅니다.
-    //    메일 발송 실패가 주문 저장을 롤백시키면 안 되므로 트랜잭션 안에 넣지 않습니다.
+    //    발송 실패가 주문 저장을 롤백시키면 안 되므로 트랜잭션 안에 넣지 않습니다.
+    //    메일과 알림톡은 각자 자기 화이트리스트로 다시 거르므로 여기서는 둘 중 하나라도 해당하면 넘깁니다.
     if (type !== 'delivery' && Array.isArray(updates)) {
       const changes = (updates as any[])
-        .filter(o => o?.id && o?.status && shouldNotify(o.status))
+        .filter(o => o?.id && o?.status && (shouldNotify(o.status) || shouldSendAlimtalk(o.status)))
         .filter(o => previousStatuses.get(o.id) !== o.status) // 실제로 바뀐 것만
         .map(o => ({ orderId: o.id as string, status: o.status as string }));
       if (changes.length > 0) {
-        const sendResult = await notifyOrderStatusChanged(changes);
-        console.log('[알림] 주문 상태 메일:', sendResult);
+        const mailResult = await notifyOrderStatusChanged(changes);
+        console.log('[알림] 주문 상태 메일:', mailResult);
+
+        // 💬 낙찰 성공 등 검수를 통과한 상태만 알림톡이 나갑니다. (lib/notifications/orderStatusAlimtalk.ts)
+        const talkResult = await notifyOrderStatusByAlimtalk(changes);
+        console.log('[알림] 주문 상태 알림톡:', talkResult);
       }
     }
 

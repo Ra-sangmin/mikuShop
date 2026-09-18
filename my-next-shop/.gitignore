@@ -3,3 +3,6 @@ node_modules
 .env
 
 /lib/generated/prisma
+
+# 포트폴리오용 이미지 (앱 구동·배포에 쓰이지 않습니다)
+portfolio/

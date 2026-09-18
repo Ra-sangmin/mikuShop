@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { signIn, getSession } from "next-auth/react";
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
+import { readReturnPath } from '@/lib/authRedirect';
 
 const REMEMBER_ID_KEY = 'miku_saved_login_id';
 
@@ -14,6 +15,10 @@ export default function LoginPage() {
   const [rememberId, setRememberId] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { showAlert } = useMikuAlert();
+  // 🔐 로그인 전에 보려던 주소(/auth/login?callbackUrl=...). 없으면 홈으로 갑니다.
+  //    useSearchParams 대신 주소창에서 직접 읽어 Suspense 경계를 따로 두지 않습니다.
+  const [returnPath, setReturnPath] = useState('/');
+  useEffect(() => { setReturnPath(readReturnPath()); }, []);
 
   // 🌟 "아이디 저장"을 켜 두었으면 다음 방문 때 아이디를 미리 채워 줍니다.
   useEffect(() => {
@@ -60,10 +65,17 @@ export default function LoginPage() {
           else localStorage.removeItem(REMEMBER_ID_KEY);
         } catch {}
         const session = await getSession();
+        // 🌟 로그인이 필요한 화면은 localStorage 의 user_id 로 판단하는데, 그 값은 원래 Header 가
+        //    세션을 받은 뒤에 넣습니다. 돌아갈 곳이 그런 화면이면 먼저 도착해 다시 튕길 수 있어,
+        //    여기서 미리 채워 둡니다.
+        const sessionUserId = (session?.user as any)?.id;
+        if (sessionUserId) {
+          try { localStorage.setItem('user_id', String(sessionUserId)); } catch {}
+        }
         const userName = session?.user?.name || "고객";
         showAlert(`${userName}님, 환영합니다!`, "success");
 
-        setTimeout(() => { window.location.href = '/'; }, 1000);
+        setTimeout(() => { window.location.href = returnPath; }, 1000);
       }
     } catch (error) {
       console.error("로그인 중 오류 발생:", error);
@@ -172,7 +184,7 @@ export default function LoginPage() {
           </div>
 
           <div className="social-group">
-            <button type="button" onClick={() => signIn('kakao', { callbackUrl: '/' })} className="social-btn kakao-btn">
+            <button type="button" onClick={() => signIn('kakao', { callbackUrl: returnPath })} className="social-btn kakao-btn">
               <span className="social-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="20" height="20">
                   <path fill="#191600" d="M12 3.5C6.75 3.5 2.5 6.86 2.5 11c0 2.64 1.75 4.96 4.4 6.3-.19.7-.7 2.56-.8 2.96-.13.5.18.49.38.36.16-.1 2.5-1.7 3.52-2.4.63.09 1.28.14 1.95.14 5.25 0 9.5-3.36 9.5-7.5s-4.19-7.36-9.45-7.36z" />
@@ -181,7 +193,7 @@ export default function LoginPage() {
               카카오로 시작하기
             </button>
 
-            <button type="button" onClick={() => signIn('naver', { callbackUrl: '/' })} className="social-btn naver-btn">
+            <button type="button" onClick={() => signIn('naver', { callbackUrl: returnPath })} className="social-btn naver-btn">
               <span className="social-icon naver-icon" aria-hidden="true">N</span>
               네이버로 시작하기
             </button>

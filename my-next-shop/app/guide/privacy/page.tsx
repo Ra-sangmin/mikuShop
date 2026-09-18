@@ -7,7 +7,7 @@ import GuideTitle from '../components/GuideTitle';
 import GuidePremiumHero from '../components/GuidePremiumHero';
 import { ShieldCheck, Printer } from '@phosphor-icons/react';
 
-const PRIVACY_EFFECTIVE_DATE = '2026년 6월 1일';
+const PRIVACY_EFFECTIVE_DATE = '2026년 9월 18일';
 
 export default function GuidePrivacyPage() {
   // 🌟 항목 수는 본문의 조항 제목(.guide-section-title)을 세어 상단 검은색 카드에 표시합니다 (목차와 같은 기준)
@@ -158,14 +158,20 @@ export default function GuidePrivacyPage() {
                 <li>개인정보의 처리를 위탁하는 경우에는 미리 그 사실을 귀하에게 고지하겠습니다.</li>
                 <li>개인정보의 처리를 위탁하는 경우에는 위탁계약 등을 통하여 서비스제공자의 개인정보보호 관련 지시엄수, 개인정보에 관한 비밀유지, 제3자 제공의 금지 및 사고 시의 책임부담 등을 명확히 규정하고 당해 계약내용을 서면 또는 전자적으로 보관하겠습니다.</li>
                 <li>
-                  미쿠짱은 원활한 구매대행 서비스 제공 및 시스템 관리를 위해 아래와 같이 회원의 개인정보를 국외(일본)로 이전(원격 접근 및 처리)하고 있습니다.
+                  미쿠짱은 원활한 구매대행 서비스 제공 및 시스템 관리를 위해 아래와 같이 회원의 개인정보를 국외(일본)로 이전(저장 및 원격 접근·처리)하고 있습니다.
                   <ul>
-                    <li><strong>이전받는 자 (업체명)</strong> : (주)ASOBIBA (활용 주체), 아마존웹서비스 (저장 주체)</li>
-                    <li><strong>이전받는 자의 연락처</strong> : 070-4845-3023</li>
+                    <li>
+                      <strong>이전받는 자 (업체명)</strong> :
+                      <ul>
+                        <li>주식회사 아소비바(ASOBIBA) &mdash; 활용 주체 (서비스 운영 및 개인정보 처리)</li>
+                        <li>Amazon Web Services, Inc. &mdash; 저장 주체 (데이터센터 운영)</li>
+                      </ul>
+                    </li>
+                    <li><strong>이전받는 자의 연락처</strong> : 070-4845-3023 (개인정보 관련 문의 창구)</li>
                     <li><strong>이전되는 국가</strong> : 일본 (Japan)</li>
-                    <li><strong>이전되는 개인정보 항목</strong> : 이름, 이메일, 프로필 사진</li>
-                    <li><strong>이전 일시 및 방법</strong> : 회원가입 및 서비스 이용 시 암호화된 통신망을 통한 전송 (한국 서버에 저장된 데이터를 일본 법인에서 원격으로 접근)</li>
-                    <li><strong>이전받는 자의 이용 목적</strong> : 구매대행 상품 주문 및 배송 처리, 현지 CS 응대, 시스템 유지보수</li>
+                    <li><strong>이전되는 개인정보 항목</strong> : 이름, 아이디, 이메일, 휴대폰 번호, 프로필 사진(소셜 로그인 이용 시)</li>
+                    <li><strong>이전 일시 및 방법</strong> : 회원가입 및 서비스 이용 시 암호화된 통신망(SSL)을 통해 전송되며, 일본 리전(AWS 아시아 태평양&middot;도쿄)에 저장되고 일본 법인이 해당 데이터에 원격으로 접근하여 처리합니다.</li>
+                    <li><strong>이전받는 자의 이용 목적</strong> : 구매대행 상품 주문 및 배송 처리, 현지 CS 응대, 시스템 유지보수 (Amazon Web Services, Inc.는 데이터 저장 및 인프라 운영 목적에 한함)</li>
                     <li><strong>보유 및 이용 기간</strong> : 회원 탈퇴 시 또는 관련 법령에 따른 보존 기간 만료 시까지 지체 없이 파기</li>
                   </ul>
                 </li>

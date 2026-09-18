@@ -282,6 +282,17 @@ model OrderFeeRule {
   @@map("order_fee_rules")
 }
 
+// 📢 공지사항 (관리자 > 고객 센터에서 등록·수정)
+model Notice {
+  id        Int      @id @default(autoincrement())
+  title     String                                   // 공지 제목
+  content   String   @db.Text                        // 공지 본문
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("notices")
+}
+
 // 🚚 국제 배송 업체 (관리자 > 국제 배송 업체 정보 관리에서 추가·수정)
 // 배송 조회 링크를 안내에 걸기 위한 목록입니다. 업체가 늘거나 주소가 바뀌어도 코드 수정 없이 관리자가 바꿉니다.
 model ShippingCarrier {

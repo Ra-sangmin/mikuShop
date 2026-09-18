@@ -359,6 +359,9 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                   <React.Fragment key={item.orderId}>
                     {/* 🌟 행 전체에 onClick 이벤트 및 커서 클래스 적용 */}
                     <tr
+                      /* 🔗 /mypage/status?orderId=... 로 들어왔을 때 이 행을 찾아 스크롤하기 위한 표시.
+                         합포장 묶음은 한 행이 여러 주문을 담으므로 공백으로 이어 붙입니다. */
+                      data-order-ids={ids.join(' ')}
                       className={`tr-row ${isChecked ? 'selected' : ''} ${hasCheckbox || isAllTab ? 'clickable' : ''}`}
                       onClick={() => {
                         if (isAllTab) { onStatusClick?.(item.status); return; }

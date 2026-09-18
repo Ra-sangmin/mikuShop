@@ -4,6 +4,7 @@ import * as cheerio from 'cheerio';
 import iconv from 'iconv-lite';
 import { requireAdmin, requireUser } from '@/lib/apiAuth';
 import { ORDER_STATUS } from '@/src/types/order';
+import { generateOrderId, generateBundleId, isDuplicateOrderId } from '@/lib/orderId';
 
 // 🟢 [GET] 1. 주문 목록 및 유저 정보 조회
 export async function GET() {
@@ -155,11 +156,11 @@ export async function POST(req: Request) {
     // }
     // ====================================================================
 
-    const orderId = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const formattedDate = parseJapaneseDate(auctionEndDate);
 
     // 🌟 모든 작업을 하나의 트랜잭션으로 묶어 안전하게 처리
-    const result = await prisma.$transaction(async (tx) => {
+    // 🧾 주문번호는 아래 반복문에서 골라 넘깁니다 (lib/orderId.ts — M250918-0001 형식)
+    const createOrder = (orderId: string) => prisma.$transaction(async (tx) => {
       
       // 1. 공통 주문 생성 (장바구니, 일반 구매, 경매 상관없이 무조건 1번만 작성!)
       const newOrder = await tx.order.create({
@@ -208,6 +209,20 @@ export async function POST(req: Request) {
       return newOrder;
     });
 
+    // 🧾 번호를 고른 직후 다른 요청이 같은 번호를 먼저 쓸 수 있으므로, 겹치면 다시 고릅니다.
+    let result: Awaited<ReturnType<typeof createOrder>> | undefined;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      const orderId = generateOrderId();
+      try {
+        result = await createOrder(orderId);
+        break;
+      } catch (e) {
+        if (isDuplicateOrderId(e) && attempt < 5) continue;
+        throw e;
+      }
+    }
+    if (!result) throw new Error('주문번호가 계속 겹쳐 주문을 만들지 못했습니다. 잠시 후 다시 시도해주세요.');
+
     return NextResponse.json({ success: true, order: result, productName: finalTitle });
 
   } catch (error: any) {
@@ -239,6 +254,13 @@ export async function PUT(request: Request) {
     const ownedCount = await prisma.order.count({ where: { orderId: { in: orderIds }, userId: sessionUserId } });
     if (ownedCount !== new Set(orderIds).size || orderIds.some((id: string) => !id)) {
       return NextResponse.json({ error: '본인 주문만 변경할 수 있습니다.' }, { status: 403 });
+    }
+
+    // 🧾 합포장 묶음번호도 서버에서 만듭니다. 화면에서 만들면 같은 날 다른 회원의 묶음과 번호가 겹쳐
+    //    서로 관계없는 주문이 한 묶음으로 보일 수 있습니다. 화면은 'AUTO' 만 보내고 여기서 채웁니다.
+    let generatedBundleId: string | null = null;
+    if (updates.some((o: any) => o?.bundleId === 'AUTO')) {
+      generatedBundleId = await generateBundleId(prisma);
     }
 
     // 입고·발송 시각을 이미 찍어 둔 주문은 건드리지 않기 위해 변경 전 값을 읽어 둡니다.
@@ -302,7 +324,9 @@ export async function PUT(request: Request) {
         }
 
         if (order.secondPaymentAmount !== undefined) updateData.secondPaymentAmount = order.secondPaymentAmount;
-        if (order.bundleId !== undefined) updateData.bundleId = order.bundleId;
+        if (order.bundleId !== undefined) {
+          updateData.bundleId = order.bundleId === 'AUTO' ? generatedBundleId : order.bundleId;
+        }
         if (order.trackingNo !== undefined) updateData.trackingNo = order.trackingNo;
         if (order.address_id !== undefined) updateData.addressId = order.address_id ? parseInt(order.address_id) : null;
         

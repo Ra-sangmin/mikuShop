@@ -89,11 +89,21 @@ export async function PUT(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, password, name, loginId } = body;
+    const { email, password, name, loginId, phone } = body;
 
-    if (!email || !password || !name || !loginId) {
+    if (!email || !password || !name || !loginId || !phone) {
       return NextResponse.json({ error: '모든 필드를 입력해주세요.' }, { status: 400 });
     }
+
+    // 📱 휴대폰 번호: 하이픈 유무와 상관없이 받되, 저장은 010-1234-5678 형태로 통일합니다.
+    //    (주문 상태 안내 발송에 쓰는 값이라 형식을 맞춰 둡니다)
+    const phoneDigits = String(phone).replace(/[^0-9]/g, '');
+    if (!/^01[016789]\d{7,8}$/.test(phoneDigits)) {
+      return NextResponse.json({ success: false, error: '휴대폰 번호 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+    const normalizedPhone = phoneDigits.length === 11
+      ? `${phoneDigits.slice(0, 3)}-${phoneDigits.slice(3, 7)}-${phoneDigits.slice(7)}`
+      : `${phoneDigits.slice(0, 3)}-${phoneDigits.slice(3, 6)}-${phoneDigits.slice(6)}`;
 
     // 🔒 비밀번호 최소 요건 확인 (기존에는 1자리도 가입이 가능했습니다)
     const policyError = validatePassword(password);
@@ -130,6 +140,7 @@ export async function POST(request: Request) {
         email,
         password: hashedPassword, // 평문이 아닌 해싱된 값을 저장!
         name,
+        phone: normalizedPhone,
         membershipGrade: 0,
         cyberMoney: 0
       },

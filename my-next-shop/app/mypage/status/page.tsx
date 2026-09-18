@@ -9,6 +9,8 @@ import OrderTable from './components/OrderTable';
 import AddressForm from './components/AddressForm';
 import PaymentSummary from './components/PaymentSummary';
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
+import { useSession } from 'next-auth/react';
+import { loginUrlWithReturn } from '@/lib/authRedirect';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 import '../mypage-premium.css';
@@ -131,18 +133,32 @@ function usePurchaseStatusLogic() {
   }, []);
 
   // 로그인 상태 확인
+  // 🐛 예전엔 localStorage 의 user_id 만 봤습니다. 그런데 그 값은 Header 가 세션을 받은 뒤에야 채워지므로,
+  //    SNS 로그인으로 이 화면에 곧장 돌아오면 아직 값이 없어 다시 로그인 페이지로 튕겼습니다.
+  //    세션 판정이 끝날 때까지 기다렸다가, 세션이 있으면 user_id 를 여기서 먼저 채웁니다.
+  const { data: session, status: authStatus } = useSession();
   useEffect(() => {
-    const userId = localStorage.getItem('user_id');
+    if (authStatus === 'loading') return;
+
+    const sessionUserId = (session?.user as any)?.id;
+    if (authStatus === 'authenticated' && sessionUserId) {
+      try { localStorage.setItem('user_id', String(sessionUserId)); } catch {}
+    }
+
+    let userId: string | null = null;
+    try { userId = localStorage.getItem('user_id'); } catch {}
+
     if (!userId) {
       if (!hasAlerted.current) {
         hasAlerted.current = true;
         showAlert('로그인이 필요한 페이지입니다.', 'warning');
-        router.push('/auth/login');
+        // 🔐 로그인 뒤 지금 주소(쿼리 포함)로 돌아오도록 함께 넘깁니다.
+        router.push(loginUrlWithReturn());
       }
       return;
     }
     setIsAuthChecking(false);
-  }, [router, showAlert]);
+  }, [authStatus, session, router, showAlert]);
 
   // 🌟 입찰 금액 입력 프리미엄 모달 콘텐츠
   const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string) => void }) => {
@@ -281,6 +297,51 @@ function usePurchaseStatusLogic() {
     }
   }, [searchParams]);
 
+  // 🔗 /mypage/status?orderId=M260918-a3f9
+  //    받는 값: 주문번호(M…) · 묶음번호(MB…) · orders.id 숫자. 알림톡 버튼처럼 바깥에서 들어오는 링크가 씁니다.
+  //    그 주문이 속한 상태 탭으로 옮기고, 해당 행을 선택 상태로 만든 뒤 화면에 보이도록 스크롤합니다.
+  //    주문 목록은 비동기로 오므로 목록이 채워진 뒤에 한 번만 실행합니다.
+  const focusOrderParam = (searchParams.get('orderId') || searchParams.get('order') || '').trim();
+  const focusHandled = useRef(false);
+  useEffect(() => {
+    if (!focusOrderParam || focusHandled.current || isLoading) return;
+
+    // 묶음번호로 들어오면 그 묶음의 아무 주문이나 잡으면 됩니다. 아래에서 묶음 전체를 선택하기 때문입니다.
+    const target = orders.find(
+      (o: any) =>
+        String(o.orderId) === focusOrderParam ||
+        String(o.id) === focusOrderParam ||
+        (!!o.bundleId && String(o.bundleId) === focusOrderParam)
+    );
+    if (!target) {
+      focusHandled.current = true;
+      showAlert('해당 주문을 찾을 수 없습니다.', 'warning');
+      return;
+    }
+    focusHandled.current = true;
+
+    // 국제 배송 상품은 위쪽 표에 나오지 않으므로 탭을 바꾸지 않고, 아래 패널의 그 행으로 데려갑니다.
+    if (target.status !== ORDER_STATUS.SHIPPING) setActiveTab(target.status);
+    // 합포장 묶음은 표에서 한 행으로 합쳐지므로, 묶음 전체를 선택해야 그 행이 선택 상태로 보입니다.
+    const ids = target.bundleId
+      ? orders
+          .filter((o: any) => o.bundleId === target.bundleId && o.status === target.status)
+          .map((o: any) => String(o.orderId))
+      : [String(target.orderId)];
+    setSelectedItems(ids);
+
+    // 탭이 바뀌어 표가 다시 그려진 뒤에 스크롤해야 해서 한 박자 늦춥니다.
+    // (주문번호에 없는 문자를 걸러 선택자가 깨지지 않게 합니다)
+    const rowKey = String(target.orderId).replace(/[^A-Za-z0-9_-]/g, '');
+    const timer = setTimeout(() => {
+      if (!rowKey) return;
+      document
+        .querySelector(`[data-order-ids~="${rowKey}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [focusOrderParam, orders, isLoading, setActiveTab, showAlert]);
+
   // 하위 상태 아이템 생성 시 상세 설명(desc) 데이터 추가
   const shippingPhases = useMemo(() => {
     // 🌟 "진행중인 목록만 보기"가 켜져 있으면 요청/진행중/창고/배송 모듈 전체가
@@ -351,11 +412,12 @@ function usePurchaseStatusLogic() {
   }, [orders, phaseOrder, progressFilterActive]);
 
   const items = useMemo(() => {
-    // 1. 탭 필터링. 전체 탭(전체 내역 보기)은 "진행중인 목록만 보기" 토글과 무관하게 항상 국제 배송(SHIPPING)을
-    // 제외하고 보여줍니다(국제 배송은 하단의 "국제 배송 현황" 패널에서 별도로 확인). 개별 상태 탭은 그 상태만 보여줍니다.
-    const filtered = activeTab === ORDER_STATUS.ALL
-      ? orders.filter(item => isProgressStatus(item.status))
-      : orders.filter(item => item.status === activeTab);
+    // 1. 탭 필터링.
+    //    국제 배송(SHIPPING)은 어떤 탭에서도 이 표에 넣지 않습니다. 아래 "국제 배송 현황" 패널에서만 보여 주며,
+    //    두 곳에 같은 상품이 나오면 진행 상황을 두 번 세는 것처럼 보이기 때문입니다.
+    const filtered = orders.filter(
+      item => isProgressStatus(item.status) && (activeTab === ORDER_STATUS.ALL || item.status === activeTab),
+    );
 
     // 2. 🌟 어떤 탭이든 상관없이 항상 우선순위 및 id 기준 정렬 적용
     return filtered.sort((a, b) => {
@@ -525,8 +587,9 @@ function usePurchaseStatusLogic() {
       const addressUpdateData = newStatus === ORDER_STATUS.PREPARING && selectedAddress ? { address_id: selectedAddress.id } : {};
       
       // 🌟 개별포장(isBundle === false)일 경우 bundleId를 생성하지 않음
-      // 🌟 map 내부에서 Date.now()를 호출하면 아이템마다 값이 달라질 수 있어, 묶음 전체가 같은 bundleId를 갖도록 미리 한 번만 생성합니다.
-      const bundleId = 'B' + Date.now();
+      // 🧾 묶음번호는 서버에서 만듭니다. 화면에서 만들면 같은 날 다른 회원의 묶음과 번호가 겹칠 수 있습니다.
+      //    'AUTO' 를 보내면 /api/orders 가 MB250918-0001 형식으로 채워 넣고, 묶음 전체에 같은 값을 씁니다.
+      const bundleId = 'AUTO';
       let updates = newStatus === ORDER_STATUS.PREPARING
         ? selectedItems.map(id => ({
             id,
@@ -763,6 +826,12 @@ function MyPurchaseStatusContent() {
 
   // 🌟 "국제 배송 현황" 패널: 국제 배송(SHIPPING) 상태 주문을 합포장 묶음 기준으로 정리하고,
   // 각 배송의 물류 단계(deliveryStatus)를 함께 보여줍니다.
+  // 🚚 국제 배송 상품은 위쪽 표가 아니라 아래 "국제 배송 현황" 패널에서만 봅니다.
+  //    예전에는 이 패널의 행이나 상단 요약을 누르면 위쪽 표가 국제 배송 탭으로 바뀌어 같은 상품이 두 곳에 보였습니다.
+  const scrollToShipmentPanel = () => {
+    document.getElementById('miku-shipment-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   // 🚚 운송장 번호를 누르면 그 주문에 저장된 배송 업체(Order.shippingCarrierId)의 사이트를 새 창으로 엽니다.
   //    업체 이름·주소는 /api/users 가 shippingCarrier 로 함께 내려줍니다.
   const openCarrierSite = (shipment: any) => {
@@ -861,7 +930,7 @@ function MyPurchaseStatusContent() {
           <button type="button" className="mp-hero-stat" onClick={() => handleTabChange(ORDER_STATUS.ARRIVED)}>
             <span>입고 완료</span><strong>{orders.filter((o: any) => o.status === ORDER_STATUS.ARRIVED).length}<small>건</small></strong>
           </button>
-          <button type="button" className="mp-hero-stat" onClick={() => handleTabChange(ORDER_STATUS.SHIPPING)}>
+          <button type="button" className="mp-hero-stat" onClick={scrollToShipmentPanel}>
             <span>국제 배송 중</span><strong>{internationalShipments.length}<small>건</small></strong>
           </button>
         </div>
@@ -1055,7 +1124,7 @@ function MyPurchaseStatusContent() {
         <h2>국제 배송 현황 <span className="section-icon-badge badge-amber"><i className="fa fa-plane"></i></span></h2>
       </div>
 
-      <div className="miku-shipment-panel">
+      <div className="miku-shipment-panel" id="miku-shipment-panel">
         <div className="table-container anim-slide-up delay-3">
           <table className="premium-table">
             <thead>
@@ -1069,11 +1138,18 @@ function MyPurchaseStatusContent() {
               {internationalShipments.length === 0 ? (
                 <tr><td colSpan={3} className="empty-row">현재 국제 배송 중인 상품이 없습니다.</td></tr>
               ) : (
-                internationalShipments.map((shipment: any) => (
+                internationalShipments.map((shipment: any) => {
+                  const shipmentIds: string[] = shipment.orderIds || [shipment.orderId];
+                  // 🔗 주소(?orderId=…)로 들어와 고른 주문이면 선택된 것으로 표시합니다.
+                  //    합포장은 묶음 구성원이 모두 선택돼 있어야 그 행이 선택 상태입니다.
+                  const isSelected =
+                    shipmentIds.length > 0 && shipmentIds.every(id => selectedItems.includes(String(id)));
+                  return (
                   <tr
                     key={shipment.orderId}
-                    className="tr-row clickable"
-                    onClick={() => handleTabChange(ORDER_STATUS.SHIPPING)}
+                    className={`tr-row ${isSelected ? 'selected' : ''}`}
+                    /* 🔗 주소로 들어온 주문번호를 찾아 스크롤하기 위한 표시 (합포장은 구성원 전부) */
+                    data-order-ids={shipmentIds.join(' ')}
                   >
                     <td className="td-cell td-product">
                       <div className="prod-name-box" title={shipment.productName}>
@@ -1122,7 +1198,8 @@ function MyPurchaseStatusContent() {
                       })()}
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -1242,6 +1319,11 @@ function MyPurchaseStatusContent() {
            table-layout: fixed로 각 칸의 폭을 실제 크기로 고정해서, 글자수로 미리 자르지 않고도
            칸 폭보다 텍스트가 클 때만 CSS 말줄임(...)으로 정확히 줄어들도록 합니다. */
         .miku-shipment-panel .premium-table { table-layout: fixed; min-width: 0; }
+        /* 🔗 주소(?orderId=…)로 들어와 고른 주문임을 표시합니다. 위쪽 표의 선택 표시와 같은 모양입니다. */
+        .miku-shipment-panel .tr-row.selected {
+          background: linear-gradient(90deg, #fdf4f4 0%, #fffafa 100%);
+          box-shadow: inset 3px 0 0 #c0606a;
+        }
         .miku-shipment-panel .td-product { max-width: none; width: auto; }
         /* 🌟 "외 N건"은 항상 보이도록 줄어들지 않게(flex-shrink:0) 고정하고, 상품명 쪽만 ...으로 줄입니다. */
         .miku-shipment-panel .prod-name-suffix { flex-shrink: 0; white-space: nowrap; color: #64748b; font-weight: 700; }
