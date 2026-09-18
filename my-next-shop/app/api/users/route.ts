@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { validatePassword } from '@/lib/passwordPolicy';
 import prisma from '@/lib/prisma';
 import { requireUser } from '@/lib/apiAuth';
+import { formatKoreanMobile } from '@/lib/phone';
 import bcrypt from 'bcrypt';
 
 export async function GET(request: Request) {
@@ -96,14 +97,11 @@ export async function POST(request: Request) {
     }
 
     // 📱 휴대폰 번호: 하이픈 유무와 상관없이 받되, 저장은 010-1234-5678 형태로 통일합니다.
-    //    (주문 상태 안내 발송에 쓰는 값이라 형식을 맞춰 둡니다)
-    const phoneDigits = String(phone).replace(/[^0-9]/g, '');
-    if (!/^01[016789]\d{7,8}$/.test(phoneDigits)) {
+    //    (주문 상태 안내 발송에 쓰는 값이라 형식을 맞춰 둡니다 - SNS 가입도 lib/phone.ts를 같이 씁니다)
+    const normalizedPhone = formatKoreanMobile(phone);
+    if (!normalizedPhone) {
       return NextResponse.json({ success: false, error: '휴대폰 번호 형식이 올바르지 않습니다.' }, { status: 400 });
     }
-    const normalizedPhone = phoneDigits.length === 11
-      ? `${phoneDigits.slice(0, 3)}-${phoneDigits.slice(3, 7)}-${phoneDigits.slice(7)}`
-      : `${phoneDigits.slice(0, 3)}-${phoneDigits.slice(3, 6)}-${phoneDigits.slice(6)}`;
 
     // 🔒 비밀번호 최소 요건 확인 (기존에는 1자리도 가입이 가능했습니다)
     const policyError = validatePassword(password);

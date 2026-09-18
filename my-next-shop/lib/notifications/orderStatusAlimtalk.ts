@@ -15,6 +15,8 @@ import {
   normalizePhone,
   sendAlimtalk,
   isAlimtalkConfigured,
+  missingSolapiEnv,
+  maskPhone,
 } from './alimtalk';
 
 /** 알림톡을 보내는 상태. 카카오 검수를 통과한 템플릿만 올립니다. */
@@ -55,10 +57,17 @@ export async function notifyOrderStatusByAlimtalk(
 
   try {
     const targets = changes.filter(c => c.orderId && shouldSendAlimtalk(c.status));
-    if (targets.length === 0) return result;
+    // 📋 안 왔을 때 "어느 단계에서 빠졌는지" 바로 보이도록 단계마다 이유를 남깁니다.
+    console.log(`[알림톡] 상태 변경 ${changes.length}건 접수 → 발송 대상 ${targets.length}건`,
+      changes.map(c => `${c.orderId}:${c.status}`).join(', ') || '(없음)');
+    if (targets.length === 0) {
+      console.log(`[알림톡] 알림톡을 보내는 상태가 아니라 종료합니다. (보내는 상태: ${ALIMTALK_STATUSES.join(', ')})`);
+      return result;
+    }
 
     if (!isAlimtalkConfigured()) {
       // 설정이 없으면 조용히 넘어갑니다. 이메일은 그대로 나가므로 고객이 못 받는 일은 없습니다.
+      console.warn(`[알림톡] 건너뜀 ${targets.length}건 — SOLAPI 환경변수가 없습니다. 빠진 값: ${missingSolapiEnv().join(', ')}`);
       result.skipped += targets.length;
       return result;
     }
@@ -98,14 +107,34 @@ export async function notifyOrderStatusByAlimtalk(
 
     for (const target of targets) {
       const order = orderMap.get(target.orderId);
-      if (!order || !order.user) { result.skipped++; continue; }
-      if (sentKeys.has(`${target.orderId}:${target.status}`)) { result.skipped++; continue; }
+      if (!order) {
+        console.warn(`[알림톡] 건너뜀 (${target.orderId}) — 주문을 찾지 못했습니다.`);
+        result.skipped++; continue;
+      }
+      if (!order.user) {
+        console.warn(`[알림톡] 건너뜀 (${target.orderId}) — 주문에 연결된 회원이 없습니다. (userId: ${order.userId})`);
+        result.skipped++; continue;
+      }
+      if (sentKeys.has(`${target.orderId}:${target.status}`)) {
+        console.log(`[알림톡] 건너뜀 (${target.orderId}) — 같은 상태로 이미 보낸 기록이 있습니다. (중복 발송 방지)`);
+        result.skipped++; continue;
+      }
 
       const phone = pickPhone(order.user);
-      if (!phone) { result.skipped++; continue; }
+      if (!phone) {
+        // 회원 번호·배송지 번호가 모두 국내 휴대폰이 아니면 여기서 걸립니다.
+        console.warn(`[알림톡] 건너뜀 (${target.orderId}) — 보낼 번호가 없습니다.`, {
+          회원번호: maskPhone(order.user.phone),
+          배송지수: order.user.addresses.length,
+        });
+        result.skipped++; continue;
+      }
 
       const template = ALIMTALK_TEMPLATES[target.status];
-      if (!template) { result.skipped++; continue; }
+      if (!template) {
+        console.warn(`[알림톡] 건너뜀 (${target.orderId}) — ${target.status} 상태에 등록된 템플릿이 없습니다.`);
+        result.skipped++; continue;
+      }
 
       const variables: Record<string, string> = {
         고객명: order.user.name || '고객',
@@ -125,6 +154,9 @@ export async function notifyOrderStatusByAlimtalk(
       if (sendResult.success) result.sent++;
       else if (sendResult.skipped) result.skipped++;
       else result.failed++;
+
+      console.log(`[알림톡] 발송 결과 (${target.status}, ${order.orderId}) →`,
+        sendResult.success ? '성공' : sendResult.skipped ? `건너뜀: ${sendResult.error}` : `실패: ${sendResult.error}`);
 
       // 건너뛴 건은 이력을 남기지 않습니다. 설정이 생기면 다시 보낼 수 있어야 하기 때문입니다.
       if (!sendResult.skipped) {

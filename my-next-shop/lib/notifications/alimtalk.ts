@@ -7,13 +7,18 @@
 //  - 실패해도 예외를 던지지 않습니다. 알림 때문에 주문 처리가 막히면 안 됩니다.
 //
 // 필요한 환경변수 (.env)
-//   SOLAPI_API_KEY        솔라피 API 키
-//   SOLAPI_API_SECRET     솔라피 API 시크릿
-//   SOLAPI_PFID           카카오 발신 프로필 ID (채널 등록 후 발급)
-//   SOLAPI_SENDER         알림톡 실패 시 문자로 대체 발송할 발신번호 (사전 등록된 번호)
-//   하나라도 없으면 발송하지 않고 건너뜁니다. (개발 환경에서 실수로 나가지 않도록)
+//   SOLAPI_API_KEY        솔라피 API 키          (필수)
+//   SOLAPI_API_SECRET     솔라피 API 시크릿      (필수)
+//   SOLAPI_PFID           카카오 발신 프로필 ID   (필수 - 채널 연동 후 발급)
+//   위 셋 중 하나라도 없으면 발송하지 않고 건너뜁니다. (개발 환경에서 실수로 나가지 않도록)
+//
+//   SOLAPI_SENDER         문자 대체발송에 쓸 발신번호 (선택)
+//   🌟 알림톡 자체는 발신번호가 필요 없습니다. 카카오 채널(pfId)이 발신번호 역할을 합니다.
+//      발신번호 사전등록제는 문자(SMS)에 적용되는 의무라, 등록 없이도 알림톡은 나갑니다.
+//      이 값이 있으면 알림톡 실패 시 문자로 대체 발송하고, 없으면 알림톡만 보냅니다.
 
 import { createHmac, randomBytes } from 'crypto';
+import { normalizeKoreanMobile } from '@/lib/phone';
 
 const SOLAPI_ENDPOINT = 'https://api.solapi.com/messages/v4/send';
 
@@ -76,14 +81,9 @@ export function fillTemplate(content: string, variables: Record<string, string>)
 /**
  * 알림톡에 쓸 수 있는 번호인지 확인하고 숫자만 남깁니다.
  * 국내 휴대폰(010/011/016/017/018/019)만 받습니다. 잘못된 번호로 보내면 건당 비용만 나갑니다.
+ * (가입할 때 번호를 정리하는 규칙과 어긋나면 안 되므로 lib/phone.ts의 함수를 그대로 씁니다)
  */
-export function normalizePhone(raw: string | null | undefined): string | null {
-  const digits = String(raw ?? '').replace(/[^0-9]/g, '');
-  if (!digits) return null;
-  // +82 로 시작하는 국제 표기를 국내 표기로 되돌립니다 (821012345678 → 01012345678)
-  const local = digits.startsWith('82') && digits.length >= 11 ? `0${digits.slice(2)}` : digits;
-  return /^01[016789][0-9]{7,8}$/.test(local) ? local : null;
-}
+export const normalizePhone = normalizeKoreanMobile;
 
 // ---------------------------------------------------------------- 발송
 
@@ -91,9 +91,23 @@ function solapiConfig() {
   const apiKey = process.env.SOLAPI_API_KEY;
   const apiSecret = process.env.SOLAPI_API_SECRET;
   const pfId = process.env.SOLAPI_PFID;
-  const sender = process.env.SOLAPI_SENDER;
-  if (!apiKey || !apiSecret || !pfId || !sender) return null;
+  if (!apiKey || !apiSecret || !pfId) return null;
+  // 발신번호는 문자 대체발송용이라 없어도 알림톡은 보냅니다. (위 헤더 주석 참고)
+  const sender = process.env.SOLAPI_SENDER || null;
   return { apiKey, apiSecret, pfId, sender };
+}
+
+/** 설정이 없을 때 "무엇이 없는지" 바로 알 수 있게 빠진 환경변수 이름만 돌려줍니다. (값은 절대 찍지 않습니다) */
+export function missingSolapiEnv(): string[] {
+  return ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_PFID']
+    .filter(name => !process.env[name]);
+}
+
+/** 로그에 남길 번호. 개인정보라 가운데를 가립니다. (01012345678 → 010****5678) */
+export function maskPhone(raw: string | null | undefined): string {
+  const digits = String(raw ?? '').replace(/[^0-9]/g, '');
+  if (digits.length < 8) return '(번호없음)';
+  return `${digits.slice(0, 3)}****${digits.slice(-4)}`;
 }
 
 /** 솔라피는 HMAC-SHA256 서명을 Authorization 헤더에 담습니다. */
@@ -120,7 +134,8 @@ export interface SendAlimtalkParams {
  */
 export function buildAlimtalkPayload(params: {
   to: string;
-  from: string;
+  /** 문자 대체발송용 발신번호. 없으면 넣지 않습니다 (알림톡만 나갑니다). */
+  from?: string | null;
   pfId: string;
   template: AlimtalkTemplate;
   variables: Record<string, string>;
@@ -129,7 +144,8 @@ export function buildAlimtalkPayload(params: {
   return {
     message: {
       to: params.to,
-      from: params.from,
+      // 등록된 발신번호가 없으면 from 자체를 빼야 합니다. 빈 문자열을 보내면 솔라피가 거절합니다.
+      ...(params.from ? { from: params.from } : {}),
       type: 'ATA', // 알림톡
       kakaoOptions: {
         pfId: params.pfId,
@@ -156,12 +172,15 @@ export function buildAlimtalkPayload(params: {
 export async function sendAlimtalk(params: SendAlimtalkParams): Promise<AlimtalkResult> {
   const config = solapiConfig();
   if (!config) {
-    console.warn('[알림톡] SOLAPI_* 환경변수가 없어 발송을 건너뜁니다.');
+    console.warn('[알림톡] SOLAPI_* 환경변수가 없어 발송을 건너뜁니다. 빠진 값:', missingSolapiEnv().join(', '));
     return { success: false, skipped: true, error: 'SOLAPI 설정 없음' };
   }
 
   const to = normalizePhone(params.to);
-  if (!to) return { success: false, skipped: true, error: '보낼 수 있는 휴대폰 번호가 아닙니다.' };
+  if (!to) {
+    console.warn(`[알림톡] 보낼 수 있는 번호가 아니라 건너뜁니다. (입력값: ${maskPhone(params.to)})`);
+    return { success: false, skipped: true, error: '보낼 수 있는 휴대폰 번호가 아닙니다.' };
+  }
 
   const body = buildAlimtalkPayload({
     to,
@@ -178,7 +197,20 @@ export async function sendAlimtalk(params: SendAlimtalkParams): Promise<Alimtalk
     return { success: true, skipped: true, error: 'dryRun' };
   }
 
+  // 📋 실제로 무엇을 어디로 보내는지 남깁니다. 안 왔을 때 "요청이 나가긴 했는지"부터 갈라야 합니다.
+  //    (API 키·시크릿은 찍지 않고, 번호는 가운데를 가립니다)
+  console.log('[알림톡] 발송 요청', {
+    to: maskPhone(to),
+    // 발신번호가 없으면 문자 대체발송만 못 할 뿐, 알림톡은 그대로 나갑니다.
+    from: config.sender ? maskPhone(config.sender) : '(없음 - 문자 대체발송 안 함)',
+    pfId: config.pfId,
+    templateId: params.template.templateId,
+    변수: params.variables,
+    버튼주소: params.buttonUrl,
+  });
+
   try {
+    const startedAt = Date.now();
     const res = await fetch(SOLAPI_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -192,12 +224,18 @@ export async function sendAlimtalk(params: SendAlimtalkParams): Promise<Alimtalk
     // 솔라피는 실패해도 200 을 주는 경우가 있어 본문의 statusCode 까지 봅니다.
     const statusCode = json?.statusCode ?? json?.groupInfo?.status;
     const ok = res.ok && (statusCode === undefined || String(statusCode) === '2000');
+
+    // 📋 솔라피 응답을 통째로 남깁니다. 템플릿 불일치·발신번호 미등록 같은 실제 사유가 여기에만 나옵니다.
+    console.log(`[알림톡] 솔라피 응답 (HTTP ${res.status}, ${Date.now() - startedAt}ms, ${ok ? '성공' : '실패'}):`,
+      JSON.stringify(json));
+
     if (!ok) {
       const reason = json?.errorMessage || json?.statusMessage || `HTTP ${res.status}`;
       return { success: false, error: String(reason).slice(0, 500) };
     }
     return { success: true };
   } catch (e) {
+    console.error('[알림톡] 솔라피 호출 자체가 실패했습니다:', e);
     return { success: false, error: (e as Error).message.slice(0, 500) };
   }
 }

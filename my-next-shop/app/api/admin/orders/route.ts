@@ -179,7 +179,8 @@ export async function PUT(request: Request) {
     //    발송 실패가 주문 저장을 롤백시키면 안 되므로 트랜잭션 안에 넣지 않습니다.
     //    메일과 알림톡은 각자 자기 화이트리스트로 다시 거르므로 여기서는 둘 중 하나라도 해당하면 넘깁니다.
     if (type !== 'delivery' && Array.isArray(updates)) {
-      const changes = (updates as any[])
+      const requested = updates as any[];
+      const changes = requested
         .filter(o => o?.id && o?.status && (shouldNotify(o.status) || shouldSendAlimtalk(o.status)))
         .filter(o => previousStatuses.get(o.id) !== o.status) // 실제로 바뀐 것만
         .map(o => ({ orderId: o.id as string, status: o.status as string }));
@@ -190,6 +191,11 @@ export async function PUT(request: Request) {
         // 💬 낙찰 성공 등 검수를 통과한 상태만 알림톡이 나갑니다. (lib/notifications/orderStatusAlimtalk.ts)
         const talkResult = await notifyOrderStatusByAlimtalk(changes);
         console.log('[알림] 주문 상태 알림톡:', talkResult);
+      } else {
+        // 📋 이미 같은 상태였던 주문을 다시 저장하면 알림이 나가지 않습니다.
+        //    "바꿨는데 안 왔다"의 상당수가 이 경우라, 이유를 남겨 둡니다.
+        console.log('[알림] 보낼 상태 변경이 없어 알림을 건너뜁니다.',
+          requested.map(o => `${o?.id}: ${previousStatuses.get(o?.id) ?? '(이전값없음)'} → ${o?.status}`).join(', '));
       }
     }
 

@@ -7,6 +7,7 @@ import KakaoProvider from "next-auth/providers/kakao";
 import prisma from "@/lib/prisma";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
+import { formatKoreanMobile } from "@/lib/phone";
 
 // 🌟 SNS 로그인 회원 찾기 (signIn·jwt 콜백이 반드시 이 함수를 함께 써야 합니다)
 //
@@ -27,6 +28,28 @@ async function findSocialUser(provider: string, providerUserId: string, email?: 
 
   if (email) {
     return prisma.user.findUnique({ where: { email } });
+  }
+  return null;
+}
+
+// 📱 SNS가 내려준 휴대폰 번호를 꺼냅니다. (동의하지 않았으면 값 자체가 없습니다)
+//    signIn 콜백의 profile은 프로바이더가 가공하기 전의 원본 응답이라 제공사마다 위치가 다릅니다.
+//      - 네이버: response.mobile("010-1234-5678") 또는 response.mobile_e164("+821012345678")
+//      - 카카오: kakao_account.phone_number("+82 10-1234-5678")
+//    저장 형태(010-1234-5678)로 맞추는 일은 lib/phone.ts가 합니다. 해외 번호 등은 null이 됩니다.
+type SocialPhoneProfile = {
+  response?: { mobile?: string; mobile_e164?: string }; // 네이버
+  kakao_account?: { phone_number?: string };            // 카카오
+};
+
+function extractSocialPhone(provider: string, profile: unknown): string | null {
+  const raw = (profile ?? {}) as SocialPhoneProfile;
+
+  if (provider === "naver") {
+    return formatKoreanMobile(raw.response?.mobile || raw.response?.mobile_e164);
+  }
+  if (provider === "kakao") {
+    return formatKoreanMobile(raw.kakao_account?.phone_number);
   }
   return null;
 }
@@ -101,6 +124,9 @@ export const authOptions: NextAuthOptions = {
         // 🌟 SNS가 내려준 프로필 이미지(카카오 프로필 사진 등). 동의하지 않았으면 비어 있습니다.
         const snsProfileImage = (user.image || '').trim() || null;
 
+        // 📱 SNS가 내려준 휴대폰 번호. 주문 상태 알림톡 발송에 쓰므로 회원 정보에 함께 저장합니다.
+        const snsPhone = extractSocialPhone(safeProvider, profile);
+
         // 유저가 없으면 새로 생성 (소셜 회원가입)
         if (!existingUser) {
           await prisma.user.create({
@@ -109,6 +135,7 @@ export const authOptions: NextAuthOptions = {
               email: userEmail,
               name: user.name || `${safeProvider} 사용자`,
               profileImage: snsProfileImage,
+              phone: snsPhone,
               password: "", // SNS 로그인이므로 비밀번호는 비워둠
               membershipGrade: 0,
               cyberMoney: 0,
@@ -118,7 +145,7 @@ export const authOptions: NextAuthOptions = {
         } else {
           // 🐛 예전엔 기존 회원이 다시 로그인해도 아무것도 갱신하지 않아서, 닉네임 동의를 나중에
           //    켜도 이름이 "kakao 사용자" 같은 임시값에 머물러 있었습니다. 프로필 사진도 마찬가지입니다.
-          const updates: { name?: string; profileImage?: string | null } = {};
+          const updates: { name?: string; profileImage?: string | null; phone?: string } = {};
 
           // 이름은 "아직 임시값인 경우"에만 SNS 닉네임으로 채웁니다.
           // (나중에 회원이 직접 이름을 바꾸는 기능이 생겨도 로그인할 때마다 덮어쓰지 않도록)
@@ -130,6 +157,12 @@ export const authOptions: NextAuthOptions = {
           // 프로필 사진은 직접 올리는 기능이 없어 SNS 값이 유일한 출처이므로 항상 최신으로 맞춥니다.
           if (snsProfileImage && snsProfileImage !== existingUser.profileImage) {
             updates.profileImage = snsProfileImage;
+          }
+
+          // 📱 휴대폰 번호는 "아직 비어 있는 경우"에만 채웁니다.
+          //    (마이페이지에서 직접 고친 번호를 로그인할 때마다 SNS 값으로 되돌리면 안 됩니다)
+          if (snsPhone && !existingUser.phone?.trim()) {
+            updates.phone = snsPhone;
           }
 
           if (Object.keys(updates).length > 0) {
