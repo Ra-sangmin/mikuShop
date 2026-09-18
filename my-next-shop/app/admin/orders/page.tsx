@@ -9,6 +9,20 @@ import '../admin-common.css';
 // 🌟 Enum 키를 기반으로 옵션 생성
 const statusOptions = Object.keys(ORDER_STATUS).filter(key => key !== 'ALL') as OrderStatus[];
 
+/** 📨 알림 발송 이력 한 줄. /api/admin/orders/notifications 응답과 짝을 이룹니다. */
+type NotificationLogRow = {
+  id: number;
+  channel: string;
+  status: string;
+  success: boolean;
+  error: string | null;
+  createdAt: string;
+  /** 이 발송에 함께 묶여 나간 주문번호들 (알림톡은 여러 건을 한 통으로 보냅니다) */
+  groupOrderIds: string[];
+  /** 고객이 받은 본문에 찍힌 대표 주문번호 */
+  leadOrderId: string | null;
+};
+
 // 🌟 mypage/status와 동일하게 합포장(bundleId) 묶음을 한 행으로 표시하는 상태들
 const GROUPABLE_STATUSES = [ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING];
 
@@ -44,6 +58,13 @@ export default function OrderManagement() {
   // 💬 입고 일괄 처리처럼 한 회원에게 여러 건이 몰릴 때, 이번 저장의 알림톡만 끕니다.
   //    (서버도 회원당 1통으로 자동 제한하지만, 아예 안 보내고 싶을 때 쓰는 스위치입니다)
   const [skipAlimtalk, setSkipAlimtalk] = useState(false);
+
+  // 📨 알림 발송 이력 (CS 문의 대응용)
+  //    알림톡은 여러 주문을 한 통으로 묶어 보내므로, 고객이 대표 주문번호 하나만 들고 문의합니다.
+  //    그 발송에 함께 묶였던 주문이 무엇인지 여기서 확인합니다.
+  const [logModalOrderId, setLogModalOrderId] = useState<string | null>(null);
+  const [logRows, setLogRows] = useState<NotificationLogRow[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   // 🌟 합포장(bundleId) 그룹을 mypage/status처럼 한 행으로 펼쳐보기 위한 상태
   const [expandedBundles, setExpandedBundles] = useState<Set<string>>(new Set());
@@ -406,6 +427,22 @@ export default function OrderManagement() {
     });
   };
 
+  const openNotificationLogs = async (orderId: string) => {
+    setLogModalOrderId(orderId);
+    setLogRows([]);
+    setLogsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/orders/notifications?orderId=${encodeURIComponent(orderId)}`);
+      const data = await res.json();
+      setLogRows(res.ok && data.success ? data.logs : []);
+    } catch (error) {
+      console.error('발송 이력 조회 실패:', error);
+      setLogRows([]);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
   const handleSaveChanges = async () => {
     if (changedOrderIds.size === 0) return;
     setIsSaving(true);
@@ -745,7 +782,17 @@ export default function OrderManagement() {
                   <td className="admin-base-td" style={order.isBundleGroup ? os.bundleGroupIdCell : undefined}>
                     <div className="admin-sub-text">{order.date}</div>
                     {!order.isBundleGroup && (
-                      <div style={{ fontWeight: '600', color: colors.textMain, marginBottom: '2px' }}>{order.id}</div>
+                      <div style={{ fontWeight: '600', color: colors.textMain, marginBottom: '2px' }}>
+                        {order.id}
+                        {/* 📨 고객이 "알림 못 받았다"·"이 번호로 받았다" 고 문의할 때 바로 확인합니다. */}
+                        <button
+                          onClick={() => openNotificationLogs(order.id)}
+                          style={os.logBtn}
+                          title="알림 발송 이력 보기"
+                        >
+                          📨
+                        </button>
+                      </div>
                     )}
                     {order.isBundleGroup && (
                       <span style={os.bundleGroupBadge}>📦 합포장 {order.bundleItems.length}건</span>
@@ -1069,6 +1116,58 @@ export default function OrderManagement() {
         </div>
       </div>
     )}
+
+    {/* 📨 알림 발송 이력 */}
+    {logModalOrderId && (
+      <div style={os.feeModalOverlay} onClick={() => setLogModalOrderId(null)}>
+        <div style={{ ...os.feeModalBox, maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
+          <h3 style={os.feeModalTitle}>알림 발송 이력</h3>
+          <p style={os.feeModalDesc}>{logModalOrderId}</p>
+
+          {logsLoading && <p style={os.logEmpty}>불러오는 중...</p>}
+
+          {!logsLoading && logRows.length === 0 && (
+            <p style={os.logEmpty}>
+              이 주문으로 발송된 알림이 없습니다.<br />
+              (상태가 알림 대상이 아니거나, 아직 상태를 바꾸지 않았습니다)
+            </p>
+          )}
+
+          {!logsLoading && logRows.map((log) => (
+            <div key={log.id} style={os.logRow}>
+              <div style={os.logRowHead}>
+                <span style={os.logChannel}>{log.channel === 'ALIMTALK' ? '💬 알림톡' : '✉️ 메일'}</span>
+                <span>{ORDER_STATUS_LABEL[log.status as OrderStatus] || log.status}</span>
+                <span style={{ color: log.success ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+                  {log.success ? '성공' : '실패'}
+                </span>
+                <span style={os.logTime}>{new Date(log.createdAt).toLocaleString('ko-KR')}</span>
+              </div>
+
+              {/* 한 통에 여러 주문이 묶였다면, 고객이 받은 본문은 "대표 외 N건" 입니다. */}
+              {log.groupOrderIds.length > 1 ? (
+                <div style={os.logGroup}>
+                  고객이 받은 번호: <b>{log.leadOrderId}</b> 외 {log.groupOrderIds.length - 1}건
+                  <div style={os.logGroupList}>
+                    {log.groupOrderIds.map((id: string) => (
+                      <span key={id} style={id === logModalOrderId ? os.logChipSelf : os.logChip}>{id}</span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={os.logGroup}>이 주문 단독으로 발송되었습니다.</div>
+              )}
+
+              {log.error && <div style={os.logError}>사유: {log.error}</div>}
+            </div>
+          ))}
+
+          <div style={os.feeModalButtonRow}>
+            <button onClick={() => setLogModalOrderId(null)} style={os.feeModalCancelBtn}>닫기</button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 }
@@ -1100,6 +1199,57 @@ const os: Record<string, React.CSSProperties> = {
     gap: '12px',
     alignItems: 'center',
   },
+
+  // 📨 알림 발송 이력
+  logBtn: {
+    marginLeft: '6px',
+    padding: '0 4px',
+    border: 'none',
+    background: 'transparent',
+    cursor: 'pointer',
+    fontSize: '12px',
+    lineHeight: 1,
+  },
+  logEmpty: {
+    padding: '18px 4px',
+    fontSize: '13px',
+    color: colors.emptyText,
+    textAlign: 'center',
+    lineHeight: 1.6,
+  },
+  logRow: {
+    border: `1px solid ${colors.borderDark}`,
+    borderRadius: '8px',
+    padding: '10px 12px',
+    marginBottom: '8px',
+  },
+  logRowHead: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    fontSize: '13px',
+    flexWrap: 'wrap',
+  },
+  logChannel: { fontWeight: 700 },
+  logTime: { marginLeft: 'auto', fontSize: '12px', color: colors.textSub },
+  logGroup: { marginTop: '6px', fontSize: '12px', color: colors.textSub },
+  logGroupList: { display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' },
+  logChip: {
+    padding: '2px 6px',
+    borderRadius: '4px',
+    background: '#f1f5f9',
+    color: colors.textSub,
+    fontSize: '11px',
+  },
+  logChipSelf: {
+    padding: '2px 6px',
+    borderRadius: '4px',
+    background: '#dbeafe',
+    color: '#1d4ed8',
+    fontSize: '11px',
+    fontWeight: 700,
+  },
+  logError: { marginTop: '6px', fontSize: '12px', color: '#dc2626' },
 
   // 💬 "알림톡 보내지 않기" 체크박스
   skipTalkLabel: {

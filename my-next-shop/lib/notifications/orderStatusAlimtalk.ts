@@ -177,6 +177,11 @@ export async function notifyOrderStatusByAlimtalk(
 
     for (const group of groups.values()) {
       const template = ALIMTALK_TEMPLATES[group.status];
+
+      // 대표 주문을 주문번호 오름차순으로 고정합니다.
+      // 관리자 화면의 정렬·체크 순서에 따라 대표가 달라지면, 고객이 받은 번호와
+      // 나중에 CS 가 조회한 번호가 어긋나 대조가 안 됩니다.
+      group.orders.sort((a, b) => a.orderId.localeCompare(b.orderId));
       const lead = group.orders[0];
       const variables = buildVariables(group.status, group.orders);
 
