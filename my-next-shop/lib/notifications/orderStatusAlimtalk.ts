@@ -45,9 +45,26 @@ function orderDetailUrl(orderId: string): string {
   return `${siteUrl()}/mypage/status?orderId=${encodeURIComponent(orderId)}`;
 }
 
+/**
+ * 여러 건을 묶어 보낼 때 여는 주소. 주문 하나만 열면 나머지를 볼 수 없으므로
+ * 그 상태의 탭을 열어 묶인 주문이 모두 보이게 합니다.
+ * (마이페이지가 ?tab= 을 읽어 해당 탭으로 이동합니다 — app/mypage/status/page.tsx)
+ */
+function orderListUrl(status: string): string {
+  return `${siteUrl()}/mypage/status?tab=${encodeURIComponent(status)}`;
+}
+
 const won = (value: number | null | undefined) => `${Number(value ?? 0).toLocaleString('ko-KR')}원`;
 /** 알림톡 본문은 길이 제한이 있어 상품명이 길면 줄입니다. */
-const shorten = (text: string, max = 40) => (text.length > max ? `${text.slice(0, max)}...` : text);
+/**
+ * 알림톡 본문은 한 줄에 들어가는 글자 수가 적어 상품명이 길면 읽기 어렵습니다.
+ * 일본 상품명은 수식어가 길게 붙는 경우가 많아 10자에서 자릅니다.
+ */
+const shorten = (text: string, max = 10) => (text.length > max ? `${text.slice(0, max)}...` : text);
+
+/** 묶어 보낼 때 "첫 상품 외 N건" 으로 표기합니다. 한 건이면 그대로 둡니다. */
+const withExtraCount = (text: string, total: number) =>
+  total > 1 ? `${text} 외 ${total - 1}건` : text;
 
 /**
  * 주문 상태가 바뀐 뒤 호출합니다. (이메일 발송과 나란히 부릅니다)
@@ -111,11 +128,14 @@ export async function notifyOrderStatusByAlimtalk(
     });
     const sentKeys = new Set(alreadySent.map(r => `${r.orderId}:${r.status}`));
 
-    // 🌟 이번 호출에서 한 회원에게 같은 상태로 이미 보냈는지. (회원당 1통 제한)
-    //    입고를 일괄 처리하면 한 사람에게 10통이 갈 수 있습니다. 알림톡은 건당 비용이 들고
-    //    같은 내용이 연달아 오면 고객에게도 불편합니다. 메일은 회원당 한 통으로 묶여 나가므로
-    //    나머지 주문도 안내 자체는 받습니다. (orderStatusMail.ts)
-    const batchUserKeys = new Set<string>();
+    // 🌟 같은 회원·같은 상태는 한 통으로 묶습니다.
+    //    입고를 일괄 처리하면 한 사람에게 10통이 나가던 문제 때문인데, 건너뛰기만 하면
+    //    "나머지 상품도 들어왔는지"를 고객이 알 수 없어서 상품명을 "○○ 외 N건" 으로 보여 줍니다.
+    //
+    //    ⚠️ 국제배송 시작만 송장번호까지 묶음 기준에 넣습니다. 송장이 다르면 다른 배송 건이고,
+    //       송장번호는 고객이 조회에 쓰는 값이라 한 통에 뭉뚱그리면 나머지를 조회할 수 없습니다.
+    type SendGroup = { status: string; phone: string; orders: typeof orders };
+    const groups = new Map<string, SendGroup>();
 
     for (const target of targets) {
       const order = orderMap.get(target.orderId);
@@ -131,10 +151,8 @@ export async function notifyOrderStatusByAlimtalk(
         console.log(`[알림톡] 건너뜀 (${target.orderId}) — 같은 상태로 이미 보낸 기록이 있습니다. (중복 발송 방지)`);
         result.skipped++; continue;
       }
-
-      const userKey = `${order.userId}:${target.status}`;
-      if (batchUserKeys.has(userKey)) {
-        console.log(`[알림톡] 건너뜀 (${target.orderId}) — 이번 저장에서 같은 회원에게 ${target.status} 알림톡을 이미 보냈습니다. (회원당 1통)`);
+      if (!ALIMTALK_TEMPLATES[target.status]) {
+        console.warn(`[알림톡] 건너뜀 (${target.orderId}) — ${target.status} 상태에 등록된 템플릿이 없습니다.`);
         result.skipped++; continue;
       }
 
@@ -148,48 +166,58 @@ export async function notifyOrderStatusByAlimtalk(
         result.skipped++; continue;
       }
 
-      const template = ALIMTALK_TEMPLATES[target.status];
-      if (!template) {
-        console.warn(`[알림톡] 건너뜀 (${target.orderId}) — ${target.status} 상태에 등록된 템플릿이 없습니다.`);
-        result.skipped++; continue;
+      const key = target.status === ORDER_STATUS.SHIPPING
+        ? `${order.userId}:${target.status}:${order.trackingNo ?? ''}`
+        : `${order.userId}:${target.status}`;
+
+      const group = groups.get(key);
+      if (group) group.orders.push(order);
+      else groups.set(key, { status: target.status, phone, orders: [order] });
+    }
+
+    for (const group of groups.values()) {
+      const template = ALIMTALK_TEMPLATES[group.status];
+      const lead = group.orders[0];
+      const variables = buildVariables(group.status, group.orders);
+
+      if (group.orders.length > 1) {
+        console.log(`[알림톡] 묶음 발송 (${group.status}) — ${group.orders.length}건을 한 통으로:`,
+          group.orders.map(o => o.orderId).join(', '));
       }
 
-      const variables = buildVariables(target.status, order);
-
       const sendResult = await sendAlimtalk({
-        to: phone,
+        to: group.phone,
         template,
         // 대행사에는 #{변수} 형태의 키로 넘깁니다.
         variables: Object.fromEntries(Object.entries(variables).map(([k, v]) => [`#{${k}}`, v])),
-        buttonUrl: orderDetailUrl(order.orderId),
+        // 묶음이면 주문 하나만 열어 봐야 나머지를 볼 수 없으니 마이페이지 목록으로 보냅니다.
+        buttonUrl: group.orders.length > 1 ? orderListUrl(group.status) : orderDetailUrl(lead.orderId),
       });
 
-      // 성공했을 때만 표시합니다. 첫 건이 실패하면 같은 회원의 다음 건이 다시 시도해야 하니까요.
-      if (sendResult.success) batchUserKeys.add(userKey);
+      if (sendResult.success) result.sent += group.orders.length;
+      else if (sendResult.skipped) result.skipped += group.orders.length;
+      else result.failed += group.orders.length;
 
-      if (sendResult.success) result.sent++;
-      else if (sendResult.skipped) result.skipped++;
-      else result.failed++;
-
-      console.log(`[알림톡] 발송 결과 (${target.status}, ${order.orderId}) →`,
+      console.log(`[알림톡] 발송 결과 (${group.status}, ${lead.orderId}${group.orders.length > 1 ? ` 외 ${group.orders.length - 1}건` : ''}) →`,
         sendResult.success ? '성공' : sendResult.skipped ? `건너뜀: ${sendResult.error}` : `실패: ${sendResult.error}`);
 
       // 건너뛴 건은 이력을 남기지 않습니다. 설정이 생기면 다시 보낼 수 있어야 하기 때문입니다.
+      // 묶인 주문은 전부 남깁니다. 한 통으로 안내가 나갔으니 나중에 또 보내면 중복입니다.
       if (!sendResult.skipped) {
-        await prisma.notificationLog.create({
-          data: {
-            userId: order.userId,
-            orderId: order.orderId,
-            status: target.status,
+        await prisma.notificationLog.createMany({
+          data: group.orders.map(o => ({
+            userId: o.userId,
+            orderId: o.orderId,
+            status: group.status,
             channel: 'ALIMTALK',
             success: sendResult.success,
             error: sendResult.error ?? null,
-          },
+          })),
         });
       }
 
       if (!sendResult.success && !sendResult.skipped) {
-        console.error(`[알림톡] 발송 실패 (${target.status}, ${order.orderId}):`, sendResult.error);
+        console.error(`[알림톡] 발송 실패 (${group.status}, ${lead.orderId}):`, sendResult.error);
       }
     }
   } catch (e) {
@@ -218,17 +246,24 @@ export type OrderForAlimtalk = {
  *    하나라도 다르면 솔라피가 발송을 거절하고, 사유가 [알림톡] 솔라피 응답 로그에 찍힙니다.
  *    템플릿을 고쳤다면 이 함수도 같이 고쳐야 합니다.
  */
-export function buildVariables(status: string, order: OrderForAlimtalk): Record<string, string> {
+export function buildVariables(status: string, group: OrderForAlimtalk[]): Record<string, string> {
+  const lead = group[0];
+  const total = group.length;
+  const sum = (pick: (o: OrderForAlimtalk) => number | null | undefined) =>
+    group.reduce((acc, o) => acc + Number(pick(o) ?? 0), 0);
+
   // 네 템플릿이 공통으로 쓰는 값
   const base: Record<string, string> = {
-    고객명: order.user?.name || '고객',
-    주문번호: order.orderId,
-    상품명: shorten(order.productName || ''),
+    고객명: lead.user?.name || '고객',
+    주문번호: lead.orderId,
+    // 묶어 보낼 때는 "첫 상품 외 N건". 나머지가 왔는지 고객이 알 수 있어야 합니다.
+    상품명: withExtraCount(shorten(lead.productName || ''), total),
   };
 
   switch (status) {
     case ORDER_STATUS.BID_SUCCESS:
-      return { ...base, 낙찰금액: won(order.myBidPrice || order.productPrice) };
+      // 금액은 묶인 주문의 합계입니다. 고객이 실제로 치러야 할 총액이라 합계가 맞습니다.
+      return { ...base, 낙찰금액: won(sum(o => o.myBidPrice || o.productPrice)) };
 
     case ORDER_STATUS.ARRIVED: // 일본 물류센터 입고 안내
       return base;
@@ -238,16 +273,16 @@ export function buildVariables(status: string, order: OrderForAlimtalk): Record<
         ...base,
         // ⚠️ 템플릿 본문이 '#{결제금액}원' 이라 숫자만 넣습니다. won() 을 쓰면 "원" 이 두 번 붙습니다.
         //    금액은 관리자가 배송비를 요청할 때 입력하는 secondPaymentAmount 입니다.
-        결제금액: Number(order.secondPaymentAmount ?? 0).toLocaleString('ko-KR'),
+        결제금액: sum(o => o.secondPaymentAmount).toLocaleString('ko-KR'),
       };
 
     case ORDER_STATUS.SHIPPING: // 국제 배송 시작 안내
       return {
         ...base,
-        // 송장번호·배송업체는 관리자가 국제배송으로 넘길 때 입력합니다.
+        // 이 상태는 송장번호까지 묶음 기준이라 group 안의 값이 모두 같습니다.
         // 아직 없으면 빈칸 대신 '-' 를 넣습니다. 변수를 통째로 빼면 카카오가 자리를 못 채워 거절합니다.
-        배송업체: order.shippingCarrier?.name || '-',
-        송장번호: order.trackingNo?.trim() || '-',
+        배송업체: lead.shippingCarrier?.name || '-',
+        송장번호: lead.trackingNo?.trim() || '-',
       };
 
     default:
