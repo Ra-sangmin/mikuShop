@@ -6,7 +6,8 @@
 // 실행
 //   npx tsx scripts/test-alimtalk.ts 01012345678            보낼 내용만 만들어 보여줍니다 (발송 안 함)
 //   npx tsx scripts/test-alimtalk.ts 01012345678 --send     실제로 한 통 보냅니다 (건당 비용 발생)
-//   npx tsx scripts/test-alimtalk.ts 01012345678 --status=BID_SUCCESS   다른 템플릿으로
+//   npx tsx scripts/test-alimtalk.ts 01012345678 --status=ARRIVED       다른 템플릿으로
+//     쓸 수 있는 상태: BID_SUCCESS(낙찰) ARRIVED(입고) PAYMENT_DONE(배송승인) SHIPPING(배송시작)
 //
 // ⚠️ --send 는 실제 카카오톡이 나가고 잔액이 차감됩니다. 받는 번호를 꼭 확인하세요.
 // ⚠️ API Key 는 등록한 IP 에서만 동작합니다. 로컬에서 401/403 이 나면 IP 제한부터 보세요.
@@ -21,6 +22,7 @@ import {
   missingSolapiEnv,
   sendAlimtalk,
 } from '../lib/notifications/alimtalk';
+import { buildVariables } from '../lib/notifications/orderStatusAlimtalk';
 import { formatKoreanMobile, normalizeKoreanMobile } from '../lib/phone';
 
 const args = process.argv.slice(2);
@@ -54,16 +56,28 @@ async function main() {
   line('상태', status);
   line('템플릿 코드', template.templateId);
   line('버튼 이름', template.buttonName);
-  console.log('\n  --- 본문 (카카오 검수 통과본과 글자 단위로 같아야 합니다) ---');
+  // 실제 발송과 같은 함수로 변수를 만듭니다. 예시 주문을 넣어 무엇이 채워지는지 봅니다.
+  const variables = buildVariables(status, {
+    orderId: 'M260918-a3f9',
+    productName: '테스트 상품',
+    productPrice: 12345,
+    myBidPrice: 12345,
+    secondPaymentAmount: 8000,
+    trackingNo: '1234567890',
+    shippingCarrier: { name: '테스트배송' },
+    user: { name: '홍길동' },
+  });
 
-  // 실제 주문 대신 눈에 띄는 예시값을 넣습니다. 변수가 안 채워지면 #{...} 가 그대로 남습니다.
-  const variables: Record<string, string> = {
-    고객명: '홍길동',
-    주문번호: 'M260918-a3f9',
-    상품명: '테스트 상품',
-    낙찰금액: '12,345원',
-  };
-  console.log(fillTemplate(template.content, variables).split('\n').map(l => `  | ${l}`).join('\n'));
+  console.log('\n  --- 이 템플릿에 채워 보낼 변수 (콘솔 등록값과 이름이 같아야 합니다) ---');
+  Object.entries(variables).forEach(([k, v]) => console.log(`  | #{${k}} = ${v}`));
+
+  console.log('\n  --- 본문 미리보기 ---');
+  if (!template.content) {
+    console.log('  | (본문 미등록 — 전송되지 않는 값이라 발송에는 지장 없습니다.');
+    console.log('  |  콘솔 본문을 ALIMTALK_TEMPLATES 의 content 에 붙여 넣으면 여기서 대조할 수 있습니다)');
+  } else {
+    console.log(fillTemplate(template.content, variables).split('\n').map(l => `  | ${l}`).join('\n'));
+  }
 
   console.log('\n===== 3. 받는 번호 =====');
   if (!rawPhone) {

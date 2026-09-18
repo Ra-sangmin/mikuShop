@@ -19,8 +19,11 @@ import {
   maskPhone,
 } from './alimtalk';
 
-/** 알림톡을 보내는 상태. 카카오 검수를 통과한 템플릿만 올립니다. */
-const ALIMTALK_STATUSES: string[] = [ORDER_STATUS.BID_SUCCESS];
+/**
+ * 알림톡을 보내는 상태. 검수를 통과해 ALIMTALK_TEMPLATES 에 등록한 템플릿이 곧 화이트리스트입니다.
+ * (예전엔 목록을 따로 들고 있어서, 템플릿을 추가하고도 여기에 안 적어 발송이 안 되는 일이 생겼습니다)
+ */
+const ALIMTALK_STATUSES: string[] = Object.keys(ALIMTALK_TEMPLATES);
 
 export interface AlimtalkNotifyResult {
   sent: number;
@@ -80,6 +83,9 @@ export async function notifyOrderStatusByAlimtalk(
         productName: true,
         productPrice: true,
         myBidPrice: true,
+        secondPaymentAmount: true,
+        trackingNo: true,
+        shippingCarrier: { select: { name: true } },
         user: {
           select: {
             id: true,
@@ -136,12 +142,7 @@ export async function notifyOrderStatusByAlimtalk(
         result.skipped++; continue;
       }
 
-      const variables: Record<string, string> = {
-        고객명: order.user.name || '고객',
-        주문번호: order.orderId,
-        상품명: shorten(order.productName || ''),
-        낙찰금액: won(order.myBidPrice || order.productPrice),
-      };
+      const variables = buildVariables(target.status, order);
 
       const sendResult = await sendAlimtalk({
         to: phone,
@@ -181,6 +182,62 @@ export async function notifyOrderStatusByAlimtalk(
   }
 
   return result;
+}
+
+/** buildVariables 가 쓰는 주문 정보. 위 findMany 의 select 와 짝을 이룹니다. */
+export type OrderForAlimtalk = {
+  orderId: string;
+  productName: string;
+  productPrice: number;
+  myBidPrice: number | null;
+  secondPaymentAmount: number | null;
+  trackingNo: string | null;
+  shippingCarrier: { name: string } | null;
+  user: { name: string } | null;
+};
+
+/**
+ * 템플릿에 채워 넣을 변수. 상태마다 템플릿이 달라 필요한 값도 다릅니다.
+ *
+ * ⚠️ 여기 키는 카카오에 등록한 템플릿의 #{변수} 이름과 **정확히** 같아야 합니다.
+ *    하나라도 다르면 솔라피가 발송을 거절하고, 사유가 [알림톡] 솔라피 응답 로그에 찍힙니다.
+ *    템플릿을 고쳤다면 이 함수도 같이 고쳐야 합니다.
+ */
+export function buildVariables(status: string, order: OrderForAlimtalk): Record<string, string> {
+  // 네 템플릿이 공통으로 쓰는 값
+  const base: Record<string, string> = {
+    고객명: order.user?.name || '고객',
+    주문번호: order.orderId,
+    상품명: shorten(order.productName || ''),
+  };
+
+  switch (status) {
+    case ORDER_STATUS.BID_SUCCESS:
+      return { ...base, 낙찰금액: won(order.myBidPrice || order.productPrice) };
+
+    case ORDER_STATUS.ARRIVED: // 일본 물류센터 입고 안내
+      return base;
+
+    case ORDER_STATUS.PAYMENT_REQ: // 국제 배송 진행 안내 (배송비 승인 요청)
+      return {
+        ...base,
+        // ⚠️ 템플릿 본문이 '#{결제금액}원' 이라 숫자만 넣습니다. won() 을 쓰면 "원" 이 두 번 붙습니다.
+        //    금액은 관리자가 배송비를 요청할 때 입력하는 secondPaymentAmount 입니다.
+        결제금액: Number(order.secondPaymentAmount ?? 0).toLocaleString('ko-KR'),
+      };
+
+    case ORDER_STATUS.SHIPPING: // 국제 배송 시작 안내
+      return {
+        ...base,
+        // 송장번호·배송업체는 관리자가 국제배송으로 넘길 때 입력합니다.
+        // 아직 없으면 빈칸 대신 '-' 를 넣습니다. 변수를 통째로 빼면 카카오가 자리를 못 채워 거절합니다.
+        배송업체: order.shippingCarrier?.name || '-',
+        송장번호: order.trackingNo?.trim() || '-',
+      };
+
+    default:
+      return base;
+  }
 }
 
 /** 회원 전화번호 → 기본 배송지 → 아무 배송지 순으로 찾습니다. */
