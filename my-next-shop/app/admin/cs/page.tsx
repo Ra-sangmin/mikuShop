@@ -1,26 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import '../admin-common.css';
 import { useResizableColumns, ResizableTableHead, type ResizableColumn } from '../components/useResizableColumns';
 
-// 🌟 열 순서와 기본 너비. orders 처럼 헤더 경계를 드래그해 너비를 조절할 수 있습니다.
-const CS_COLUMNS: readonly ResizableColumn[] = [
-  { key: 'type', label: '분류' },
-  { key: 'title', label: '제목' },
-  { key: 'user', label: '작성자' },
-  { key: 'date', label: '등록일' },
-  { key: 'status', label: '상태', align: 'center' },
+// 🌟 자주하는 질문 표의 열. orders 처럼 헤더 경계를 드래그해 너비를 조절할 수 있습니다.
+const FAQ_COLUMNS: readonly ResizableColumn[] = [
+  { key: 'question', label: '질문' },
+  { key: 'answer', label: '답변' },
   { key: 'manage', label: '관리', align: 'center' },
 ];
-const CS_DEFAULT_WIDTHS = {
-  type: 120,
-  title: 360,
-  user: 140,
-  date: 140,
-  status: 120,
-  manage: 140,
-};
+const FAQ_DEFAULT_WIDTHS = { question: 340, answer: 480, manage: 170 };
 
 // 🌟 공지사항 표의 열 (문의 목록과 같은 방식으로 너비를 조절할 수 있습니다)
 const NOTICE_COLUMNS: readonly ResizableColumn[] = [
@@ -29,7 +19,7 @@ const NOTICE_COLUMNS: readonly ResizableColumn[] = [
   { key: 'date', label: '등록일' },
   { key: 'manage', label: '관리', align: 'center' },
 ];
-const NOTICE_DEFAULT_WIDTHS = { title: 300, content: 460, date: 140, manage: 140 };
+const NOTICE_DEFAULT_WIDTHS = { title: 300, content: 460, date: 140, manage: 170 };
 
 interface Notice {
   id: number;
@@ -39,23 +29,23 @@ interface Notice {
   updatedAt: string;
 }
 
-const emptyNoticeForm = { title: '', content: '' };
+interface Faq {
+  id: number;
+  question: string;
+  answer: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
-// 가짜 문의 데이터
-const dummyInquiries = [
-  { id: 1, type: '배송문의', title: '언제쯤 도착하나요?', user: '김철수', date: '2026.02.25', status: '답변완료' },
-  { id: 2, type: '결제문의', title: '입금 확인 부탁드립니다.', user: '이영희', date: '2026.02.26', status: '대기중' },
-  { id: 3, type: '상품문의', title: '사이즈 재입고 문의', user: '박민수', date: '2026.02.26', status: '대기중' },
-];
+const emptyNoticeForm = { title: '', content: '' };
+const emptyFaqForm = { question: '', answer: '' };
 
 export default function CSManagement() {
-  // 실제 서비스 시 API 연동용 State 자리
-  const [inquiries] = useState(dummyInquiries);
-
-  const { columnWidths, totalTableWidth, onMouseDown } = useResizableColumns({
-    storageKey: 'admin_cs_column_widths',
-    defaultWidths: CS_DEFAULT_WIDTHS,
-    visibleColumns: CS_COLUMNS.map(c => c.key),
+  const faqCols = useResizableColumns({
+    storageKey: 'admin_cs_faq_column_widths',
+    defaultWidths: FAQ_DEFAULT_WIDTHS,
+    visibleColumns: FAQ_COLUMNS.map(c => c.key),
   });
 
   // 📢 공지사항
@@ -65,6 +55,18 @@ export default function CSManagement() {
   // 🌟 내용이 길어 표 안에서 고치기 어려우므로, "수정"을 누르면 위쪽 입력 패널로 불러옵니다.
   const [editingNoticeId, setEditingNoticeId] = useState<number | null>(null);
   const [noticeForm, setNoticeForm] = useState(emptyNoticeForm);
+  // 🌟 삭제 중인 공지 id (버튼 중복 클릭 방지)
+  const [deletingNoticeId, setDeletingNoticeId] = useState<number | null>(null);
+
+  // ❓ 자주하는 질문
+  const [faqs, setFaqs] = useState<Faq[]>([]);
+  const [isFaqLoading, setIsFaqLoading] = useState(true);
+  const [isFaqSaving, setIsFaqSaving] = useState(false);
+  const [editingFaqId, setEditingFaqId] = useState<number | null>(null);
+  const [faqForm, setFaqForm] = useState(emptyFaqForm);
+  const [deletingFaqId, setDeletingFaqId] = useState<number | null>(null);
+  // "수정"을 누르면 입력 패널로 화면을 옮기기 위한 위치 표시
+  const faqFormRef = useRef<HTMLDivElement>(null);
 
   const noticeCols = useResizableColumns({
     storageKey: 'admin_cs_notice_column_widths',
@@ -128,19 +130,110 @@ export default function CSManagement() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // 🌟 공지 삭제 — 되돌릴 수 없으므로 한 번 더 확인합니다.
+  const handleDeleteNotice = async (notice: Notice) => {
+    if (!window.confirm(`"${notice.title}" 공지사항을 삭제할까요?\n삭제한 공지는 되돌릴 수 없습니다.`)) return;
+
+    setDeletingNoticeId(notice.id);
+    try {
+      const res = await fetch(`/api/admin/notices?id=${notice.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        // 수정 중이던 공지를 지웠다면 입력 패널도 비워 줍니다.
+        if (editingNoticeId === notice.id) resetNoticeForm();
+        fetchNotices();
+      } else {
+        alert(data.error || '삭제 실패');
+      }
+    } catch (error) {
+      console.error('공지사항 삭제 에러:', error);
+      alert('삭제 중 오류가 발생했습니다.');
+    } finally {
+      setDeletingNoticeId(null);
+    }
+  };
+
   const formatDate = (value: string) => {
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString('ko-KR');
   };
 
-  // 통계 계산 (가짜 데이터 기반)
-  const pendingCount = inquiries.filter(q => q.status === '대기중').length;
-  const todayCount = inquiries.filter(q => q.date === '2026.02.26').length; // 날짜 하드코딩 예시
+  // ❓ 자주하는 질문 (고객문의 > 자주하는 질문 화면에 그대로 보입니다)
+  const fetchFaqs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/faqs');
+      const data = await res.json();
+      if (data.success) setFaqs(data.faqs);
+      else alert(data.error || '자주하는 질문을 불러오지 못했습니다.');
+    } catch (error) {
+      console.error('자주하는 질문 조회 에러:', error);
+      alert('서버 오류가 발생했습니다.');
+    } finally {
+      setIsFaqLoading(false);
+    }
+  }, []);
 
-  const getStatusStyle = (status: string) => {
-    return status === '대기중'
-      ? { bg: colors.pendingBg, text: colors.pendingText }
-      : { bg: colors.completedBg, text: colors.completedText };
+  useEffect(() => { fetchFaqs(); }, [fetchFaqs]);
+
+  const resetFaqForm = () => {
+    setEditingFaqId(null);
+    setFaqForm(emptyFaqForm);
+  };
+
+  const handleFaqSubmit = async () => {
+    if (!faqForm.question.trim() || !faqForm.answer.trim()) {
+      alert('질문과 답변을 모두 입력해주세요.');
+      return;
+    }
+    setIsFaqSaving(true);
+    try {
+      const isEditing = editingFaqId !== null;
+      const res = await fetch('/api/admin/faqs', {
+        method: isEditing ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isEditing ? { id: editingFaqId, ...faqForm } : faqForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        resetFaqForm();
+        fetchFaqs();
+      } else {
+        alert(data.error || (isEditing ? '수정 실패' : '등록 실패'));
+      }
+    } catch (error) {
+      console.error('자주하는 질문 저장 에러:', error);
+      alert('서버 오류가 발생했습니다.');
+    } finally {
+      setIsFaqSaving(false);
+    }
+  };
+
+  const startEditingFaq = (faq: Faq) => {
+    setEditingFaqId(faq.id);
+    setFaqForm({ question: faq.question, answer: faq.answer });
+    // 입력 패널이 표보다 위에 있으므로 그 위치로 올려 줍니다.
+    faqFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const handleDeleteFaq = async (faq: Faq) => {
+    if (!window.confirm(`"${faq.question}" 질문을 삭제할까요?\n삭제한 질문은 되돌릴 수 없습니다.`)) return;
+
+    setDeletingFaqId(faq.id);
+    try {
+      const res = await fetch(`/api/admin/faqs?id=${faq.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        if (editingFaqId === faq.id) resetFaqForm();
+        fetchFaqs();
+      } else {
+        alert(data.error || '삭제 실패');
+      }
+    } catch (error) {
+      console.error('자주하는 질문 삭제 에러:', error);
+      alert('삭제 중 오류가 발생했습니다.');
+    } finally {
+      setDeletingFaqId(null);
+    }
   };
 
   return (
@@ -150,15 +243,15 @@ export default function CSManagement() {
       <div style={css.cardGrid}>
         <div className="admin-container admin-flex-between">
           <div>
-            <div className="admin-stat-title">미답변 문의</div>
-            <div className="admin-stat-count" style={{ color: colors.pendingText }}>{pendingCount}건</div>
+            <div className="admin-stat-title">등록된 자주하는 질문</div>
+            <div className="admin-stat-count" style={{ color: colors.accent }}>{faqs.length}건</div>
           </div>
           <div style={css.statIcon}>💬</div>
         </div>
         <div className="admin-container admin-flex-between">
           <div>
-            <div className="admin-stat-title">오늘 들어온 문의</div>
-            <div className="admin-stat-count" style={{ color: colors.accent }}>{todayCount}건</div>
+            <div className="admin-stat-title">등록된 공지사항</div>
+            <div className="admin-stat-count" style={{ color: colors.pendingText }}>{notices.length}건</div>
           </div>
           <div style={css.statIcon}>🔔</div>
         </div>
@@ -210,7 +303,16 @@ export default function CSManagement() {
                     <td style={css.td} title={notice.content}>{notice.content}</td>
                     <td style={css.td}>{formatDate(notice.createdAt)}</td>
                     <td style={css.tdCenter}>
-                      <button onClick={() => startEditingNotice(notice)} style={css.btnSecondary}>수정</button>
+                      <div style={css.noticeRowActions}>
+                        <button onClick={() => startEditingNotice(notice)} style={css.btnRowEdit}>수정</button>
+                        <button
+                          onClick={() => handleDeleteNotice(notice)}
+                          disabled={deletingNoticeId === notice.id}
+                          style={{ ...css.btnRowDelete, ...(deletingNoticeId === notice.id ? css.btnRowDisabled : null) }}
+                        >
+                          {deletingNoticeId === notice.id ? '삭제 중' : '삭제'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )) : (
@@ -228,44 +330,76 @@ export default function CSManagement() {
         </div>
       </div>
 
-      {/* 🌟 테이블 영역 */}
+      {/* ❓ 자주하는 질문 — 고객문의 > 자주하는 질문 화면에 그대로 보입니다 */}
       <div className="admin-container">
-        <h2 className="admin-section-title">문의 목록</h2>
+        <h2 className="admin-section-title">자주하는 질문</h2>
+
+        {/* 입력 패널 — 등록과 수정을 같은 자리에서 합니다 */}
+        <div style={css.noticeForm} ref={faqFormRef}>
+          <label style={css.noticeLabel}>질문</label>
+          <input
+            type="text"
+            value={faqForm.question}
+            onChange={(e) => setFaqForm({ ...faqForm, question: e.target.value })}
+            placeholder="예) 배송비는 어떻게 계산되나요?"
+            style={css.noticeInput}
+          />
+
+          <label style={css.noticeLabel}>답변</label>
+          <textarea
+            value={faqForm.answer}
+            onChange={(e) => setFaqForm({ ...faqForm, answer: e.target.value })}
+            placeholder="고객에게 보여줄 답변을 입력하세요"
+            rows={5}
+            style={css.noticeTextarea}
+          />
+
+          <div style={css.noticeButtonRow}>
+            {editingFaqId !== null && (
+              <button onClick={resetFaqForm} style={css.btnSecondary}>취소</button>
+            )}
+            <button onClick={handleFaqSubmit} disabled={isFaqSaving} style={css.btnPrimary}>
+              {editingFaqId !== null ? '수정 저장' : '등록'}
+            </button>
+          </div>
+        </div>
 
         {/* 🐛 table-layout: fixed 는 표에 확정된 너비가 있어야 적용됩니다.
             보이는 열 너비의 합을 표 너비로 직접 지정해야 드래그로 열이 줄어듭니다. */}
         <div style={css.tableWrapper}>
-        <table className="admin-table-resizable" style={{ width: totalTableWidth }}>
-          <ResizableTableHead columns={CS_COLUMNS} columnWidths={columnWidths} onMouseDown={onMouseDown} />
-          <tbody>
-            {inquiries.map((inquiry) => {
-              const statusStyle = getStatusStyle(inquiry.status);
-
-              return (
-                <tr key={inquiry.id} className="admin-table-body-row">
-                  <td style={css.td}>
-                    <span style={css.typeBadge}>{inquiry.type}</span>
-                  </td>
-                  <td style={css.tdBold}>{inquiry.title}</td>
-                  <td style={css.td}>{inquiry.user}</td>
-                  <td style={css.td}>{inquiry.date}</td>
-                  <td style={css.tdCenter}>
-                    <span style={{ 
-                      ...css.statusBadge, 
-                      backgroundColor: statusStyle.bg, 
-                      color: statusStyle.text 
-                    }}>
-                      {inquiry.status}
-                    </span>
-                  </td>
-                  <td style={css.tdCenter}>
-                    <button style={css.btnReply}>답변하기</button>
-                  </td>
+          <table className="admin-table-resizable" style={{ width: faqCols.totalTableWidth }}>
+            <ResizableTableHead columns={FAQ_COLUMNS} columnWidths={faqCols.columnWidths} onMouseDown={faqCols.onMouseDown} />
+            <tbody>
+              {!isFaqLoading ? (
+                faqs.length > 0 ? faqs.map((faq) => (
+                  <tr key={faq.id} className="admin-table-body-row">
+                    <td style={css.tdBold} title={faq.question}>{faq.question}</td>
+                    <td style={css.td} title={faq.answer}>{faq.answer}</td>
+                    <td style={css.tdCenter}>
+                      <div style={css.noticeRowActions}>
+                        <button onClick={() => startEditingFaq(faq)} style={css.btnRowEdit}>수정</button>
+                        <button
+                          onClick={() => handleDeleteFaq(faq)}
+                          disabled={deletingFaqId === faq.id}
+                          style={{ ...css.btnRowDelete, ...(deletingFaqId === faq.id ? css.btnRowDisabled : null) }}
+                        >
+                          {deletingFaqId === faq.id ? '삭제 중' : '삭제'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={FAQ_COLUMNS.length} className="admin-empty-td">등록된 질문이 없습니다.</td>
+                  </tr>
+                )
+              ) : (
+                <tr>
+                  <td colSpan={FAQ_COLUMNS.length} className="admin-empty-td">로딩 중...</td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -287,11 +421,13 @@ const colors = {
   accent: '#3b82f6',
   bgHead: '#f8fafc',
   
-  // 상태 뱃지용 색상
-  pendingBg: '#fff7ed',
+  // 통계 카드 강조 색상
   pendingText: '#ea580c',
-  completedBg: '#f0fdf4',
-  completedText: '#16a34a',
+
+  // 삭제 버튼용 색상
+  dangerText: '#dc2626',
+  dangerBorder: '#fecaca',
+  dangerBg: '#fef2f2',
 };
 
 // 🌟 열 너비를 고정(table-layout: fixed)했으므로, 넘치는 값은 말줄임으로 처리합니다.
@@ -330,20 +466,6 @@ const css: Record<string, React.CSSProperties> = {
   tdBold: { ...baseTd, fontWeight: '500' },
   tdCenter: { ...baseTd, textAlign: 'center' },
   
-  // 뱃지 및 버튼
-  typeBadge: {
-    fontSize: '12px',
-    padding: '2px 6px',
-    backgroundColor: colors.border,
-    borderRadius: '4px',
-    color: colors.textSub,
-  },
-  statusBadge: {
-    padding: '4px 8px',
-    borderRadius: '4px',
-    fontSize: '12px',
-    fontWeight: '600',
-  },
   // 📢 공지사항 입력 패널
   noticeForm: {
     display: 'flex',
@@ -401,14 +523,36 @@ const css: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     color: colors.textDark,
   },
-  btnReply: {
+  // 🌟 표 안 "관리" 칸 — 수정 / 삭제 버튼을 나란히 둡니다.
+  noticeRowActions: {
+    display: 'flex',
+    gap: '6px',
+    justifyContent: 'center',
+  },
+  btnRowEdit: {
     padding: '6px 12px',
     backgroundColor: colors.white,
     border: `1px solid ${colors.borderInput}`,
     borderRadius: '6px',
-    fontSize: '13px',
+    fontSize: '12px',
+    fontWeight: 600,
     cursor: 'pointer',
     color: colors.textDark,
-    fontWeight: '500',
+    whiteSpace: 'nowrap',
+  },
+  btnRowDelete: {
+    padding: '6px 12px',
+    backgroundColor: colors.dangerBg,
+    border: `1px solid ${colors.dangerBorder}`,
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    color: colors.dangerText,
+    whiteSpace: 'nowrap',
+  },
+  btnRowDisabled: {
+    opacity: 0.55,
+    cursor: 'not-allowed',
   },
 };

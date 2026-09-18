@@ -8,7 +8,7 @@ import {
   ClipboardText, ChatCircleDots, ShoppingCartSimple, MapPin, AirplaneTilt,
   Wallet, Coins, Money, Crown, Info, Scales, BookOpen, PaperPlaneTilt,
   Question, Headset, SignOut, User, FilePlus, CaretDown,
-  Notepad, ShieldCheck, Calculator, House, Heart, LockKey, X, ArrowUpRight
+  Notepad, ShieldCheck, Calculator, House, Heart, LockKey, X, ArrowUpRight, Megaphone
 } from "@phosphor-icons/react";
 import { PURCHASE_MENU, DELIVERY_MENU, menuPath } from './serviceMenus';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
@@ -146,7 +146,7 @@ function useHeaderLogic() {
     { label: "배송대행", desc: "일본 주소로 받아 한국까지 안전하게", items: DELIVERY_MENU },
     { label: "미쿠짱머니", desc: "예치금 충전 · 이용 내역 · 환불", items: [{ label: '충전 신청', desc: '예치금 충전하기', href: '/mypage/money/charge' }, { label: '이용 내역', desc: '충전·사용 내역 확인', href: '/mypage/money/history' }, { label: '환불 신청', desc: '잔액 환불 요청', href: '/mypage/money/refund' }] },
     { label: "수수료/배송비", desc: "등급 혜택과 요금 기준을 한눈에", items: [{ label: '회원 등급 및 혜택', desc: '등급별 수수료 혜택', href: '/guide/membership' }, { label: '수수료 안내', desc: '대행 수수료 기준', href: '/guide/fee-guide' }, { label: '국제 배송 요금표', desc: '무게·부피별 요금', href: '/guide/shipping-fee' }, { label: '예상 관부과세 안내', desc: '통관 세금 계산 기준', href: '/guide/customs' }] },
-    { label: "이용가이드", desc: "처음이라면 여기부터 확인하세요", items: [{ label: '구매대행 방법', desc: '신청부터 수령까지', href: '/guide/purchase-method' }, { label: '배송대행 방법', desc: '신청부터 수령까지', href: '/guide/delivery-method' }, { label: '이용약관', desc: '서비스 이용 규정', href: '/guide/terms' }, { label: '개인정보처리방침', desc: '개인정보 수집·이용', href: '/guide/privacy' }] },
+    { label: "이용가이드", desc: "처음이라면 여기부터 확인하세요", items: [{ label: '구매대행 방법', desc: '신청부터 수령까지', href: '/guide/purchase-method' }, { label: '배송대행 방법', desc: '신청부터 수령까지', href: '/guide/delivery-method' }, { label: '공지사항', desc: '새로운 소식과 안내', href: '/guide/notice' }, { label: '이용약관', desc: '서비스 이용 규정', href: '/guide/terms' }, { label: '개인정보처리방침', desc: '개인정보 수집·이용', href: '/guide/privacy' }] },
     { label: "고객문의", desc: "궁금한 점은 언제든 물어보세요", items: [{ label: '자주하는 질문', desc: '자주 묻는 내용 모음', href: '/inquiry/faq' }, { label: '카카오톡 문의', desc: '실시간 상담 연결', href: '/inquiry/kakaotalk' }] }
   ];
 
@@ -189,6 +189,7 @@ function getIconByLabel(itemLabel: string, size: number = 20) {
     case '구매대행 방법': return <BookOpen {...iconProps} />;
     case '배송대행 방법': return <PaperPlaneTilt {...iconProps} />;
     case '자주하는 질문': return <Question {...iconProps} />;
+    case '공지사항': return <Megaphone {...iconProps} />;
     case '이용약관': return <Notepad {...iconProps} />;
     case '개인정보처리방침': return <ShieldCheck {...iconProps} />;
     case '카카오톡 문의': return <Headset {...iconProps} />;

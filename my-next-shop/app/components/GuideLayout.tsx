@@ -9,7 +9,7 @@ import {
   User, ClipboardText, House, Heart, ShoppingCartSimple, PaperPlaneTilt, Question,
   Notepad, ShieldCheck, Crown, Info, Scales, Calculator, Wallet, Coins, Money,
   BookOpen, UserCircle, CaretRight, SignOut,
-  ChatCircleDots, MapPin, AirplaneTilt, ArrowUpRight, Headset,
+  ChatCircleDots, MapPin, AirplaneTilt, ArrowUpRight, Headset, Megaphone,
 } from '@phosphor-icons/react';
 import { PURCHASE_MENU, DELIVERY_MENU, menuPath, type MenuVia } from './serviceMenus';
 
@@ -31,6 +31,7 @@ const MENU_ICONS: Record<string, React.ElementType> = {
   '배송대행 신청방법': PaperPlaneTilt,
   '자주하는 질문': Question,
   '카카오톡 문의': Headset,
+  '공지사항': Megaphone,
   '이용약관': Notepad,
   '개인정보처리방침': ShieldCheck,
   '회원 등급 및 혜택': Crown,
@@ -92,6 +93,7 @@ function useGuideLayoutLogic(rawType?: string) {
   const guideMenu = [
     { label: '구매대행 신청방법', href: '/guide/purchase-method' },
     { label: '배송대행 신청방법', href: '/guide/delivery-method' },
+    { label: '공지사항', href: '/guide/notice' },
     { label: '이용약관', href: '/guide/terms' },
     { label: '개인정보처리방침', href: '/guide/privacy' },
   ];

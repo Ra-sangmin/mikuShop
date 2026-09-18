@@ -293,6 +293,19 @@ model Notice {
   @@map("notices")
 }
 
+// ❓ 자주하는 질문 (관리자 > 고객 센터에서 추가·수정·삭제)
+// inquiry/faq 화면이 이 표를 그대로 보여줍니다.
+model Faq {
+  id        Int      @id @default(autoincrement())
+  question  String   @db.Text                        // 질문
+  answer    String   @db.Text                        // 답변
+  sortOrder Int      @default(0) @map("sort_order")  // 화면에 보이는 순서 (작을수록 위)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("faqs")
+}
+
 // 🚚 국제 배송 업체 (관리자 > 국제 배송 업체 정보 관리에서 추가·수정)
 // 배송 조회 링크를 안내에 걸기 위한 목록입니다. 업체가 늘거나 주소가 바뀌어도 코드 수정 없이 관리자가 바꿉니다.
 model ShippingCarrier {

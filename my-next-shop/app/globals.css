@@ -1227,6 +1227,15 @@ body {
   transition: background-color 0.2s ease;
 }
 .notice-row + .notice-row { border-top: 1px solid #f2f4f7; }
+/* 🌟 공지 한 줄 전체가 클릭 영역이 되도록, 링크가 li의 안쪽 여백까지 덮게 합니다. */
+.notice-link {
+  display: flex; align-items: center; gap: 12px;
+  flex: 1; min-width: 0;
+  margin: -15px -10px; padding: 15px 10px;
+  border-radius: 12px;
+  color: inherit; text-decoration: none;
+}
+.notice-link:focus-visible { outline: 2px solid var(--tone-to); outline-offset: -2px; }
 .notice-row:hover { background: rgb(var(--tone-rgb) / 0.05); border-top-color: transparent; }
 .notice-row:hover + .notice-row { border-top-color: transparent; }
 .notice-dot {

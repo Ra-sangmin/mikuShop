@@ -461,7 +461,7 @@ export default function HomePage() {
                         <span className="info-card-eyebrow">NOTICE</span>
                         <span className="info-card-title">공지사항</span>
                     </span>
-                    <Link href="#" className="info-card-more">전체보기 <CaretRight weight="bold" /></Link>
+                    <Link href="/guide/notice" className="info-card-more">전체보기 <CaretRight weight="bold" /></Link>
                 </div>
                 <ul className="notice-list">
                     {isNoticeLoading ? (
@@ -470,6 +470,7 @@ export default function HomePage() {
                         notices.map(notice => (
                             <NoticeItem
                                 key={notice.id}
+                                id={notice.id}
                                 title={notice.title}
                                 date={formatNoticeDate(notice.createdAt)}
                                 content={notice.content}
@@ -623,13 +624,16 @@ function formatNoticeDate(value: string) {
     return `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function NoticeItem({ title, date, content }: any) {
+function NoticeItem({ id, title, date, content }: any) {
     return (
         // 🌟 목록에는 제목만 들어가므로, 본문은 마우스를 올렸을 때 보이도록 title 속성에 넣습니다.
+        //    클릭하면 공지사항 목록 페이지에서 해당 글이 펼쳐진 채로 열립니다.
         <li className="notice-row" title={content || undefined}>
-            <span className="notice-dot" aria-hidden="true"></span>
-            <span className="notice-title">{title}</span>
-            <span className="notice-date">{date}</span>
+            <Link href={`/guide/notice?id=${id}`} className="notice-link">
+                <span className="notice-dot" aria-hidden="true"></span>
+                <span className="notice-title">{title}</span>
+                <span className="notice-date">{date}</span>
+            </Link>
         </li>
     );
 }

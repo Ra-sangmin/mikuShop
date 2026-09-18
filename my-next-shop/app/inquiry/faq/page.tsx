@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import GuideLayout from '@/app/components/GuideLayout';
 import '@/app/guide/guide-common.css';
@@ -7,17 +7,12 @@ import '@/app/mypage/mypage-premium.css';
 import GuideFooterNotice from '@/app/guide/components/GuideFooterNotice';
 import { Question, MagnifyingGlass, X, CaretDown, Coins, AirplaneTilt, Scales, ChatCircleDots, BookOpen } from '@phosphor-icons/react';
 
-// 🌟 질문과 답변 데이터. 항목을 추가할 때는 이 배열에만 넣으면 됩니다.
-const FAQS = [
-  {
-    q: "배송기간은 얼마나 걸리나요?",
-    a: "평균적으로 현지 배송 2~3일, 국제 배송 3~5일 정도 소요됩니다."
-  },
-  {
-    q: "배송비는 어떻게 계산되나요?",
-    a: "상품의 무게와 부피 중 큰 것을 기준으로 배송비가 책정됩니다."
-  }
-];
+// 🌟 질문과 답변은 관리자 > 고객 센터 > 자주하는 질문에서 등록·수정합니다.
+interface Faq {
+  id: number;
+  question: string;
+  answer: string;
+}
 
 const RELATED_LINKS = [
   { href: '/guide/fee-guide', label: '수수료 안내', icon: <Coins weight="bold" /> },
@@ -27,13 +22,30 @@ const RELATED_LINKS = [
 
 export default function FAQPage() {
   const [keyword, setKeyword] = useState('');
-  const [openIndex, setOpenIndex] = useState<number | null>(0);
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [faqs, setFaqs] = useState<Faq[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/faqs')
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled || !data.success) return;
+        setFaqs(data.faqs);
+        // 첫 질문은 펼친 채로 보여줍니다.
+        if (data.faqs.length > 0) setOpenId(data.faqs[0].id);
+      })
+      .catch(err => console.error('자주하는 질문 조회 실패:', err))
+      .finally(() => { if (!cancelled) setIsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   const filtered = useMemo(() => {
     const k = keyword.trim().toLowerCase();
-    return FAQS.map((faq, index) => ({ ...faq, index }))
-      .filter(faq => !k || faq.q.toLowerCase().includes(k) || faq.a.toLowerCase().includes(k));
-  }, [keyword]);
+    if (!k) return faqs;
+    return faqs.filter(faq => faq.question.toLowerCase().includes(k) || faq.answer.toLowerCase().includes(k));
+  }, [faqs, keyword]);
 
   return (
     <GuideLayout title="자주하는 질문" type="contact">
@@ -57,7 +69,7 @@ export default function FAQPage() {
             </div>
           </div>
           <div className="mp-hero-stats">
-            <div className="mp-hero-stat"><span>전체 질문</span><strong>{FAQS.length}<small>건</small></strong></div>
+            <div className="mp-hero-stat"><span>전체 질문</span><strong>{faqs.length}<small>건</small></strong></div>
             <div className="mp-hero-stat"><span>검색 결과</span><strong>{filtered.length}<small>건</small></strong></div>
             <Link href="/guide/purchase-method" className="mp-hero-stat">
               <span>구매대행 방법</span><strong style={{ fontSize: '16px' }}>보러가기 <i className="fa fa-arrow-right"></i></strong>
@@ -96,29 +108,35 @@ export default function FAQPage() {
               <span className="gp-eyebrow">FAQ</span>
               <h3 className="gp-section-title">자주 묻는 질문</h3>
             </div>
-            <span className="gp-chip is-neutral">{keyword ? `검색 결과 ${filtered.length}건` : `전체 ${FAQS.length}건`}</span>
+            <span className="gp-chip is-neutral">{keyword ? `검색 결과 ${filtered.length}건` : `전체 ${faqs.length}건`}</span>
           </div>
 
-          {filtered.length > 0 ? (
+          {isLoading ? (
+            <div className="gp-empty">
+              <strong>질문을 불러오는 중이에요</strong>
+              <span>잠시만 기다려 주세요.</span>
+            </div>
+          ) : filtered.length > 0 ? (
             <div className="gp-faq-list">
               {filtered.map((faq) => {
-                const isOpen = openIndex === faq.index || !!keyword.trim();
+                const isOpen = openId === faq.id || !!keyword.trim();
                 return (
-                  <div key={faq.index} className={`gp-faq ${isOpen ? 'is-open' : ''}`}>
+                  <div key={faq.id} className={`gp-faq ${isOpen ? 'is-open' : ''}`}>
                     <button
                       type="button"
                       className="gp-faq-q"
                       aria-expanded={isOpen}
-                      onClick={() => setOpenIndex(openIndex === faq.index ? null : faq.index)}
+                      onClick={() => setOpenId(openId === faq.id ? null : faq.id)}
                     >
                       <span className="gp-faq-mark">Q</span>
-                      <span className="gp-faq-q-text">{faq.q}</span>
+                      <span className="gp-faq-q-text">{faq.question}</span>
                       <span className="gp-faq-toggle"><CaretDown size={15} weight="bold" /></span>
                     </button>
                     {isOpen && (
                       <div className="gp-faq-a">
                         <span className="gp-faq-a-mark">A</span>
-                        <p>{faq.a}</p>
+                        {/* 관리자에서 입력한 줄바꿈을 그대로 보여줍니다 */}
+                        <p style={{ whiteSpace: 'pre-wrap' }}>{faq.answer}</p>
                       </div>
                     )}
                   </div>
@@ -127,8 +145,8 @@ export default function FAQPage() {
             </div>
           ) : (
             <div className="gp-empty">
-              <strong>검색 결과가 없어요</strong>
-              <span>다른 단어로 검색하거나 카카오톡으로 문의해 주세요.</span>
+              <strong>{keyword ? '검색 결과가 없어요' : '등록된 질문이 없어요'}</strong>
+              <span>{keyword ? '다른 단어로 검색하거나 카카오톡으로 문의해 주세요.' : '궁금한 점은 카카오톡으로 편하게 문의해 주세요.'}</span>
             </div>
           )}
 
