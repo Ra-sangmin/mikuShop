@@ -478,14 +478,15 @@ export function UserBasicInfo({ user, onCopy }: {
       <dd>
         {customsCode ? (
           <span className="aui-secret">
-            <code>{showCustoms ? customsCode : maskCustoms(customsCode)}</code>
-            <button type="button" onClick={() => setShowCustoms(v => !v)} aria-label={showCustoms ? '가리기' : '보기'}>
-              {showCustoms ? <EyeSlash size={13} weight="bold" /> : <Eye size={13} weight="bold" />}
-            </button>
-            {/* 가려져 있어도 복사는 원래 값으로 합니다. 통관 서류에 붙여넣을 값이라
+            {/* 다른 항목과 같이 값을 눌러 복사합니다.
+                가려져 있어도 복사는 원래 값으로 합니다 — 통관 서류에 붙여넣을 값이라
                 가린 문자(•)가 섞이면 쓸 수 없습니다. */}
-            <button type="button" onClick={() => copy(customsCode, '개인통관부호')} aria-label="개인통관부호 복사">
-              <Copy size={12} weight="bold" />
+            <button type="button" className="aui-copyable" onClick={() => copy(customsCode, '개인통관부호')}>
+              <code>{showCustoms ? customsCode : maskCustoms(customsCode)}</code>
+              <Copy size={11} weight="bold" />
+            </button>
+            <button type="button" className="aui-eye" onClick={() => setShowCustoms(v => !v)} aria-label={showCustoms ? '가리기' : '보기'}>
+              {showCustoms ? <EyeSlash size={13} weight="bold" /> : <Eye size={13} weight="bold" />}
             </button>
           </span>
         ) : <span className="is-empty">미등록</span>}
