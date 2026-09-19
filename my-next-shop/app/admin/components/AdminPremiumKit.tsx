@@ -482,6 +482,11 @@ export function UserBasicInfo({ user, onCopy }: {
             <button type="button" onClick={() => setShowCustoms(v => !v)} aria-label={showCustoms ? '가리기' : '보기'}>
               {showCustoms ? <EyeSlash size={13} weight="bold" /> : <Eye size={13} weight="bold" />}
             </button>
+            {/* 가려져 있어도 복사는 원래 값으로 합니다. 통관 서류에 붙여넣을 값이라
+                가린 문자(•)가 섞이면 쓸 수 없습니다. */}
+            <button type="button" onClick={() => copy(customsCode, '개인통관부호')} aria-label="개인통관부호 복사">
+              <Copy size={12} weight="bold" />
+            </button>
           </span>
         ) : <span className="is-empty">미등록</span>}
       </dd>

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useFitTable, FitColGroup, FitTh } from '../components/useFitTable';
-import { AdminHero, HeroButton, KpiCard, SearchField, SegFilter, EmptyRow, SkeletonRows, BundleItemsPanel, BundleBadge, BundleToggle, UserBasicInfo, type BasicInfoUser, UserSummaryStats, type SummaryUser, useToasts, ToastStack } from '../components/AdminPremiumKit';
+import { AdminHero, HeroButton, KpiCard, SearchField, SegFilter, EmptyRow, SkeletonRows, BundleItemsPanel, BundleBadge, BundleToggle, UserBasicInfo, type BasicInfoUser, UserSummaryStats, type SummaryUser, useToasts, ToastStack, gradeTone, toneVars } from '../components/AdminPremiumKit';
 import { useRouter } from 'next/navigation';
 // 🌟 글로벌 상수 및 라벨 임포트
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
@@ -12,7 +12,7 @@ import {
   Wrench, FloppyDisk, Package,
   MapPinLine, EnvelopeSimple, ArrowRight, Truck,
   Sparkle, ShoppingCart, Warehouse, CreditCard, ClipboardText, Gavel,
-  ArrowSquareOut, Tag, PencilSimple, CaretUp, ChatText, Camera, ShieldCheck, CaretDown, CircleNotch, CheckCircle, AirplaneTilt, HourglassMedium,
+  ArrowSquareOut, Tag, PencilSimple, CaretUp, ChatText, Camera, ShieldCheck, CaretDown, CircleNotch, CheckCircle, AirplaneTilt, HourglassMedium, UserCircle, X, Copy,
 } from '@phosphor-icons/react';
 
 // 🌟 Enum 키를 기반으로 옵션 생성
@@ -520,6 +520,12 @@ export default function OrderManagement() {
   const [userModal, setUserModal] = useState<{ id: number; name: string } | null>(null);
   const [userDetail, setUserDetail] = useState<(BasicInfoUser & SummaryUser) | null>(null);
   const [userLoading, setUserLoading] = useState(false);
+  useEffect(() => {
+    if (!userModal) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setUserModal(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [userModal]);
 
   const openUserModal = async (userId: number | null, name: string) => {
     if (!userId) return;
@@ -1555,31 +1561,54 @@ export default function OrderManagement() {
 
     {/* 📨 알림 발송 이력 */}
     {/* 👤 주문자 정보 — 회원 관리의 "기본 정보"와 같은 패널을 씁니다. */}
-    {userModal && (
-      <div style={os.feeModalOverlay} onClick={() => setUserModal(null)}>
-        <div style={{ ...os.feeModalBox, maxWidth: '460px' }} onClick={(e) => e.stopPropagation()}>
-          <h3 style={os.feeModalTitle}>{userModal.name}</h3>
-          <p style={os.feeModalDesc}>회원 기본 정보</p>
+    {userModal && (() => {
+      const tone = gradeTone(userDetail?.grade?.name);
+      return (
+      <div className="ord-modal-overlay" onClick={() => setUserModal(null)}>
+        <div className="ord-umodal" style={toneVars(tone)} role="dialog" aria-modal="true" aria-label={`${userModal.name} 회원 기본 정보`}
+          onClick={(e) => e.stopPropagation()}>
+          {/* 머리 — 등급 색 배경 + 이니셜 아바타 */}
+          <div className="ord-umodal-hero">
+            <span className="ord-umodal-avatar" aria-hidden="true">{(userModal.name?.trim()?.[0] || '?').toUpperCase()}</span>
+            <div className="ord-umodal-who">
+              <span className="ord-umodal-eyebrow"><UserCircle size={12} weight="fill" /> 회원 기본 정보</span>
+              <h3>{userModal.name}</h3>
+              {userDetail?.grade?.name && <span className="ord-umodal-grade">{userDetail.grade.name}</span>}
+            </div>
+            <button type="button" className="ord-umodal-close" onClick={() => setUserModal(null)} aria-label="닫기">
+              <X size={16} weight="bold" />
+            </button>
+          </div>
 
-          {userLoading && <p style={os.logEmpty}>불러오는 중...</p>}
-          {!userLoading && !userDetail && <p style={os.logEmpty}>회원 정보를 불러오지 못했습니다.</p>}
-          {!userLoading && userDetail && (
-            <>
-              {/* 주문·머니·등급을 먼저 보여 줍니다. 주문 화면에서 가장 자주 확인하는 값입니다. */}
-              <UserSummaryStats user={userDetail} />
-              <UserBasicInfo
-                user={userDetail}
-                onCopy={(_text, label) => pushToast('success', `${label}을(를) 복사했습니다.`)}
-              />
-            </>
-          )}
+          <div className="ord-umodal-body">
+            {userLoading && (
+              <div className="ord-umodal-state"><CircleNotch size={18} weight="bold" className="ord-spin" /> 불러오는 중…</div>
+            )}
+            {!userLoading && !userDetail && (
+              <div className="ord-umodal-state is-error">회원 정보를 불러오지 못했습니다.</div>
+            )}
+            {!userLoading && userDetail && (
+              <>
+                {/* 주문·머니·등급을 먼저 보여 줍니다. 주문 화면에서 가장 자주 확인하는 값입니다. */}
+                <UserSummaryStats user={userDetail} />
+                <div className="ord-umodal-info">
+                  <UserBasicInfo
+                    user={userDetail}
+                    onCopy={(_text, label) => pushToast('success', `${label}을(를) 복사했습니다.`)}
+                  />
+                </div>
+                <p className="ord-umodal-hint"><Copy size={11} weight="bold" /> 값을 누르면 복사됩니다</p>
+              </>
+            )}
+          </div>
 
-          <div style={os.feeModalButtonRow}>
-            <button onClick={() => setUserModal(null)} style={os.feeModalCancelBtn}>닫기</button>
+          <div className="ord-umodal-foot">
+            <button type="button" onClick={() => setUserModal(null)} className="ord-modal-btn is-confirm">닫기</button>
           </div>
         </div>
       </div>
-    )}
+      );
+    })()}
 
     {logModalOrderId && (
       <div className="ord-modal-overlay" onClick={() => setLogModalOrderId(null)}>
