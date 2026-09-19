@@ -1,6 +1,9 @@
 "use client";
 import React from 'react';
 import Link from 'next/link';
+// 🌟 일본 창고 주소는 lib/japanAddress.ts 한 곳에만 둡니다.
+//    예전엔 여기에도 따로 적어 두어, 주소를 고칠 때 한쪽만 바뀐 적이 있습니다.
+import { japanWarehouseOneLine } from '@/lib/japanAddress';
 
 const SERVICE_LINKS = [
   { href: '/purchase/request', label: '구매대행 신청' },
@@ -348,7 +351,7 @@ export default function Footer() {
               </div>
               <dl className="info-list single">
                 <div className="info-row"><dt>상호</dt><dd>(株)ASOBIBA (アソビバ)</dd></div>
-                <div className="info-row"><dt>주소</dt><dd>〒123-0865 東京都足立区新田3-35-31 1008号</dd></div>
+                <div className="info-row"><dt>주소</dt><dd>{japanWarehouseOneLine()}</dd></div>
               </dl>
             </section>
           </div>

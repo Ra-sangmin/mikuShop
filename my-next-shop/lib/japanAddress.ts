@@ -13,6 +13,18 @@ export const JAPAN_WAREHOUSE_ADDRESS = {
   phone: '03-xxxx-xxxx',
 };
 
+/**
+ * 한 줄로 이어 쓴 일본식 주소. (예: 〒123-0865 東京都足立区新田 3-35-32 309号)
+ * 푸터처럼 칸을 나누지 않고 한 줄로 보여주는 곳이 씁니다.
+ * 주소를 화면마다 따로 적어 두면 한쪽만 고쳐져 어긋납니다 — 실제로 그런 적이 있습니다.
+ */
+export function japanWarehouseOneLine(): string {
+  const a = JAPAN_WAREHOUSE_ADDRESS;
+  // 괄호 안의 로마자 표기는 한 줄 주소에서는 뺍니다. (東京都 (Tokyo) → 東京都)
+  const jp = (v: string) => v.replace(/\s*\(.*\)\s*/, '').trim();
+  return `〒${a.zipCode} ${jp(a.prefecture)}${jp(a.city)}${a.address1}`;
+}
+
 /* ------------------------------------------------------------------ 사서함 번호 */
 
 export const MAILBOX_PREFIX = 'MK';
