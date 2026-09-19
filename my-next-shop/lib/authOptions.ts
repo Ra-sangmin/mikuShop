@@ -8,6 +8,7 @@ import prisma from "@/lib/prisma";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
 import { formatKoreanMobile } from "@/lib/phone";
+import { generateMailboxNumber } from "@/lib/japanAddress";
 
 // 🌟 SNS 로그인 회원 찾기 (signIn·jwt 콜백이 반드시 이 함수를 함께 써야 합니다)
 //
@@ -147,6 +148,9 @@ export const authOptions: NextAuthOptions = {
 
         // 유저가 없으면 새로 생성 (소셜 회원가입)
         if (!existingUser) {
+          // 📦 일본 창고 사서함 번호도 이 시점에 발급합니다. (일반 가입과 같은 규칙)
+          const japanMailboxNumber = await generateMailboxNumber(prisma);
+
           await prisma.user.create({
             data: {
               loginId: `${safeProvider}_${user.id}`, // SNS 유저 전용 식별 아이디
@@ -154,6 +158,7 @@ export const authOptions: NextAuthOptions = {
               name: user.name || `${safeProvider} 사용자`,
               profileImage: snsProfileImage,
               phone: snsPhone,
+              japanMailboxNumber,
               password: "", // SNS 로그인이므로 비밀번호는 비워둠
               membershipGrade: 0,
               cyberMoney: 0,

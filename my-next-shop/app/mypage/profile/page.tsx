@@ -23,6 +23,7 @@ function useProfileEditLogic() {
 
   const [user, setUser] = useState({
     id: '', name: '', email: '', phone: '',
+    japanMailboxNumber: '',
     cyberMoney: 0,
   });
 
@@ -54,6 +55,7 @@ function useProfileEditLogic() {
             setUser({
               id: data.user.id.toString(),
               name: data.user.name || '', email: data.user.email || '', phone: data.user.phone || '',
+              japanMailboxNumber: data.user.japanMailboxNumber || '',
               cyberMoney: data.user.cyberMoney || 0,
             });
             fetchAddresses(data.user.id.toString());
@@ -373,7 +375,7 @@ function ProfileEditContent() {
           <span className="mp-eyebrow">Japan Address</span>
           <h2>나의 일본 배송지 주소 <span className="section-icon-badge badge-indigo"><i className="fa fa-location-dot"></i></span></h2>
         </div>
-        <JapanAddressCard userName={user.name} />
+        <JapanAddressCard userName={user.name} mailboxNumber={user.japanMailboxNumber} />
       </div>
 
       {/* 모달 렌더링 */}

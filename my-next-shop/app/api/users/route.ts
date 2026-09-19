@@ -4,6 +4,7 @@ import { validatePassword } from '@/lib/passwordPolicy';
 import prisma from '@/lib/prisma';
 import { requireUser } from '@/lib/apiAuth';
 import { formatKoreanMobile } from '@/lib/phone';
+import { generateMailboxNumber } from '@/lib/japanAddress';
 import bcrypt from 'bcrypt';
 
 export async function GET(request: Request) {
@@ -99,6 +100,11 @@ export async function POST(request: Request) {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // 🌟 2. 암호화된 비밀번호를 저장
+    // 📦 일본 창고 사서함 번호는 가입 시점에 발급합니다.
+    //    배송대행을 신청하기 전에 주소부터 확인하는 게 실제 순서라, 나중에 발급하면
+    //    마이페이지에 번호가 비어 있는 상태가 생깁니다.
+    const japanMailboxNumber = await generateMailboxNumber(prisma);
+
     const newUser = await prisma.user.create({
       data: {
         loginId,
@@ -106,6 +112,7 @@ export async function POST(request: Request) {
         password: hashedPassword, // 평문이 아닌 해싱된 값을 저장!
         name,
         phone: normalizedPhone,
+        japanMailboxNumber,
         membershipGrade: 0,
         cyberMoney: 0
       },

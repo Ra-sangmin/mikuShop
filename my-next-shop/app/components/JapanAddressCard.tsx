@@ -2,18 +2,23 @@
 
 import React, { useState } from 'react';
 import { MapPin, Fingerprint, Lightbulb } from 'lucide-react';
-import { JAPAN_MAILBOX_NUMBER, JAPAN_WAREHOUSE_ADDRESS } from '@/lib/japanAddress';
+import { JAPAN_WAREHOUSE_ADDRESS } from '@/lib/japanAddress';
 
 // 🌟 "나의 일본 배송지 주소" 카드
 // 배송대행 > 일본 배송주소 확인(/delivery/address)과 마이페이지 > 나의 배송지 정보(/mypage/profile)가
 // 같은 카드를 쓰도록 공용 컴포넌트로 분리했습니다.
 interface JapanAddressCardProps {
   userName: string;
+  /** 회원별 사서함 번호 (users.japanMailboxNumber). 예전에 가입한 회원은 아직 없을 수 있습니다. */
   mailboxNumber?: string;
 }
 
-export default function JapanAddressCard({ userName, mailboxNumber = JAPAN_MAILBOX_NUMBER }: JapanAddressCardProps) {
+export default function JapanAddressCard({ userName, mailboxNumber }: JapanAddressCardProps) {
   const a = JAPAN_WAREHOUSE_ADDRESS;
+  // 🌟 번호가 없으면 아무 번호도 보여주지 않습니다.
+  //    예전에는 전 회원이 같은 고정값을 썼는데, 그러면 창고가 소포 주인을 가릴 수 없습니다.
+  //    임시로라도 다른 번호를 채워 넣으면 그 번호의 주인에게 소포가 갑니다.
+  const hasMailbox = !!mailboxNumber?.trim();
   const recipient = [userName, mailboxNumber].filter(Boolean).join(' ');
 
   return (
@@ -35,8 +40,8 @@ export default function JapanAddressCard({ userName, mailboxNumber = JAPAN_MAILB
             <span className="jp-card-section-icon"><Fingerprint size={12} strokeWidth={2.5} /></span>
             고유 식별 정보
           </h4>
-          <CopyRow label="상세주소 2" value={mailboxNumber} isHighlight />
-          <CopyRow label="받는사람" value={recipient} isHighlight />
+          <CopyRow label="상세주소 2" value={hasMailbox ? mailboxNumber! : '발급 준비 중'} isHighlight disabled={!hasMailbox} />
+          <CopyRow label="받는사람" value={recipient} isHighlight disabled={!hasMailbox} />
           <CopyRow label="전화번호" value={a.phone} />
         </section>
       </div>
@@ -44,7 +49,11 @@ export default function JapanAddressCard({ userName, mailboxNumber = JAPAN_MAILB
       <div className="jp-card-tip">
         <span className="jp-card-tip-icon"><Lightbulb size={16} strokeWidth={2.2} /></span>
         <div className="jp-card-tip-text">
-          상세주소 2에 사서함 번호(<strong>{mailboxNumber}</strong>)를 반드시 적어 주셔야 빠른 입고 확인과 배송이 가능합니다.
+          {hasMailbox ? (
+            <>상세주소 2에 사서함 번호(<strong>{mailboxNumber}</strong>)를 반드시 적어 주셔야 빠른 입고 확인과 배송이 가능합니다.</>
+          ) : (
+            <>사서함 번호가 아직 발급되지 않았습니다. <strong>번호 없이 주문하시면 소포 주인을 확인할 수 없어 입고 처리가 되지 않습니다.</strong> 고객센터로 문의해 주세요.</>
+          )}
         </div>
       </div>
 
@@ -92,6 +101,8 @@ export default function JapanAddressCard({ userName, mailboxNumber = JAPAN_MAILB
           font-size: 12px; font-weight: 800; color: #475569; cursor: pointer; transition: all 0.2s ease;
         }
         .jp-card-copy-btn:hover { border-color: #ff4b2b; color: #ff4b2b; }
+        .jp-card-copy-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .jp-card-copy-btn:disabled:hover { border-color: #cbd5e1; color: #475569; }
         .jp-card-row-box.highlight .jp-card-copy-btn { border-color: #fdba74; color: #ea580c; }
         .jp-card-row-box.highlight .jp-card-copy-btn:hover { background: #ff4b2b; color: #ffffff; border-color: #ff4b2b; }
         .jp-card-copy-btn.copied { background: #10b981 !important; color: #ffffff !important; border-color: transparent !important; }
@@ -121,10 +132,11 @@ export default function JapanAddressCard({ userName, mailboxNumber = JAPAN_MAILB
   );
 }
 
-function CopyRow({ label, value, isHighlight }: { label: string; value: string; isHighlight?: boolean }) {
+function CopyRow({ label, value, isHighlight, disabled }: { label: string; value: string; isHighlight?: boolean; disabled?: boolean }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
+    if (disabled) return;
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
@@ -143,6 +155,7 @@ function CopyRow({ label, value, isHighlight }: { label: string; value: string; 
           type="button"
           className={`jp-card-copy-btn ${copied ? 'copied' : ''}`}
           onClick={handleCopy}
+          disabled={disabled}
           aria-label={`${label} 복사`}
         >
           {copied ? '완료' : '복사'}
