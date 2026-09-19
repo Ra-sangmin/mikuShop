@@ -2,24 +2,31 @@
 
 import React, { useState } from 'react';
 import { MapPin, Fingerprint, Lightbulb } from 'lucide-react';
-import { JAPAN_WAREHOUSE_ADDRESS } from '@/lib/japanAddress';
+import { JAPAN_WAREHOUSE_ADDRESS, japanRecipientName } from '@/lib/japanAddress';
 
 // 🌟 "나의 일본 배송지 주소" 카드
 // 배송대행 > 일본 배송주소 확인(/delivery/address)과 마이페이지 > 나의 배송지 정보(/mypage/profile)가
 // 같은 카드를 쓰도록 공용 컴포넌트로 분리했습니다.
 interface JapanAddressCardProps {
-  userName: string;
   /** 회원별 사서함 번호 (users.japanMailboxNumber). 예전에 가입한 회원은 아직 없을 수 있습니다. */
   mailboxNumber?: string;
+  /**
+   * 영문(로마자) 이름 (users.nameEnglish). 없으면 받는사람은 사서함 번호만 씁니다.
+   * 한글 이름은 일부러 받지 않습니다 — 받는사람에 넣으면 일본 쇼핑몰 결제에서 막힙니다.
+   */
+  nameEnglish?: string;
 }
 
-export default function JapanAddressCard({ userName, mailboxNumber }: JapanAddressCardProps) {
+export default function JapanAddressCard({ mailboxNumber, nameEnglish }: JapanAddressCardProps) {
   const a = JAPAN_WAREHOUSE_ADDRESS;
   // 🌟 번호가 없으면 아무 번호도 보여주지 않습니다.
   //    예전에는 전 회원이 같은 고정값을 썼는데, 그러면 창고가 소포 주인을 가릴 수 없습니다.
   //    임시로라도 다른 번호를 채워 넣으면 그 번호의 주인에게 소포가 갑니다.
   const hasMailbox = !!mailboxNumber?.trim();
-  const recipient = [userName, mailboxNumber].filter(Boolean).join(' ');
+  const hasEnglish = !!nameEnglish?.trim();
+  // 받는사람 = 영문 이름 + 사서함 번호. 영문 이름이 없으면 번호만 씁니다.
+  // 한글 이름을 넣으면 일본 쇼핑몰 결제 단계에서 막히는 그 문제를 그대로 겪게 됩니다.
+  const recipient = japanRecipientName(nameEnglish, mailboxNumber);
 
   return (
     <div className="jp-card">
@@ -49,8 +56,14 @@ export default function JapanAddressCard({ userName, mailboxNumber }: JapanAddre
       <div className="jp-card-tip">
         <span className="jp-card-tip-icon"><Lightbulb size={16} strokeWidth={2.2} /></span>
         <div className="jp-card-tip-text">
-          {hasMailbox ? (
+          {hasMailbox && hasEnglish ? (
             <>상세주소 2에 사서함 번호(<strong>{mailboxNumber}</strong>)를 반드시 적어 주셔야 빠른 입고 확인과 배송이 가능합니다.</>
+          ) : hasMailbox ? (
+            <>
+              상세주소 2에 사서함 번호(<strong>{mailboxNumber}</strong>)를 반드시 적어 주세요.{' '}
+              <strong>영문 이름을 등록하시면</strong> 받는사람에 함께 표시되어, 한자·가타카나 입력을 요구하는
+              일본 쇼핑몰에서 결제가 한결 수월해집니다. (마이페이지 &gt; 내 정보)
+            </>
           ) : (
             <>사서함 번호가 아직 발급되지 않았습니다. <strong>번호 없이 주문하시면 소포 주인을 확인할 수 없어 입고 처리가 되지 않습니다.</strong> 고객센터로 문의해 주세요.</>
           )}

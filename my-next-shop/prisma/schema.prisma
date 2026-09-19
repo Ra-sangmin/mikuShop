@@ -24,6 +24,11 @@ model User {
   loginId             String   @unique @map("login_id")
   password            String
   name                String
+  // 🔤 영문(로마자) 이름. 일본 쇼핑몰 주소의 "받는사람"에 사서함 번호와 함께 씁니다.
+  //    한자·가타카나는 사이트마다 전각/반각 규칙이 달라 결제 단계에서 자주 막힙니다.
+  //    ⚠️ addresses.recipientEnglishName 과는 다른 값입니다.
+  //       그쪽은 "한국에서 받는 사람"이라 가족·지인일 수 있고, 이쪽은 사서함 주인(회원 본인)입니다.
+  nameEnglish         String?  @map("name_english")
   // 🌟 카카오·네이버 등 SNS 로그인에서 받아온 프로필 이미지 URL (직접 업로드는 아직 없음)
   profileImage        String?  @map("profile_image") @db.Text
   email               String?  @unique

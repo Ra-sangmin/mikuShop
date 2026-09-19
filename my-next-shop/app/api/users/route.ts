@@ -4,7 +4,7 @@ import { validatePassword } from '@/lib/passwordPolicy';
 import prisma from '@/lib/prisma';
 import { requireUser } from '@/lib/apiAuth';
 import { formatKoreanMobile } from '@/lib/phone';
-import { generateMailboxNumber } from '@/lib/japanAddress';
+import { generateMailboxNumber, isValidNameEnglish, normalizeNameEnglish } from '@/lib/japanAddress';
 import bcrypt from 'bcrypt';
 
 export async function GET(request: Request) {
@@ -50,18 +50,61 @@ export async function GET(request: Request) {
   }
 }
 
-// 🗑️ PUT 은 없앴습니다.
-//    users.address_id(쉼표로 이어붙인 배송지 ID 문자열)만 건드리던 엔드포인트인데,
-//    배송지는 addresses 테이블이 user_id 로 직접 물고 있어 그 컬럼 자체가 필요 없었고
-//    호출하는 화면도 없었습니다. 회원 정보 수정이 필요해지면 새로 만드는 편이 낫습니다.
+/**
+ * 회원이 자기 정보를 고칩니다. 지금은 영문 이름 하나뿐입니다.
+ *
+ * 예전 PUT 은 users.address_id(쉼표로 이어붙인 배송지 ID)만 건드리던 엔드포인트라 없앴습니다.
+ * 배송지는 addresses 테이블이 user_id 로 직접 물고 있어 그 컬럼 자체가 필요 없었습니다.
+ * 여기서는 고칠 수 있는 항목을 명시적으로만 받습니다 — 통째로 받으면 등급·머니까지 바뀝니다.
+ */
+export async function PATCH(request: Request) {
+  try {
+    const { id, nameEnglish } = await request.json();
+
+    // 🔒 본인만 수정 가능
+    const auth = await requireUser(id);
+    if (!auth.ok) return auth.response;
+
+    if (typeof nameEnglish !== 'string') {
+      return NextResponse.json({ success: false, error: '영문 이름이 필요합니다.' }, { status: 400 });
+    }
+
+    // 빈 문자열이면 지웁니다. (등록했다가 취소하는 경우)
+    const trimmed = nameEnglish.trim();
+    if (trimmed && !isValidNameEnglish(trimmed)) {
+      return NextResponse.json({ success: false, error: '영문 이름은 영문·공백·하이픈만 사용할 수 있습니다.' }, { status: 400 });
+    }
+
+    const user = await prisma.user.update({
+      where: { id: auth.userId },
+      data: { nameEnglish: trimmed ? normalizeNameEnglish(trimmed) : null },
+      omit: { password: true },
+    });
+
+    return NextResponse.json({ success: true, user });
+  } catch (error) {
+    console.error('User PATCH Error:', error);
+    return NextResponse.json({ error: '회원 정보 수정 실패' }, { status: 500 });
+  }
+}
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, password, name, loginId, phone } = body;
+    const { email, password, name, loginId, phone, nameEnglish } = body;
 
     if (!email || !password || !name || !loginId || !phone) {
       return NextResponse.json({ error: '모든 필드를 입력해주세요.' }, { status: 400 });
+    }
+
+    // 🔤 영문 이름은 선택입니다. 넣었다면 형식만 확인합니다.
+    //    (일본 쇼핑몰 주소의 "받는사람"에 쓰는 값이라 영문·공백·하이픈만 받습니다)
+    let normalizedNameEnglish: string | null = null;
+    if (typeof nameEnglish === 'string' && nameEnglish.trim()) {
+      if (!isValidNameEnglish(nameEnglish)) {
+        return NextResponse.json({ success: false, error: '영문 이름은 영문·공백·하이픈만 사용할 수 있습니다.' }, { status: 400 });
+      }
+      normalizedNameEnglish = normalizeNameEnglish(nameEnglish);
     }
 
     // 📱 휴대폰 번호: 하이픈 유무와 상관없이 받되, 저장은 010-1234-5678 형태로 통일합니다.
@@ -111,6 +154,7 @@ export async function POST(request: Request) {
         email,
         password: hashedPassword, // 평문이 아닌 해싱된 값을 저장!
         name,
+        nameEnglish: normalizedNameEnglish,
         phone: normalizedPhone,
         japanMailboxNumber,
         membershipGrade: 0,

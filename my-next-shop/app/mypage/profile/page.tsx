@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import GuideLayout from '../../components/GuideLayout';
 import JapanAddressCard from '../../components/JapanAddressCard';
+import { isValidNameEnglish } from '@/lib/japanAddress';
 import DaumPostcode from 'react-daum-postcode';
 import { useMikuAlert } from '../../context/MikuAlertContext';
 import { useSearchParams } from 'next/navigation';
@@ -23,9 +24,39 @@ function useProfileEditLogic() {
 
   const [user, setUser] = useState({
     id: '', name: '', email: '', phone: '',
-    japanMailboxNumber: '',
+    japanMailboxNumber: '', nameEnglish: '',
     cyberMoney: 0,
   });
+
+  // 🔤 영문 이름 — 일본 배송지의 "받는사람"에 쓰이는 값이라 이 화면에서 직접 고칩니다.
+  //    SNS 로그인은 영문 이름을 주지 않고, 가입할 때 건너뛴 회원도 있어서 여기가 유일한 입력 경로입니다.
+  const [editingNameEn, setEditingNameEn] = useState(false);
+  const [nameEnInput, setNameEnInput] = useState('');
+  const [savingNameEn, setSavingNameEn] = useState(false);
+
+  const saveNameEnglish = async () => {
+    const value = nameEnInput.trim();
+    if (value && !isValidNameEnglish(value)) {
+      return showAlert('영문·공백·하이픈만 입력해 주세요.', 'warning');
+    }
+    setSavingNameEn(true);
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: user.id, nameEnglish: value }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) return showAlert(data.error || '저장하지 못했습니다.', 'warning');
+      setUser(prev => ({ ...prev, nameEnglish: data.user.nameEnglish || '' }));
+      setEditingNameEn(false);
+      showAlert(value ? '영문 이름을 저장했습니다.' : '영문 이름을 지웠습니다.', 'success');
+    } catch {
+      showAlert('통신 중 오류가 발생했습니다.', 'warning');
+    } finally {
+      setSavingNameEn(false);
+    }
+  };
 
   const fetchAddresses = useCallback(async (userId: string) => {
     try {
@@ -56,6 +87,7 @@ function useProfileEditLogic() {
               id: data.user.id.toString(),
               name: data.user.name || '', email: data.user.email || '', phone: data.user.phone || '',
               japanMailboxNumber: data.user.japanMailboxNumber || '',
+              nameEnglish: data.user.nameEnglish || '',
               cyberMoney: data.user.cyberMoney || 0,
             });
             fetchAddresses(data.user.id.toString());
@@ -112,7 +144,9 @@ function useProfileEditLogic() {
 
   return {
     loading, user, addresses, isAddressModalOpen, editingAddress,
-    handleAddressAction, deleteAddress, openNewAddress, openEditAddress, closeAddressModal
+    handleAddressAction, deleteAddress, openNewAddress, openEditAddress, closeAddressModal,
+    // 🔤 영문 이름 편집
+    editingNameEn, setEditingNameEn, nameEnInput, setNameEnInput, savingNameEn, saveNameEnglish
   };
 }
 
@@ -223,7 +257,8 @@ function AddressModal({ address, onClose, onSave, isFirstAddress }: any) {
 function ProfileEditContent() {
   const {
     loading, user, addresses, isAddressModalOpen, editingAddress,
-    handleAddressAction, deleteAddress, openNewAddress, openEditAddress, closeAddressModal
+    handleAddressAction, deleteAddress, openNewAddress, openEditAddress, closeAddressModal,
+    editingNameEn, setEditingNameEn, nameEnInput, setNameEnInput, savingNameEn, saveNameEnglish
   } = useProfileEditLogic();
 
   // 🌟 로딩 중엔 실제 콘텐츠(및 #jp-address-section)가 아직 DOM에 없어서 브라우저의
@@ -375,7 +410,41 @@ function ProfileEditContent() {
           <span className="mp-eyebrow">Japan Address</span>
           <h2>나의 일본 배송지 주소 <span className="section-icon-badge badge-indigo"><i className="fa fa-location-dot"></i></span></h2>
         </div>
-        <JapanAddressCard userName={user.name} mailboxNumber={user.japanMailboxNumber} />
+        {/* 🔤 영문 이름: 카드의 "받는사람"에 그대로 들어가므로 카드 바로 위에 둡니다. */}
+        <div className="jp-nameen-box">
+          {editingNameEn ? (
+            <>
+              <label className="jp-nameen-label" htmlFor="jp-name-en">영문 이름</label>
+              <input
+                id="jp-name-en" className="jp-nameen-input" type="text" maxLength={60}
+                value={nameEnInput} onChange={(e) => setNameEnInput(e.target.value)}
+                placeholder="SANGMIN RA" autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') saveNameEnglish(); }}
+              />
+              <button type="button" className="jp-nameen-btn is-primary" onClick={saveNameEnglish} disabled={savingNameEn}>
+                {savingNameEn ? '저장 중…' : '저장'}
+              </button>
+              <button type="button" className="jp-nameen-btn" onClick={() => setEditingNameEn(false)} disabled={savingNameEn}>
+                취소
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="jp-nameen-label">영문 이름</span>
+              <span className={`jp-nameen-value ${user.nameEnglish ? '' : 'is-empty'}`}>
+                {user.nameEnglish || '미등록 — 등록하시면 일본 쇼핑몰 결제가 수월해집니다'}
+              </span>
+              <button
+                type="button" className="jp-nameen-btn"
+                onClick={() => { setNameEnInput(user.nameEnglish || ''); setEditingNameEn(true); }}
+              >
+                {user.nameEnglish ? '수정' : '등록'}
+              </button>
+            </>
+          )}
+        </div>
+
+        <JapanAddressCard mailboxNumber={user.japanMailboxNumber} nameEnglish={user.nameEnglish} />
       </div>
 
       {/* 모달 렌더링 */}
@@ -391,6 +460,38 @@ function ProfileEditContent() {
       {/* 글로벌 오염 방지를 위해 .miku-profile- 접두사를 일관되게 사용합니다. */}
       {/* ================================================================= */}
       <style jsx global>{`
+        /* 🔤 영문 이름 줄 — 일본 배송지 카드 바로 위 */
+        .jp-nameen-box {
+          display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+          margin-bottom: 14px; padding: 14px 18px;
+          background: #ffffff; border: 1px solid #e8edf4; border-radius: 16px;
+        }
+        .jp-nameen-label { font-size: 13px; font-weight: 800; color: #64748b; flex-shrink: 0; }
+        .jp-nameen-value {
+          flex: 1; min-width: 0; font-size: 15px; font-weight: 800; color: #0f172a;
+          letter-spacing: 0.02em;
+        }
+        .jp-nameen-value.is-empty { font-size: 13px; font-weight: 600; color: #94a3b8; letter-spacing: 0; }
+        .jp-nameen-input {
+          flex: 1; min-width: 160px; height: 40px; padding: 0 14px;
+          border: 1px solid #cbd5e1; border-radius: 10px;
+          font-family: inherit; font-size: 15px; font-weight: 700; text-transform: uppercase;
+        }
+        .jp-nameen-input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12); }
+        .jp-nameen-btn {
+          flex-shrink: 0; height: 40px; padding: 0 16px; border-radius: 10px; cursor: pointer;
+          border: 1px solid #cbd5e1; background: #ffffff; color: #475569;
+          font-family: inherit; font-size: 13px; font-weight: 800;
+        }
+        .jp-nameen-btn:hover:not(:disabled) { border-color: #4f46e5; color: #4f46e5; }
+        .jp-nameen-btn.is-primary { border-color: transparent; background: #4f46e5; color: #ffffff; }
+        .jp-nameen-btn.is-primary:hover:not(:disabled) { background: #4338ca; }
+        .jp-nameen-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        @media (max-width: 640px) {
+          .jp-nameen-box { align-items: stretch; flex-direction: column; }
+          .jp-nameen-btn, .jp-nameen-input { width: 100%; }
+        }
+
         .miku-profile-wrapper {
           /* 🌟 마이페이지·주문 현황과 같은 폭(레이아웃 컨텐츠 영역 전체)을 쓰도록 max-width 제한을 뺐습니다 */
           margin: 0 auto;

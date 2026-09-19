@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { PASSWORD_MIN_LENGTH } from '@/lib/passwordPolicy';
+import { isValidNameEnglish } from '@/lib/japanAddress';
 
 // 🌟 휴대폰 번호: 숫자만 남기고 010-1234-5678 형태로 자동 정리합니다.
 //    (저장 값도 하이픈 포함 형태로 통일해 마이페이지·주문서와 같은 모양이 되게 합니다)
@@ -28,12 +29,13 @@ const checkPassword = (password: string): string | null => {
   return null;
 };
 
-type FormKey = 'loginId' | 'name' | 'phone' | 'email' | 'password' | 'confirmPassword';
+type FormKey = 'loginId' | 'name' | 'nameEnglish' | 'phone' | 'email' | 'password' | 'confirmPassword';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState<Record<FormKey, string>>({
     loginId: '',
     name: '',
+    nameEnglish: '',
     phone: '',
     email: '',
     password: '',
@@ -50,10 +52,11 @@ export default function RegisterPage() {
   // 🌟 항목별 오류 메시지. 입력을 한 번이라도 건드린 칸에만 보여 줍니다.
   const errors = useMemo(() => {
     const e: Partial<Record<FormKey, string>> = {};
-    const { loginId, name, phone, email, password, confirmPassword } = formData;
+    const { loginId, name, nameEnglish, phone, email, password, confirmPassword } = formData;
 
     if (loginId && !isValidLoginId(loginId)) e.loginId = '영문·숫자 4~20자로 입력해 주세요.';
     if (name && name.trim().length < 2) e.name = '이름을 2자 이상 입력해 주세요.';
+    if (nameEnglish && !isValidNameEnglish(nameEnglish)) e.nameEnglish = '영문·공백·하이픈만 입력해 주세요.';
     if (phone && !isValidPhone(phone)) e.phone = '휴대폰 번호 형식이 올바르지 않습니다.';
     if (email && !isValidEmail(email)) e.email = '이메일 형식이 올바르지 않습니다.';
     if (password) {
@@ -79,7 +82,7 @@ export default function RegisterPage() {
     e.preventDefault();
     if (isSubmitting) return;
 
-    const { loginId, email, password, confirmPassword, name, phone } = formData;
+    const { loginId, email, password, confirmPassword, name, nameEnglish, phone } = formData;
 
     if (!loginId || !email || !password || !name || !phone) {
       setTouched({ loginId: true, name: true, phone: true, email: true, password: true, confirmPassword: true });
@@ -101,7 +104,7 @@ export default function RegisterPage() {
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ loginId, email, password, name, phone }),
+        body: JSON.stringify({ loginId, email, password, name, nameEnglish, phone }),
       });
 
       const data = await response.json();
@@ -180,6 +183,23 @@ export default function RegisterPage() {
                   />
                 </div>
                 {fieldError('name') && <p className="reg-msg is-error"><i className="fa fa-circle-exclamation"></i>{fieldError('name')}</p>}
+              </div>
+
+              {/* 🔤 영문 이름(선택): 일본 쇼핑몰 주소의 "받는사람"에 사서함 번호와 함께 씁니다.
+                  한자·가타카나는 사이트마다 전각/반각 규칙이 달라 결제 단계에서 자주 막힙니다. */}
+              <div className="reg-group">
+                <label className="reg-label" htmlFor="reg-name-en">영문 이름 <span className="reg-optional">(선택)</span></label>
+                <div className={`reg-wrap ${fieldError('nameEnglish') ? 'is-error' : ''}`}>
+                  <span className="reg-icon"><i className="fa fa-font"></i></span>
+                  <input
+                    id="reg-name-en" name="nameEnglish" type="text" className="reg-input"
+                    value={formData.nameEnglish} onChange={handleChange} onBlur={handleBlur}
+                    placeholder="SANGMIN RA" maxLength={60} autoComplete="off"
+                  />
+                </div>
+                {fieldError('nameEnglish')
+                  ? <p className="reg-msg is-error"><i className="fa fa-circle-exclamation"></i>{fieldError('nameEnglish')}</p>
+                  : <p className="reg-msg"><i className="fa fa-circle-info"></i>일본 배송지의 받는사람에 쓰입니다. 나중에 마이페이지에서도 등록할 수 있어요.</p>}
               </div>
 
               {/* 🌟 휴대폰 번호: 주문 상태 안내 발송에 사용합니다 */}

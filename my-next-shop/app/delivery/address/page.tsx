@@ -20,8 +20,8 @@ export default function DeliveryAddressPage() {
   const hasAlerted = useRef(false);
 
   const [isAuthChecking, setIsAuthChecking] = useState(true);
-  const [userName, setUserName] = useState('');
   const [mailboxNumber, setMailboxNumber] = useState('');
+  const [nameEnglish, setNameEnglish] = useState('');
 
   useEffect(() => {
     const userId = localStorage.getItem('user_id');
@@ -42,9 +42,9 @@ export default function DeliveryAddressPage() {
       .then(res => res.json())
       .then(data => {
         if (!data.success) return;
-        setUserName(data.user?.name || '');
         // 📦 회원별 사서함 번호. 예전에 가입한 회원은 아직 없을 수 있습니다.
         setMailboxNumber(data.user?.japanMailboxNumber || '');
+        setNameEnglish(data.user?.nameEnglish || '');
       })
       .catch(() => {});
   }, [router, showAlert]);
@@ -74,7 +74,7 @@ export default function DeliveryAddressPage() {
             상품이 창고에 도착하면 <strong>배송대행 신청</strong>으로 한국 발송을 요청하실 수 있습니다.
           </p>
 
-          <JapanAddressCard userName={userName} mailboxNumber={mailboxNumber} />
+          <JapanAddressCard mailboxNumber={mailboxNumber} nameEnglish={nameEnglish} />
 
           <NoticePanel tone="amber" title="이용 전 필독사항" className="delivery-address-notice">
             <ul>

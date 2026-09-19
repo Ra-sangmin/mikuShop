@@ -71,3 +71,32 @@ export async function generateMailboxNumber(db: PrismaClient): Promise<string> {
   // 10번 연속 겹칠 확률은 사실상 0입니다. 여기까지 왔다면 뭔가 잘못된 것이라 알립니다.
   throw new Error('사서함 번호를 만들지 못했습니다. (10회 연속 중복)');
 }
+
+/* ------------------------------------------------------------------ 영문 이름 */
+
+/**
+ * 일본 쇼핑몰 주소의 "받는사람"에 넣을 문자열을 만듭니다.
+ *
+ * 권장 형태는 `영문이름 + 사서함번호` 입니다. (예: SANGMIN RA MK-WQM5Z)
+ * 일본 쇼핑몰은 한자·가타카나 입력 시 전각/반각 규칙이 까다로워 결제 단계에서 자주 막히는데,
+ * 영문은 대부분의 사이트에서 무난히 통과합니다. 창고에서도 분류가 빨라집니다.
+ *
+ * 영문 이름이 없으면 한글 이름을 섞지 않고 사서함 번호만 씁니다.
+ * 한글을 넣으면 위의 입력 오류를 그대로 겪게 되고, 사서함 번호만으로도 주인은 가려집니다.
+ */
+export function japanRecipientName(nameEnglish: string | null | undefined, mailboxNumber: string | null | undefined): string {
+  return [nameEnglish?.trim() || null, mailboxNumber?.trim() || null].filter(Boolean).join(' ');
+}
+
+/** 영문 이름으로 받을 수 있는 값인지. 영문·공백·하이픈만 허용합니다. */
+export function isValidNameEnglish(value: string): boolean {
+  return /^[A-Za-z][A-Za-z\s-]{0,58}[A-Za-z]$/.test(value.trim());
+}
+
+/**
+ * 저장 형태로 다듬습니다. 대문자로 통일하고 공백을 한 칸으로 정리합니다.
+ * 운송장·주소 표기는 대문자가 관례이고, 대소문자가 섞이면 같은 사람인지 알아보기 어렵습니다.
+ */
+export function normalizeNameEnglish(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toUpperCase();
+}
