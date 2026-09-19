@@ -191,7 +191,6 @@ export default function UserManagement() {
       if (!q) return true;
       return (
         u.name?.toLowerCase().includes(q) ||
-        u.nickname?.toLowerCase().includes(q) ||
         u.loginId?.toLowerCase().includes(q) ||
         u.email?.toLowerCase().includes(q) ||
         (qDigits.length >= 3 && u.phone?.replace(/\D/g, '').includes(qDigits))
@@ -633,6 +632,9 @@ function MemberDrawer({ userId, grades, onClose, onSaved, pushToast }: {
 
   const user = detail?.user;
   const tone = gradeTone(user?.grade?.name);
+  // 🌟 개인통관부호는 배송지(addresses)에 딸린 값입니다.
+  //    목록은 기본 배송지가 맨 앞으로 정렬돼 오므로(api/admin/users) 첫 번째가 기본 배송지입니다.
+  const customsCode: string | null = user?.addresses?.[0]?.personalCustomsCode || null;
   const delta = moneyMode === 'add' ? moneyAmount : -moneyAmount;
   const nextBalance = (user?.cyberMoney || 0) + delta;
   const moneyInvalid = moneyAmount === 0 || nextBalance < 0;
@@ -710,7 +712,7 @@ function MemberDrawer({ userId, grades, onClose, onSaved, pushToast }: {
             <header className="usr-drawer-hero" style={toneVars(tone)}>
               <Avatar user={user} tone={tone} size={64} />
               <div className="usr-drawer-id">
-                <h2>{user.name}{user.nickname && <small>{user.nickname}</small>}</h2>
+                <h2>{user.name}</h2>
                 <button type="button" className="usr-copyable is-light" onClick={() => copy(user.loginId, '아이디')}>
                   {user.loginId} <Copy size={11} weight="bold" />
                 </button>
@@ -739,11 +741,13 @@ function MemberDrawer({ userId, grades, onClose, onSaved, pushToast }: {
                   <dd>{user.phone
                     ? <button type="button" className="usr-copyable" onClick={() => copy(user.phone, '휴대폰 번호')}>{user.phone}<Copy size={11} weight="bold" /></button>
                     : <span className="is-empty">미등록</span>}</dd>
+                  {/* 🌟 개인통관부호는 배송지에 딸린 값입니다. (users 에도 한 벌 들고 있었지만 채우는 경로가 없어 늘 비어 있었습니다)
+                      목록은 기본 배송지가 맨 앞이라 addresses[0] 이 기본 배송지입니다. */}
                   <dt>개인통관부호</dt>
                   <dd>
-                    {user.personalCustomsCode ? (
+                    {customsCode ? (
                       <span className="usr-secret">
-                        <code>{showCustoms ? user.personalCustomsCode : maskCustoms(user.personalCustomsCode)}</code>
+                        <code>{showCustoms ? customsCode : maskCustoms(customsCode)}</code>
                         <button type="button" onClick={() => setShowCustoms(v => !v)} aria-label={showCustoms ? '가리기' : '보기'}>
                           {showCustoms ? <EyeSlash size={13} weight="bold" /> : <Eye size={13} weight="bold" />}
                         </button>

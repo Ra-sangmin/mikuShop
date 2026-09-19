@@ -22,7 +22,7 @@ function useProfileEditLogic() {
   const [editingAddress, setEditingAddress] = useState<any>(null);
 
   const [user, setUser] = useState({
-    id: '', name: '', email: '', phone: '', nickname: '', personalCustomsCode: '', defaultAddressId: null as number | null,
+    id: '', name: '', email: '', phone: '',
     cyberMoney: 0,
   });
 
@@ -54,8 +54,6 @@ function useProfileEditLogic() {
             setUser({
               id: data.user.id.toString(),
               name: data.user.name || '', email: data.user.email || '', phone: data.user.phone || '',
-              nickname: data.user.nickname || '', personalCustomsCode: data.user.personalCustomsCode || '',
-              defaultAddressId: data.user.defaultAddressId || null,
               cyberMoney: data.user.cyberMoney || 0,
             });
             fetchAddresses(data.user.id.toString());
@@ -87,12 +85,9 @@ function useProfileEditLogic() {
         showAlert(editingAddress ? '배송지가 수정되었습니다.' : '새 배송지가 추가되었습니다.', 'success');
         setIsAddressModalOpen(false);
         setEditingAddress(null);
+        // 기본 배송지 여부는 배송지 목록(addresses.isDefault)에 들어 있으므로
+        // 목록만 다시 받으면 됩니다. 회원 정보를 또 조회할 필요가 없습니다.
         fetchAddresses(storedId);
-        if (addressData.isDefault) {
-          const userRes = await fetch(`/api/users?id=${storedId}`);
-          const userData = await userRes.json();
-          if (userData.success) setUser(prev => ({ ...prev, defaultAddressId: userData.user.defaultAddressId }));
-        }
       }
     } catch (error) { showAlert('배송지 저장 중 오류가 발생했습니다.', 'error'); }
   };
@@ -241,7 +236,7 @@ function ProfileEditContent() {
 
   if (loading) return <div className="miku-profile-loading">데이터를 불러오는 중입니다...</div>;
 
-  const defaultAddress = addresses.find(a => a.id === user.defaultAddressId) || addresses.find(a => a.isDefault);
+  const defaultAddress = addresses.find(a => a.isDefault);
 
   return (
     <div className="miku-profile-wrapper mp-skin">
@@ -347,7 +342,7 @@ function ProfileEditContent() {
             <div className="empty-state">등록된 배송지가 없습니다.</div>
           ) : (
             addresses.map((addr) => {
-              const isDefault = addr.id === user.defaultAddressId;
+              const isDefault = addr.isDefault;
               return (
                 <div key={addr.id} className={`address-list-item ${isDefault ? 'is-default' : ''}`}>
                   <div className="item-info">

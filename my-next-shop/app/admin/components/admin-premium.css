@@ -751,3 +751,54 @@
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11.5px; font-weight: 800; letter-spacing: 0;
 }
+
+/* =====================================================
+   상품 정보 칸 (<ProductCell>) — 주문 관리와 같은 모양
+   ===================================================== */
+.apc { display: flex; align-items: center; gap: 12px; min-width: 0; container: apc / inline-size; }
+.apc-thumb {
+  position: relative; width: 52px; height: 52px; flex-shrink: 0;
+  border-radius: 13px; overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(145deg, #f8fafc 0%, #eef2f7 100%);
+  border: 1px solid #e6ebf2; color: #b6c2d2;
+  box-shadow: 0 8px 16px -12px rgba(15, 23, 42, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: transform 0.2s ease;
+}
+.apc-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+tr:hover .apc-thumb { transform: scale(1.04); }
+.abx-row .apc-thumb { border-color: #fbd9b4; }
+.apc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.apc-name {
+  display: block; min-width: 0;
+  font-size: 13.5px; font-weight: 800; color: #0f172a; letter-spacing: -0.2px; line-height: 1.45;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.apc-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.apc-meta .abx-toggle { height: 22px; padding: 0 8px; font-size: 11px; border-radius: 7px; }
+.apc-url {
+  display: inline-flex; align-items: center; gap: 3px;
+  height: 22px; padding: 0 8px; border-radius: 7px;
+  background: #ffffff; border: 1px solid #dbe6fd;
+  font-size: 11px; font-weight: 800; color: #2563eb; text-decoration: none; white-space: nowrap;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+.apc-url:hover { background: #2563eb; border-color: #2563eb; color: #ffffff; }
+.apc-ic {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 7px; flex-shrink: 0;
+  border: 1px solid transparent; cursor: help;
+}
+.apc-ic.is-photo { color: #0284c7; background: #e0f2fe; border-color: #bae6fd; }
+.apc-ic.is-pack  { color: #7c3aed; background: #ede9fe; border-color: #ddd6fe; }
+.apc-ic.is-etc   { color: #db2777; background: #fce7f3; border-color: #fbcfe8; }
+.apc-ic.is-opt   { color: #64748b; background: #f1f5f9; border-color: #e2e8f0; }
+.apc-ic.is-req   { color: #b45309; background: #fffbeb; border-color: #fde68a; }
+@container apc (max-width: 220px) {
+  .apc-thumb { width: 42px; height: 42px; border-radius: 11px; }
+  .apc { gap: 9px; }
+}
+@container apc (max-width: 160px) {
+  .apc { flex-direction: column; align-items: flex-start; }
+  .apc-body { width: 100%; }
+}

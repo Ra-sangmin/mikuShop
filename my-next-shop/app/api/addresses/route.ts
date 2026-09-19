@@ -79,28 +79,12 @@ export async function POST(request: Request) {
       }
 
       if (isDefault) {
-        // 기존 기본 배송지 해제
+        // 기본 배송지는 addresses.isDefault 하나로만 표시합니다.
+        // 예전에는 users.defaultAddressId·addressId(CSV)에도 같은 사실을 써 두었는데,
+        // 한쪽만 갱신되면 화면과 알림톡이 서로 다른 배송지를 가리켰습니다.
         await prisma.address.updateMany({
           where: { userId: userId, isDefault: true },
           data: { isDefault: false }
-        });
-
-        // 🌟 기본 배송지가 아닌 다른 모든 주소들의 ID를 모아서 User의 addressId(CSV)에 저장
-        const otherAddresses = await prisma.address.findMany({
-          where: { 
-            userId: userId,
-            NOT: { id: parseInt(id) }
-          },
-          select: { id: true }
-        });
-        const otherIdsCsv = otherAddresses.map(a => a.id).join(',');
-        
-        await prisma.user.update({
-          where: { id: userId },
-          data: { 
-            defaultAddressId: parseInt(id),
-            addressId: otherIdsCsv
-          }
         });
       }
 
@@ -143,25 +127,7 @@ export async function POST(request: Request) {
       }
     });
 
-    if (isDefault) {
-      // 🌟 기본 배송지가 아닌 다른 모든 주소들의 ID를 모아서 User의 addressId(CSV)에 저장
-      const otherAddresses = await prisma.address.findMany({
-        where: { 
-          userId: userId,
-          NOT: { id: newAddress.id }
-        },
-        select: { id: true }
-      });
-      const otherIdsCsv = otherAddresses.map(a => a.id).join(',');
-
-      await prisma.user.update({
-        where: { id: userId },
-        data: { 
-          defaultAddressId: newAddress.id,
-          addressId: otherIdsCsv
-        }
-      });
-    }
+    // 기본 배송지 표시는 위에서 끝났습니다. (addresses.isDefault 한 곳으로만 관리)
 
     return NextResponse.json({ success: true, address: newAddress, mode: 'create' });
 

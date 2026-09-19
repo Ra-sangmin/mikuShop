@@ -45,3 +45,68 @@
   background: linear-gradient(180deg, #fffaf4 0%, #fff7ed 100%);
   box-shadow: inset 3px 0 0 #f97316;
 }
+
+/* =====================================================
+   수취인 — 이름 + (도로명 · 번지), 누르면 자세히
+   ===================================================== */
+.dlv-rcpt {
+  display: inline-flex; flex-direction: column; align-items: center; gap: 2px; max-width: 100%;
+  padding: 6px 10px; border-radius: 10px; border: 1px solid transparent; background: transparent;
+  font-family: inherit; cursor: pointer; text-align: center;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.dlv-rcpt:hover { background: #f5f8ff; border-color: #dbe6fd; }
+.dlv-rcpt-name { font-size: 14px; font-weight: 800; color: #0f172a; white-space: nowrap; }
+.dlv-rcpt-addr { max-width: 100%; font-size: 12px; font-weight: 600; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dlv-rcpt:hover .dlv-rcpt-name { color: #1d4ed8; }
+
+.dlv-addr-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  background: rgba(10, 15, 26, 0.5); backdrop-filter: blur(3px);
+  animation: dlvFade 0.2s ease-out both;
+}
+.dlv-addr-modal {
+  position: relative; width: 100%; max-width: 440px;
+  padding: 22px 22px 18px; border-radius: 20px; background: #ffffff;
+  box-shadow: 0 30px 70px -30px rgba(10, 15, 26, 0.6);
+  overflow: hidden;
+  animation: dlvRise 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.dlv-addr-modal::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 4px; background: linear-gradient(90deg, #60a5fa 0%, #2563eb 100%); }
+.dlv-addr-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.dlv-addr-head > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dlv-addr-head strong { font-size: 17px; font-weight: 900; color: #0f172a; letter-spacing: -0.4px; }
+.dlv-addr-head span { font-size: 12px; font-weight: 700; color: #94a3b8; font-family: 'SFMono-Regular', Consolas, monospace; }
+.dlv-addr-mark {
+  width: 42px; height: 42px; border-radius: 13px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #ffffff; background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+  box-shadow: 0 10px 20px -12px rgba(37, 99, 235, 0.95);
+}
+.dlv-addr-close { width: 32px; height: 32px; border-radius: 10px; border: 1px solid #e8edf4; background: #ffffff; color: #64748b; font-size: 20px; line-height: 1; cursor: pointer; }
+.dlv-addr-close:hover { background: #f8fafc; color: #0f172a; }
+.dlv-addr-list {
+  margin: 0 0 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+  border-radius: 14px; background: #f9fbfd; border: 1px solid #edf1f6;
+}
+.dlv-addr-list > div { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.dlv-addr-list dt { font-size: 12px; font-weight: 700; color: #94a3b8; }
+.dlv-addr-list dd { margin: 0; font-size: 13.5px; font-weight: 600; color: #334155; line-height: 1.55; word-break: break-all; }
+.dlv-addr-list dd strong { font-weight: 900; color: #0f172a; }
+.dlv-addr-list dd em { font-style: normal; font-weight: 600; color: #94a3b8; }
+.dlv-addr-list dd.is-mono { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; }
+.dlv-addr-zip { display: inline-block; padding: 0 6px; margin-right: 2px; border-radius: 5px; font-size: 11.5px; font-weight: 800; color: #2563eb; background: #eff6ff; }
+.dlv-addr-actions { display: flex; gap: 8px; }
+.dlv-addr-btn {
+  flex: 1; height: 42px; border-radius: 12px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer;
+}
+.dlv-addr-btn.is-ghost { background: #ffffff; border: 1px solid #e2e8f0; color: #475569; }
+.dlv-addr-btn.is-ghost:hover { background: #f8fafc; }
+.dlv-addr-btn.is-ghost.is-done { color: #059669; border-color: #a7f3d0; background: #ecfdf5; }
+.dlv-addr-btn.is-primary { border: 0; color: #ffffff; background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%); }
+@keyframes dlvFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dlvRise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .dlv-addr-overlay, .dlv-addr-modal { animation: none; } }

@@ -49,43 +49,10 @@ export async function GET(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
-  try {
-    const { id, addressId, addressMode } = await request.json();
-
-    // 🔒 본인만 수정 가능
-    const auth = await requireUser(id);
-    if (!auth.ok) return auth.response;
-
-    const updateData: any = {};
-    const userId = auth.userId;
-
-    // 🏠 주소 업데이트 로직만 남김
-    if (addressId !== undefined) {
-      if (addressMode === 'add') {
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        let currentIds = user?.addressId ? user.addressId.split(',') : [];
-        const newIdStr = addressId.toString();
-        if (!currentIds.includes(newIdStr)) {
-          currentIds.push(newIdStr);
-        }
-        updateData.addressId = currentIds.join(',');
-      } else {
-        updateData.addressId = addressId.toString();
-      }
-    }
-
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: updateData,
-      omit: { password: true },
-    });
-
-    return NextResponse.json({ success: true, user: updatedUser });
-  } catch (error) {
-    return NextResponse.json({ error: '유저 정보 업데이트 실패' }, { status: 500 });
-  }
-}
+// 🗑️ PUT 은 없앴습니다.
+//    users.address_id(쉼표로 이어붙인 배송지 ID 문자열)만 건드리던 엔드포인트인데,
+//    배송지는 addresses 테이블이 user_id 로 직접 물고 있어 그 컬럼 자체가 필요 없었고
+//    호출하는 화면도 없었습니다. 회원 정보 수정이 필요해지면 새로 만드는 편이 낫습니다.
 
 export async function POST(request: Request) {
   try {

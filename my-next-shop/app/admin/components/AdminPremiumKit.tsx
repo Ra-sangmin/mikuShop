@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useState, type CSSProperties, type ReactNode } from 'react';
-import { MagnifyingGlass, X, CheckCircle, WarningCircle, Tray, Package, ArrowSquareOut, Stack, CaretDown } from '@phosphor-icons/react';
+import { MagnifyingGlass, X, CheckCircle, WarningCircle, Tray, Package, ArrowSquareOut, Stack, CaretDown, Camera, ShieldCheck, Sparkle, Tag, ChatText } from '@phosphor-icons/react';
 import './admin-premium.css';
 
 /* ---------------- 히어로 ---------------- */
@@ -231,6 +231,69 @@ export function downloadCsv(filename: string, header: string[], rows: (string | 
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/* ---------------- 상품 정보 칸 (주문 관리 · 배송 현황 공용 모양) ---------------- */
+
+/** 부가 서비스 ("사진 검수, 포장 보완") → 목록 */
+export const parseServices = (v?: string | null) =>
+  Array.from(new Set(String(v || '').split(',').map(x => x.trim()).filter(x => x && x !== '-')));
+
+const SERVICE_ICON: Record<string, { icon: ReactNode; cls: string }> = {
+  '사진 검수': { icon: <Camera size={12} weight="fill" />, cls: 'is-photo' },
+  '포장 보완': { icon: <ShieldCheck size={12} weight="fill" />, cls: 'is-pack' },
+};
+
+/**
+ * 썸네일 + 한 줄 상품명 + [원본 | 전체 N건] + 서비스 · 옵션 · 요청 아이콘.
+ * 합포장이면 '원본' 자리에 '전체 N건' 버튼이 옵니다. 자세한 내용은 마우스를 올리면 보입니다.
+ */
+export function ProductCell({ name, imageUrl, productUrl, serviceRequest, option, request, bundle }: {
+  name: string;
+  imageUrl?: string | null;
+  productUrl?: string | null;
+  serviceRequest?: string | null;
+  option?: string | null;
+  request?: string | null;
+  bundle?: { open: boolean; count: number; onToggle: () => void };
+}) {
+  const has = (v?: string | null) => !!v && v !== '-';
+  return (
+    <span className="apc">
+      <span className="apc-thumb">
+        <Package size={18} weight="duotone" />
+        {imageUrl && (
+          // 이미지가 깨지면 숨겨서 뒤의 상자 아이콘이 보이게 합니다.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt="" referrerPolicy="no-referrer" loading="lazy"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+        )}
+      </span>
+      <span className="apc-body">
+        <span className="apc-name" title={name}>{name}</span>
+        <span className="apc-meta">
+          {bundle ? (
+            <BundleToggle open={bundle.open} count={bundle.count} onClick={bundle.onToggle} />
+          ) : has(productUrl) && (
+            <a href={productUrl!} target="_blank" rel="noopener noreferrer" className="apc-url" title="상품 원본 페이지 열기">
+              원본 <ArrowSquareOut size={10} weight="bold" />
+            </a>
+          )}
+          {parseServices(serviceRequest).map(sv => (
+            <span key={sv} className={`apc-ic ${SERVICE_ICON[sv]?.cls || 'is-etc'}`} title={sv} aria-label={sv}>
+              {SERVICE_ICON[sv]?.icon || <Sparkle size={12} weight="fill" />}
+            </span>
+          ))}
+          {has(option) && (
+            <span className="apc-ic is-opt" title={`옵션: ${option}`} aria-label="옵션 있음"><Tag size={12} weight="fill" /></span>
+          )}
+          {has(request) && (
+            <span className="apc-ic is-req" title={`요청: ${request}`} aria-label="요청사항 있음"><ChatText size={12} weight="fill" /></span>
+          )}
+        </span>
+      </span>
+    </span>
+  );
 }
 
 /* ---------------- 합포장 대표 행 표시 (배지 · 펼치기 버튼) ---------------- */

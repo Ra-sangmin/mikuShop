@@ -8,7 +8,7 @@ import { useFitTable, FitColGroup, FitTh } from '../components/useFitTable';
 import {
   AdminHero, HeroButton, KpiCard, SearchField, SegFilter, EmptyRow, SkeletonRows,
   useToasts, ToastStack, fmtDateTime, BundleItemsPanel,
-  BundleBadge, BundleToggle,
+  BundleBadge, ProductCell,
 } from '../components/AdminPremiumKit';
 import {
   Truck, ArrowClockwise, ArrowsClockwise, FloppyDisk, Package, AirplaneTilt,
@@ -32,7 +32,7 @@ const DELIVERY_TONE: Record<DeliveryStatus, string> = {
 
 type Filter = 'ACTIVE' | 'ALL' | DeliveryStatus;
 
-const COLUMNS = ['date', 'user', 'address', 'product', 'tracking', 'status', 'manage'] as const;
+const COLUMNS = ['date', 'user', 'product', 'address', 'tracking', 'status', 'manage'] as const;
 const DEFAULT_WIDTHS = {
   date: 190,
   user: 130,
@@ -52,6 +52,9 @@ type DeliveryRow = {
   product: string;
   productImageUrl: string | null;
   productUrl: string;     // 상품 원본 페이지 ('' = 없음)
+  serviceRequest: string; // 부가 서비스 ("사진 검수, 포장 보완")
+  productOption: string;
+  productRequest: string;
   productPrice: number;   // 현지 통화(엔) 기준 상품가
   status: DeliveryStatus;
   trackingNo: string;     // 화면 표시용 ('' = 없음)
@@ -120,6 +123,15 @@ function groupByBundle(rows: DeliveryRow[]): DisplayRow[] {
   return result;
 }
 
+// 🏠 도로명 주소에서 "○○로 / ○○길"부터 끝까지(도로명 + 번지)만 — 마이페이지 배송 준비 수취인과 같은 규칙
+function lastRoadPart(address?: string) {
+  const tokens = address?.trim().split(/\s+/) || [];
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (/(로|길)$/.test(tokens[i])) return tokens.slice(i).join(' ');
+  }
+  return tokens[tokens.length - 1] || '';
+}
+
 export default function DeliveryManagement() {
   const [orders, setOrders] = useState<DeliveryRow[]>([]);
   const [originalOrders, setOriginalOrders] = useState<DeliveryRow[]>([]);
@@ -127,6 +139,15 @@ export default function DeliveryManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  // 🏠 수취인 자세히 보기 팝업
+  const [addrDetail, setAddrDetail] = useState<DisplayRow | null>(null);
+  const [addrCopied, setAddrCopied] = useState(false);
+  useEffect(() => {
+    if (!addrDetail) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setAddrDetail(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [addrDetail]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<Filter>('ACTIVE');
@@ -162,6 +183,9 @@ export default function DeliveryManagement() {
             product: o.productName,
             productImageUrl: o.productImageUrl || null,
             productUrl: o.productUrl || '',
+            serviceRequest: o.serviceRequest || '',
+            productOption: o.productOption || '',
+            productRequest: o.productRequest || '',
             productPrice: Number(o.productPrice) || 0,
             status: (o.deliveryStatus || DELIVERY_STATUS.PREPARING) as DeliveryStatus,
             trackingNo: o.trackingNo || '',
@@ -416,8 +440,8 @@ export default function DeliveryManagement() {
               <tr className="admin-table-head-row">
                 <FitTh table={table} columnKey="date">주문일시 / 주문번호</FitTh>
                 <FitTh table={table} columnKey="user">주문자</FitTh>
-                <FitTh table={table} columnKey="address">수취인 · 주소</FitTh>
-                <FitTh table={table} columnKey="product">상품</FitTh>
+                <FitTh table={table} columnKey="product">상품 정보</FitTh>
+                <FitTh table={table} columnKey="address">수취인</FitTh>
                 <FitTh table={table} columnKey="tracking">배송 업체 · 송장</FitTh>
                 <FitTh table={table} columnKey="status">배송 상태</FitTh>
                 <FitTh table={table} columnKey="manage">관리</FitTh>
@@ -451,28 +475,27 @@ export default function DeliveryManagement() {
                     </td>
                     <td className="ap-td"><span className="ap-strong">{o.user}</span></td>
                     <td className="ap-td is-left">
+                      {/* 주문 관리와 같은 모양: 썸네일 · 한 줄 이름 · [원본 | 전체 N건] · 서비스/옵션/요청 아이콘 */}
+                      <ProductCell
+                        name={o.product}
+                        imageUrl={o.productImageUrl}
+                        productUrl={o.productUrl}
+                        serviceRequest={o.isBundleGroup ? o.bundleItems!.map(b => b.serviceRequest).join(',') : o.serviceRequest}
+                        option={o.isBundleGroup ? o.bundleItems!.map(b => b.productOption).filter(v => v && v !== '-').join(' / ') : o.productOption}
+                        request={o.isBundleGroup ? o.bundleItems!.map(b => b.productRequest).filter(v => v && v !== '-').join(' / ') : o.productRequest}
+                        bundle={o.isBundleGroup ? { open: isOpen, count: o.bundleItems!.length, onToggle: () => toggleBundle(o.bundleId) } : undefined}
+                      />
+                    </td>
+                    <td className="ap-td">
+                      {/* 회원 화면(마이페이지 · 배송 준비)과 같은 모양: 이름 + (도로명 · 번지). 누르면 연락처 · 통관번호 등 자세히 */}
                       {o.address ? (
-                        <div className="ap-address">
-                          <span className="ap-address-top">{o.address.recipientName}<span>{o.address.phone}</span></span>
-                          <span className="ap-address-line" title={`[${o.address.zipCode}] ${o.address.address} ${o.address.detailAddress}`}>
-                            [{o.address.zipCode}] {o.address.address} {o.address.detailAddress}
-                          </span>
-                          {o.address.personalCustomsCode && <span className="ap-address-code">통관 {o.address.personalCustomsCode}</span>}
-                        </div>
+                        <button type="button" className="dlv-rcpt" onClick={() => { setAddrCopied(false); setAddrDetail(o); }}
+                          title="눌러서 연락처 · 주소 · 통관번호 보기">
+                          <span className="dlv-rcpt-name">{o.address.recipientName || '미지정'}</span>
+                          {o.address.address && <span className="dlv-rcpt-addr">({lastRoadPart(o.address.address)})</span>}
+                        </button>
                       ) : (
                         <span className="ap-empty-mark">{o.recipient ? `${o.recipient} (주소 정보 없음)` : '배송지 미지정'}</span>
-                      )}
-                    </td>
-                    <td className="ap-td is-left">
-                      <span className="ap-product">
-                        <span className="ap-thumb">
-                          {o.productImageUrl ? <img src={o.productImageUrl} alt="" referrerPolicy="no-referrer" /> : <Package size={16} weight="duotone" />}
-                        </span>
-                        <span className="ap-product-name" title={o.product}>{o.product}</span>
-                      </span>
-                      {o.isBundleGroup && (
-                        <BundleToggle open={isOpen} count={o.bundleItems!.length}
-                          onClick={() => toggleBundle(o.bundleId)} className="is-below" />
                       )}
                     </td>
                     <td className="ap-td">
@@ -533,6 +556,49 @@ export default function DeliveryManagement() {
           </table>
         </div>
       </section>
+
+      {addrDetail?.address && (() => {
+        const a = addrDetail.address;
+        const full = `[${a.zipCode}] ${a.address} ${a.detailAddress || ''}`.trim();
+        const copyAll = async () => {
+          try {
+            await navigator.clipboard.writeText(`${a.recipientName} ${a.phone || ''}\n${full}${a.personalCustomsCode ? `\n통관번호 ${a.personalCustomsCode}` : ''}`);
+            setAddrCopied(true);
+            setTimeout(() => setAddrCopied(false), 1500);
+          } catch { /* 복사 권한이 없으면 무시 */ }
+        };
+        const rows: [string, React.ReactNode, string?][] = [
+          ['받는 분', <strong key="n">{a.recipientName}{a.recipientEnglishName ? <em> · {a.recipientEnglishName}</em> : null}</strong>],
+          ['연락처', a.phone || '-', 'is-mono'],
+          ['주소', <><span className="dlv-addr-zip">{a.zipCode}</span> {a.address}{a.detailAddress && <><br />{a.detailAddress}</>}</>],
+          ['통관번호', a.personalCustomsCode || '-', 'is-mono'],
+        ];
+        return (
+          <div className="dlv-addr-overlay" onClick={() => setAddrDetail(null)}>
+            <div className="dlv-addr-modal" role="dialog" aria-modal="true" aria-label="수취인 정보" onClick={(e) => e.stopPropagation()}>
+              <div className="dlv-addr-head">
+                <span className="dlv-addr-mark"><House size={20} weight="duotone" /></span>
+                <div>
+                  <strong>수취인 정보</strong>
+                  <span>{addrDetail.isBundleGroup ? `묶음 ${addrDetail.bundleId} · ${addrDetail.bundleItems!.length}건` : addrDetail.id}</span>
+                </div>
+                <button type="button" className="dlv-addr-close" onClick={() => setAddrDetail(null)} aria-label="닫기">×</button>
+              </div>
+              <dl className="dlv-addr-list">
+                {rows.map(([k, v, cls]) => (
+                  <div key={k}><dt>{k}</dt><dd className={cls || ''}>{v}</dd></div>
+                ))}
+              </dl>
+              <div className="dlv-addr-actions">
+                <button type="button" className={`dlv-addr-btn is-ghost ${addrCopied ? 'is-done' : ''}`} onClick={copyAll}>
+                  <Copy size={14} weight="bold" /> {addrCopied ? '복사됨' : '전체 복사'}
+                </button>
+                <button type="button" className="dlv-addr-btn is-primary" onClick={() => setAddrDetail(null)}>닫기</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <ToastStack toasts={toasts} />
     </div>

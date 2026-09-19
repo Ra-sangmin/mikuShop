@@ -45,13 +45,31 @@ type SocialPhoneProfile = {
 function extractSocialPhone(provider: string, profile: unknown): string | null {
   const raw = (profile ?? {}) as SocialPhoneProfile;
 
-  if (provider === "naver") {
-    return formatKoreanMobile(raw.response?.mobile || raw.response?.mobile_e164);
+  // 제공사가 실제로 번호를 내려줬는지 먼저 봅니다.
+  const rawPhone =
+    provider === "naver" ? (raw.response?.mobile || raw.response?.mobile_e164)
+    : provider === "kakao" ? raw.kakao_account?.phone_number
+    : undefined;
+
+  const formatted = formatKoreanMobile(rawPhone);
+
+  // 📋 번호가 저장되지 않을 때 원인을 세 가지로 갈라 보기 위한 로그입니다.
+  //    ① 동의항목 미설정 → 값 자체가 안 옴 (가장 흔합니다)
+  //    ② 해외 번호 등    → 값은 왔지만 국내 휴대폰이 아니라 걸러짐
+  //    ③ 정상
+  //    ⚠️ 번호 원문은 찍지 않습니다. 받았는지 여부와 자릿수만 남깁니다.
+  if (provider === "naver" || provider === "kakao") {
+    if (!rawPhone) {
+      console.warn(`[SNS로그인] ${provider}: 휴대폰 번호를 내려주지 않았습니다. 개발자센터의 동의항목 설정을 확인하세요.`,
+        { 받은필드: Object.keys((raw.response ?? raw.kakao_account ?? {}) as object) });
+    } else if (!formatted) {
+      console.warn(`[SNS로그인] ${provider}: 번호를 받았지만 국내 휴대폰 형식이 아니라 저장하지 않습니다. (자릿수 ${String(rawPhone).replace(/[^0-9]/g, '').length})`);
+    } else {
+      console.log(`[SNS로그인] ${provider}: 휴대폰 번호를 받았습니다.`);
+    }
   }
-  if (provider === "kakao") {
-    return formatKoreanMobile(raw.kakao_account?.phone_number);
-  }
-  return null;
+
+  return formatted;
 }
 
 export const authOptions: NextAuthOptions = {
