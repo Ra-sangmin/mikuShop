@@ -840,3 +840,31 @@ tr:hover .apc-thumb { transform: scale(1.04); }
   .aui-info { grid-template-columns: 1fr; gap: 4px 0; }
   .aui-info dt { margin-top: 8px; }
 }
+
+/* 회원 요약 (주문 · 머니 · 등급) — <UserSummaryStats> */
+.aui-stats {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px; margin-bottom: 16px;
+}
+.aui-stats > div {
+  display: flex; flex-direction: column; gap: 5px; align-items: center;
+  padding: 12px 8px; border-radius: 14px;
+  background: #f8fafc; border: 1px solid #eceff4;
+}
+.aui-stats span { font-size: 11.5px; font-weight: 700; color: #94a3b8; }
+.aui-stats strong { font-size: 16px; font-weight: 900; color: #0f172a; letter-spacing: -0.3px; }
+.aui-stats strong small { margin-left: 2px; font-size: 11.5px; font-weight: 700; color: #94a3b8; }
+
+.aui-grade {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 800; white-space: nowrap;
+  color: var(--g-text, #1d4ed8);
+  background: rgba(var(--g-rgb, 59, 130, 246), 0.12);
+  border: 1px solid rgba(var(--g-rgb, 59, 130, 246), 0.26);
+}
+
+@media (max-width: 520px) {
+  .aui-stats { grid-template-columns: 1fr; }
+  .aui-stats > div { flex-direction: row; justify-content: space-between; }
+}

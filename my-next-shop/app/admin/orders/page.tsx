@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useFitTable, FitColGroup, FitTh } from '../components/useFitTable';
-import { AdminHero, HeroButton, KpiCard, SearchField, SegFilter, EmptyRow, SkeletonRows, BundleItemsPanel, BundleBadge, BundleToggle, UserBasicInfo, type BasicInfoUser, useToasts, ToastStack } from '../components/AdminPremiumKit';
+import { AdminHero, HeroButton, KpiCard, SearchField, SegFilter, EmptyRow, SkeletonRows, BundleItemsPanel, BundleBadge, BundleToggle, UserBasicInfo, type BasicInfoUser, UserSummaryStats, type SummaryUser, useToasts, ToastStack } from '../components/AdminPremiumKit';
 import { useRouter } from 'next/navigation';
 // 🌟 글로벌 상수 및 라벨 임포트
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
@@ -518,7 +518,7 @@ export default function OrderManagement() {
   // 👤 주문자 팝업 — 회원 관리의 "기본 정보"와 같은 내용을 보여줍니다.
   //    주문을 보다가 연락처·통관부호를 확인하려고 회원 관리로 넘어갔다 돌아오는 일이 잦았습니다.
   const [userModal, setUserModal] = useState<{ id: number; name: string } | null>(null);
-  const [userDetail, setUserDetail] = useState<BasicInfoUser | null>(null);
+  const [userDetail, setUserDetail] = useState<(BasicInfoUser & SummaryUser) | null>(null);
   const [userLoading, setUserLoading] = useState(false);
 
   const openUserModal = async (userId: number | null, name: string) => {
@@ -1564,10 +1564,14 @@ export default function OrderManagement() {
           {userLoading && <p style={os.logEmpty}>불러오는 중...</p>}
           {!userLoading && !userDetail && <p style={os.logEmpty}>회원 정보를 불러오지 못했습니다.</p>}
           {!userLoading && userDetail && (
-            <UserBasicInfo
-              user={userDetail}
-              onCopy={(_text, label) => pushToast('success', `${label}을(를) 복사했습니다.`)}
-            />
+            <>
+              {/* 주문·머니·등급을 먼저 보여 줍니다. 주문 화면에서 가장 자주 확인하는 값입니다. */}
+              <UserSummaryStats user={userDetail} />
+              <UserBasicInfo
+                user={userDetail}
+                onCopy={(_text, label) => pushToast('success', `${label}을(를) 복사했습니다.`)}
+              />
+            </>
           )}
 
           <div style={os.feeModalButtonRow}>

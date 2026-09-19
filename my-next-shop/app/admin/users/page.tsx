@@ -5,7 +5,7 @@ import '../admin-common.css';
 import './users-premium.css';
 import { useFitTable, FitColGroup, FitTh } from '../components/useFitTable';
 // 🌟 기본 정보 패널은 주문 관리의 주문자 팝업과 같은 내용을 보여줘야 해서 공용 키트에 있습니다.
-import { UserBasicInfo } from '../components/AdminPremiumKit';
+import { UserBasicInfo, gradeTone, toneVars, type GradeToneValue } from '../components/AdminPremiumKit';
 import { ORDER_STATUS_LABEL } from '@/src/types/order';
 import {
   MagnifyingGlass, X, Users, UserPlus, Receipt, Wallet, UserCircle, PencilSimple,
@@ -18,23 +18,7 @@ import {
    🎨 표시용 도우미
    ============================================================ */
 
-// 등급 이름 → 색. (등급이 추가돼도 기본색으로 안전하게 표시됩니다)
-const GRADE_TONE: { match: RegExp; text: string; rgb: string; from: string; to: string }[] = [
-  { match: /diamond|다이아/i, text: '#0e7490', rgb: '6, 182, 212', from: '#67e8f9', to: '#0891b2' },
-  { match: /platinum|플래티/i, text: '#4338ca', rgb: '79, 70, 229', from: '#a5b4fc', to: '#4f46e5' },
-  { match: /gold|골드/i, text: '#b45309', rgb: '245, 158, 11', from: '#fcd34d', to: '#d97706' },
-  { match: /silver|실버/i, text: '#475569', rgb: '100, 116, 139', from: '#cbd5e1', to: '#64748b' },
-  { match: /bronze|브론즈/i, text: '#c2410c', rgb: '234, 88, 12', from: '#fdba74', to: '#ea580c' },
-];
-const DEFAULT_GRADE_TONE = { text: '#1d4ed8', rgb: '59, 130, 246', from: '#93c5fd', to: '#2563eb' };
-type Tone = typeof DEFAULT_GRADE_TONE;
-const gradeTone = (name?: string): Tone =>
-  GRADE_TONE.find(tone => name && tone.match.test(name)) || DEFAULT_GRADE_TONE;
-
-const toneVars = (tone: Tone) => ({
-  ['--g-text' as any]: tone.text, ['--g-rgb' as any]: tone.rgb,
-  ['--g-from' as any]: tone.from, ['--g-to' as any]: tone.to,
-});
+// 🌟 등급 색·표시는 주문 관리의 주문자 팝업과 같아야 해서 공용 키트에 있습니다.
 
 /** 이름의 첫 글자 (아바타용) */
 const initialOf = (name?: string) => (name?.trim()?.[0] || '?').toUpperCase();
@@ -535,7 +519,7 @@ function Kpi({ icon, label, value, foot, loading }: { icon: React.ReactNode; lab
   );
 }
 
-function Avatar({ user, tone, size }: { user: any; tone: Tone; size: number }) {
+function Avatar({ user, tone, size }: { user: any; tone: GradeToneValue; size: number }) {
   const [broken, setBroken] = useState(false);
   // 카카오 프로필 URL 이 http 로 오는 경우가 있어 https 로 맞춥니다(혼합 콘텐츠 차단 방지).
   const src = !broken && user.profileImage ? String(user.profileImage).replace(/^http:\/\//, 'https://') : null;

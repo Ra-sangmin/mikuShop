@@ -502,3 +502,59 @@ export function UserBasicInfo({ user, onCopy }: {
     </dl>
   );
 }
+
+/* ---------------- 회원 등급 색 ---------------- */
+
+/**
+ * 등급 이름 → 색. 등급이 추가돼도 기본색으로 안전하게 표시됩니다.
+ * 회원 관리와 주문 관리가 같은 색을 쓰도록 여기 한 곳에 둡니다.
+ */
+export const GRADE_TONE: { match: RegExp; text: string; rgb: string; from: string; to: string }[] = [
+  { match: /diamond|다이아/i, text: '#0e7490', rgb: '6, 182, 212', from: '#67e8f9', to: '#0891b2' },
+  { match: /platinum|플래티/i, text: '#4338ca', rgb: '79, 70, 229', from: '#a5b4fc', to: '#4f46e5' },
+  { match: /gold|골드/i, text: '#b45309', rgb: '245, 158, 11', from: '#fcd34d', to: '#d97706' },
+  { match: /silver|실버/i, text: '#475569', rgb: '100, 116, 139', from: '#cbd5e1', to: '#64748b' },
+  { match: /bronze|브론즈/i, text: '#c2410c', rgb: '234, 88, 12', from: '#fdba74', to: '#ea580c' },
+];
+export const DEFAULT_GRADE_TONE = { text: '#1d4ed8', rgb: '59, 130, 246', from: '#93c5fd', to: '#2563eb' };
+export type GradeToneValue = typeof DEFAULT_GRADE_TONE;
+
+export const gradeTone = (name?: string): GradeToneValue =>
+  GRADE_TONE.find(tone => name && tone.match.test(name)) || DEFAULT_GRADE_TONE;
+
+export const toneVars = (tone: GradeToneValue) => ({
+  ['--g-text' as string]: tone.text, ['--g-rgb' as string]: tone.rgb,
+  ['--g-from' as string]: tone.from, ['--g-to' as string]: tone.to,
+} as CSSProperties);
+
+/* ---------------- 회원 요약 (주문 · 머니 · 등급) ---------------- */
+
+export type SummaryUser = {
+  cyberMoney?: number | null;
+  grade?: { name?: string } | null;
+  _count?: { orders?: number } | null;
+};
+
+/**
+ * 회원 한 줄 요약. 주문 건수 · 미쿠짱머니 잔액 · 회원 등급을 보여줍니다.
+ * 주문을 보다가 "이 사람 등급이 뭐고 잔액이 얼마인지"를 바로 확인하려고 만들었습니다.
+ */
+export function UserSummaryStats({ user }: { user: SummaryUser }) {
+  const tone = gradeTone(user.grade?.name);
+  return (
+    <div className="aui-stats">
+      <div>
+        <span>주문</span>
+        <strong>{(user._count?.orders || 0).toLocaleString()}<small>건</small></strong>
+      </div>
+      <div>
+        <span>미쿠짱머니</span>
+        <strong translate="no">₩{(user.cyberMoney || 0).toLocaleString()}</strong>
+      </div>
+      <div>
+        <span>회원 등급</span>
+        <strong><span className="aui-grade" style={toneVars(tone)}>{user.grade?.name || '등급 없음'}</span></strong>
+      </div>
+    </div>
+  );
+}
