@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import DaumPostcode from 'react-daum-postcode';
+import { isValidNameEnglish } from '@/lib/japanAddress';
 
 // =================================================================
 // 1. 비즈니스 로직 영역 (Business Logic Layer)
@@ -48,6 +49,11 @@ function useAddressFormLogic({ userData, selectedAddress, setSelectedAddress, fe
 
   const handleSubmitNewAddress = async () => {
     if (!addressForm.recipientName) return alert('수취인명(한글)을 입력해주세요.');
+    // 🔤 일본 쇼핑몰·창고는 한글을 못 읽습니다. 영문 수취인명이 없으면 배송이 지연됩니다.
+    if (!addressForm.recipientEnglishName?.trim()) return alert('수취인명(영문)을 입력해주세요.');
+    if (!isValidNameEnglish(addressForm.recipientEnglishName)) {
+      return alert('수취인명(영문)은 영문·공백·하이픈만 사용할 수 있습니다.');
+    }
     if (!addressForm.phone) return alert('연락처를 입력해주세요.');
     if (!addressForm.zipCode || !addressForm.address) return alert('주소 검색을 통해 주소를 입력해주세요.');
     if (!addressForm.detailAddress) return alert('상세 주소를 입력해주세요.');
@@ -190,7 +196,7 @@ export default function AddressForm(props: any) {
 
             <div className="modal-body">
               <FormInputGroup label="수취인명(한글)" name="recipientName" value={addressForm.recipientName} onChange={handleFormChange} required />
-              <FormInputGroup label="수취인명(영문)" name="recipientEnglishName" value={addressForm.recipientEnglishName} onChange={handleFormChange} />
+              <FormInputGroup label="수취인명(영문)" name="recipientEnglishName" value={addressForm.recipientEnglishName} onChange={handleFormChange} placeholder="MIKU JJANG" required />
               <FormInputGroup label="연락처" name="phone" value={addressForm.phone} onChange={handleFormChange} required />
 
               <div className="miku-addr-input-group">

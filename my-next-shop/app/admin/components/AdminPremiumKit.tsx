@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useState, type CSSProperties, type ReactNode } from 'react';
-import { MagnifyingGlass, X, CheckCircle, WarningCircle, Tray, Package, ArrowSquareOut, Stack, CaretDown, Camera, ShieldCheck, Sparkle, Tag, ChatText, Copy, Eye, EyeSlash } from '@phosphor-icons/react';
+import { MagnifyingGlass, X, CheckCircle, WarningCircle, Tray, Package, ArrowSquareOut, Stack, CaretDown, Camera, ShieldCheck, Sparkle, Tag, ChatText, Copy } from '@phosphor-icons/react';
 import './admin-premium.css';
 // 🌟 받는사람 표기는 마이페이지의 일본 배송지 카드와 같은 함수를 씁니다.
 import { japanRecipientName } from '@/lib/japanAddress';
@@ -431,16 +431,11 @@ export type BasicInfoUser = {
   japanMailboxNumber?: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
-  /** 기본 배송지가 맨 앞으로 정렬돼 옵니다. 개인통관부호는 여기 딸린 값입니다. */
-  addresses?: { personalCustomsCode?: string | null }[];
 };
 
 /** SNS 회원의 임시 이메일(kakao_xxx@mikuchan.local)은 표시하지 않습니다. */
 const realEmail = (email?: string | null) => (email && !email.endsWith('.local') ? email : null);
 
-/** 개인통관부호는 가운데를 가립니다. (P123456789012 → P1234••••••012) */
-const maskCustoms = (code?: string | null) =>
-  !code ? null : code.length <= 8 ? code : `${code.slice(0, 5)}${'•'.repeat(code.length - 8)}${code.slice(-3)}`;
 
 /**
  * 회원 기본 정보 패널.
@@ -453,9 +448,6 @@ export function UserBasicInfo({ user, onCopy }: {
   /** 복사했을 때 알릴 방법. 화면마다 토스트가 달라서 밖에서 받습니다. */
   onCopy?: (text: string, label: string) => void;
 }) {
-  const [showCustoms, setShowCustoms] = useState(false);
-  // 개인통관부호는 users 가 아니라 배송지에 딸린 값입니다. 첫 번째가 기본 배송지입니다.
-  const customsCode = user.addresses?.[0]?.personalCustomsCode || null;
 
   const copy = (text: string, label: string) => {
     navigator.clipboard?.writeText(text).then(() => onCopy?.(text, label)).catch(() => {});
@@ -476,23 +468,6 @@ export function UserBasicInfo({ user, onCopy }: {
       <dt>휴대폰</dt>
       <dd>{copyable(user.phone, '휴대폰 번호')}</dd>
 
-      <dt>개인통관부호</dt>
-      <dd>
-        {customsCode ? (
-          <span className="aui-secret">
-            {/* 다른 항목과 같이 값을 눌러 복사합니다.
-                가려져 있어도 복사는 원래 값으로 합니다 — 통관 서류에 붙여넣을 값이라
-                가린 문자(•)가 섞이면 쓸 수 없습니다. */}
-            <button type="button" className="aui-copyable" onClick={() => copy(customsCode, '개인통관부호')}>
-              <code>{showCustoms ? customsCode : maskCustoms(customsCode)}</code>
-              <Copy size={11} weight="bold" />
-            </button>
-            <button type="button" className="aui-eye" onClick={() => setShowCustoms(v => !v)} aria-label={showCustoms ? '가리기' : '보기'}>
-              {showCustoms ? <EyeSlash size={13} weight="bold" /> : <Eye size={13} weight="bold" />}
-            </button>
-          </span>
-        ) : <span className="is-empty">미등록</span>}
-      </dd>
 
       {/* 📮 회원이 일본 쇼핑몰 주소칸에 그대로 넣는 값입니다. (예: RA SANGMIN MK-NXJV9)
           사서함 번호와 영문 이름을 따로 두지 않는 이유는, 둘 다 이 값에 들어 있어

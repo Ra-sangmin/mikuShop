@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireUser } from '@/lib/apiAuth';
+import { isValidNameEnglish, normalizeNameEnglish } from '@/lib/japanAddress';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -70,6 +71,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '필수 필드가 누락되었습니다.' }, { status: 400 });
     }
 
+    // 🔤 영문 수취인명도 필수입니다. 일본 쇼핑몰·창고는 한글을 읽지 못해
+    //    비어 있으면 현지에서 소포 주인을 가릴 수 없고 배송이 지연됩니다.
+    //    화면에서도 막지만, 화면을 거치지 않는 요청이 빈 값을 넣지 못하도록 여기서도 확인합니다.
+    const trimmedEnglishName = String(recipientEnglishName ?? '').trim();
+    if (!trimmedEnglishName) {
+      return NextResponse.json({ error: '수취인명(영문)을 입력해주세요.' }, { status: 400 });
+    }
+    if (!isValidNameEnglish(trimmedEnglishName)) {
+      return NextResponse.json({ error: '수취인명(영문)은 영문·공백·하이픈만 사용할 수 있습니다.' }, { status: 400 });
+    }
+    const normalizedEnglishName = normalizeNameEnglish(trimmedEnglishName);
+
     // 1. 업데이트 로직
     if (id) {
       // 🔒 수정 대상 배송지가 본인 것인지 확인
@@ -92,7 +105,7 @@ export async function POST(request: Request) {
         where: { id: parseInt(id) },
         data: {
           recipientName,
-          recipientEnglishName,
+          recipientEnglishName: normalizedEnglishName,
           phone,
           zipCode,
           address,
@@ -117,7 +130,7 @@ export async function POST(request: Request) {
       data: {
         userId: userId,
         recipientName,
-        recipientEnglishName,
+        recipientEnglishName: normalizedEnglishName,
         phone,
         zipCode,
         address,

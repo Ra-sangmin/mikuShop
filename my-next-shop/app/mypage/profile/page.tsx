@@ -100,6 +100,11 @@ function useProfileEditLogic() {
 
   const handleAddressAction = async (addressData: any) => {
     if (!addressData.recipientName) return showAlert('수취인명(한글)을 입력해주세요.', 'warning');
+    // 🔤 일본 쇼핑몰·창고는 한글을 못 읽습니다. 영문 수취인명이 없으면 배송이 지연됩니다.
+    if (!addressData.recipientEnglishName?.trim()) return showAlert('수취인명(영문)을 입력해주세요.', 'warning');
+    if (!isValidNameEnglish(addressData.recipientEnglishName)) {
+      return showAlert('수취인명(영문)은 영문·공백·하이픈만 사용할 수 있습니다.', 'warning');
+    }
     if (!addressData.phone) return showAlert('연락처를 입력해주세요.', 'warning');
     if (!addressData.zipCode || !addressData.address) return showAlert('주소 검색을 통해 주소를 입력해주세요.', 'warning');
     if (!addressData.detailAddress) return showAlert('상세 주소를 입력해주세요.', 'warning');
@@ -212,7 +217,7 @@ function AddressModal({ address, onClose, onSave, isFirstAddress }: any) {
 
         <div className="modal-body">
           <InputGroup label="수취인명(한글)" name="recipientName" value={formData.recipientName} onChange={handleChange} required />
-          <InputGroup label="수취인명(영문)" name="recipientEnglishName" value={formData.recipientEnglishName} onChange={handleChange} />
+          <InputGroup label="수취인명(영문)" name="recipientEnglishName" value={formData.recipientEnglishName} onChange={handleChange} placeholder="MIKU JJANG" required />
           <InputGroup label="연락처" name="phone" value={formData.phone} onChange={handleChange} required />
           
           <div className="miku-profile-input-group">
