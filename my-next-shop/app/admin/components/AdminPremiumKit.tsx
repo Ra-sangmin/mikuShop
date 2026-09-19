@@ -498,10 +498,10 @@ export function UserBasicInfo({ user, onCopy }: {
           사서함 번호와 영문 이름을 따로 두지 않는 이유는, 둘 다 이 값에 들어 있어
           같은 정보가 세 줄로 나뉘었기 때문입니다.
           마이페이지의 일본 배송지 카드와 같은 함수로 만들어 문구가 어긋나지 않게 합니다. */}
-      <dt>받는사람 정보</dt>
+      <dt>영문이름 + 식별번호</dt>
       <dd>{copyable(
         japanRecipientName(user.nameEnglish, user.japanMailboxNumber) || null,
-        '받는사람 정보',
+        '영문이름 + 식별번호',
         '사서함 번호 미발급',
       )}</dd>
 
