@@ -418,7 +418,7 @@ function ProfileEditContent() {
               <input
                 id="jp-name-en" className="jp-nameen-input" type="text" maxLength={60}
                 value={nameEnInput} onChange={(e) => setNameEnInput(e.target.value)}
-                placeholder="MIKU JJAN" autoFocus
+                placeholder="MIKU JJANG" autoFocus
                 onKeyDown={(e) => { if (e.key === 'Enter') saveNameEnglish(); }}
               />
               <button type="button" className="jp-nameen-btn is-primary" onClick={saveNameEnglish} disabled={savingNameEn}>

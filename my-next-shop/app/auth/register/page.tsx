@@ -194,7 +194,7 @@ export default function RegisterPage() {
                   <input
                     id="reg-name-en" name="nameEnglish" type="text" className="reg-input"
                     value={formData.nameEnglish} onChange={handleChange} onBlur={handleBlur}
-                    placeholder="MIKU JJAN" maxLength={60} autoComplete="off"
+                    placeholder="MIKU JJANG" maxLength={60} autoComplete="off"
                   />
                 </div>
                 {fieldError('nameEnglish')

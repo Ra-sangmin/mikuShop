@@ -77,7 +77,7 @@ export async function generateMailboxNumber(db: PrismaClient): Promise<string> {
 /**
  * 일본 쇼핑몰 주소의 "받는사람"에 넣을 문자열을 만듭니다.
  *
- * 권장 형태는 `영문이름 + 사서함번호` 입니다. (예: MIKU JJAN MK-WQM5Z)
+ * 권장 형태는 `영문이름 + 사서함번호` 입니다. (예: MIKU JJANG MK-WQM5Z)
  * 일본 쇼핑몰은 한자·가타카나 입력 시 전각/반각 규칙이 까다로워 결제 단계에서 자주 막히는데,
  * 영문은 대부분의 사이트에서 무난히 통과합니다. 창고에서도 분류가 빨라집니다.
  *
