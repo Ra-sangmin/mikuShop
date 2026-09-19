@@ -264,13 +264,13 @@ export async function PUT(request: Request) {
     }
 
     // 입고·발송 시각을 이미 찍어 둔 주문은 건드리지 않기 위해 변경 전 값을 읽어 둡니다.
-    const previousOrders = new Map<string, { receivedAt: Date | null; shippedAt: Date | null }>();
+    const previousOrders = new Map<string, { receivedAt: Date | null; shippedAt: Date | null; status?: string }>();
     if (type !== 'delivery') {
       const before = await prisma.order.findMany({
         where: { orderId: { in: orderIds } },
-        select: { orderId: true, receivedAt: true, shippedAt: true },
+        select: { orderId: true, receivedAt: true, shippedAt: true, status: true },
       });
-      before.forEach(o => previousOrders.set(o.orderId, { receivedAt: o.receivedAt, shippedAt: o.shippedAt }));
+      before.forEach(o => previousOrders.set(o.orderId, { receivedAt: o.receivedAt, shippedAt: o.shippedAt, status: o.status }));
     }
 
     // ✅ 안전한 인터랙티브 트랜잭션 (모두 성공하거나 자동 롤백)
@@ -321,6 +321,8 @@ export async function PUT(request: Request) {
           const previous = previousOrders.get(order.id);
           if (order.status === ORDER_STATUS.ARRIVED && !previous?.receivedAt) updateData.receivedAt = new Date();
           if (order.status === ORDER_STATUS.SHIPPING && !previous?.shippedAt) updateData.shippedAt = new Date();
+          // 🕒 상태가 실제로 바뀌었으면 변경 시각을 남깁니다. (관리자 '처리 중 전체' 최근 변경순 정렬)
+          if (previous && previous.status !== order.status) updateData.statusChangedAt = new Date();
         }
 
         if (order.secondPaymentAmount !== undefined) updateData.secondPaymentAmount = order.secondPaymentAmount;

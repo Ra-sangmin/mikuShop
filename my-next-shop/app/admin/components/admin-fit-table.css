@@ -1,0 +1,55 @@
+/* ============================================================
+   🧩 관리자 표 공통 (useFitTable.tsx 전용)
+   - 오른쪽 고정 열(aft-pinned)과 헤더 세로선 정리만 담당합니다.
+   - 색은 화면마다 아래 CSS 변수로 덮어쓸 수 있습니다.
+       --aft-pinned-bg         고정 열 기본 배경 (기본 #ffffff)
+       --aft-pinned-head-bg    고정 열 헤더 배경 (기본 #f8fafc)
+       --aft-pinned-hover-bg   행 hover 시 배경 (기본 #f8faff)
+       --aft-pinned-active-bg  선택된 행(is-open) 배경 (기본 #eef4ff)
+       --aft-line              본문 세로선 · 고정 열 왼쪽 선 색 (기본 #eef2f7)
+       --aft-head-line         헤더에서 고정 열 왼쪽 선 색 (기본 #e2e8f0)
+   - 프로젝트 규칙상 color-mix() 는 쓰지 않습니다.
+   ============================================================ */
+
+/* 헤더 제목 — 최소 폭 측정용이라 줄바꿈하지 않습니다 */
+.aft-label { display: inline-block; white-space: nowrap; }
+
+/* 고정 열 바로 앞 열: 오른쪽 세로선을 지워 고정 열의 선 하나만 남깁니다 */
+th.aft-no-divider { border-right: 0 !important; }
+
+/* 본문 칸 사이 세로선 (헤더 세로선과 같은 위치) */
+.aft-table > tbody > tr > td { border-right: 1px solid var(--aft-line, #eef2f7); }
+.aft-table > tbody > tr > td:last-child { border-right: 0; }
+/* 고정 열 바로 앞 칸은 고정 열의 왼쪽 선과 겹치지 않도록 지웁니다 */
+.aft-table.aft-has-pinned > tbody > tr > td:nth-last-child(2) { border-right: 0; }
+
+/* 고정 열: 항상 맨 오른쪽 (가로 스크롤 시에도 고정) */
+.aft-pinned {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--aft-pinned-bg, #ffffff);
+  transition: background-color 0.15s ease;
+}
+th.aft-pinned {
+  z-index: 6;
+  background: var(--aft-pinned-head-bg, #f8fafc);
+}
+/* 고정 열의 왼쪽 선 — 화면별 헤더 스타일(box-shadow 등)에 덮이지 않도록 가상 요소로 그립니다 */
+.aft-pinned::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 1px;
+  background: var(--aft-line, #eef2f7);
+  pointer-events: none;
+}
+th.aft-pinned::before { background: var(--aft-head-line, #e2e8f0); }
+
+/* 폭이 좁아져도 말줄임(…)을 만들지 않습니다 */
+td.aft-pinned { text-overflow: clip; padding-left: 8px; padding-right: 8px; }
+td.aft-pinned > * { max-width: 100%; }
+
+/* 행 hover / 선택 배경을 고정 열에도 똑같이 */
+tr.aft-row:hover > .aft-pinned { background: var(--aft-pinned-hover-bg, #f8faff); }
+tr.aft-row.is-open > .aft-pinned { background: var(--aft-pinned-active-bg, #eef4ff); }

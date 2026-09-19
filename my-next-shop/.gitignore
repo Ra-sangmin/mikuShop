@@ -6,3 +6,9 @@ node_modules
 
 # 포트폴리오용 이미지 (앱 구동·배포에 쓰이지 않습니다)
 portfolio/
+
+# 임시 테스트 산출물 (예: scripts/check-faq.tmp.ts)
+*.tmp.*
+
+# 참고용으로 복사해 둔 옛 파일 모음 (배포 대상 아님)
+_to_delete/

@@ -1,0 +1,611 @@
+/* ============================================================
+   🧭 관리자 셸(사이드바 + 상단 헤더) 전용 스타일
+   - 프로젝트 규칙상 color-mix() 는 쓰지 않습니다.
+   - 모바일 브레이크포인트는 사이트 기준값(768px)을 따릅니다.
+   ============================================================ */
+
+:root {
+  --ash-blue-from: #60a5fa;
+  --ash-blue-to: #2563eb;
+  --ash-blue-rgb: 59, 130, 246;
+}
+
+/* =====================================================
+   1. 사이드바
+   ===================================================== */
+.ash-side {
+  width: 264px;
+  min-width: 264px;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  color: #e2e8f0;
+  background: linear-gradient(180deg, #16203200 0%, #0d131f 100%), #131b2b;
+  border-right: 1px solid rgba(255, 255, 255, 0.055);
+  overflow: hidden; contain: paint; /* 장식 글로우가 밖으로 새지 않도록 */
+}
+/* 상단의 은은한 푸른 글로우 */
+.ash-side::before {
+  content: '';
+  position: absolute; top: -120px; left: -80px;
+  width: 320px; height: 320px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--ash-blue-rgb), 0.2) 0%, rgba(var(--ash-blue-rgb), 0) 70%);
+  pointer-events: none;
+}
+.ash-side > * { position: relative; z-index: 1; }
+
+/* ---------- 브랜드 ---------- */
+.ash-brand {
+  display: flex; align-items: center; gap: 11px;
+  padding: 22px 22px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.ash-brand-mark {
+  width: 38px; height: 38px; border-radius: 12px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--ash-blue-from) 0%, var(--ash-blue-to) 100%);
+  box-shadow: 0 10px 20px -10px rgba(var(--ash-blue-rgb), 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.ash-brand-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ash-brand-eyebrow { font-size: 9.5px; font-weight: 900; letter-spacing: 0.16em; color: #64748b; }
+.ash-brand-name { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; color: #f8fafc; }
+
+/* ---------- 메뉴 ---------- */
+.ash-nav { flex: 1; padding: 16px 12px 12px; overflow-y: auto; }
+.ash-nav::-webkit-scrollbar { width: 6px; }
+.ash-nav::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 99px; }
+.ash-nav::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.18); }
+.ash-nav::-webkit-scrollbar-track { background: transparent; }
+
+.ash-group-label {
+  display: block;
+  padding: 16px 12px 7px;
+  font-size: 9.5px; font-weight: 900; letter-spacing: 0.15em;
+  color: #4d5b72;
+}
+.ash-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.ash-item {
+  position: relative;
+  display: flex; align-items: center; gap: 11px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0; border-radius: 11px;
+  background: transparent;
+  color: #93a1b5;
+  font-size: 13.5px; font-weight: 600; letter-spacing: -0.2px; text-align: left;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+.ash-item:hover { background: rgba(255, 255, 255, 0.05); color: #e2e8f0; }
+.ash-item:hover .ash-item-icon { color: #cbd5e1; border-color: rgba(255, 255, 255, 0.12); }
+
+.ash-item-icon {
+  width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #7b8aa1;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+.ash-item-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ash-item-caret { flex-shrink: 0; opacity: 0; transform: translateX(-3px); transition: opacity 0.18s ease, transform 0.18s ease; }
+
+/* 선택된 메뉴 */
+.ash-item.is-active {
+  color: #ffffff; font-weight: 800;
+  background: linear-gradient(135deg, rgba(var(--ash-blue-rgb), 0.22) 0%, rgba(var(--ash-blue-rgb), 0.08) 100%);
+  box-shadow: inset 0 0 0 1px rgba(var(--ash-blue-rgb), 0.28);
+}
+.ash-item.is-active .ash-item-icon {
+  color: #ffffff; border-color: transparent;
+  background: linear-gradient(135deg, var(--ash-blue-from) 0%, var(--ash-blue-to) 100%);
+  box-shadow: 0 8px 16px -9px rgba(var(--ash-blue-rgb), 0.95);
+}
+.ash-item.is-active .ash-item-caret { opacity: 1; transform: translateX(0); color: #93b4f5; }
+
+/* ---------- 하단 상태 ---------- */
+.ash-foot {
+  margin: 8px 12px 16px;
+  padding: 12px 14px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex; align-items: center; gap: 9px;
+}
+.ash-foot-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: #34d399;
+  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
+  animation: ashPulse 2.2s ease-out infinite;
+}
+.ash-foot-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ash-foot-title { font-size: 11.5px; font-weight: 800; color: #cbd5e1; }
+.ash-foot-sub { font-size: 10.5px; font-weight: 600; color: #5d6b81; }
+
+@keyframes ashPulse {
+  0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+
+/* ---------- 모바일 드로어 ---------- */
+.ash-backdrop { display: none; }
+
+@media (max-width: 768px) {
+  .ash-side {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 8px 0 40px rgba(0, 0, 0, 0.45);
+  }
+  .ash-side.is-open { transform: translateX(0); }
+
+  .ash-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 999;
+    background: rgba(8, 12, 20, 0.6);
+    backdrop-filter: blur(2px);
+    opacity: 0; visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+  .ash-backdrop.is-open { opacity: 1; visibility: visible; }
+}
+
+/* =====================================================
+   2. 상단 헤더
+   ===================================================== */
+.ash-header {
+  flex-shrink: 0;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 8px;
+  min-height: 74px;
+  padding: 0 28px;
+  background: #ffffff;
+  border-bottom: 1px solid #e9eef5;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.035);
+}
+.ash-header-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; }
+.ash-header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+.ash-burger {
+  display: none;
+  width: 38px; height: 38px; border-radius: 11px;
+  align-items: center; justify-content: center;
+  border: 1px solid #e2e8f0; background: #ffffff; color: #475569;
+  cursor: pointer; flex-shrink: 0;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+.ash-burger:hover { background: #f8fafc; color: #0f172a; border-color: #cbd5e1; }
+
+.ash-titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ash-crumb {
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  font-size: 10px; font-weight: 900; letter-spacing: 0.12em; color: #a3aec0;
+}
+.ash-title {
+  margin: 0;
+  font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #0f172a;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.ash-header-right { display: flex; align-items: center; gap: 12px; }
+
+/* ---------- 환율 카드 ---------- */
+.ash-rate {
+  display: flex; align-items: center; gap: 11px;
+  padding: 7px 14px 7px 9px;
+  border-radius: 13px;
+  background: #f8fafc;
+  border: 1px solid #e9eef5;
+}
+.ash-rate-icon {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #ffffff;
+  background: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
+  box-shadow: 0 7px 14px -8px rgba(79, 70, 229, 0.9);
+}
+.ash-rate-body { display: flex; flex-direction: column; gap: 1px; line-height: 1.25; }
+.ash-rate-label { font-size: 9.5px; font-weight: 900; letter-spacing: 0.1em; color: #94a3b8; }
+.ash-rate-value {
+  font-size: 13.5px; font-weight: 700; color: #334155;
+  display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ash-rate-value strong { font-size: 15px; font-weight: 900; color: #e11d48; letter-spacing: -0.3px; }
+.ash-rate-formula {
+  font-size: 11px; font-weight: 700; color: #94a3b8;
+  background: #ffffff; border: 1px solid #eef2f7; border-radius: 7px;
+  padding: 1px 7px;
+}
+.ash-rate-formula .is-base { color: #2563eb; }
+.ash-rate-formula .is-add { color: #7c3aed; }
+
+/* ---------- 프로필 ---------- */
+.ash-profile {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px 6px 7px;
+  border-radius: 13px;
+  background: #f8fafc;
+  border: 1px solid #e9eef5;
+}
+.ash-avatar {
+  width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13.5px; font-weight: 900; color: #ffffff;
+  background: linear-gradient(135deg, var(--ash-blue-from) 0%, var(--ash-blue-to) 100%);
+  box-shadow: 0 8px 16px -9px rgba(var(--ash-blue-rgb), 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.ash-profile-body { display: flex; flex-direction: column; gap: 0; line-height: 1.3; }
+.ash-profile-role { font-size: 9.5px; font-weight: 900; letter-spacing: 0.1em; color: #a3aec0; }
+.ash-profile-name { font-size: 13px; font-weight: 800; color: #334155; white-space: nowrap; }
+
+.ash-logout {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  height: 30px; padding: 0 11px; margin-left: 2px;
+  border-radius: 9px;
+  border: 1px solid #f1e0e2; background: #ffffff;
+  color: #e11d48; font-size: 12px; font-weight: 800; white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+.ash-logout:hover:not(:disabled) { background: #fff1f2; border-color: #fecdd3; }
+.ash-logout:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ---------- 모바일 ---------- */
+.ash-rate.is-mobile { display: none; }
+
+@media (max-width: 768px) {
+  .ash-header { min-height: auto; padding: 12px 14px; gap: 10px; }
+  .ash-burger { display: inline-flex; }
+  .ash-title { font-size: 17px; }
+  .ash-header-right { gap: 8px; }
+  .ash-rate.is-desktop { display: none; }
+  .ash-rate.is-mobile { display: flex; width: 100%; justify-content: center; }
+  .ash-profile { padding: 5px 6px; }
+}
+
+@media (max-width: 460px) {
+  .ash-crumb { display: none; }
+  .ash-profile-body { display: none; }
+  .ash-rate-formula { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ash-foot-dot { animation: none; }
+}
+
+/* =====================================================
+   3. 본문 영역
+   ===================================================== */
+.ash-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 26px 28px 40px;
+}
+@media (max-width: 768px) {
+  .ash-content { padding: 18px 14px 32px; }
+}
+
+/* =====================================================
+   4. 📱 모바일 헤더 — 환율 설정 패널 (AdminRatePanel.tsx, 접두사 arp-)
+      견적 계산기 결과 카드의 어두운 환율 설정과 같은 디자인입니다.
+   ===================================================== */
+.ash-rate-panel { display: none; }
+@media (max-width: 768px) {
+  .ash-rate-panel { display: block; width: 100%; }
+}
+
+.arp {
+  position: relative; overflow: hidden; contain: paint;
+  padding: 6px;
+  border-radius: 18px;
+  color: #e2e8f0;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.24) 0%, rgba(56, 189, 248, 0) 55%),
+    linear-gradient(145deg, #0b1224 0%, #151d3b 100%);
+  box-shadow: 0 12px 26px -18px rgba(15, 23, 42, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.arp-toggle {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; min-height: 44px; padding: 0 10px 0 6px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e2e8f0; font-family: inherit; cursor: pointer; text-align: left;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.arp-toggle:active { background: rgba(255, 255, 255, 0.09); }
+.arp.is-open .arp-toggle { background: rgba(129, 140, 248, 0.12); border-color: rgba(165, 180, 252, 0.3); }
+.arp-icon {
+  width: 30px; height: 30px; border-radius: 10px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #ffffff; background: linear-gradient(135deg, #60a5fa 0%, #4f46e5 100%);
+  box-shadow: 0 8px 14px -8px rgba(79, 70, 229, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.arp-title { font-size: 14.5px; font-weight: 800; color: #ffffff; white-space: nowrap; }
+.arp-value { flex: 1; min-width: 0; text-align: right; font-size: 13.5px; font-weight: 700; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.arp-value b { color: #fda4af; font-weight: 900; }
+.arp-dirty {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px; border-radius: 99px;
+  font-size: 10.5px; font-weight: 900; color: #fcd34d; background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(252, 211, 77, 0.3);
+}
+.arp-dirty.is-err { color: #fda4af; background: rgba(244, 63, 94, 0.14); border-color: rgba(253, 164, 175, 0.3); }
+.arp-caret { flex-shrink: 0; color: #94a3b8; transition: transform 0.2s ease; }
+.arp.is-open .arp-caret { transform: rotate(180deg); color: #c7d2fe; }
+
+.arp-body { display: flex; flex-direction: column; gap: 8px; padding: 8px 2px 2px; animation: arpIn 0.25s ease both; }
+@keyframes arpIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.arp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.arp-tile {
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 11px 12px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  text-align: left; font-family: inherit; color: inherit;
+}
+.arp-tile::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 2px; background: var(--c); opacity: 0.9; }
+.arp-tile.is-btn { cursor: pointer; }
+.arp-tile.is-btn:active { background: rgba(255, 255, 255, 0.09); }
+.arp-tile.is-input { cursor: text; }
+.arp-tile.is-input:focus-within { border-color: rgba(167, 139, 250, 0.6); box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.18); }
+.arp-tile.is-final {
+  grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between;
+  background: rgba(244, 63, 94, 0.1); border-color: rgba(253, 164, 175, 0.25);
+}
+.arp-tile-label { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; color: #94a3b8; }
+.arp-tile-label svg { color: #93c5fd; }
+.arp-tile-val {
+  display: flex; align-items: baseline; gap: 3px;
+  font-size: 21px; font-weight: 900; letter-spacing: -0.5px; color: var(--c); font-variant-numeric: tabular-nums;
+}
+.arp-tile-val small { font-size: 12.5px; font-weight: 700; color: #94a3b8; letter-spacing: 0; }
+.arp-tile.is-final .arp-tile-val { font-size: 23px; }
+.arp-tile-val input {
+  max-width: 100%; min-width: 0; border: 0; outline: none; background: transparent; padding: 0;
+  font: inherit; color: inherit; font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+.arp-tile-val input::-webkit-outer-spin-button, .arp-tile-val input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.arp-tile-val input::placeholder { color: #475569; }
+
+.arp-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; height: 44px; border-radius: 13px; border: 1px solid transparent;
+  font-size: 14.5px; font-weight: 800; font-family: inherit; cursor: pointer;
+}
+.arp-btn.is-primary { color: #0b1224; background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%); box-shadow: 0 10px 20px -12px rgba(165, 180, 252, 0.9); }
+.arp-btn.is-primary:disabled { color: #94a3b8; background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.1); box-shadow: none; cursor: default; }
+.arp-btn.is-primary:disabled svg { color: #6ee7b7; }
+.arp-btn.is-danger { color: #ffffff; background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%); }
+.arp-btn.is-ghost { color: #e2e8f0; background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.14); }
+.arp-confirm {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; border-radius: 14px;
+  background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(252, 211, 77, 0.3);
+}
+.arp-confirm > span { font-size: 13.5px; font-weight: 700; color: #fde68a; }
+.arp-confirm > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.arp-msg { margin: 0; padding: 2px 4px; font-size: 12.5px; font-weight: 700; text-align: center; }
+.arp-msg.is-ok { color: #6ee7b7; }
+.arp-msg.is-err { color: #fda4af; }
+.arp-spin { animation: arpSpin 0.8s linear infinite; }
+@keyframes arpSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .arp-body, .arp-spin { animation: none; } }
+
+/* =====================================================
+   5. 📱 모바일 헤더 — 타이틀 · 메뉴 · 프로필 고급화
+   ===================================================== */
+@media (max-width: 768px) {
+  .ash-header {
+    position: relative;
+    padding: 12px 14px 12px;
+    background:
+      radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.07) 0%, rgba(99, 102, 241, 0) 45%),
+      linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+    border-bottom: 1px solid #eef1f7;
+    box-shadow: 0 10px 24px -22px rgba(15, 23, 42, 0.55);
+    contain: paint;
+  }
+  .ash-header-row { gap: 10px; }
+  .ash-header-left { gap: 11px; }
+
+  /* 메뉴 버튼 — 환율 패널과 어울리는 어두운 버튼 */
+  .ash-burger {
+    position: relative; overflow: hidden;
+    width: 40px; height: 40px; border-radius: 13px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    background: linear-gradient(145deg, #1e293b 0%, #0b1224 100%);
+    box-shadow: 0 10px 18px -12px rgba(15, 23, 42, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+  .ash-burger::after {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 100% 0%, rgba(129, 140, 248, 0.45) 0%, rgba(129, 140, 248, 0) 60%);
+    pointer-events: none;
+  }
+  .ash-burger svg { position: relative; z-index: 1; }
+  .ash-burger:hover { background: linear-gradient(145deg, #1e293b 0%, #0b1224 100%); color: #ffffff; border-color: rgba(255, 255, 255, 0.08); }
+  .ash-burger:active { transform: scale(0.96); }
+
+  /* 타이틀 — 작은 브랜드 줄 + 굵은 제목 */
+  .ash-titles { gap: 2px; }
+  .ash-crumb {
+    display: inline-flex !important;
+    gap: 5px; font-size: 9.5px; letter-spacing: 0.16em;
+    color: #818cf8; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ash-crumb svg { color: #a5b4fc; }
+  .ash-title {
+    font-size: 18.5px; font-weight: 900; letter-spacing: -0.6px; line-height: 1.2;
+    color: #0b1224;
+  }
+
+  /* 프로필 — 아바타 + 둥근 로그아웃 버튼만 */
+  .ash-profile {
+    gap: 6px; padding: 4px;
+    border-radius: 15px;
+    background: #ffffff;
+    border: 1px solid #e9eef5;
+    box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.5);
+  }
+  .ash-avatar {
+    position: relative; overflow: visible;
+    width: 34px; height: 34px; border-radius: 11px; font-size: 14px;
+  }
+  .ash-avatar::after {
+    content: ''; position: absolute; right: -2px; bottom: -2px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #10b981; border: 2px solid #ffffff;
+  }
+  .ash-logout {
+    height: 34px; padding: 0 11px; margin-left: 0;
+    border-radius: 11px;
+    border: 1px solid #ffe4e6;
+    background: linear-gradient(180deg, #fff5f6 0%, #ffe9ec 100%);
+    color: #e11d48; font-size: 12.5px;
+  }
+  .ash-logout:active:not(:disabled) { transform: scale(0.96); }
+}
+
+@media (max-width: 460px) {
+  .ash-logout { width: 34px; padding: 0; }
+  .ash-logout-text { display: none; }
+}
+
+/* =====================================================
+   6. 🖥 데스크톱 헤더 — 타이틀 · 환율 · 프로필 고급화 (769px 이상)
+   ===================================================== */
+@media (min-width: 769px) {
+  .ash-header {
+    position: relative;
+    min-height: 78px;
+    padding: 0 30px;
+    background:
+      radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.06) 0%, rgba(99, 102, 241, 0) 35%),
+      linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+    border-bottom: 1px solid #edf0f6;
+    box-shadow: 0 12px 28px -26px rgba(15, 23, 42, 0.6);
+    contain: paint;
+  }
+  /* 아래쪽 은은한 색 띠 */
+  .ash-header::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+    background: linear-gradient(90deg, rgba(99, 102, 241, 0.45) 0%, rgba(236, 72, 153, 0.25) 35%, rgba(99, 102, 241, 0) 70%);
+    pointer-events: none;
+  }
+
+  /* 타이틀 — 왼쪽 세로 포인트 막대 */
+  .ash-header-left { gap: 14px; }
+  .ash-titles {
+    position: relative; padding-left: 14px; gap: 3px;
+  }
+  .ash-titles::before {
+    content: ''; position: absolute; left: 0; top: 3px; bottom: 3px; width: 4px; border-radius: 4px;
+    background: linear-gradient(180deg, #818cf8 0%, #6366f1 50%, #ec4899 100%);
+    box-shadow: 0 4px 10px -3px rgba(99, 102, 241, 0.6);
+  }
+  .ash-crumb { font-size: 10px; letter-spacing: 0.18em; color: #818cf8; }
+  .ash-crumb svg { color: #a5b4fc; }
+  .ash-title { font-size: 22px; font-weight: 900; letter-spacing: -0.7px; line-height: 1.15; color: #0b1224; }
+
+  .ash-header-right { gap: 12px; }
+
+  /* 환율 카드 — 어두운 패널 */
+  .ash-rate {
+    position: relative; overflow: hidden;
+    gap: 12px; padding: 8px 16px 8px 9px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background:
+      radial-gradient(circle at 100% 0%, rgba(129, 140, 248, 0.35) 0%, rgba(129, 140, 248, 0) 55%),
+      linear-gradient(145deg, #151d3b 0%, #0b1224 100%);
+    box-shadow: 0 12px 24px -16px rgba(15, 23, 42, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  .ash-rate-icon {
+    width: 34px; height: 34px; border-radius: 11px;
+    background: linear-gradient(135deg, #60a5fa 0%, #4f46e5 100%);
+    box-shadow: 0 8px 16px -8px rgba(79, 70, 229, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+  .ash-rate-label { color: #94a3b8; letter-spacing: 0.12em; }
+  .ash-rate-value { color: #cbd5e1; font-size: 13.5px; }
+  .ash-rate-value strong { color: #fda4af; font-size: 16px; }
+  .ash-rate-formula {
+    background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.1); color: #64748b;
+  }
+  .ash-rate-formula .is-base { color: #93c5fd; }
+  .ash-rate-formula .is-add { color: #c4b5fd; }
+
+  /* 프로필 */
+  .ash-profile {
+    gap: 11px; padding: 6px 6px 6px 7px;
+    border-radius: 16px;
+    background: #ffffff;
+    border: 1px solid #e9eef5;
+    box-shadow: 0 10px 22px -18px rgba(15, 23, 42, 0.55);
+  }
+  .ash-avatar {
+    position: relative; overflow: visible;
+    width: 36px; height: 36px; border-radius: 12px; font-size: 14.5px;
+  }
+  .ash-avatar::after {
+    content: ''; position: absolute; right: -2px; bottom: -2px;
+    width: 11px; height: 11px; border-radius: 50%;
+    background: #10b981; border: 2px solid #ffffff;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  }
+  .ash-profile-body { padding-right: 12px; border-right: 1px solid #eef1f6; }
+  .ash-profile-role { color: #818cf8; letter-spacing: 0.14em; }
+  .ash-profile-name { font-size: 14px; font-weight: 900; color: #0f172a; letter-spacing: -0.2px; }
+
+  .ash-logout {
+    height: 36px; padding: 0 14px; margin-left: 0; gap: 6px;
+    border-radius: 12px;
+    border: 1px solid #ffe4e6;
+    background: linear-gradient(180deg, #fff7f8 0%, #ffecef 100%);
+    color: #e11d48; font-size: 13px; font-weight: 800;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  }
+  .ash-logout:hover:not(:disabled) {
+    color: #ffffff; border-color: transparent;
+    background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
+    box-shadow: 0 10px 18px -10px rgba(225, 29, 72, 0.8);
+  }
+  .ash-logout:active:not(:disabled) { transform: scale(0.97); }
+}
+@media (min-width: 769px) {
+  .ash-header-left { flex: 1 1 auto; min-width: 0; }
+  .ash-header-right { flex-shrink: 0; }
+}
+/* 좁은 데스크톱(태블릿 가로): 부가 정보 줄여 제목 자리 확보 */
+@media (min-width: 769px) and (max-width: 1180px) {
+  .ash-header { padding: 0 20px; }
+  .ash-rate-formula { display: none; }
+  .ash-profile-body { display: none; }
+}
+@media (min-width: 769px) and (max-width: 960px) {
+  .ash-rate-label { display: none; }
+  .ash-logout { width: 36px; padding: 0; }
+  .ash-logout-text { display: none; }
+}
+
+/* 🖥 헤더 환율 카드 = 견적 계산기 환율 설정 바로가기 */
+.ash-rate.is-link {
+  font-family: inherit; text-align: left; cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.ash-rate-go {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; margin-left: 2px; border-radius: 7px; flex-shrink: 0;
+  color: #a5b4fc; background: rgba(255, 255, 255, 0.08);
+  transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+.ash-rate.is-link:hover { transform: translateY(-1px); border-color: rgba(165, 180, 252, 0.35); box-shadow: 0 16px 28px -16px rgba(79, 70, 229, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+.ash-rate.is-link:hover .ash-rate-go { transform: translateX(2px); color: #ffffff; background: rgba(129, 140, 248, 0.35); }
+.ash-rate.is-link:active { transform: translateY(0) scale(0.98); }
+.ash-rate.is-link:focus-visible { outline: 2px solid #818cf8; outline-offset: 2px; }

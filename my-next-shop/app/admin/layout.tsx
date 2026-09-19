@@ -3,7 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import AdminSidebar from '@/app/admin/components/AdminSidebar';
+import AdminRatePanel from '@/app/admin/components/AdminRatePanel';
 import { ADMIN_MENU } from '@/app/admin/adminMenu';
+import { List, CurrencyJpy, SignOut, House, CaretRight } from '@phosphor-icons/react';
+import '@/app/admin/admin-shell.css';
 
 export default function AdminLayout({
   children,
@@ -43,10 +46,20 @@ export default function AdminLayout({
 
     fetchExchangeInfo();
 
-    // 🌟 admin/estimate의 "전역 적용" 버튼이 추가 증가액을 DB에 저장하면 이 이벤트를 쏘는데,
-    // 그때 헤더의 "추가 증가액" 표시도 다시 불러와 즉시 반영합니다.
-    window.addEventListener('exchangeRateConfigUpdated', fetchExchangeInfo);
-    return () => window.removeEventListener('exchangeRateConfigUpdated', fetchExchangeInfo);
+    // 🌟 환율 새로고침·추가 증가액 적용(견적 계산기, 모바일 헤더 환율 설정)이 이 이벤트를 보냅니다.
+    //    detail 에 최신 값이 있으면 그대로 쓰고(캐시된 예전 환율로 덮어쓰지 않도록), 없으면 다시 불러옵니다.
+    const onUpdate = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (d) {
+        setExchangeRate(d.baseExchangeRate);
+        setRateBasisUnit(d.exchangeRateBasisUnit);
+        setAdditionalRate(d.additionalRate * d.exchangeRateBasisUnit);
+      } else {
+        fetchExchangeInfo();
+      }
+    };
+    window.addEventListener('exchangeRateConfigUpdated', onUpdate);
+    return () => window.removeEventListener('exchangeRateConfigUpdated', onUpdate);
   }, []);
 
   // 현재 경로에 맞는 타이틀 찾기 (없으면 기본값 설정). AdminSidebar.tsx와 공유하는
@@ -112,6 +125,40 @@ export default function AdminLayout({
     }
   };
 
+  // 🌟 최종 표시 환율 카드 (데스크톱/모바일 두 곳에서 같은 내용을 씁니다)
+  // 🖥 헤더 환율 카드 클릭 → 견적 계산기의 '환율 및 마진 설정' 으로 이동
+  const goRateSettings = () => {
+    if (pathname === '/admin/estimate') {
+      window.dispatchEvent(new Event('admin:focusRateSettings'));
+    } else {
+      router.push('/admin/estimate#rate-settings');
+    }
+  };
+
+  const rateCard = (variant: 'desktop' | 'mobile') => (
+    <button
+      type="button"
+      className={`ash-rate is-${variant} is-link`}
+      onClick={goRateSettings}
+      title="견적 계산기의 환율 및 마진 설정으로 이동"
+      aria-label="환율 및 마진 설정으로 이동"
+    >
+      <span className="ash-rate-icon" aria-hidden="true"><CurrencyJpy size={16} weight="bold" /></span>
+      <span className="ash-rate-body">
+        <span className="ash-rate-label">최종 표시 환율</span>
+        <span className="ash-rate-value" translate="no">
+          {rateBasisUnit}엔 = <strong>{(exchangeRate * rateBasisUnit + additionalRate).toFixed(2)}원</strong>
+          <span className="ash-rate-formula">
+            <span className="is-base" title="현재 환율">{(exchangeRate * rateBasisUnit).toFixed(2)}</span>
+            {' + '}
+            <span className="is-add" title="추가 증가액">{additionalRate}</span>
+          </span>
+        </span>
+      </span>
+      <span className="ash-rate-go" aria-hidden="true"><CaretRight size={12} weight="bold" /></span>
+    </button>
+  );
+
   return (
     <div style={s.container}>
       {/* 1. 사이드바 */}
@@ -119,157 +166,66 @@ export default function AdminLayout({
 
       <main style={s.main}>
         {/* 2. 헤더 */}
-        <header style={s.header} className="admin-header">
-          <div className="admin-header-main-row">
-            <div className="admin-header-left">
+        <header className="ash-header">
+          <div className="ash-header-row">
+            <div className="ash-header-left">
               {/* 🌟 모바일에서만 보이는 사이드바 토글 버튼 */}
               <button
-                className="admin-hamburger-btn"
+                type="button"
+                className="ash-burger"
                 onClick={() => setIsSidebarOpen(true)}
                 aria-label="메뉴 열기"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="3" y1="6" x2="21" y2="6"></line>
-                  <line x1="3" y1="12" x2="21" y2="12"></line>
-                  <line x1="3" y1="18" x2="21" y2="18"></line>
-                </svg>
+                <List size={19} weight="bold" />
               </button>
 
-              <h1 style={s.title} className="admin-title">{currentTitle}</h1>
+              <span className="ash-titles">
+                <span className="ash-crumb">
+                  <House size={11} weight="fill" /> MIKU ADMIN CONSOLE
+                </span>
+                <h1 className="ash-title">{currentTitle}</h1>
+              </span>
             </div>
 
-            <div style={s.headerRight} className="admin-header-right">
+            <div className="ash-header-right">
               {/* 최종 표시 환율 (데스크톱: 프로필 옆) */}
-              <div style={s.finalRateCard} className="final-rate-card desktop-final-rate">
-                <span style={s.exchangeLabel}>최종 표시 환율</span>
-                <span style={s.exchangeValue}>
-                  {rateBasisUnit}엔 = <strong style={s.finalRateValue}>{(exchangeRate * rateBasisUnit + additionalRate).toFixed(2)}원</strong>
-                  <span style={s.finalRateFormula}>
-                    (<span title="현재 환율" style={s.formulaCurrentRate}>{(exchangeRate * rateBasisUnit).toFixed(2)}</span>
-                    {' + '}
-                    <span title="추가 증가액" style={s.formulaAdditionalRate}>{additionalRate}</span>)
-                  </span>
-                </span>
-              </div>
+              {rateCard('desktop')}
 
               {/* 사용자 프로필 및 로그아웃 */}
-              <div style={s.profileCard}>
-                <div style={s.avatar}>
-                  {adminName.charAt(0).toUpperCase()}
-                </div>
-                <span style={s.profileName} className="admin-profile-name">{adminName}</span>
+              <div className="ash-profile">
+                <span className="ash-avatar" aria-hidden="true">{adminName.charAt(0).toUpperCase()}</span>
+                <span className="ash-profile-body">
+                  <span className="ash-profile-role">ADMINISTRATOR</span>
+                  <span className="ash-profile-name">{adminName}</span>
+                </span>
                 <button
+                  type="button"
                   onClick={handleLogout}
                   disabled={isLoggingOut}
-                  style={s.logoutBtn}
+                  className="ash-logout"
+                  aria-label="로그아웃"
+                  title="로그아웃"
                 >
-                  {isLoggingOut ? '...' : '로그아웃'}
+                  <SignOut size={14} weight="bold" />
+                  <span className="ash-logout-text">{isLoggingOut ? '...' : '로그아웃'}</span>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* 🌟 최종 표시 환율 (모바일 전용: 로그아웃 버튼 아래 별도 줄).
+          {/* 🌟 최종 표시 환율 (모바일 전용: 아래 별도 줄).
               헤더 한 줄에 다 같이 넣으면 좁아서 라벨이 안 보이던 문제를 이 줄로 옮겨 해결합니다. */}
-          <div style={s.finalRateCard} className="final-rate-card mobile-final-rate">
-            <span style={s.exchangeLabel}>최종 표시 환율</span>
-            <span style={s.exchangeValue}>
-              {rateBasisUnit}엔 = <strong style={s.finalRateValue}>{(exchangeRate * rateBasisUnit + additionalRate).toFixed(2)}원</strong>
-              <span style={s.finalRateFormula}>
-                (<span title="현재 환율" style={s.formulaCurrentRate}>{(exchangeRate * rateBasisUnit).toFixed(2)}</span>
-                {' + '}
-                <span title="추가 증가액" style={s.formulaAdditionalRate}>{additionalRate}</span>)
-              </span>
-            </span>
+          {/* 📱 모바일: 환율 설정 패널 (펼쳐서 새로고침·추가 증가액 적용까지) */}
+          <div className="ash-rate-panel">
+            <AdminRatePanel />
           </div>
         </header>
 
         {/* 3. 실제 페이지 내용 */}
-        <div style={s.content}>
+        <div className="ash-content">
           {children}
         </div>
       </main>
-
-      {/* 🌟 모바일 브레이크포인트는 globals.css 주석에 명시된 사이트 기준값(768px)을 따릅니다. */}
-      <style jsx>{`
-        .admin-hamburger-btn {
-          display: none;
-          border: none;
-          background: transparent;
-          color: #334155;
-          cursor: pointer;
-          padding: 4px;
-          margin-right: 0;
-          flex-shrink: 0;
-        }
-
-        .admin-header-main-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          width: 100%;
-        }
-
-        /* 🌟 햄버거 버튼과 타이틀을 한 그룹으로 묶어서, space-between이 이 둘 사이가 아니라
-           이 그룹과 오른쪽 영역 사이에서만 여백을 분배하도록 합니다 (타이틀이 버튼에 붙어 보임). */
-        .admin-header-left {
-          display: flex;
-          align-items: center;
-        }
-
-        /* 🌟 로그아웃 버튼 아래 별도 줄 - 데스크톱에서는 숨기고, 모바일에서만 보여줍니다.
-           (finalRateCard에 인라인 style로 display:flex가 박혀있어서 !important로 덮어씁니다) */
-        .mobile-final-rate {
-          display: none !important;
-        }
-
-        @media (max-width: 768px) {
-          .admin-hamburger-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .admin-header {
-            height: auto !important;
-            padding: 12px 16px !important;
-            gap: 8px;
-          }
-
-          .admin-title {
-            font-size: 18px !important;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
-
-          .admin-header-right {
-            gap: 8px !important;
-          }
-
-          .final-rate-card {
-            padding: 6px 10px !important;
-          }
-
-          /* 🌟 헤더 한 줄에 다 넣으면 좁아서 라벨이 안 보이던 최종 표시 환율을,
-             모바일에서는 아래 별도 줄로 옮겨서 표시합니다. */
-          .desktop-final-rate {
-            display: none !important;
-          }
-
-          .mobile-final-rate {
-            display: flex !important;
-            width: 100%;
-            justify-content: center;
-          }
-        }
-
-        @media (max-width: 420px) {
-          .admin-profile-name {
-            display: none;
-          }
-        }
-      `}</style>
     </div>
   );
 }
@@ -280,7 +236,7 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     height: '100vh',
     overflow: 'hidden',
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f5f7fb',
     fontFamily: "'Inter', 'Noto Sans KR', sans-serif",
   },
   main: {
@@ -288,100 +244,5 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     minWidth: 0,
-  },
-  header: {
-    height: '70px',
-    backgroundColor: '#fff',
-    borderBottom: '1px solid #e2e8f0',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    padding: '0 30px',
-    flexShrink: 0,
-  },
-  title: {
-    fontSize: '22px',
-    fontWeight: '700',
-    color: '#0f172a',
-    margin: 0,
-  },
-  headerRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '24px',
-  },
-  exchangeLabel: {
-    color: '#64748b',
-    marginRight: '8px',
-  },
-  exchangeValue: {
-    color: '#0f172a',
-  },
-  finalRateCard: {
-    display: 'flex',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    padding: '8px 16px',
-    borderRadius: '8px',
-    border: '1px solid #e2e8f0',
-    fontSize: '14px',
-  },
-  finalRateValue: {
-    color: '#ef4444',
-  },
-  finalRateFormula: {
-    marginLeft: '8px',
-    color: '#475569',
-    fontWeight: '500',
-    fontSize: '12px',
-  },
-  formulaCurrentRate: {
-    color: '#2563eb',
-    fontWeight: '700',
-  },
-  formulaAdditionalRate: {
-    color: '#7c3aed',
-    fontWeight: '700',
-  },
-  profileCard: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '4px 12px',
-    backgroundColor: '#f8fafc',
-    borderRadius: '12px',
-    border: '1px solid #e2e8f0',
-  },
-  avatar: {
-    width: '32px',
-    height: '32px',
-    backgroundColor: '#3b82f6',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 'bold',
-    color: '#fff',
-    fontSize: '14px',
-  },
-  profileName: {
-    fontWeight: '600',
-    color: '#334155',
-    fontSize: '14px',
-  },
-  logoutBtn: {
-    border: 'none',
-    backgroundColor: 'transparent',
-    color: '#ef4444',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    padding: '4px 8px',
-    whiteSpace: 'nowrap',
-  },
-  content: {
-    padding: '30px',
-    overflowY: 'auto',
-    flex: 1,
   },
 };

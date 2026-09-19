@@ -1,293 +1,282 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { DELIVERY_STATUS } from '@/src/types/order';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import '../admin-common.css';
+import { DELIVERY_STATUS } from '@/src/types/order';
+import { useFitTable, FitColGroup, FitTh } from '../components/useFitTable';
+import {
+  AdminHero, HeroButton, KpiCard, SearchField, SegFilter, EmptyRow, SkeletonRows,
+  useToasts, ToastStack, fmtDate, downloadCsv,
+} from '../components/AdminPremiumKit';
+import {
+  ArrowClockwise, DownloadSimple, Wallet, Receipt, ChartLineUp, CalendarCheck, Package, Sparkle,
+} from '@phosphor-icons/react';
+
+/* ============================================================
+   💰 정산 관리 — 배송 완료(COMPLETED)된 주문의 정산 내역
+   ============================================================ */
+
+// ⚠️ 기존 화면과 같은 고정 환율입니다. (실제 결제 환율과 다를 수 있습니다)
+const SETTLEMENT_RATE = 9.05;
+
+type Period = 'all' | 'thisMonth' | 'lastMonth' | 'last30';
+
+const COLUMNS = ['date', 'id', 'user', 'address', 'product', 'jpy', 'krw'] as const;
+const DEFAULT_WIDTHS = {
+  date: 120,
+  id: 190,
+  user: 130,
+  address: 300,
+  product: 330,
+  jpy: 130,
+  krw: 160,
+};
+
+type SettlementRow = {
+  id: string;
+  completedAt: string;
+  user: string;
+  address: any | null;
+  recipient: string;
+  product: string;
+  productImageUrl: string | null;
+  jpy: number;
+  krw: number;
+};
+
+const startOfMonth = (offset = 0) => {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth() + offset, 1);
+};
 
 export default function SettlementManagement() {
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<SettlementRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // 통계용
-  const [totalSettlement, setTotalSettlement] = useState(0);
-  const [settledCount, setSettledCount] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [period, setPeriod] = useState<Period>('all');
+  const { toasts, pushToast } = useToasts();
 
-  const persistWidths = true;
-
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
-    date: 150,
-    id: 250,
-    user: 150,
-    address: 350,
-    product: 600,
-    jpy: 150,
-    krw: 150
+  // 🌟 공통 표 — 마지막 '정산 금액' 열이 오른쪽에 붙어 남은 폭을 차지합니다.
+  const table = useFitTable({
+    storageKey: 'admin_settlement_column_widths_v2',
+    columns: COLUMNS,
+    defaultWidths: DEFAULT_WIDTHS,
+    pinned: { key: 'krw', minWidth: 140 },
   });
 
-  const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
-
-  // 🌟 표 전체 너비 = 각 열 너비의 합. table-layout: fixed는 확정된 너비가 있어야 적용됩니다.
-  //    (CSS의 width: max-content만으로는 긴 상품명이 지정한 열 너비를 무시하고 밀어냅니다)
-  const totalTableWidth = Object.values(columnWidths).reduce((sum, w) => sum + (Number(w) || 0), 0);
-
-  useEffect(() => {
-    const isEnabled = localStorage.getItem('admin_persist_column_widths') !== 'false';
-    if (!isEnabled) return;
-
-    const savedWidths = localStorage.getItem('admin_settlement_column_widths');
-    if (savedWidths) {
-      try {
-        setColumnWidths(JSON.parse(savedWidths));
-      } catch (e) {
-        console.error("Failed to parse column widths", e);
+  const fetchOrders = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/admin/orders');
+      const data = await res.json();
+      if (data.success) {
+        // 🐛 deliveryStatus는 Prisma enum('COMPLETED')입니다. 한글 라벨과 비교하면 항상 불일치합니다.
+        const rows: SettlementRow[] = data.orders
+          .filter((o: any) => o.deliveryStatus === DELIVERY_STATUS.COMPLETED)
+          .map((o: any) => ({
+            id: o.orderId,
+            completedAt: o.shippedAt || o.registeredAt,
+            user: o.user?.name || '알 수 없음',
+            address: o.addressId ? (o.user?.addresses?.find((a: any) => a.id === o.addressId) || null) : null,
+            recipient: o.recipient || '',
+            product: o.productName,
+            productImageUrl: o.productImageUrl || null,
+            jpy: o.productPrice || 0,
+            krw: Math.round((o.productPrice || 0) * SETTLEMENT_RATE),
+          }))
+          .sort((a: SettlementRow, b: SettlementRow) => +new Date(b.completedAt) - +new Date(a.completedAt));
+        setOrders(rows);
+      } else {
+        pushToast('error', data.error || '정산 내역을 불러오지 못했습니다.');
       }
+    } catch (error) {
+      console.error("데이터 가져오기 실패:", error);
+      pushToast('error', '정산 내역을 불러오지 못했습니다.');
+    } finally {
+      setIsLoading(false);
     }
+  }, [pushToast]);
+
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  /* ---------- 기간 ---------- */
+  const inPeriod = useCallback((iso: string, p: Period) => {
+    const t = new Date(iso).getTime();
+    if (p === 'thisMonth') return t >= startOfMonth(0).getTime();
+    if (p === 'lastMonth') return t >= startOfMonth(-1).getTime() && t < startOfMonth(0).getTime();
+    if (p === 'last30') return t >= Date.now() - 30 * 86400000;
+    return true;
   }, []);
 
-  const saveColumnWidths = (widths: Record<string, number>) => {
-    if (persistWidths) {
-      localStorage.setItem('admin_settlement_column_widths', JSON.stringify(widths));
-    }
+  const periodCounts = useMemo(() => ({
+    all: orders.length,
+    thisMonth: orders.filter(o => inPeriod(o.completedAt, 'thisMonth')).length,
+    lastMonth: orders.filter(o => inPeriod(o.completedAt, 'lastMonth')).length,
+    last30: orders.filter(o => inPeriod(o.completedAt, 'last30')).length,
+  }), [orders, inPeriod]);
+
+  const rendered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return orders.filter(o => {
+      if (!inPeriod(o.completedAt, period)) return false;
+      if (!q) return true;
+      return o.id.toLowerCase().includes(q) || o.user.toLowerCase().includes(q) || o.product?.toLowerCase().includes(q);
+    });
+  }, [orders, period, searchTerm, inPeriod]);
+
+  /* ---------- 집계 ---------- */
+  const sum = (list: SettlementRow[]) => list.reduce((s, o) => s + o.krw, 0);
+  const totalAll = sum(orders);
+  const thisMonthList = orders.filter(o => inPeriod(o.completedAt, 'thisMonth'));
+  const lastMonthList = orders.filter(o => inPeriod(o.completedAt, 'lastMonth'));
+  const thisMonthSum = sum(thisMonthList);
+  const lastMonthSum = sum(lastMonthList);
+  const monthDelta = lastMonthSum > 0 ? Math.round(((thisMonthSum - lastMonthSum) / lastMonthSum) * 100) : null;
+  const avg = orders.length ? Math.round(totalAll / orders.length) : 0;
+
+  const renderedKrw = sum(rendered);
+  const renderedJpy = rendered.reduce((s, o) => s + o.jpy, 0);
+
+  const exportCsv = () => {
+    downloadCsv(
+      `mikushop_settlement_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['완료일자', '주문번호', '구매자', '수취인', '주소', '상품명', '상품가(JPY)', '정산금액(KRW)'],
+      rendered.map(o => [
+        fmtDate(o.completedAt), o.id, o.user, o.address?.recipientName || o.recipient,
+        o.address ? `[${o.address.zipCode}] ${o.address.address} ${o.address.detailAddress}` : '',
+        o.product, o.jpy, o.krw,
+      ]),
+    );
+    pushToast('success', `${rendered.length.toLocaleString()}건을 내보냈습니다.`);
   };
-
-  const onMouseDown = (key: string, side: 'left' | 'right', e: React.MouseEvent) => {
-    let targetKey = key;
-    const visibleCols = ['date', 'id', 'user', 'address', 'product', 'jpy', 'krw'];
-
-    if (side === 'left') {
-      const colIndex = visibleCols.indexOf(key);
-      if (colIndex > 0) targetKey = visibleCols[colIndex - 1];
-      else return;
-    }
-
-    resizingRef.current = { key: targetKey, startX: e.pageX, startWidth: columnWidths[targetKey] };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  };
-
-  const onMouseMove = (e: MouseEvent) => {
-    if (!resizingRef.current) return;
-    const { key, startX, startWidth } = resizingRef.current;
-    const deltaX = e.pageX - startX;
-    setColumnWidths(prev => ({ ...prev, [key]: Math.max(50, startWidth + deltaX) }));
-  };
-
-  const onMouseUp = () => {
-    if (resizingRef.current) {
-      setColumnWidths(prev => {
-        saveColumnWidths(prev);
-        return prev;
-      });
-    }
-    resizingRef.current = null;
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
-    document.body.style.cursor = 'default';
-    document.body.style.userSelect = 'auto';
-  };
-
-  useEffect(() => {
-    const fetchOrders = async () => {
-      try {
-        const res = await fetch('/api/admin/orders');
-        const data = await res.json();
-
-        if (data.success) {
-          // 배송완료된 항목만 필터링
-          // 🐛 deliveryStatus는 Prisma enum('COMPLETED')입니다. 한글 라벨('배송완료')과
-          //    비교하면 항상 불일치라 정산 금액이 늘 ₩0으로 나왔습니다.
-          const settledOrders = data.orders
-            .filter((dbOrder: any) => dbOrder.deliveryStatus === DELIVERY_STATUS.COMPLETED)
-            .map((dbOrder: any) => ({
-              id: dbOrder.orderId, 
-              date: new Date(dbOrder.shippedAt || dbOrder.registeredAt).toLocaleDateString(),
-              user: dbOrder.user?.name || '알 수 없음',
-              address: dbOrder.addressId 
-                ? (dbOrder.user?.addresses?.find((a: any) => a.id === dbOrder.addressId) || null)
-                : null,
-              recipient: dbOrder.recipient || '',
-              product: dbOrder.productName,
-              jpy: dbOrder.productPrice,
-              krw: Math.round(dbOrder.productPrice * 9.05),
-              status: dbOrder.status
-            }));
-
-          setOrders(settledOrders);
-          
-          const total = settledOrders.reduce((sum: number, order: any) => sum + order.krw, 0);
-          setTotalSettlement(total);
-          setSettledCount(settledOrders.length);
-        }
-      } catch (error) {
-        console.error("데이터 가져오기 실패:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, []);
 
   return (
-    <div style={ss.container}>
-      
-      {/* 🌟 통계 카드 섹션 */}
-      <div style={ss.cardGrid}>
-        <div className="admin-container">
-          <div className="admin-stat-title">누적 정산액</div>
-          <div className="admin-stat-count">₩ {totalSettlement.toLocaleString()}</div>
+    <div className="ap-page">
+      <AdminHero
+        eyebrow="SETTLEMENT" icon={<Sparkle size={11} weight="fill" />}
+        title="정산 관리"
+        description={`배송이 완료된 주문의 정산 내역입니다. 정산 금액은 상품가 × ${SETTLEMENT_RATE} 기준으로 계산합니다.`}
+        accentRgb="16, 185, 129"
+        actions={<>
+          <HeroButton onClick={fetchOrders} disabled={isLoading}>
+            <ArrowClockwise size={15} weight="bold" className={isLoading ? 'ap-spin' : ''} /> 새로고침
+          </HeroButton>
+          <HeroButton primary onClick={exportCsv} disabled={isLoading || rendered.length === 0}>
+            <DownloadSimple size={15} weight="bold" /> CSV 내보내기
+          </HeroButton>
+        </>}
+      >
+        <div className="ap-kpis">
+          <KpiCard icon={<Wallet size={18} weight="duotone" />} label="누적 정산액" toneRgb="110, 231, 183" loading={isLoading}
+            value={<><span className="ap-cur">₩</span>{totalAll.toLocaleString()}</>}
+            foot={`전체 ${orders.length.toLocaleString()}건`} />
+          <KpiCard icon={<CalendarCheck size={18} weight="duotone" />} label="이번 달 정산액" loading={isLoading}
+            value={<><span className="ap-cur">₩</span>{thisMonthSum.toLocaleString()}</>}
+            foot={monthDelta === null
+              ? `이번 달 ${thisMonthList.length.toLocaleString()}건`
+              : <span className={monthDelta >= 0 ? 'is-up' : 'is-down'}>지난달 대비 {monthDelta >= 0 ? '+' : ''}{monthDelta}%</span>}
+            active={period === 'thisMonth'} onClick={() => setPeriod(period === 'thisMonth' ? 'all' : 'thisMonth')} />
+          <KpiCard icon={<Receipt size={18} weight="duotone" />} label="정산 완료 건수" toneRgb="147, 197, 253" loading={isLoading}
+            value={<>{orders.length.toLocaleString()}<small>건</small></>}
+            foot={`지난달 ${lastMonthList.length.toLocaleString()}건`} />
+          <KpiCard icon={<ChartLineUp size={18} weight="duotone" />} label="평균 객단가" toneRgb="253, 186, 116" loading={isLoading}
+            value={<><span className="ap-cur">₩</span>{avg.toLocaleString()}</>}
+            foot="주문 1건당 평균 정산 금액" />
         </div>
-        <div className="admin-container">
-          <div className="admin-stat-title">정산 완료 건수</div>
-          <div className="admin-stat-count" style={{ color: colors.accent }}>{settledCount}건</div>
-        </div>
-        <div className="admin-container">
-          <div className="admin-stat-title">평균 객단가</div>
-          <div className="admin-stat-count" style={{ color: '#10b981' }}>
-            ₩ {settledCount > 0 ? Math.round(totalSettlement / settledCount).toLocaleString() : 0}
+      </AdminHero>
+
+      <section className="ap-panel">
+        <div className="ap-toolbar">
+          <div className="ap-toolbar-left">
+            <SearchField value={searchTerm} onChange={setSearchTerm} placeholder="주문번호, 구매자, 상품명 검색" />
+            <SegFilter<Period>
+              ariaLabel="기간"
+              value={period}
+              onChange={setPeriod}
+              options={[
+                { value: 'all', label: '전체', count: periodCounts.all },
+                { value: 'thisMonth', label: '이번 달', count: periodCounts.thisMonth },
+                { value: 'lastMonth', label: '지난 달', count: periodCounts.lastMonth },
+                { value: 'last30', label: '최근 30일', count: periodCounts.last30 },
+              ]}
+            />
+          </div>
+          <div className="ap-toolbar-right">
+            <span className="ap-count">합계 <b>₩{renderedKrw.toLocaleString()}</b></span>
           </div>
         </div>
-      </div>
 
-      {/* 🌟 테이블 영역 */}
-      <div className="admin-container">
-        <h2 className="admin-section-title">정산 완료 내역 (배송 완료 건)</h2>
-        <div style={ss.tableWrapper}>
-          <table className="admin-table-resizable" style={{ width: totalTableWidth }}>
-            <colgroup>
-              <col style={{ width: columnWidths.date }} />
-              <col style={{ width: columnWidths.id }} />
-              <col style={{ width: columnWidths.user }} />
-              <col style={{ width: columnWidths.address }} />
-              <col style={{ width: columnWidths.product }} />
-              <col style={{ width: columnWidths.jpy }} />
-              <col style={{ width: columnWidths.krw }} />
-            </colgroup>
+        <div className="ap-table-wrap" ref={table.wrapRef}>
+          <table className={`admin-table-resizable ${table.tableClassName}`} style={table.tableStyle}>
+            <FitColGroup table={table} />
             <thead>
               <tr className="admin-table-head-row">
-                <th className="admin-th-resizable">
-                  <div onMouseDown={(e) => onMouseDown('date', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
-                  완료 일자
-                  <div onMouseDown={(e) => onMouseDown('date', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
-                </th>
-                <th className="admin-th-resizable">
-                  <div onMouseDown={(e) => onMouseDown('id', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
-                  주문 번호
-                  <div onMouseDown={(e) => onMouseDown('id', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
-                </th>
-                <th className="admin-th-resizable">
-                  <div onMouseDown={(e) => onMouseDown('user', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
-                  구매자
-                  <div onMouseDown={(e) => onMouseDown('user', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
-                </th>
-                <th className="admin-th-resizable">
-                  <div onMouseDown={(e) => onMouseDown('address', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
-                  수취인 주소
-                  <div onMouseDown={(e) => onMouseDown('address', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
-                </th>
-                <th className="admin-th-resizable">
-                  <div onMouseDown={(e) => onMouseDown('product', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
-                  상품명
-                  <div onMouseDown={(e) => onMouseDown('product', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
-                </th>
-                <th className="admin-th-resizable" style={{ textAlign: 'right' }}>
-                  <div onMouseDown={(e) => onMouseDown('jpy', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
-                  상품가 (JPY)
-                  <div onMouseDown={(e) => onMouseDown('jpy', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
-                </th>
-                <th style={{ padding: '16px 12px', textAlign: 'right', position: 'relative' }}>
-                  <div onMouseDown={(e) => onMouseDown('krw', 'left', e)} className="admin-resize-handle-left" onMouseOver={(e) => e.currentTarget.style.borderLeft = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderLeft = 'none'} />
-                  정산 금액 (KRW)
-                  <div onMouseDown={(e) => onMouseDown('krw', 'right', e)} className="admin-resize-handle-right" onMouseOver={(e) => e.currentTarget.style.borderRight = `3px solid ${colors.accent}`} onMouseOut={(e) => e.currentTarget.style.borderRight = 'none'} />
-                </th>
+                <FitTh table={table} columnKey="date">완료 일자</FitTh>
+                <FitTh table={table} columnKey="id">주문 번호</FitTh>
+                <FitTh table={table} columnKey="user">구매자</FitTh>
+                <FitTh table={table} columnKey="address">수취인 · 주소</FitTh>
+                <FitTh table={table} columnKey="product">상품</FitTh>
+                <FitTh table={table} columnKey="jpy">상품가 (JPY)</FitTh>
+                <FitTh table={table} columnKey="krw">정산 금액 (KRW)</FitTh>
               </tr>
             </thead>
             <tbody>
-              {!isLoading ? (
-                orders.length > 0 ? orders.map((order) => (
-                  <tr key={order.id} className="admin-table-body-row">
-                    <td className="admin-base-td">{order.date}</td>
-                    <td className="admin-base-td" style={{ fontWeight: '600' }}>{order.id}</td>
-                    <td className="admin-base-td">{order.user}</td>
-                    <td className="admin-base-td" style={{ fontSize: '13px' }}>
-                      {order.address ? (
-                        <>
-                          <div style={{ fontWeight: '600', color: colors.textMain, marginBottom: '2px' }}>
-                            {order.address.recipientName} ({order.address.phone})
-                          </div>
-                          <div style={{ color: colors.textSub, lineHeight: '1.4' }}>
-                            [{order.address.zipCode}] {order.address.address} {order.address.detailAddress}
-                          </div>
-                          <div style={{ fontSize: '11px', color: colors.accent, marginTop: '2px' }}>
-                            통관번호: {order.address.personalCustomsCode}
-                          </div>
-                        </>
-                      ) : (
-                        <div style={{ color: colors.emptyText }}>
-                          {order.recipient ? `${order.recipient} (주소 정보 없음)` : '배송지 미지정'}
-                        </div>
-                      )}
-                    </td>
-                    <td className="admin-base-td">{order.product}</td>
-                    <td className="admin-base-td" style={{ textAlign: 'right' }}>{order.jpy.toLocaleString()}￥</td>
-                    <td style={{ padding: '16px 12px', textAlign: 'right', fontWeight: '700', color: colors.textMain }}>
-                      ₩ {order.krw.toLocaleString()}
-                    </td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan={7} className="admin-empty-td">정산 완료된 내역이 없습니다.</td>
-                  </tr>
-                )
-              ) : (
-                <tr>
-                  <td colSpan={7} className="admin-empty-td">데이터를 불러오는 중입니다...</td>
+              {isLoading ? (
+                <SkeletonRows columns={COLUMNS} pinnedKey="krw" />
+              ) : rendered.length === 0 ? (
+                <EmptyRow colSpan={COLUMNS.length} icon={<Receipt size={24} weight="duotone" />}
+                  title={searchTerm || period !== 'all' ? '조건에 맞는 정산 내역이 없습니다' : '정산 완료된 내역이 없습니다'}
+                  description={searchTerm || period !== 'all' ? '검색어나 기간을 바꿔 보세요.' : '배송 완료된 주문이 이곳에 표시됩니다.'} />
+              ) : rendered.map(o => (
+                <tr key={o.id} className="admin-table-body-row aft-row">
+                  <td className="ap-td"><span className="ap-strong ap-tabnum">{fmtDate(o.completedAt)}</span></td>
+                  <td className="ap-td"><span className="ap-id">{o.id}</span></td>
+                  <td className="ap-td"><span className="ap-strong">{o.user}</span></td>
+                  <td className="ap-td is-left">
+                    {o.address ? (
+                      <div className="ap-address">
+                        <span className="ap-address-top">{o.address.recipientName}<span>{o.address.phone}</span></span>
+                        <span className="ap-address-line" title={`[${o.address.zipCode}] ${o.address.address} ${o.address.detailAddress}`}>
+                          [{o.address.zipCode}] {o.address.address} {o.address.detailAddress}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="ap-empty-mark">{o.recipient ? `${o.recipient} (주소 정보 없음)` : '배송지 미지정'}</span>
+                    )}
+                  </td>
+                  <td className="ap-td is-left">
+                    <span className="ap-product">
+                      <span className="ap-thumb">
+                        {o.productImageUrl ? <img src={o.productImageUrl} alt="" referrerPolicy="no-referrer" /> : <Package size={16} weight="duotone" />}
+                      </span>
+                      <span className="ap-product-name" title={o.product}>{o.product}</span>
+                    </span>
+                  </td>
+                  <td className="ap-td is-right"><span className="ap-money is-sub"><i>¥</i>{o.jpy.toLocaleString()}</span></td>
+                  <td className={table.pinnedCellClass('krw', 'ap-td is-right')}>
+                    <span className="ap-money"><i>₩</i>{o.krw.toLocaleString()}</span>
+                  </td>
                 </tr>
-              )}
+              ))}
             </tbody>
+            {!isLoading && rendered.length > 0 && (
+              <tfoot>
+                <tr>
+                  <td className="ap-td is-left" colSpan={5}>
+                    <span className="ap-strong">합계</span> <span className="ap-section-hint">{rendered.length.toLocaleString()}건</span>
+                  </td>
+                  <td className="ap-td is-right"><span className="ap-money is-sub"><i>¥</i>{renderedJpy.toLocaleString()}</span></td>
+                  <td className={table.pinnedCellClass('krw', 'ap-td is-right')}>
+                    <span className="ap-money"><i>₩</i>{renderedKrw.toLocaleString()}</span>
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
-      </div>
+      </section>
+
+      <ToastStack toasts={toasts} />
     </div>
   );
 }
-
-// ==========================================
-// 🎨 스타일 정의 영역 (Settlement Styles: ss)
-// ==========================================
-
-const colors = {
-  white: '#fff',
-  border: '#f1f5f9',
-  borderDark: '#e2e8f0',
-  textMain: '#0f172a',
-  textSub: '#64748b',
-  textDark: '#334155',
-  accent: '#3b82f6',
-  emptyText: '#94a3b8',
-  bgHead: '#f8fafc',
-};
-
-const ss: Record<string, React.CSSProperties> = {
-  // 최상위 컨테이너 (기존처럼 전체 배경 역할은 제거되었지만, 내부 여백 등을 위해 유지)
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '30px', // 통계카드와 테이블 사이 간격
-  },
-
-  // 통계 카드 그리드
-  cardGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '20px',
-  },
-
-  // 테이블 구조
-  tableWrapper: {
-    width: '100%',
-    overflowX: 'auto',
-  },
-};

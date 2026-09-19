@@ -2,7 +2,19 @@
 
 import React, { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import GuideLayout from '@/app/components/GuideLayout'; // 미쿠짱 레이아웃 유지
+import GuideLayout from '@/app/components/GuideLayout';
+import '../payment-premium.css';
+import {
+  WarningOctagon, LockKey, ArrowCounterClockwise, Headset, Hash,
+  CreditCard, ShieldWarning, Timer, CheckCircle,
+} from '@phosphor-icons/react';
+
+// 🌟 결제가 막히는 대표적인 이유. 고객이 스스로 확인할 수 있는 것만 적습니다.
+const REASONS = [
+  { icon: <CreditCard size={15} weight="duotone" />, text: '카드 한도 초과 또는 잔액 부족' },
+  { icon: <ShieldWarning size={15} weight="duotone" />, text: '카드사 안전결제(ISP·앱카드) 인증 실패' },
+  { icon: <Timer size={15} weight="duotone" />, text: '결제창을 닫았거나 인증 시간이 초과됨' },
+];
 
 function FailContent() {
   const searchParams = useSearchParams();
@@ -13,108 +25,49 @@ function FailContent() {
   const code = searchParams.get('code') || 'PAYMENT_FAILED';
 
   return (
-    <div style={{ maxWidth: '600px', margin: '80px auto', textAlign: 'center', fontFamily: 'Pretendard' }}>
-      <div style={{ 
-        backgroundColor: '#fff', 
-        padding: '50px 40px', 
-        borderRadius: '32px', 
-        boxShadow: '0 10px 40px rgba(0,0,0,0.04)', 
-        border: '1px solid #f1f5f9' 
-      }}>
-        
-        {/* 실패 아이콘 영역 */}
-        <div style={{ 
-          width: '80px', 
-          height: '80px', 
-          backgroundColor: '#fef2f2', 
-          borderRadius: '50%', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          margin: '0 auto 24px',
-          color: '#ef4444',
-          fontSize: '36px'
-        }}>
-          <i className="fa fa-exclamation-triangle"></i> {/* 폰트어썸 아이콘 (또는 ⚠️ 이모지 사용 가능) */}
-        </div>
+    <div className="pay-page">
+      <div className="pay-card">
+        <div className="pay-body">
 
-        {/* 텍스트 영역 */}
-        <h2 style={{ fontSize: '26px', fontWeight: '900', color: '#0f172a', marginBottom: '16px' }}>
-          결제에 실패했습니다
-        </h2>
-        
-        <p style={{ color: '#64748b', fontSize: '15px', lineHeight: '1.6', marginBottom: '30px', wordBreak: 'keep-all' }}>
-          입력하신 정보가 올바르지 않거나, 결제 한도 초과 등의 사유로 결제가 중단되었습니다.<br/>
-          아래의 사유를 확인해 주세요.
-        </p>
-
-        {/* 에러 상세 정보 박스 */}
-        <div style={{ 
-          backgroundColor: '#f8fafc', 
-          padding: '24px', 
-          borderRadius: '20px', 
-          textAlign: 'left',
-          border: '1px dashed #cbd5e1',
-          marginBottom: '40px'
-        }}>
-          <div style={{ marginBottom: '12px' }}>
-            <span style={{ fontSize: '13px', fontWeight: '700', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
-              오류 메시지
-            </span>
-            <span style={{ fontSize: '16px', fontWeight: '800', color: '#ef4444', wordBreak: 'keep-all' }}>
-              {message}
-            </span>
+          <div className="pay-mark is-error">
+            <span className="pay-ring" aria-hidden="true" />
+            <WarningOctagon size={44} weight="fill" />
           </div>
-          <div>
-            <span style={{ fontSize: '13px', fontWeight: '700', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
-              오류 코드
-            </span>
-            <span style={{ fontSize: '14px', fontWeight: '600', color: '#475569', fontFamily: 'monospace' }}>
-              {code}
-            </span>
+
+          <span className="pay-eyebrow is-error">PAYMENT FAILED</span>
+          <h2 className="pay-title">결제가 완료되지<br />않았습니다</h2>
+          <p className="pay-desc">결제가 중단되어 금액은 청구되지 않았습니다.<br />아래 사유를 확인한 뒤 다시 시도해 주세요.</p>
+
+          <div className="pay-error-panel">
+            <span className="pay-error-eyebrow">ERROR MESSAGE</span>
+            <p className="pay-error-msg">{message}</p>
+            <span className="pay-error-code"><Hash size={12} weight="bold" /> {code}</span>
           </div>
-        </div>
 
-        {/* 버튼 영역 */}
-        <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
-          <button 
-            onClick={() => router.push('/mypage/money/charge')}
-            style={{ 
-              width: '100%', 
-              padding: '18px', 
-              backgroundColor: '#d27377', 
-              color: '#fff', 
-              border: 'none', 
-              borderRadius: '16px', 
-              fontSize: '17px', 
-              fontWeight: '800', 
-              cursor: 'pointer',
-              boxShadow: '0 8px 20px rgba(210, 115, 119, 0.2)',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            충전 페이지로 돌아가기
-          </button>
-          
-          <button 
-            onClick={() => router.push('/inquiry/kakaotalk')}
-            style={{ 
-              width: '100%', 
-              padding: '18px', 
-              backgroundColor: '#fff', 
-              color: '#64748b', 
-              border: '1px solid #e2e8f0', 
-              borderRadius: '16px', 
-              fontSize: '16px', 
-              fontWeight: '700', 
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            고객센터 문의하기
-          </button>
-        </div>
+          <div className="pay-reasons">
+            <span className="pay-reasons-title">이런 경우에 주로 발생합니다</span>
+            {REASONS.map(reason => (
+              <div key={reason.text} className="pay-reason">
+                {reason.icon}
+                <span>{reason.text}</span>
+              </div>
+            ))}
+          </div>
 
+          <div className="pay-actions">
+            <button type="button" className="pay-btn is-primary" onClick={() => router.push('/mypage/money/charge')}>
+              <ArrowCounterClockwise size={16} weight="bold" /> 충전 페이지로 돌아가기
+            </button>
+            <button type="button" className="pay-btn is-ghost" onClick={() => router.push('/inquiry/kakaotalk')}>
+              <Headset size={16} weight="bold" /> 고객센터 문의하기
+            </button>
+          </div>
+
+          <span className="pay-secure">
+            <CheckCircle size={14} weight="fill" /> 승인되지 않은 결제는 청구되지 않습니다
+          </span>
+
+        </div>
       </div>
     </div>
   );
@@ -124,7 +77,19 @@ export default function PaymentFailPage() {
   return (
     <GuideLayout title="결제 실패" type="money">
       {/* 🌟 useSearchParams를 사용할 때는 Suspense로 감싸는 것이 Next.js 권장 사항입니다 */}
-      <Suspense fallback={<div style={{ textAlign: 'center', padding: '100px', fontSize: '20px', fontWeight: 'bold' }}>정보를 불러오는 중입니다...</div>}>
+      <Suspense fallback={
+        <div className="pay-page">
+          <div className="pay-card">
+            <div className="pay-body">
+              <div className="pay-loader" aria-hidden="true">
+                <span className="pay-loader-track" />
+                <span className="pay-loader-core"><LockKey size={28} weight="duotone" /></span>
+              </div>
+              <h2 className="pay-title">정보를 불러오는 중입니다</h2>
+            </div>
+          </div>
+        </div>
+      }>
         <FailContent />
       </Suspense>
     </GuideLayout>

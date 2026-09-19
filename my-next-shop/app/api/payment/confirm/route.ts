@@ -94,7 +94,7 @@ export async function POST(request: Request) {
     // (토스 응답 원문과 유저 레코드 전체를 그대로 넘기면 불필요한 개인정보까지 노출됩니다.)
     return NextResponse.json({
       success: true,
-      data: { orderId: data?.orderId, approvedAt: data?.approvedAt, totalAmount: data?.totalAmount },
+      data: { orderId: data?.orderId, approvedAt: data?.approvedAt, totalAmount: data?.totalAmount, method: data?.method },
       dbResult: {
         chargedAmount: amountNum,
         balance: dbResult.user.cyberMoney,

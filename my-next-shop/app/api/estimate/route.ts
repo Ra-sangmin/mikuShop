@@ -2,88 +2,20 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAdmin, getAdminSession } from '@/lib/apiAuth';
 import {
+  loadExchangeRateConfig,
+  updateExchangeRateConfig,
+  getBaseExchangeRate,
+} from '@/lib/exchangeRate';
+import {
   calculateTieredPaymentFee,
   calculateTieredAgencyFee,
   DEFAULT_PAYMENT_FEE_RULE,
   DEFAULT_AGENCY_FEE_RULE,
 } from '@/src/utils/feeCalculator';
 
-// 🌟 관리자가 DB 값을 언제든 바꿀 수 있고, 전역 변수 캐시는 그 변경을 놓치는 위험이 있어
-// 캐시 없이 매 요청마다 DB를 직접 조회합니다.
-async function loadExchangeRateConfig(): Promise<{ additionalRate: number; rateBasisUnit: number; currentExchangeRate: number }> {
-  const config = await prisma.exchangeRateConfig.findFirst();
-  return {
-    additionalRate: config?.additionalRate ?? 0,
-    rateBasisUnit: config?.rateBasisUnit ?? 100,
-    currentExchangeRate: config?.currentExchangeRate ?? 0,
-  };
-}
-
-// 🌟 추가 증가액 / 현재 환율 값이 실제로 바뀌는 곳은 여기 한 곳으로 모읍니다.
-async function updateExchangeRateConfig(data: { additionalRate?: number; currentExchangeRate?: number }) {
-  const config = await prisma.exchangeRateConfig.findFirst();
-
-  if (config) {
-    await prisma.exchangeRateConfig.update({
-      where: { id: config.id },
-      data,
-    });
-  } else {
-    await prisma.exchangeRateConfig.create({
-      data: {
-        additionalRate: data.additionalRate ?? 0,
-        currentExchangeRate: data.currentExchangeRate ?? 0,
-      },
-    });
-  }
-}
-
-// 🌟 네이버가 finance.naver.com의 구(舊) HTML 페이지(.nhn)를 stock.naver.com으로
-// 리다이렉트하면서 <option value="..."> 형식의 옛 마크업이 사라져, 예전 정규식 파싱이
-// 항상 실패하고 조용히 9.05(=가짜 905원) 폴백값만 반환하던 문제가 있었습니다.
-// stock.naver.com이 실제로 호출하는 공개 JSON API를 직접 사용하도록 교체합니다.
-async function fetchNaverExchangeRate(forceRefresh: boolean): Promise<number> {
-  const fetchOptions: RequestInit = forceRefresh
-    ? { cache: 'no-store' }
-    : { next: { revalidate: 300 } };
-
-  const response = await fetch('https://stock.naver.com/api/stockSecurity/exchange-rates/v2/market-index/FX_JPYKRW/latest', {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    },
-    ...fetchOptions
-  });
-
-  if (!response.ok) throw new Error(`네이버 환율 API 응답 오류: ${response.status}`);
-
-  const data = await response.json();
-  const basis = parseFloat(data.currencyBasis) || 100;
-  const rate = parseFloat(data.saleBaseRate);
-
-  if (!rate || isNaN(rate)) throw new Error("환율 값을 찾을 수 없습니다.");
-
-  // 🌟 API는 "100엔 기준" 매매기준율을 주므로, 이 프로젝트 전체가 쓰는 "1엔 기준" 단위로 환산합니다.
-  const baseRate = rate / basis;
-
-  // 🌟 forceRefresh로 즉시 새로고침한 경우에만 DB의 현재 환율(currentExchangeRate)도 갱신합니다.
-  if (forceRefresh) {
-    await updateExchangeRateConfig({ currentExchangeRate: baseRate });
-  }
-
-  return baseRate;
-}
-
-// 🌟 fetchNaverExchangeRate 실패 시 9.05로 대체하되, 실패 여부를 함께 반환해
-// 호출부(프론트엔드)가 "이건 진짜 환율이 아니라 임시값"이라고 표시할 수 있게 합니다.
-async function getBaseExchangeRate(forceRefresh = false): Promise<{ rate: number; failed: boolean }> {
-  try {
-    const rate = await fetchNaverExchangeRate(forceRefresh);
-    return { rate, failed: false };
-  } catch (error) {
-    console.error("환율 크롤링 에러:", error);
-    return { rate: 9.05, failed: true };
-  }
-}
+// 🌟 환율 조회·저장 로직은 lib/exchangeRate.ts 로 옮겼습니다.
+//    자동 수집 크론(app/api/cron/exchange-rate)이 같은 경로를 써야 하기 때문입니다.
+//    동작은 예전과 같습니다 — forceRefresh 일 때만 네이버를 새로 조회하고 DB 에 저장합니다.
 
 export async function POST(request: Request) {
   try {

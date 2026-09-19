@@ -59,7 +59,9 @@ export async function POST(req: Request) {
           myBidPrice: { increment: amount }, // 기존 입찰가에 더함
           depositAmount: { increment: deposit }, // 기존 보증금에 더함
           bidStatus: 'ADDITIONAL',
-          status: "BIDDING" // 상태를 진행중으로 변경
+          status: "BIDDING", // 상태를 진행중으로 변경
+          // 🕒 상태가 실제로 바뀔 때만 변경 시각을 남깁니다.
+          ...(order.status !== "BIDDING" ? { statusChangedAt: new Date() } : {}),
         }
       });
 

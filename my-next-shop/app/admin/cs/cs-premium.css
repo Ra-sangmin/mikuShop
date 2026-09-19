@@ -1,0 +1,171 @@
+/* =====================================================
+   💬 고객센터 — 공지사항 · 자주하는 질문 패널 (cs-)
+   ===================================================== */
+.ap-panel.cs-panel {
+  --cs-rgb: 236, 72, 153;
+  --cs-from: #f472b6;
+  --cs-to: #db2777;
+  position: relative;
+  padding: 0 0 20px;
+  border-radius: 22px;
+  overflow: hidden; contain: paint;
+  border: 1px solid #e9eef5;
+  background: #ffffff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 22px 44px -32px rgba(15, 23, 42, 0.45), 0 2px 6px -4px rgba(15, 23, 42, 0.08);
+}
+.cs-panel.is-faq { --cs-rgb: 99, 102, 241; --cs-from: #818cf8; --cs-to: #4f46e5; }
+.ap-panel.cs-panel > .ap-toolbar,
+.ap-panel.cs-panel > .ap-table-wrap,
+.ap-panel.cs-panel > .ap-help { margin-left: 22px; margin-right: 22px; width: auto; }
+.cs-panel > .ap-help { margin-top: 14px !important; }
+
+/* ---------- 머리 ---------- */
+.cs-head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 20px 22px 18px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(var(--cs-rgb), 0.10) 0%, rgba(var(--cs-rgb), 0) 45%),
+    linear-gradient(180deg, #fcfdff 0%, #ffffff 100%);
+  border-bottom: 1px solid #f1f4f9;
+}
+.cs-head::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  background: linear-gradient(90deg, var(--cs-from) 0%, var(--cs-to) 40%, rgba(var(--cs-rgb), 0) 100%);
+}
+.cs-head-icon {
+  position: relative; overflow: hidden;
+  width: 46px; height: 46px; border-radius: 15px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--cs-from) 0%, var(--cs-to) 100%);
+  box-shadow: 0 12px 22px -12px rgba(var(--cs-rgb), 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.cs-head-icon::after { content: ''; position: absolute; inset: 0; background: linear-gradient(145deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 55%); }
+.cs-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cs-head-text strong { font-size: 19px; font-weight: 900; letter-spacing: -0.5px; color: #0f172a; }
+.cs-head-text span { font-size: 13px; font-weight: 600; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-head-stats { display: flex; gap: 8px; flex-shrink: 0; }
+.cs-stat {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
+  min-width: 72px; padding: 7px 12px; border-radius: 13px;
+  background: #ffffff; border: 1px solid #eef1f6;
+  box-shadow: 0 6px 14px -12px rgba(15, 23, 42, 0.5);
+}
+.cs-stat b { font-size: 17px; font-weight: 900; letter-spacing: -0.4px; color: #0f172a; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.cs-stat:first-child b { color: var(--cs-to); }
+.cs-stat small { font-size: 11px; font-weight: 700; color: #94a3b8; }
+
+/* ---------- 작성 카드 ---------- */
+.cs-composer {
+  margin: 18px 22px 16px;
+  border-radius: 18px;
+  border: 1px solid #e6ebf3;
+  background: #ffffff;
+  box-shadow: 0 14px 30px -26px rgba(15, 23, 42, 0.55);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.cs-composer:focus-within { border-color: rgba(var(--cs-rgb), 0.45); box-shadow: 0 0 0 4px rgba(var(--cs-rgb), 0.08), 0 18px 36px -28px rgba(var(--cs-rgb), 0.7); }
+.cs-composer.is-editing { border-color: rgba(245, 158, 11, 0.55); box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1); }
+
+.cs-composer-head {
+  display: flex; align-items: center; gap: 11px;
+  padding: 14px 16px;
+  background: linear-gradient(90deg, rgba(var(--cs-rgb), 0.06) 0%, rgba(var(--cs-rgb), 0) 70%);
+  border-bottom: 1px solid #f1f4f9;
+}
+.cs-composer-icon {
+  width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--cs-to); background: rgba(var(--cs-rgb), 0.1); border: 1px solid rgba(var(--cs-rgb), 0.18);
+}
+.cs-composer.is-editing .cs-composer-icon { color: #b45309; background: #fef3c7; border-color: #fde68a; }
+.cs-composer-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cs-composer-title strong { font-size: 15px; font-weight: 900; color: #1e293b; letter-spacing: -0.2px; }
+.cs-composer-title span { font-size: 12.5px; font-weight: 600; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-editing-pill {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  padding: 4px 10px; border-radius: 99px;
+  font-size: 12px; font-weight: 800; color: #b45309; background: #fffbeb; border: 1px solid #fde68a;
+}
+.cs-dot { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2); animation: csPulse 1.4s ease-in-out infinite; }
+@keyframes csPulse { 50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); } }
+
+.cs-composer-body { display: flex; flex-direction: column; gap: 14px; padding: 16px; }
+.cs-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.cs-field-label {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 800; color: #475569;
+}
+.cs-field-label em { margin-left: auto; font-style: normal; font-size: 12px; font-weight: 700; color: #a3aec0; font-variant-numeric: tabular-nums; }
+.cs-qa {
+  width: 20px; height: 20px; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 900; color: #ffffff;
+}
+.cs-qa.is-q { background: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%); }
+.cs-qa.is-a { background: linear-gradient(135deg, #34d399 0%, #059669 100%); }
+
+.cs-input, .cs-textarea {
+  width: 100%; box-sizing: border-box;
+  border: 1.5px solid #e6ebf3; border-radius: 13px; background: #f8fafc;
+  font-family: inherit; font-size: 15px; font-weight: 600; color: #0f172a;
+  outline: none;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+.cs-input { height: 48px; padding: 0 15px; font-size: 15.5px; font-weight: 700; }
+.cs-textarea { min-height: 130px; padding: 13px 15px; line-height: 1.7; resize: vertical; }
+.cs-input::placeholder, .cs-textarea::placeholder { color: #b4bfcf; font-weight: 500; }
+.cs-input:hover, .cs-textarea:hover { border-color: #d7deea; }
+.cs-input:focus, .cs-textarea:focus { background: #ffffff; border-color: rgba(var(--cs-rgb), 0.55); box-shadow: 0 0 0 4px rgba(var(--cs-rgb), 0.1); }
+
+.cs-composer-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px;
+  background: #fafbfd; border-top: 1px solid #f1f4f9;
+}
+.cs-foot-hint { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; font-weight: 600; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-foot-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.cs-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 42px; padding: 0 18px; border-radius: 12px; border: 1px solid transparent;
+  font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer; white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease, background 0.2s ease;
+}
+.cs-btn.is-primary {
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--cs-from) 0%, var(--cs-to) 100%);
+  box-shadow: 0 12px 22px -12px rgba(var(--cs-rgb), 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.cs-btn.is-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 16px 26px -12px rgba(var(--cs-rgb), 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+.cs-btn.is-primary:disabled { opacity: 1; cursor: not-allowed; color: #a3aec0; background: #eef1f6; box-shadow: none; }
+.cs-btn.is-ghost { color: #475569; background: #ffffff; border-color: #e2e8f0; }
+.cs-btn.is-ghost:hover { background: #f8fafc; }
+.cs-btn:active:not(:disabled) { transform: scale(0.97); }
+
+/* ---------- 목록 ---------- */
+.cs-panel .ap-table-wrap { border-radius: 16px; border: 1px solid #eef1f6; }
+.cs-q-cell { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.cs-q-no {
+  flex-shrink: 0; padding: 2px 8px; border-radius: 7px;
+  font-size: 11.5px; font-weight: 900; color: #4f46e5; background: #eef2ff; border: 1px solid #e0e7ff;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 모바일 ---------- */
+@media (max-width: 768px) {
+  .ap-panel.cs-panel { border-radius: 18px; padding: 0 0 14px; }
+  .cs-head { flex-wrap: wrap; padding: 16px 14px 14px; gap: 12px; }
+  .cs-head-icon { width: 40px; height: 40px; border-radius: 13px; }
+  .cs-head-text strong { font-size: 17px; }
+  .cs-head-text span { white-space: normal; }
+  .cs-head-stats { width: 100%; }
+  .cs-stat { flex: 1; align-items: flex-start; }
+  .cs-composer { margin: 14px 12px 12px; }
+  .ap-panel.cs-panel > .ap-toolbar, .ap-panel.cs-panel > .ap-table-wrap, .ap-panel.cs-panel > .ap-help { margin-left: 12px; margin-right: 12px; }
+  .cs-composer-body { padding: 14px 12px; }
+  .cs-composer-foot { flex-direction: column; align-items: stretch; padding: 12px; }
+  .cs-foot-hint { white-space: normal; }
+  .cs-foot-actions .cs-btn { flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .cs-dot { animation: none; } }

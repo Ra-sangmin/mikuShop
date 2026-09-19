@@ -149,6 +149,7 @@ model Order {
   registeredAt        DateTime       @default(now()) @map("registered_at")
   receivedAt          DateTime?      @map("received_at")
   shippedAt           DateTime?      @map("shipped_at")
+  statusChangedAt     DateTime?      @map("status_changed_at") // 진행 상태가 마지막으로 바뀐 시각 (주문 관리 '처리 중 전체' 정렬용)
   auctionEndDate      DateTime?      @map("auction_end_date")       // 🌟 1. 경매 종료 시간
 
   // 6. 상태 관리

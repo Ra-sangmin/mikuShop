@@ -9,6 +9,12 @@ import { useEffect, useRef, useState } from 'react';
  * - 왼쪽 손잡이는 "바로 앞 열"의 너비를 조절합니다. (orders 와 동일한 규칙)
  * - 조절한 너비는 localStorage 에 저장되어 다음 방문에도 유지됩니다.
  *
+ * - (선택) mode: 'cascade' — 경계선을 끌면 표 전체 너비를 유지한 채 이웃 열부터 차례로 줄입니다.
+ *   · 오른쪽으로 끌면: 바로 오른쪽 열 → 그다음 열 … 순서로 최소 너비까지 줄이고,
+ *     그래도 모자라면 getTrailingRoom() 이 알려준 표 끝의 여유 폭(예: 관리 열)을 씁니다.
+ *   · 왼쪽으로 끌면: 끄는 열 → 그 왼쪽 열 … 순서로 최소 너비까지 줄이고, 비는 폭은 바로 오른쪽 열이 가져갑니다.
+ *   · 모두 최소 너비가 되면 더 이상 움직이지 않습니다.
+ *
  * ⚠️ table-layout: fixed 는 표에 확정된 너비가 있어야 동작하므로,
  *    반환값 totalTableWidth 를 <table style={{ width: totalTableWidth }}> 로 꼭 넣어주세요.
  */
@@ -19,12 +25,26 @@ export function useResizableColumns<T extends Record<string, number>>(options: {
   visibleColumns?: readonly string[];
   /** 열이 이보다 좁아지지 않도록 하는 최소 너비(px). */
   minWidth?: number;
+  /** (선택) 열마다 다른 최소 너비(px). 생략하면 minWidth 를 씁니다. */
+  getMinWidth?: (key: string) => number;
+  /** 'single'(기본): 끄는 열만 늘고 줄어듭니다. 'cascade': 위 설명 참고. */
+  mode?: 'single' | 'cascade';
+  /** cascade 모드: 마지막 열 뒤에 남아 있는, 열들이 더 가져다 쓸 수 있는 폭(px). 생략하면 0. */
+  getTrailingRoom?: (widths: Record<string, number>) => number;
 }) {
-  const { storageKey, defaultWidths, minWidth = 50 } = options;
+  const { storageKey, defaultWidths, minWidth = 50, mode = 'single' } = options;
   const visibleColumns: readonly string[] = options.visibleColumns ?? Object.keys(defaultWidths);
 
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(defaultWidths);
-  const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+  const resizingRef = useRef<{
+    key: string; startX: number; startWidth: number;
+    /** cascade 모드: 드래그 시작 시점의 전체 너비와 표 끝 여유 폭 */
+    startWidths?: Record<string, number>; trailingRoom?: number;
+  } | null>(null);
+  const getMinWidthRef = useRef(options.getMinWidth);
+  getMinWidthRef.current = options.getMinWidth;
+  const minOf = (key: string) =>
+    getMinWidthRef.current ? Math.max(minWidth, getMinWidthRef.current(key)) : minWidth;
 
   // 최신 값을 이벤트 핸들러에서 참조하기 위한 보관용 ref
   const visibleColumnsRef = useRef(visibleColumns);
@@ -69,9 +89,49 @@ export function useResizableColumns<T extends Record<string, number>>(options: {
 
   const onMouseMove = (e: MouseEvent) => {
     if (!resizingRef.current) return;
-    const { key, startX, startWidth } = resizingRef.current;
+    const { key, startX, startWidth, startWidths, trailingRoom = 0 } = resizingRef.current;
     const deltaX = e.pageX - startX;
-    setColumnWidths(prev => ({ ...prev, [key]: Math.max(minWidth, startWidth + deltaX) }));
+
+    if (startWidths) {
+      setColumnWidths(prev => ({ ...prev, ...cascadeResize(key, deltaX, startWidths, trailingRoom) }));
+      return;
+    }
+    // 이미 최소보다 좁은 상태(저장된 너비 등)라면 더 줄이지만 않도록 시작 너비까지는 허용합니다.
+    const colMin = minOf(key);
+    setColumnWidths(prev => ({ ...prev, [key]: Math.max(Math.min(colMin, startWidth), startWidth + deltaX) }));
+  };
+
+  /** 경계선(key 열의 오른쪽 선)을 deltaX 만큼 옮겼을 때의 새 너비들 */
+  const cascadeResize = (key: string, deltaX: number, start: Record<string, number>, trailingRoom: number) => {
+    const cols = visibleColumnsRef.current;
+    const b = cols.indexOf(key);
+    const next: Record<string, number> = {};
+    for (const c of cols) next[c] = Number(start[c]) || 0;
+    const room = (c: string) => Math.max(0, next[c] - minOf(c));
+
+    if (deltaX > 0) {
+      // 오른쪽으로: 오른쪽 열부터 차례로 줄이고, 마지막엔 표 끝 여유 폭을 씁니다.
+      let need = deltaX;
+      let gained = 0;
+      for (let j = b + 1; j < cols.length && need > 0; j++) {
+        const take = Math.min(room(cols[j]), need);
+        next[cols[j]] -= take; need -= take; gained += take;
+      }
+      const tail = Math.min(Math.max(0, trailingRoom), need);
+      gained += tail;
+      next[key] += gained;
+    } else if (deltaX < 0) {
+      // 왼쪽으로: 끄는 열부터 왼쪽으로 차례로 줄이고, 비는 폭은 바로 오른쪽 열이 가져갑니다.
+      // (오른쪽 열이 없으면 표가 줄어들고 그만큼 표 끝 여유 폭이 늘어납니다)
+      let need = -deltaX;
+      let freed = 0;
+      for (let j = b; j >= 0 && need > 0; j--) {
+        const take = Math.min(room(cols[j]), need);
+        next[cols[j]] -= take; need -= take; freed += take;
+      }
+      if (b + 1 < cols.length) next[cols[b + 1]] += freed;
+    }
+    return next;
   };
 
   const onMouseUp = () => {
@@ -96,7 +156,13 @@ export function useResizableColumns<T extends Record<string, number>>(options: {
     const startWidth = Number(widthsRef.current[targetKey]);
     if (!Number.isFinite(startWidth)) return;
 
-    resizingRef.current = { key: targetKey, startX: e.pageX, startWidth };
+    if (mode === 'cascade') {
+      const startWidths = { ...widthsRef.current };
+      const trailingRoom = options.getTrailingRoom ? options.getTrailingRoom(startWidths) : 0;
+      resizingRef.current = { key: targetKey, startX: e.pageX, startWidth, startWidths, trailingRoom };
+    } else {
+      resizingRef.current = { key: targetKey, startX: e.pageX, startWidth };
+    }
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
     document.body.style.cursor = 'col-resize';
@@ -114,7 +180,8 @@ export function useResizableColumns<T extends Record<string, number>>(options: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { columnWidths, totalTableWidth, onMouseDown };
+  /** 화면 폭에 맞추는 등 코드에서 너비를 직접 바꿀 때 사용합니다. (저장은 하지 않습니다) */
+  return { columnWidths, totalTableWidth, onMouseDown, setColumnWidths };
 }
 
 export type ResizableColumn = {

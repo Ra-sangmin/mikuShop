@@ -1,0 +1,319 @@
+/* =====================================================================
+   💳 결제 결과 화면 공통 스타일 (payment/success, payment/fail)
+   - 프로젝트 규칙상 color-mix() 는 쓰지 않고 rgba(var(--x-rgb), a) 형태로 씁니다.
+   ===================================================================== */
+
+.pay-page {
+  --pay-rose-from: #e3868a;
+  --pay-rose-to: #c0606a;
+  --pay-rose-rgb: 210, 115, 119;
+  --pay-green-rgb: 16, 185, 129;
+  --pay-red-rgb: 239, 68, 68;
+  --pay-ink: #0f172a;
+  --pay-sub: #64748b;
+
+  max-width: 620px;
+  margin: 56px auto 96px;
+  padding: 0 20px;
+}
+
+/* ---------- 카드 셸 ---------- */
+.pay-card {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #eef2f7;
+  border-radius: 30px;
+  padding: 52px 44px 44px;
+  box-shadow: 0 30px 70px -40px rgba(15, 23, 42, 0.28), 0 2px 6px rgba(15, 23, 42, 0.03);
+  overflow: hidden;
+  animation: payRise 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* 상단 브랜드 헤어라인 */
+.pay-card::before {
+  content: '';
+  position: absolute; inset: 0 0 auto 0; height: 4px;
+  background: linear-gradient(90deg, var(--pay-rose-from) 0%, var(--pay-rose-to) 55%, #f2c4c6 100%);
+}
+/* 은은한 배경 글로우 */
+.pay-card::after {
+  content: '';
+  position: absolute; top: -140px; right: -120px;
+  width: 300px; height: 300px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--pay-rose-rgb), 0.12) 0%, rgba(var(--pay-rose-rgb), 0) 70%);
+  pointer-events: none;
+}
+.pay-body { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; text-align: center; }
+
+/* ---------- 상태 아이콘 ---------- */
+.pay-mark {
+  position: relative;
+  width: 92px; height: 92px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 26px;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--pay-rose-from) 0%, var(--pay-rose-to) 100%);
+  box-shadow: 0 16px 34px -14px rgba(var(--pay-rose-rgb), 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.pay-mark.is-success {
+  background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+  box-shadow: 0 16px 34px -14px rgba(var(--pay-green-rgb), 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.pay-mark.is-error {
+  background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
+  box-shadow: 0 16px 34px -14px rgba(var(--pay-red-rgb), 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+/* 퍼져나가는 링 */
+.pay-mark .pay-ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 2px solid rgba(var(--pay-green-rgb), 0.45);
+  animation: payRing 2.4s ease-out infinite;
+}
+.pay-mark .pay-ring:nth-child(2) { animation-delay: 1.2s; }
+.pay-mark.is-error .pay-ring { border-color: rgba(var(--pay-red-rgb), 0.4); }
+
+/* 로딩 링 (conic + mask) */
+.pay-loader {
+  position: relative;
+  width: 92px; height: 92px; margin-bottom: 26px;
+  display: flex; align-items: center; justify-content: center;
+}
+.pay-loader-track {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(var(--pay-rose-rgb), 0) 0%, rgba(var(--pay-rose-rgb), 0.15) 40%, var(--pay-rose-to) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  animation: paySpin 1.1s linear infinite;
+}
+.pay-loader-core {
+  width: 62px; height: 62px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--pay-rose-to);
+  background: rgba(var(--pay-rose-rgb), 0.08);
+}
+
+/* ---------- 타이포 ---------- */
+.pay-eyebrow {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 900; letter-spacing: 0.14em;
+  color: var(--pay-rose-to); text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.pay-eyebrow.is-success { color: #059669; }
+.pay-eyebrow.is-error { color: #dc2626; }
+.pay-title {
+  margin: 0 0 10px;
+  font-size: 27px; font-weight: 900; line-height: 1.38;
+  letter-spacing: -0.7px; color: var(--pay-ink); word-break: keep-all;
+}
+.pay-desc {
+  margin: 0 0 30px;
+  font-size: 15px; line-height: 1.7; color: var(--pay-sub); word-break: keep-all;
+}
+
+/* ---------- 진행 단계 (로딩) ---------- */
+.pay-steps { display: flex; align-items: flex-start; gap: 0; width: 100%; max-width: 380px; margin: 4px 0 30px; }
+.pay-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; position: relative; }
+.pay-step + .pay-step::before {
+  content: ''; position: absolute; top: 13px; left: -50%; width: 100%; height: 2px;
+  background: #e8edf4;
+}
+.pay-step.is-done + .pay-step::before,
+.pay-step.is-active + .pay-step::before { background: linear-gradient(90deg, var(--pay-rose-to) 0%, #e8edf4 100%); }
+.pay-step-dot {
+  position: relative; z-index: 1;
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 900;
+  background: #f1f5f9; color: #94a3b8; border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px #e8edf4;
+}
+.pay-step.is-done .pay-step-dot {
+  background: linear-gradient(135deg, var(--pay-rose-from) 0%, var(--pay-rose-to) 100%);
+  color: #fff; box-shadow: 0 0 0 1px transparent;
+}
+.pay-step.is-active .pay-step-dot {
+  background: linear-gradient(135deg, var(--pay-rose-from) 0%, var(--pay-rose-to) 100%);
+  color: #fff; box-shadow: 0 0 0 1px transparent;
+  animation: payPulse 1.4s ease-in-out infinite;
+}
+.pay-step-label { font-size: 12px; font-weight: 700; color: #94a3b8; letter-spacing: -0.2px; }
+.pay-step.is-done .pay-step-label, .pay-step.is-active .pay-step-label { color: #475569; }
+
+/* ---------- 영수증 (성공) ---------- */
+.pay-receipt {
+  position: relative;
+  width: 100%;
+  border-radius: 24px;
+  padding: 26px 26px 24px;
+  margin-bottom: 18px;
+  text-align: left;
+  color: #e2e8f0;
+  background: linear-gradient(160deg, #1b2434 0%, #0d131e 100%);
+  box-shadow: 0 22px 44px -26px rgba(13, 19, 30, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+/* 미세한 도트 패턴 */
+.pay-receipt::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 14px 14px;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 62%);
+  mask-image: linear-gradient(180deg, #000 0%, transparent 62%);
+  pointer-events: none;
+}
+.pay-receipt > * { position: relative; z-index: 1; }
+
+.pay-receipt-head {
+  display: flex; align-items: center; gap: 8px;
+  padding-bottom: 16px; margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  font-size: 12px; font-weight: 800; letter-spacing: 0.1em; color: #94a3b8;
+}
+.pay-receipt-head .pay-receipt-chip {
+  margin-left: auto; letter-spacing: 0;
+  font-size: 11px; font-weight: 800; color: #6ee7b7;
+  background: rgba(var(--pay-green-rgb), 0.14);
+  border: 1px solid rgba(var(--pay-green-rgb), 0.3);
+  border-radius: 999px; padding: 3px 10px;
+}
+.pay-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 13px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+.pay-row:last-of-type { border-bottom: 0; }
+.pay-row-label { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: #8f9cb0; flex-shrink: 0; }
+.pay-row-label svg { color: #64748b; }
+.pay-row-value { font-size: 14.5px; font-weight: 700; color: #f1f5f9; text-align: right; word-break: break-all; }
+.pay-row-value.is-mono { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12.5px; font-weight: 600; color: #94a3b8; }
+
+/* 절취선 + 좌우 노치 */
+.pay-perf { position: relative; height: 1px; margin: 16px -26px; border-top: 1px dashed rgba(255, 255, 255, 0.22); }
+.pay-perf::before, .pay-perf::after {
+  content: ''; position: absolute; top: -11px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #ffffff;
+}
+.pay-perf::before { left: -11px; }
+.pay-perf::after { right: -11px; }
+
+.pay-total {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 14px;
+  padding-top: 4px;
+}
+.pay-total-label { font-size: 13px; font-weight: 700; color: #8f9cb0; }
+.pay-total-value {
+  display: inline-flex; align-items: baseline; gap: 8px;
+  font-size: 34px; font-weight: 900; letter-spacing: -1px; color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+.pay-total-value .pay-krw {
+  font-size: 11px; font-weight: 900; letter-spacing: 0.08em;
+  color: #f8e2a0; background: rgba(248, 226, 160, 0.12);
+  border: 1px solid rgba(248, 226, 160, 0.3);
+  border-radius: 999px; padding: 3px 9px;
+  transform: translateY(-6px);
+}
+
+/* 충전 후 잔액 안내 */
+.pay-balance {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px; margin-bottom: 28px;
+  border-radius: 16px; text-align: left;
+  background: rgba(var(--pay-green-rgb), 0.07);
+  border: 1px solid rgba(var(--pay-green-rgb), 0.22);
+}
+.pay-balance-icon {
+  width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+}
+.pay-balance-text { font-size: 13.5px; font-weight: 600; color: #047857; line-height: 1.5; }
+.pay-balance-text strong { font-weight: 900; font-variant-numeric: tabular-nums; }
+
+/* ---------- 오류 패널 ---------- */
+.pay-error-panel {
+  width: 100%; text-align: left;
+  border-radius: 20px; padding: 20px 22px; margin-bottom: 18px;
+  background: #fffbfb;
+  border: 1px solid rgba(var(--pay-red-rgb), 0.18);
+}
+.pay-error-eyebrow {
+  display: block; font-size: 10.5px; font-weight: 900; letter-spacing: 0.12em;
+  color: #f87171; margin-bottom: 7px;
+}
+.pay-error-msg { margin: 0 0 14px; font-size: 15.5px; font-weight: 800; color: #b91c1c; line-height: 1.6; word-break: keep-all; }
+.pay-error-code {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px; font-weight: 700; color: #64748b;
+  background: #ffffff; border: 1px solid #e9d5d5;
+  border-radius: 8px; padding: 5px 10px;
+}
+
+/* 자주 발생하는 원인 */
+.pay-reasons { width: 100%; text-align: left; margin-bottom: 28px; }
+.pay-reasons-title { display: block; font-size: 12px; font-weight: 800; color: #94a3b8; letter-spacing: 0.04em; margin-bottom: 10px; }
+.pay-reason {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 11px 14px; border-radius: 13px;
+  background: #f8fafc; border: 1px solid #eef2f7;
+  font-size: 13.5px; font-weight: 600; color: #475569; line-height: 1.55;
+}
+.pay-reason + .pay-reason { margin-top: 8px; }
+.pay-reason svg { flex-shrink: 0; margin-top: 2px; color: #cbd5e1; }
+
+/* ---------- 버튼 ---------- */
+.pay-actions { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.pay-btn {
+  width: 100%; padding: 17px 20px; border-radius: 16px;
+  font-size: 15.5px; font-weight: 800; letter-spacing: -0.3px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  cursor: pointer; text-decoration: none;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.pay-btn.is-primary {
+  color: #fff; border: none;
+  background: linear-gradient(135deg, var(--pay-rose-from) 0%, var(--pay-rose-to) 100%);
+  box-shadow: 0 12px 26px -12px rgba(var(--pay-rose-rgb), 0.85);
+}
+.pay-btn.is-primary:hover { transform: translateY(-2px); box-shadow: 0 18px 32px -14px rgba(var(--pay-rose-rgb), 0.9); }
+.pay-btn.is-ghost {
+  background: #ffffff; color: #475569; border: 1px solid #e2e8f0;
+}
+.pay-btn.is-ghost:hover { background: #f8fafc; color: var(--pay-ink); border-color: #cbd5e1; }
+
+/* ---------- 하단 안전결제 표시 ---------- */
+.pay-secure {
+  display: inline-flex; align-items: center; gap: 7px;
+  margin-top: 22px; font-size: 12px; font-weight: 600; color: #94a3b8;
+}
+.pay-secure svg { color: #cbd5e1; }
+
+/* ---------- 애니메이션 ---------- */
+@keyframes payRise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes paySpin { to { transform: rotate(360deg); } }
+@keyframes payRing { 0% { transform: scale(1); opacity: 0.55; } 100% { transform: scale(1.55); opacity: 0; } }
+@keyframes payPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(var(--pay-rose-rgb), 0.45); } 50% { box-shadow: 0 0 0 7px rgba(var(--pay-rose-rgb), 0); } }
+@keyframes payFade { from { opacity: 0; } to { opacity: 1; } }
+.pay-fade { animation: payFade 0.45s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pay-card, .pay-fade { animation: none; }
+  .pay-mark .pay-ring, .pay-step.is-active .pay-step-dot { animation: none; }
+}
+
+/* ---------- 모바일 ---------- */
+@media (max-width: 640px) {
+  .pay-page { margin: 28px auto 64px; padding: 0 14px; }
+  .pay-card { padding: 40px 22px 30px; border-radius: 24px; }
+  .pay-title { font-size: 23px; }
+  .pay-desc { font-size: 14px; margin-bottom: 26px; }
+  .pay-receipt { padding: 22px 20px 20px; border-radius: 20px; }
+  .pay-perf { margin-left: -20px; margin-right: -20px; }
+  .pay-total-value { font-size: 29px; }
+  .pay-row { flex-wrap: wrap; gap: 4px; }
+  .pay-row-value { text-align: left; }
+  .pay-step-label { font-size: 11px; }
+}

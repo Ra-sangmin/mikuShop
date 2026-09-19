@@ -2,19 +2,40 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import GuideLayout from '@/app/components/GuideLayout'; 
-import { CheckCircle, XCircle, CircleNotch, Receipt } from "@phosphor-icons/react";
+import GuideLayout from '@/app/components/GuideLayout';
+import '../payment-premium.css';
+import {
+  CheckCircle, WarningOctagon, ShieldCheck, Receipt, Package, Hash,
+  Clock, CreditCard, Wallet, LockKey, ArrowRight, ArrowCounterClockwise, Headset,
+} from '@phosphor-icons/react';
+
+interface ConfirmResult {
+  approvedAt?: string;
+  method?: string;
+  balance?: number;
+}
+
+/** 토스에서 내려주는 승인 일시(ISO)를 "2026. 09. 18. 14:32" 형태로 */
+function formatApprovedAt(value?: string) {
+  const d = value ? new Date(value) : new Date();
+  if (Number.isNaN(d.getTime())) return '-';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}. ${p(d.getMonth() + 1)}. ${p(d.getDate())}. ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 function SuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  
+
   const paymentKey = searchParams.get('paymentKey');
   const orderId = searchParams.get('orderId');
   const amount = searchParams.get('amount');
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  const [result, setResult] = useState<ConfirmResult>({});
+  // 🌟 로딩 화면의 진행 단계 (0: 결제 요청 완료 → 1: 승인 확인 중 → 2: 충전 반영)
+  const [step, setStep] = useState(1);
 
   useEffect(() => {
     const confirmPayment = async () => {
@@ -41,12 +62,19 @@ function SuccessContent() {
         const data = await res.json();
 
         if (res.ok && data.success) {
-          setStatus('success');
+          setStep(2);
+          setResult({
+            approvedAt: data?.data?.approvedAt,
+            method: data?.data?.method,
+            balance: data?.dbResult?.balance,
+          });
+          // 마지막 단계가 채워지는 것을 잠깐 보여준 뒤 결과로 넘어갑니다.
+          setTimeout(() => setStatus('success'), 450);
         } else {
           setStatus('error');
           setErrorMessage(data.message || '결제 승인에 실패했습니다.');
         }
-      } catch (err) {
+      } catch {
         setStatus('error');
         setErrorMessage('서버와 통신 중 문제가 발생했습니다.');
       }
@@ -57,88 +85,144 @@ function SuccessContent() {
     return () => clearTimeout(timer);
   }, [paymentKey, orderId, amount]);
 
+  const amountNum = parseInt(amount || '0', 10);
+
   return (
-    <div style={styles.container}>
-      <PageStyles />
-      <div className="premium-card fade-in-up">
-        
-        {/* =====================================
-            1. 로딩 상태 UI 
-        ===================================== */}
-        {status === 'loading' && (
-          <div style={styles.stateWrapper}>
-            <div style={styles.iconCircle('rgba(210, 115, 119, 0.1)')}>
-              <CircleNotch size={48} color="#d27377" weight="bold" className="spin-anim" />
-            </div>
-            <h2 style={styles.title}>결제를 안전하게<br/>처리하고 있습니다</h2>
-            <p style={styles.desc}>창을 닫거나 새로고침하지 마시고<br/>잠시만 기다려주세요.</p>
-          </div>
-        )}
+    <div className="pay-page">
+      <div className="pay-card">
+        <div className="pay-body">
 
-        {/* =====================================
-            2. 성공 상태 UI (프리미엄 영수증 폼)
-        ===================================== */}
-        {status === 'success' && (
-          <div style={styles.stateWrapper} className="fade-in">
-            <div style={styles.iconCircle('rgba(16, 185, 129, 0.1)')}>
-              <CheckCircle size={56} color="#10b981" weight="fill" className="pop-anim" />
-            </div>
-            <h2 style={styles.title}>결제가 성공적으로<br/>완료되었습니다!</h2>
-            <p style={styles.desc}>미쿠짱머니 충전이 즉시 반영되었습니다.</p>
+          {/* ===== 1. 승인 처리 중 ===== */}
+          {status === 'loading' && (
+            <>
+              <div className="pay-loader" aria-hidden="true">
+                <span className="pay-loader-track" />
+                <span className="pay-loader-core"><ShieldCheck size={30} weight="duotone" /></span>
+              </div>
+              <span className="pay-eyebrow">PAYMENT IN PROGRESS</span>
+              <h2 className="pay-title">결제를 안전하게<br />처리하고 있습니다</h2>
+              <p className="pay-desc">창을 닫거나 새로고침하지 마시고<br />잠시만 기다려 주세요.</p>
 
-            {/* 영수증 박스 */}
-            <div style={styles.receiptBox}>
-              <div style={styles.receiptHeader}>
-                <Receipt size={20} color="#64748b" weight="duotone" />
-                <span>결제 상세 내역</span>
+              <div className="pay-steps" role="list">
+                {['결제 요청', '승인 확인', '충전 반영'].map((label, i) => (
+                  <div
+                    key={label}
+                    role="listitem"
+                    className={`pay-step ${i < step ? 'is-done' : i === step ? 'is-active' : ''}`}
+                  >
+                    <span className="pay-step-dot">
+                      {i < step ? <CheckCircle size={15} weight="fill" /> : i + 1}
+                    </span>
+                    <span className="pay-step-label">{label}</span>
+                  </div>
+                ))}
               </div>
-              
-              <div style={styles.receiptRow}>
-                <span style={styles.receiptLabel}>주문 항목</span>
-                <span style={styles.receiptValue}>미쿠짱머니 충전</span>
-              </div>
-              <div style={styles.receiptRow}>
-                <span style={styles.receiptLabel}>주문 번호</span>
-                <span style={styles.receiptValueSmall}>{orderId}</span>
-              </div>
-              
-              <div style={styles.receiptDivider}></div>
-              
-              <div style={styles.receiptRow}>
-                <span style={styles.receiptLabelTotal}>최종 결제 금액</span>
-                <span style={styles.receiptTotal}>{parseInt(amount || '0').toLocaleString()}원</span>
-              </div>
-            </div>
 
-            <button 
-              className="premium-btn primary-btn"
-              onClick={() => router.push('/mypage')}
-            >
-              마이페이지로 이동
-            </button>
-          </div>
-        )}
+              <span className="pay-secure"><LockKey size={14} weight="fill" /> 토스페이먼츠 안전 결제로 보호되고 있습니다</span>
+            </>
+          )}
 
-        {/* =====================================
-            3. 실패/에러 상태 UI
-        ===================================== */}
-        {status === 'error' && (
-          <div style={styles.stateWrapper} className="fade-in">
-            <div style={styles.iconCircle('rgba(239, 68, 68, 0.1)')}>
-              <XCircle size={56} color="#ef4444" weight="fill" className="shake-anim" />
+          {/* ===== 2. 결제 완료 (영수증) ===== */}
+          {status === 'success' && (
+            <div className="pay-fade" style={{ display: 'contents' }}>
+              <div className="pay-mark is-success">
+                <span className="pay-ring" aria-hidden="true" />
+                <span className="pay-ring" aria-hidden="true" />
+                <CheckCircle size={46} weight="fill" />
+              </div>
+              <span className="pay-eyebrow is-success">PAYMENT COMPLETE</span>
+              <h2 className="pay-title">결제가 정상적으로<br />완료되었습니다</h2>
+              <p className="pay-desc">미쿠짱머니 충전이 계정에 즉시 반영되었습니다.</p>
+
+              {/* 영수증 */}
+              <div className="pay-receipt">
+                <div className="pay-receipt-head">
+                  <Receipt size={16} weight="duotone" />
+                  RECEIPT
+                  <span className="pay-receipt-chip">승인 완료</span>
+                </div>
+
+                <div className="pay-row">
+                  <span className="pay-row-label"><Package size={15} weight="duotone" /> 주문 항목</span>
+                  <span className="pay-row-value">미쿠짱머니 충전</span>
+                </div>
+                <div className="pay-row">
+                  <span className="pay-row-label"><CreditCard size={15} weight="duotone" /> 결제 수단</span>
+                  <span className="pay-row-value">{result.method || '신용·체크카드'}</span>
+                </div>
+                <div className="pay-row">
+                  <span className="pay-row-label"><Clock size={15} weight="duotone" /> 승인 일시</span>
+                  <span className="pay-row-value">{formatApprovedAt(result.approvedAt)}</span>
+                </div>
+                <div className="pay-row">
+                  <span className="pay-row-label"><Hash size={15} weight="duotone" /> 주문 번호</span>
+                  <span className="pay-row-value is-mono">{orderId}</span>
+                </div>
+
+                <div className="pay-perf" aria-hidden="true" />
+
+                <div className="pay-total">
+                  <span className="pay-total-label">최종 결제 금액</span>
+                  <strong className="pay-total-value" translate="no">
+                    {amountNum.toLocaleString()}
+                    <span className="pay-krw">KRW</span>
+                  </strong>
+                </div>
+              </div>
+
+              {typeof result.balance === 'number' && (
+                <div className="pay-balance">
+                  <span className="pay-balance-icon" aria-hidden="true"><Wallet size={17} weight="duotone" /></span>
+                  <span className="pay-balance-text">
+                    충전 후 보유 머니 <strong translate="no">{result.balance.toLocaleString()}원</strong>
+                  </span>
+                </div>
+              )}
+
+              <div className="pay-actions">
+                <button type="button" className="pay-btn is-primary" onClick={() => router.push('/mypage')}>
+                  마이페이지로 이동 <ArrowRight size={16} weight="bold" />
+                </button>
+                <button type="button" className="pay-btn is-ghost" onClick={() => router.push('/mypage/money/history')}>
+                  <Receipt size={16} weight="bold" /> 머니 이용 내역 보기
+                </button>
+              </div>
+
+              <span className="pay-secure"><LockKey size={14} weight="fill" /> 토스페이먼츠 안전 결제</span>
             </div>
-            <h2 style={styles.title}>결제 승인 과정에서<br/>문제가 발생했습니다</h2>
-            <p style={styles.descError}>{errorMessage}</p>
-            
-            <button 
-              className="premium-btn secondary-btn"
-              onClick={() => router.push('/mypage/money/charge')}
-            >
-              다시 시도하기
-            </button>
-          </div>
-        )}
-        
+          )}
+
+          {/* ===== 3. 승인 실패 ===== */}
+          {status === 'error' && (
+            <div className="pay-fade" style={{ display: 'contents' }}>
+              <div className="pay-mark is-error">
+                <span className="pay-ring" aria-hidden="true" />
+                <WarningOctagon size={44} weight="fill" />
+              </div>
+              <span className="pay-eyebrow is-error">PAYMENT FAILED</span>
+              <h2 className="pay-title">결제 승인 과정에서<br />문제가 발생했습니다</h2>
+              <p className="pay-desc">결제가 완료되지 않았습니다. 아래 사유를 확인해 주세요.</p>
+
+              <div className="pay-error-panel">
+                <span className="pay-error-eyebrow">ERROR MESSAGE</span>
+                <p className="pay-error-msg">{errorMessage}</p>
+                {orderId && <span className="pay-error-code"><Hash size={12} weight="bold" /> {orderId}</span>}
+              </div>
+
+              <div className="pay-actions">
+                <button type="button" className="pay-btn is-primary" onClick={() => router.push('/mypage/money/charge')}>
+                  <ArrowCounterClockwise size={16} weight="bold" /> 다시 시도하기
+                </button>
+                <button type="button" className="pay-btn is-ghost" onClick={() => router.push('/inquiry/kakaotalk')}>
+                  <Headset size={16} weight="bold" /> 고객센터 문의하기
+                </button>
+              </div>
+
+              <span className="pay-secure"><LockKey size={14} weight="fill" /> 결제가 승인되지 않은 경우 금액은 청구되지 않습니다</span>
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );
@@ -147,205 +231,21 @@ function SuccessContent() {
 export default function PaymentSuccessPage() {
   return (
     <GuideLayout title="결제 처리" type="money">
-      <Suspense fallback={<div style={{ textAlign: 'center', padding: '100px', fontSize: '20px', fontWeight: 'bold', color: '#64748b' }}>페이지를 불러오는 중입니다...</div>}>
+      <Suspense fallback={
+        <div className="pay-page">
+          <div className="pay-card">
+            <div className="pay-body">
+              <div className="pay-loader" aria-hidden="true">
+                <span className="pay-loader-track" />
+                <span className="pay-loader-core"><ShieldCheck size={30} weight="duotone" /></span>
+              </div>
+              <h2 className="pay-title">결제 정보를 불러오는 중입니다</h2>
+            </div>
+          </div>
+        </div>
+      }>
         <SuccessContent />
       </Suspense>
     </GuideLayout>
-  );
-}
-
-// ==========================================
-// 🌟 인라인 스타일 객체
-// ==========================================
-const styles: Record<string, any> = {
-  container: {
-    maxWidth: '540px',
-    margin: '80px auto',
-    padding: '0 20px',
-    fontFamily: 'Pretendard, "Noto Sans KR", sans-serif',
-  },
-  stateWrapper: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-  },
-  iconCircle: (bgColor: string) => ({
-    width: '100px',
-    height: '100px',
-    backgroundColor: bgColor,
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: '28px',
-  }),
-  title: {
-    fontSize: '28px',
-    fontWeight: '900',
-    color: '#0f172a',
-    lineHeight: '1.4',
-    marginBottom: '12px',
-    letterSpacing: '-0.5px',
-  },
-  desc: {
-    color: '#64748b',
-    fontSize: '16px',
-    lineHeight: '1.6',
-    marginBottom: '32px',
-  },
-  descError: {
-    color: '#ef4444',
-    fontSize: '15px',
-    fontWeight: '600',
-    backgroundColor: '#fef2f2',
-    padding: '12px 20px',
-    borderRadius: '12px',
-    marginBottom: '32px',
-  },
-  receiptBox: {
-    width: '100%',
-    backgroundColor: '#f8fafc',
-    borderRadius: '24px',
-    padding: '28px',
-    border: '1px solid #e2e8f0',
-    marginBottom: '36px',
-    textAlign: 'left',
-  },
-  receiptHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    fontSize: '14px',
-    fontWeight: '800',
-    color: '#475569',
-    marginBottom: '20px',
-    borderBottom: '2px solid #e2e8f0',
-    paddingBottom: '16px',
-  },
-  receiptRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '16px',
-  },
-  receiptLabel: {
-    fontSize: '15px',
-    color: '#64748b',
-    fontWeight: '600',
-  },
-  receiptValue: {
-    fontSize: '16px',
-    color: '#0f172a',
-    fontWeight: '700',
-  },
-  receiptValueSmall: {
-    fontSize: '13px',
-    color: '#94a3b8',
-    fontFamily: 'monospace',
-    fontWeight: '600',
-  },
-  receiptDivider: {
-    borderBottom: '1px dashed #cbd5e1',
-    margin: '20px 0',
-  },
-  receiptLabelTotal: {
-    fontSize: '16px',
-    color: '#334155',
-    fontWeight: '800',
-  },
-  receiptTotal: {
-    fontSize: '24px',
-    color: '#d27377',
-    fontWeight: '900',
-  },
-};
-
-// ==========================================
-// 🌟 전역 애니메이션 및 버튼 CSS
-// ==========================================
-function PageStyles() {
-  return (
-    <style jsx global>{`
-      @keyframes fadeInUp {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-      }
-      @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
-      @keyframes popIn {
-        0% { transform: scale(0.5); opacity: 0; }
-        70% { transform: scale(1.1); }
-        100% { transform: scale(1); opacity: 1; }
-      }
-      @keyframes shake {
-        0%, 100% { transform: translateX(0); }
-        25% { transform: translateX(-5px); }
-        75% { transform: translateX(5px); }
-      }
-
-      .fade-in-up { animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-      .fade-in { animation: fadeIn 0.5s ease-out forwards; }
-      .spin-anim { animation: spin 1.2s linear infinite; }
-      .pop-anim { animation: popIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-      .shake-anim { animation: shake 0.4s ease-in-out; }
-
-      .premium-card {
-        background-color: #fff;
-        padding: 56px 48px;
-        border-radius: 36px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.04);
-        border: 1px solid #f1f5f9;
-        position: relative;
-        overflow: hidden;
-      }
-
-      .premium-btn {
-        width: 100%;
-        padding: 20px;
-        border-radius: 20px;
-        font-size: 18px;
-        font-weight: 800;
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-      }
-
-      .primary-btn {
-        background: linear-gradient(135deg, #e3868a 0%, #d27377 100%);
-        color: #fff;
-        border: none;
-        box-shadow: 0 10px 25px rgba(210, 115, 119, 0.25);
-      }
-      .primary-btn:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 15px 35px rgba(210, 115, 119, 0.35);
-      }
-
-      .secondary-btn {
-        background: #f8fafc;
-        color: #475569;
-        border: 1px solid #e2e8f0;
-      }
-      .secondary-btn:hover {
-        background: #f1f5f9;
-        color: #0f172a;
-        border-color: #cbd5e1;
-      }
-
-      @media (max-width: 600px) {
-        .premium-card { padding: 40px 24px; border-radius: 28px; }
-        .receiptBox { padding: 20px; border-radius: 20px; }
-      }
-    `}</style>
   );
 }

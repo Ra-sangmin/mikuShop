@@ -31,6 +31,7 @@ export async function GET() {
         registeredAt: true,
         receivedAt: true,
         shippedAt: true,
+        statusChangedAt: true,
         serviceRequest: true,
         status: true,
         deliveryStatus: true,
@@ -138,6 +139,8 @@ export async function PUT(request: Request) {
           //    그래서 입고·발송 시각이 전혀 기록되지 않았고, 정산 화면은 발송일 대신 주문일을 쓰고 있었습니다.
           //    같은 상태로 다시 저장할 때 시각이 덮어써지지 않도록, 상태가 실제로 바뀐 경우에만 찍습니다.
           const statusChanged = previousStatuses.get(order.id) !== order.status;
+          // 🕒 상태가 실제로 바뀐 경우에만 변경 시각을 남깁니다. ('처리 중 전체' 탭을 최근 변경순으로 정렬)
+          if (statusChanged) updateData.statusChangedAt = new Date();
           if (statusChanged && order.status === ORDER_STATUS.ARRIVED) {
             updateData.receivedAt = new Date();
           }
