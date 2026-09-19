@@ -39,9 +39,44 @@ async function findSocialUser(provider: string, providerUserId: string, email?: 
 //      - 카카오: kakao_account.phone_number("+82 10-1234-5678")
 //    저장 형태(010-1234-5678)로 맞추는 일은 lib/phone.ts가 합니다. 해외 번호 등은 null이 됩니다.
 type SocialPhoneProfile = {
-  response?: { mobile?: string; mobile_e164?: string }; // 네이버
-  kakao_account?: { phone_number?: string };            // 카카오
+  response?: { mobile?: string; mobile_e164?: string; name?: string; nickname?: string }; // 네이버
+  kakao_account?: {                                                                       // 카카오
+    phone_number?: string;
+    name?: string;
+    profile?: { nickname?: string };
+  };
 };
+
+/**
+ * 🙍 SNS가 내려준 이름을 꺼냅니다.
+ *
+ * next-auth 의 프로바이더는 네이버에서 `response.nickname`(별명)만 읽습니다.
+ * 그런데 네이버 개발자센터의 "제공 정보"에 별명이 없으면 응답에 그 필드가 아예 없어서,
+ * user.name 이 비고 화면에 "naver 사용자" 같은 대체값이 남습니다.
+ * 네이버는 이름(실명)과 별명을 따로 내려주므로 원본 응답에서 직접 둘 다 봅니다.
+ *
+ * 실명을 먼저 보는 이유는 배송·통관에 쓰는 이름이기 때문입니다.
+ * (카카오는 프로바이더가 읽는 profile.nickname 이 거의 항상 있어 문제가 없었지만,
+ *  같은 이유로 여기서도 실명을 먼저 봅니다)
+ */
+function extractSocialName(provider: string, profile: unknown, fallback?: string | null): string | null {
+  const raw = (profile ?? {}) as SocialPhoneProfile;
+
+  const candidates = provider === "naver"
+    ? [raw.response?.name, raw.response?.nickname]
+    : provider === "kakao"
+      ? [raw.kakao_account?.name, raw.kakao_account?.profile?.nickname]
+      : [];
+
+  const picked = [...candidates, fallback].map(v => v?.trim()).find(Boolean);
+
+  if ((provider === "naver" || provider === "kakao") && !picked) {
+    console.warn(`[SNS로그인] ${provider}: 이름을 내려주지 않았습니다. 개발자센터의 제공 정보(이름·별명) 설정을 확인하세요.`,
+      { 받은필드: Object.keys((raw.response ?? raw.kakao_account ?? {}) as object) });
+  }
+
+  return picked ?? null;
+}
 
 function extractSocialPhone(provider: string, profile: unknown): string | null {
   const raw = (profile ?? {}) as SocialPhoneProfile;
@@ -146,6 +181,9 @@ export const authOptions: NextAuthOptions = {
         // 📱 SNS가 내려준 휴대폰 번호. 주문 상태 알림톡 발송에 쓰므로 회원 정보에 함께 저장합니다.
         const snsPhone = extractSocialPhone(safeProvider, profile);
 
+        // 🙍 SNS가 내려준 이름. 프로바이더가 읽는 값(user.name)이 비어도 원본 응답에서 다시 찾습니다.
+        const snsName = extractSocialName(safeProvider, profile, user.name);
+
         // 유저가 없으면 새로 생성 (소셜 회원가입)
         if (!existingUser) {
           // 📦 일본 창고 사서함 번호도 이 시점에 발급합니다. (일반 가입과 같은 규칙)
@@ -155,7 +193,7 @@ export const authOptions: NextAuthOptions = {
             data: {
               loginId: `${safeProvider}_${user.id}`, // SNS 유저 전용 식별 아이디
               email: userEmail,
-              name: user.name || `${safeProvider} 사용자`,
+              name: snsName || `${safeProvider} 사용자`,
               profileImage: snsProfileImage,
               phone: snsPhone,
               japanMailboxNumber,
@@ -173,8 +211,8 @@ export const authOptions: NextAuthOptions = {
           // 이름은 "아직 임시값인 경우"에만 SNS 닉네임으로 채웁니다.
           // (나중에 회원이 직접 이름을 바꾸는 기능이 생겨도 로그인할 때마다 덮어쓰지 않도록)
           const isPlaceholderName = !existingUser.name?.trim() || /^(kakao|naver|social)\s*사용자$/.test(existingUser.name.trim());
-          if (user.name && isPlaceholderName && user.name !== existingUser.name) {
-            updates.name = user.name;
+          if (snsName && isPlaceholderName && snsName !== existingUser.name) {
+            updates.name = snsName;
           }
 
           // 프로필 사진은 직접 올리는 기능이 없어 SNS 값이 유일한 출처이므로 항상 최신으로 맞춥니다.
