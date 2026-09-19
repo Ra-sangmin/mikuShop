@@ -18,6 +18,8 @@
 import { useCallback, useState, type CSSProperties, type ReactNode } from 'react';
 import { MagnifyingGlass, X, CheckCircle, WarningCircle, Tray, Package, ArrowSquareOut, Stack, CaretDown, Camera, ShieldCheck, Sparkle, Tag, ChatText, Copy, Eye, EyeSlash } from '@phosphor-icons/react';
 import './admin-premium.css';
+// 🌟 받는사람 표기는 마이페이지의 일본 배송지 카드와 같은 함수를 씁니다.
+import { japanRecipientName } from '@/lib/japanAddress';
 
 /* ---------------- 히어로 ---------------- */
 export function AdminHero({ eyebrow, icon, title, description, actions, children, accentRgb }: {
@@ -499,6 +501,15 @@ export function UserBasicInfo({ user, onCopy }: {
       {/* 🔤 일본 배송지의 "받는사람"에 사서함 번호와 함께 들어가는 이름입니다. */}
       <dt>영문 이름</dt>
       <dd>{copyable(user.nameEnglish, '영문 이름')}</dd>
+
+      {/* 📮 회원이 일본 쇼핑몰 주소칸에 그대로 넣는 값입니다.
+          마이페이지의 일본 배송지 카드와 같은 함수로 만들어 문구가 어긋나지 않게 합니다. */}
+      <dt>받는사람 정보</dt>
+      <dd>{copyable(
+        japanRecipientName(user.nameEnglish, user.japanMailboxNumber) || null,
+        '받는사람 정보',
+        '사서함 번호 미발급',
+      )}</dd>
 
       <dt>가입일시</dt>
       <dd>{fmtDateTime(user.createdAt)}</dd>
