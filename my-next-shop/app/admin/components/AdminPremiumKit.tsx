@@ -494,15 +494,9 @@ export function UserBasicInfo({ user, onCopy }: {
         ) : <span className="is-empty">미등록</span>}
       </dd>
 
-      {/* 📦 일본 창고 사서함 번호. 창고가 소포 주인을 가리는 값이라 CS 문의 때 바로 필요합니다. */}
-      <dt>고유 식별 번호</dt>
-      <dd>{copyable(user.japanMailboxNumber, '고유 식별 번호', '미발급')}</dd>
-
-      {/* 🔤 일본 배송지의 "받는사람"에 사서함 번호와 함께 들어가는 이름입니다. */}
-      <dt>영문 이름</dt>
-      <dd>{copyable(user.nameEnglish, '영문 이름')}</dd>
-
-      {/* 📮 회원이 일본 쇼핑몰 주소칸에 그대로 넣는 값입니다.
+      {/* 📮 회원이 일본 쇼핑몰 주소칸에 그대로 넣는 값입니다. (예: RA SANGMIN MK-NXJV9)
+          사서함 번호와 영문 이름을 따로 두지 않는 이유는, 둘 다 이 값에 들어 있어
+          같은 정보가 세 줄로 나뉘었기 때문입니다.
           마이페이지의 일본 배송지 카드와 같은 함수로 만들어 문구가 어긋나지 않게 합니다. */}
       <dt>받는사람 정보</dt>
       <dd>{copyable(
