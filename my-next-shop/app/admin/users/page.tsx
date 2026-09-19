@@ -754,6 +754,16 @@ function MemberDrawer({ userId, grades, onClose, onSaved, pushToast }: {
                       </span>
                     ) : <span className="is-empty">미등록</span>}
                   </dd>
+                  {/* 📦 일본 창고 사서함 번호. 창고가 소포 주인을 가리는 값이라 CS 문의 때 바로 필요합니다. */}
+                  <dt>고유 식별 번호</dt>
+                  <dd>{user.japanMailboxNumber
+                    ? <button type="button" className="usr-copyable" onClick={() => copy(user.japanMailboxNumber, '고유 식별 번호')}>{user.japanMailboxNumber}<Copy size={11} weight="bold" /></button>
+                    : <span className="is-empty">미발급</span>}</dd>
+                  {/* 🔤 일본 배송지의 "받는사람"에 사서함 번호와 함께 들어가는 이름입니다. */}
+                  <dt>영문 이름</dt>
+                  <dd>{user.nameEnglish
+                    ? <button type="button" className="usr-copyable" onClick={() => copy(user.nameEnglish, '영문 이름')}>{user.nameEnglish}<Copy size={11} weight="bold" /></button>
+                    : <span className="is-empty">미등록</span>}</dd>
                   <dt>가입일시</dt>
                   <dd>{fmtDateTime(user.createdAt)}</dd>
                   <dt>최근 수정</dt>
