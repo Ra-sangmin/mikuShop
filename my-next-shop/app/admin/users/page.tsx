@@ -4,12 +4,14 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import '../admin-common.css';
 import './users-premium.css';
 import { useFitTable, FitColGroup, FitTh } from '../components/useFitTable';
+// 🌟 기본 정보 패널은 주문 관리의 주문자 팝업과 같은 내용을 보여줘야 해서 공용 키트에 있습니다.
+import { UserBasicInfo } from '../components/AdminPremiumKit';
 import { ORDER_STATUS_LABEL } from '@/src/types/order';
 import {
   MagnifyingGlass, X, Users, UserPlus, Receipt, Wallet, UserCircle, PencilSimple,
   ArrowClockwise, DownloadSimple, CaretLeft, CaretRight, EnvelopeSimple, Phone,
   IdentificationCard, MapPin, Package, ClockCounterClockwise, Plus, Minus, Crown,
-  CheckCircle, WarningCircle, Eye, EyeSlash, Copy, ArrowRight, Sparkle,
+  CheckCircle, WarningCircle, Copy, ArrowRight, Sparkle,
 } from '@phosphor-icons/react';
 
 /* ============================================================
@@ -57,9 +59,6 @@ const fmtDateTime = (d: string | Date) => {
 const won = (n: number) => `₩${(n || 0).toLocaleString()}`;
 const daysSince = (d: string | Date) => Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86400000));
 
-/** 개인통관부호는 가운데를 가립니다. (P123456789012 → P1234••••••012) */
-const maskCustoms = (code?: string | null) =>
-  !code ? null : code.length <= 8 ? code : `${code.slice(0, 5)}${'•'.repeat(code.length - 8)}${code.slice(-3)}`;
 
 const STATUS_TONE: Record<string, string> = {
   BID_PENDING: '245, 158, 11', BIDDING: '245, 158, 11', BID_SUCCESS: '16, 185, 129',
@@ -586,7 +585,6 @@ function MemberDrawer({ userId, grades, onClose, onSaved, pushToast }: {
   pushToast: PushToast;
 }) {
   const [detail, setDetail] = useState<any | null>(null);
-  const [showCustoms, setShowCustoms] = useState(false);
 
   // 등급
   const [gradeDraft, setGradeDraft] = useState<number | null>(null);
@@ -632,9 +630,6 @@ function MemberDrawer({ userId, grades, onClose, onSaved, pushToast }: {
 
   const user = detail?.user;
   const tone = gradeTone(user?.grade?.name);
-  // 🌟 개인통관부호는 배송지(addresses)에 딸린 값입니다.
-  //    목록은 기본 배송지가 맨 앞으로 정렬돼 오므로(api/admin/users) 첫 번째가 기본 배송지입니다.
-  const customsCode: string | null = user?.addresses?.[0]?.personalCustomsCode || null;
   const delta = moneyMode === 'add' ? moneyAmount : -moneyAmount;
   const nextBalance = (user?.cyberMoney || 0) + delta;
   const moneyInvalid = moneyAmount === 0 || nextBalance < 0;
@@ -732,43 +727,7 @@ function MemberDrawer({ userId, grades, onClose, onSaved, pushToast }: {
             <div className="usr-drawer-body">
               {/* 기본 정보 */}
               <DrawerSection icon={<IdentificationCard size={15} weight="duotone" />} title="기본 정보">
-                <dl className="usr-info">
-                  <dt>이메일</dt>
-                  <dd>{realEmail(user.email)
-                    ? <button type="button" className="usr-copyable" onClick={() => copy(user.email, '이메일')}>{user.email}<Copy size={11} weight="bold" /></button>
-                    : <span className="is-empty">미등록</span>}</dd>
-                  <dt>휴대폰</dt>
-                  <dd>{user.phone
-                    ? <button type="button" className="usr-copyable" onClick={() => copy(user.phone, '휴대폰 번호')}>{user.phone}<Copy size={11} weight="bold" /></button>
-                    : <span className="is-empty">미등록</span>}</dd>
-                  {/* 🌟 개인통관부호는 배송지에 딸린 값입니다. (users 에도 한 벌 들고 있었지만 채우는 경로가 없어 늘 비어 있었습니다)
-                      목록은 기본 배송지가 맨 앞이라 addresses[0] 이 기본 배송지입니다. */}
-                  <dt>개인통관부호</dt>
-                  <dd>
-                    {customsCode ? (
-                      <span className="usr-secret">
-                        <code>{showCustoms ? customsCode : maskCustoms(customsCode)}</code>
-                        <button type="button" onClick={() => setShowCustoms(v => !v)} aria-label={showCustoms ? '가리기' : '보기'}>
-                          {showCustoms ? <EyeSlash size={13} weight="bold" /> : <Eye size={13} weight="bold" />}
-                        </button>
-                      </span>
-                    ) : <span className="is-empty">미등록</span>}
-                  </dd>
-                  {/* 📦 일본 창고 사서함 번호. 창고가 소포 주인을 가리는 값이라 CS 문의 때 바로 필요합니다. */}
-                  <dt>고유 식별 번호</dt>
-                  <dd>{user.japanMailboxNumber
-                    ? <button type="button" className="usr-copyable" onClick={() => copy(user.japanMailboxNumber, '고유 식별 번호')}>{user.japanMailboxNumber}<Copy size={11} weight="bold" /></button>
-                    : <span className="is-empty">미발급</span>}</dd>
-                  {/* 🔤 일본 배송지의 "받는사람"에 사서함 번호와 함께 들어가는 이름입니다. */}
-                  <dt>영문 이름</dt>
-                  <dd>{user.nameEnglish
-                    ? <button type="button" className="usr-copyable" onClick={() => copy(user.nameEnglish, '영문 이름')}>{user.nameEnglish}<Copy size={11} weight="bold" /></button>
-                    : <span className="is-empty">미등록</span>}</dd>
-                  <dt>가입일시</dt>
-                  <dd>{fmtDateTime(user.createdAt)}</dd>
-                  <dt>최근 수정</dt>
-                  <dd>{fmtDateTime(user.updatedAt)}</dd>
-                </dl>
+                <UserBasicInfo user={user} onCopy={(_, label) => pushToast('success', `${label}을(를) 복사했습니다.`)} />
               </DrawerSection>
 
               {/* 등급 변경 */}

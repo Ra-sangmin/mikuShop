@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useFitTable, FitColGroup, FitTh } from '../components/useFitTable';
-import { AdminHero, HeroButton, KpiCard, SearchField, SegFilter, EmptyRow, SkeletonRows, BundleItemsPanel, BundleBadge, BundleToggle, useToasts, ToastStack } from '../components/AdminPremiumKit';
+import { AdminHero, HeroButton, KpiCard, SearchField, SegFilter, EmptyRow, SkeletonRows, BundleItemsPanel, BundleBadge, BundleToggle, UserBasicInfo, type BasicInfoUser, useToasts, ToastStack } from '../components/AdminPremiumKit';
 import { useRouter } from 'next/navigation';
 // 🌟 글로벌 상수 및 라벨 임포트
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
@@ -239,6 +239,8 @@ export default function OrderManagement() {
               || [dbOrder.shippedAt, dbOrder.receivedAt, dbOrder.registeredAt].filter(Boolean)
                   .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0],
             user: dbOrder.user?.name || '알 수 없음',
+            // 👤 주문자를 누르면 회원 기본 정보를 띄웁니다. 조회에 회원 ID 가 필요합니다.
+            userId: dbOrder.userId ?? dbOrder.user?.id ?? null,
             address: dbOrder.addressId ? (dbOrder.user?.addresses?.find((a: any) => a.id === dbOrder.addressId) || null) : null,
             addressId: dbOrder.addressId, 
             recipient: dbOrder.recipient || '',
@@ -511,6 +513,29 @@ export default function OrderManagement() {
       }
       return newSet;
     });
+  };
+
+  // 👤 주문자 팝업 — 회원 관리의 "기본 정보"와 같은 내용을 보여줍니다.
+  //    주문을 보다가 연락처·통관부호를 확인하려고 회원 관리로 넘어갔다 돌아오는 일이 잦았습니다.
+  const [userModal, setUserModal] = useState<{ id: number; name: string } | null>(null);
+  const [userDetail, setUserDetail] = useState<BasicInfoUser | null>(null);
+  const [userLoading, setUserLoading] = useState(false);
+
+  const openUserModal = async (userId: number | null, name: string) => {
+    if (!userId) return;
+    setUserModal({ id: userId, name });
+    setUserDetail(null);
+    setUserLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users?id=${userId}`);
+      const data = await res.json();
+      setUserDetail(res.ok && data.success ? data.user : null);
+    } catch (error) {
+      console.error('회원 정보 조회 실패:', error);
+      setUserDetail(null);
+    } finally {
+      setUserLoading(false);
+    }
   };
 
   const openNotificationLogs = async (orderId: string) => {
@@ -1082,12 +1107,18 @@ export default function OrderManagement() {
                     )}
                   </td>
                   <td className="admin-base-td">
-                    <span className="ord-user">
+                    <button
+                      type="button"
+                      className="ord-user is-clickable"
+                      onClick={() => openUserModal(order.userId, order.user)}
+                      disabled={!order.userId}
+                      title={order.userId ? '회원 정보 보기' : '연결된 회원이 없습니다'}
+                    >
                       <span className="ord-user-avatar" aria-hidden="true">
                         {(order.user?.trim()?.[0] || '?').toUpperCase()}
                       </span>
                       <span className="ord-user-name">{order.user}</span>
-                    </span>
+                    </button>
                   </td>
                   
                   
@@ -1523,6 +1554,29 @@ export default function OrderManagement() {
     )}
 
     {/* 📨 알림 발송 이력 */}
+    {/* 👤 주문자 정보 — 회원 관리의 "기본 정보"와 같은 패널을 씁니다. */}
+    {userModal && (
+      <div style={os.feeModalOverlay} onClick={() => setUserModal(null)}>
+        <div style={{ ...os.feeModalBox, maxWidth: '460px' }} onClick={(e) => e.stopPropagation()}>
+          <h3 style={os.feeModalTitle}>{userModal.name}</h3>
+          <p style={os.feeModalDesc}>회원 기본 정보</p>
+
+          {userLoading && <p style={os.logEmpty}>불러오는 중...</p>}
+          {!userLoading && !userDetail && <p style={os.logEmpty}>회원 정보를 불러오지 못했습니다.</p>}
+          {!userLoading && userDetail && (
+            <UserBasicInfo
+              user={userDetail}
+              onCopy={(_text, label) => pushToast('success', `${label}을(를) 복사했습니다.`)}
+            />
+          )}
+
+          <div style={os.feeModalButtonRow}>
+            <button onClick={() => setUserModal(null)} style={os.feeModalCancelBtn}>닫기</button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {logModalOrderId && (
       <div className="ord-modal-overlay" onClick={() => setLogModalOrderId(null)}>
         <div className="ord-modal" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>

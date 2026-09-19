@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useState, type CSSProperties, type ReactNode } from 'react';
-import { MagnifyingGlass, X, CheckCircle, WarningCircle, Tray, Package, ArrowSquareOut, Stack, CaretDown, Camera, ShieldCheck, Sparkle, Tag, ChatText } from '@phosphor-icons/react';
+import { MagnifyingGlass, X, CheckCircle, WarningCircle, Tray, Package, ArrowSquareOut, Stack, CaretDown, Camera, ShieldCheck, Sparkle, Tag, ChatText, Copy, Eye, EyeSlash } from '@phosphor-icons/react';
 import './admin-premium.css';
 
 /* ---------------- 히어로 ---------------- */
@@ -416,5 +416,89 @@ export function BundleItemsPanel({ items, highlightIds }: {
         );
       })}
     </div>
+  );
+}
+
+/* ---------------- 회원 기본 정보 ---------------- */
+
+/** <UserBasicInfo> 가 읽는 회원 정보. /api/admin/users 응답 일부입니다. */
+export type BasicInfoUser = {
+  email?: string | null;
+  phone?: string | null;
+  nameEnglish?: string | null;
+  japanMailboxNumber?: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  /** 기본 배송지가 맨 앞으로 정렬돼 옵니다. 개인통관부호는 여기 딸린 값입니다. */
+  addresses?: { personalCustomsCode?: string | null }[];
+};
+
+/** SNS 회원의 임시 이메일(kakao_xxx@mikuchan.local)은 표시하지 않습니다. */
+const realEmail = (email?: string | null) => (email && !email.endsWith('.local') ? email : null);
+
+/** 개인통관부호는 가운데를 가립니다. (P123456789012 → P1234••••••012) */
+const maskCustoms = (code?: string | null) =>
+  !code ? null : code.length <= 8 ? code : `${code.slice(0, 5)}${'•'.repeat(code.length - 8)}${code.slice(-3)}`;
+
+/**
+ * 회원 기본 정보 패널.
+ *
+ * 회원 관리의 상세 서랍과 주문 관리의 주문자 팝업이 같은 내용을 보여주도록 여기 한 곳에 둡니다.
+ * 따로 두면 한쪽에 항목을 더할 때 다른 쪽이 빠져, 보는 화면에 따라 정보가 달라집니다.
+ */
+export function UserBasicInfo({ user, onCopy }: {
+  user: BasicInfoUser;
+  /** 복사했을 때 알릴 방법. 화면마다 토스트가 달라서 밖에서 받습니다. */
+  onCopy?: (text: string, label: string) => void;
+}) {
+  const [showCustoms, setShowCustoms] = useState(false);
+  // 개인통관부호는 users 가 아니라 배송지에 딸린 값입니다. 첫 번째가 기본 배송지입니다.
+  const customsCode = user.addresses?.[0]?.personalCustomsCode || null;
+
+  const copy = (text: string, label: string) => {
+    navigator.clipboard?.writeText(text).then(() => onCopy?.(text, label)).catch(() => {});
+  };
+
+  // 값이 있으면 누를 수 있는 텍스트, 없으면 흐린 안내. (렌더 중에 컴포넌트를 만들면
+  // 리렌더마다 새 컴포넌트가 되어 입력 상태가 날아가므로 함수로만 둡니다)
+  const copyable = (value: string | null | undefined, label: string, emptyText = '미등록') =>
+    value
+      ? <button type="button" className="aui-copyable" onClick={() => copy(value, label)}>{value}<Copy size={11} weight="bold" /></button>
+      : <span className="is-empty">{emptyText}</span>;
+
+  return (
+    <dl className="aui-info">
+      <dt>이메일</dt>
+      <dd>{copyable(realEmail(user.email), '이메일')}</dd>
+
+      <dt>휴대폰</dt>
+      <dd>{copyable(user.phone, '휴대폰 번호')}</dd>
+
+      <dt>개인통관부호</dt>
+      <dd>
+        {customsCode ? (
+          <span className="aui-secret">
+            <code>{showCustoms ? customsCode : maskCustoms(customsCode)}</code>
+            <button type="button" onClick={() => setShowCustoms(v => !v)} aria-label={showCustoms ? '가리기' : '보기'}>
+              {showCustoms ? <EyeSlash size={13} weight="bold" /> : <Eye size={13} weight="bold" />}
+            </button>
+          </span>
+        ) : <span className="is-empty">미등록</span>}
+      </dd>
+
+      {/* 📦 일본 창고 사서함 번호. 창고가 소포 주인을 가리는 값이라 CS 문의 때 바로 필요합니다. */}
+      <dt>고유 식별 번호</dt>
+      <dd>{copyable(user.japanMailboxNumber, '고유 식별 번호', '미발급')}</dd>
+
+      {/* 🔤 일본 배송지의 "받는사람"에 사서함 번호와 함께 들어가는 이름입니다. */}
+      <dt>영문 이름</dt>
+      <dd>{copyable(user.nameEnglish, '영문 이름')}</dd>
+
+      <dt>가입일시</dt>
+      <dd>{fmtDateTime(user.createdAt)}</dd>
+
+      <dt>최근 수정</dt>
+      <dd>{fmtDateTime(user.updatedAt)}</dd>
+    </dl>
   );
 }

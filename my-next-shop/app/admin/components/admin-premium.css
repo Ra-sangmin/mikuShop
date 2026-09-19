@@ -802,3 +802,41 @@ tr:hover .apc-thumb { transform: scale(1.04); }
   .apc { flex-direction: column; align-items: flex-start; }
   .apc-body { width: 100%; }
 }
+
+/* =====================================================
+   회원 기본 정보 패널 (<UserBasicInfo>)
+   회원 관리의 상세 서랍과 주문 관리의 주문자 팝업이 함께 씁니다.
+   ===================================================== */
+.aui-info {
+  display: grid; grid-template-columns: 96px minmax(0, 1fr);
+  gap: 11px 14px; margin: 0; font-size: 13.5px;
+}
+.aui-info dt { font-weight: 700; color: #94a3b8; }
+.aui-info dd { margin: 0; font-weight: 700; color: #334155; min-width: 0; overflow-wrap: anywhere; }
+.aui-info .is-empty { color: #cbd5e1; font-weight: 600; }
+
+.aui-copyable {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  padding: 0; border: 0; background: none; cursor: pointer;
+  font-family: inherit; font-size: inherit; font-weight: 700; color: inherit; text-align: left;
+  overflow-wrap: anywhere;
+}
+.aui-copyable svg { color: #cbd5e1; flex-shrink: 0; transition: color 0.15s ease; }
+.aui-copyable:hover svg { color: #6366f1; }
+
+.aui-secret { display: inline-flex; align-items: center; gap: 8px; }
+.aui-secret code {
+  padding: 2px 8px; border-radius: 6px;
+  background: #f1f5f9; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12.5px; color: #334155;
+}
+.aui-secret button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 7px;
+  border: 1px solid #e8edf4; background: #ffffff; color: #94a3b8; cursor: pointer;
+}
+.aui-secret button:hover { color: #6366f1; border-color: #c7d2fe; }
+
+@media (max-width: 520px) {
+  .aui-info { grid-template-columns: 1fr; gap: 4px 0; }
+  .aui-info dt { margin-top: 8px; }
+}

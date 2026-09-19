@@ -908,3 +908,12 @@
 /* 개별 탭 제목 — 상태 색 점 */
 .ord-sec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--sec-c, #64748b); box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.05); }
 .ord-sec-head.is-single { margin-top: 4px; }
+
+/* 👤 주문자 — 누르면 회원 기본 정보가 뜹니다. */
+.ord-user.is-clickable {
+  padding: 0; border: 0; background: none; cursor: pointer;
+  font-family: inherit; text-align: left;
+  border-radius: 8px; transition: opacity 0.15s ease;
+}
+.ord-user.is-clickable:hover:not(:disabled) .ord-user-name { color: #2563eb; text-decoration: underline; }
+.ord-user.is-clickable:disabled { cursor: default; opacity: 0.6; }
