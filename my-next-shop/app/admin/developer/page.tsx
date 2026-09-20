@@ -19,7 +19,8 @@ const PLATFORMS = [
   { value: 'yahoo_shopping', label: '야후 쇼핑', rgb: '220, 38, 38' },
   { value: 'rakuten', label: '라쿠텐', rgb: '190, 18, 60' },
   { value: 'mercari', label: '메루카리', rgb: '236, 72, 153' },
-  { value: 'amazon', label: '아마존', rgb: '245, 158, 11' },
+  // 아마존은 아직 수집할 곳이 없어 빼 두었습니다. 고르면 없는 API 를 불러 오류만 났습니다.
+  // 상품 데이터를 어디서 받을지(공식 API·유료 API·직접 크롤링) 정해지면 그때 다시 넣습니다.
 ] as const;
 type PlatformValue = (typeof PLATFORMS)[number]['value'];
 

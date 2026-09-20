@@ -376,7 +376,14 @@ export default function HomePage() {
               <SiteCard shopId="mercari" logoSrc="merukari_logo" name="메루카리" desc="일본 최대 중고거래 사이트" tag="중고거래" brandRgb="255 51 63" />
               <SiteCard shopId="rakuten" logoSrc="rakuten_logo" name="라쿠텐" desc="일본 대표 종합 쇼핑몰" tag="종합몰" brandRgb="191 0 0" />
               <SiteCard shopId="yahoo_shopping" logoSrc="yahoo_shopping_logo" name="야후 쇼핑" desc="다양한 혜택의 야후 쇼핑" tag="종합몰" brandRgb="255 0 51" />
-              {/* <SiteCard shopId="amazon" logoSrc="amazon_logo" name="아마존" desc="빠른 배송의 아마존 재팬" onClick={handleComingSoon}/> */}
+              {/* 🛒 아마존은 아직 내보내지 않습니다. 운영 서버(EC2)에서 아마존의 카테고리·검색
+                  페이지가 캡차로 막혀 있어 둘러보기를 만들 수 없고(상품 상세만 열립니다),
+                  카테고리까지 제공하려면 유료 API 가 필요해 도입 여부를 검토 중입니다.
+                  상품 주소를 붙여넣는 주문(/purchase/request)은 이미 동작합니다.
+
+                  ⚠️ 아래 줄을 살릴 때는 SiteCard 에 href·cta 인자를 함께 되살려야 합니다.
+                     지금 SiteCard 는 무조건 /main_shop/{shopId} 로 가는데 그 주소는 없습니다.
+              <SiteCard shopId="amazon" logoSrc="amazon_logo" name="아마존" desc="상품 주소로 주문하는 아마존 재팬" tag="종합몰" brandRgb="255 153 0" href="/purchase/request" cta="주소로 주문" /> */}
               <SiteCard shopId="yahoo_auction" logoSrc="yahoo_auction_logo" name="야후 옥션" desc="실시간 일본 옥션 입찰" tag="경매" brandRgb="240 130 0" />
           </div>
         </div>
@@ -581,7 +588,8 @@ function SiteCard({ shopId, logoSrc, name, desc, tag, brandRgb = '148 163 184', 
             <div className="site-card-box">
                 {tag && <span className="site-card-tag">{tag}</span>}
                 <div className="site-logo-wrap">
-                    <div className="site-logo-plate">
+                    {/* 🍮 원본 로고는 그대로, 받침만 말랑한 젤리 느낌 (광택 · 볼록한 안쪽 그림자 · 호버 시 출렁) */}
+                    <div className="site-jelly">
                         <img src={`/images/${logoSrc}.png`} alt={name} draggable="false" />
                     </div>
                 </div>
