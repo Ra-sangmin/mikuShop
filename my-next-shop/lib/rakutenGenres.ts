@@ -16,6 +16,7 @@
 //    retranslateUntranslated() 로 나중에 채웁니다.
 
 import prisma from '@/lib/prisma';
+import { blockedCategoryIds } from '@/lib/blockedCategories';
 import { resolveCategoryNames } from '@/lib/categoryTranslation';
 import { rakutenGenreAPI, RakutenApiError, type RakutenPriority } from '@/lib/rakuten';
 
@@ -60,7 +61,8 @@ function toRow(r: NamedRow & { genreLevel: number | null; parentId: number; isLe
 
 async function activeChildren(genreId: number): Promise<GenreRow[]> {
   const rows = await prisma.rakutenCategory.findMany({
-    where: { parentId: genreId, isActive: true },
+    // 🚫 들여올 수 없는 물건의 카테고리는 목록에서 지웁니다. (lib/blockedCategories.ts)
+    where: { parentId: genreId, isActive: true, genreId: { notIn: [...blockedCategoryIds('rakuten')] } },
     orderBy: { id: 'asc' },
     select: { genreLevel: true, parentId: true, isLeaf: true, ...NAME_SELECT },
   });
@@ -124,7 +126,11 @@ export async function syncGenreChildren(
   };
 
   // 1) 자식 반영
+  const blocked = blockedCategoryIds('rakuten');
   for (const c of apiChildren) {
+    // 🚫 차단 카테고리는 되살리지 않습니다. 여기서 걸러내지 않으면 동기화가 매번
+    //    isActive=true 로 덮어써서, 숨겨둔 것이 조용히 다시 나타납니다.
+    if (blocked.has(c.genreId)) continue;
     const translationId = translationIdOf(c.nameJa);
     await prisma.rakutenCategory.upsert({
       where: { genreId: c.genreId },

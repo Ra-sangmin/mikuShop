@@ -1,14 +1,21 @@
 import { NextResponse } from 'next/server';
 import { rakutenBaseAPIOn } from '@/lib/rakuten';
 import { isGenreNotFoundError, markGenreStale } from '@/lib/rakutenGenres';
+import { isBlockedCategory } from '@/lib/blockedCategories';
 
 export async function GET(request: Request) {
   try {
 
       const { searchParams } = new URL(request.url);
-      
+
       // 1. URL 파라미터 상태 추출
       const genreId = searchParams.get('genreId') || '0';
+
+      // 🚫 들여올 수 없는 물건의 카테고리는 상품도 내주지 않습니다.
+      //    목록에서 지우는 것만으로는 주소를 직접 친 경우를 막지 못합니다.
+      if (isBlockedCategory('rakuten', Number(genreId))) {
+        return NextResponse.json({ items: [], page: 1, pageCount: 0 });
+      }
       const page = searchParams.get('page') || '1';
       const sort = searchParams.get('sort') || 'standard';
       
