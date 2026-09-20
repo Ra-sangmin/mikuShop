@@ -9,36 +9,20 @@
 //  translation.ko(없으면 jp)를 읽습니다 — lib/categoryPath.ts 의 categoryDisplayName().
 
 import prisma from '@/lib/prisma';
+import { translateBatch, type Translated } from '@/lib/deepl';
 
 export interface ResolvedName { ko: string; translationId: number | null; }
 
-/** DeepL 일본어→한국어. ok=false 는 번역을 못 받아 원문을 돌려준 것. */
-export async function translateWithDeepL(namesJa: string[]): Promise<{ text: string; ok: boolean }[]> {
-  const key = process.env.DEEPL_API_KEY;
-  if (!key || namesJa.length === 0) return namesJa.map(text => ({ text, ok: false }));
-
-  const out: { text: string; ok: boolean }[] = [];
-  for (let i = 0; i < namesJa.length; i += 50) { // DeepL 은 한 요청에 50개까지
-    const chunk = namesJa.slice(i, i + 50);
-    try {
-      const res = await fetch('https://api-free.deepl.com/v2/translate', {
-        method: 'POST',
-        headers: { Authorization: `DeepL-Auth-Key ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: chunk, source_lang: 'JA', target_lang: 'KO' }),
-      });
-      if (!res.ok) throw new Error(`DeepL ${res.status}`);
-      const j = await res.json();
-      const translated: string[] = (j.translations ?? []).map((t: any) => String(t.text ?? ''));
-      out.push(...chunk.map((name, k) => {
-        const text = translated[k]?.trim();
-        return text ? { text, ok: true } : { text: name, ok: false };
-      }));
-    } catch (e) {
-      console.error('[categoryTranslation] 번역 실패, 원문 유지:', (e as Error).message);
-      out.push(...chunk.map(text => ({ text, ok: false })));
-    }
-  }
-  return out;
+/**
+ * DeepL 일본어→한국어. ok=false 는 번역을 못 받아 원문을 돌려준 것.
+ *
+ * 실제 호출은 lib/deepl.ts 가 합니다. 이 이름을 남겨 둔 것은 부르는 쪽이 여럿이고
+ * (아래 두 곳 + lib/itemVariants.ts) 전부 "일본어 → 한국어"로만 쓰기 때문입니다.
+ */
+export async function translateWithDeepL(namesJa: string[]): Promise<Translated[]> {
+  // 카테고리·옵션 이름은 일본어라는 것이 확실해서 원본 언어를 못박습니다.
+  // 짧은 단어는 DeepL 이 언어를 잘못 짚는 일이 있습니다. ("CD" 를 영어로 보는 식)
+  return translateBatch(namesJa, 'KO', 'JA');
 }
 
 /**

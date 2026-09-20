@@ -1,135 +1,49 @@
-// lib/translate.ts
+// 🈯 한 건짜리 문구 번역 — 상품명(구매대행 신청)과 검색어에 씁니다.
+//
+// DeepL 호출 자체는 lib/deepl.ts 한 곳에 모여 있습니다. 여기서는 두 가지만 더 합니다.
+//  1) 번역할 필요가 있는지 먼저 봅니다. 이미 목적 언어로 적힌 문구를 보내면 DeepL 할당량만 씁니다.
+//  2) 결과를 글자 수에 맞춰 자릅니다.
+//
+// 이 파일은 prisma 를 쓰지 않습니다. 상품명·검색어는 매번 달라서 표에 쌓아 봐야 재사용되지 않습니다.
+// (종류가 정해진 카테고리 이름은 lib/categoryTranslation.ts 가 Translation 표에 쌓아 재사용합니다)
 
-/**
- * 일본어를 한국어로 번역하고 글자 수를 제한하는 함수
- * @param text 번역할 원문
- * @param characterLimit 글자 수 제한 (기본값 100)
- */
-export async function translateToKorean(
-  text: string, 
-  characterLimit: number = 100 // 기본값 100 설정
-): Promise<string> {
-  if (!text) return "";
+import { translateOne } from '@/lib/deepl';
 
-  //TODO :  실제 서비스 할때 번역하도록 함. 테스트 때는 자주 사용해서 막아둠
-  {
-    console.log(characterLimit);
-      // 매개변수로 받은 characterLimit을 기준으로 글자 수 제한 적용
-      if (text.length > characterLimit) {
-        text = text.substring(0, characterLimit) + "...";
-      }
-      
-      return text;
-  }
-  
+const HAS_JAPANESE = /[぀-ゟ゠-ヿ]/;
+const HAS_KOREAN = /[ㄱ-ㅎㅏ-ㅣ가-힣]/;
 
-  let finalTitle = text;
-  const japaneseRegex = /[\u3040-\u309F\u30A0-\u30FF]/;
-
-  // 일본어가 포함된 경우에만 DeepL 번역 실행
-  if (japaneseRegex.test(text)) {
-    try {
-      const authKey = process.env.DEEPL_API_KEY;
-
-      if (authKey) {
-        const deepLUrl = "https://api-free.deepl.com/v2/translate";
-        
-        const deepLRes = await fetch(deepLUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `DeepL-Auth-Key ${authKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            text: [text],
-            target_lang: 'KO'
-          })
-        });
-
-        if (deepLRes.ok) {
-          const data = await deepLRes.json();
-          finalTitle = data.translations[0].text;
-        } else {
-          console.error("⚠️ DeepL API 에러:", deepLRes.status);
-        }
-      }
-    } catch (transError) {
-      console.error("⚠️ DeepL 통신 에러:", transError);
-    }
-  }
-
-  // 매개변수로 받은 characterLimit을 기준으로 글자 수 제한 적용
-  if (finalTitle.length > characterLimit) {
-    finalTitle = finalTitle.substring(0, characterLimit) + "...";
-  }
-
-  return finalTitle;
+/** 글자 수를 넘으면 잘라내고 말줄임표를 붙입니다. */
+function clamp(text: string, characterLimit: number): string {
+  return text.length > characterLimit ? `${text.substring(0, characterLimit)}...` : text;
 }
 
 /**
- * 한국어를 일본어로 번역하고 글자 수를 제한하는 함수
- * @param text 번역할 원문 (한국어 등)
+ * 일본어를 한국어로 번역하고 글자 수를 제한합니다.
+ *
+ * 일본어(히라가나·가타카나)가 없으면 번역하지 않습니다. 영문 상품명처럼
+ * 그대로 두는 편이 나은 문구까지 보내면 할당량만 줄어듭니다.
+ * 번역에 실패해도 원문을 돌려줍니다 — 빈 칸보다는 일본어라도 남는 편이 낫습니다.
+ *
+ * @param text 번역할 원문
  * @param characterLimit 글자 수 제한 (기본값 100)
  */
-export async function translateToJapanese(
-  text: string, 
-  characterLimit: number = 100
-): Promise<string> {
-  if (!text) return "";
+export async function translateToKorean(text: string, characterLimit: number = 100): Promise<string> {
+  if (!text) return '';
+  if (!HAS_JAPANESE.test(text)) return clamp(text, characterLimit);
 
-  // 🧪 [테스트 모드] 실제 서비스 전까지 API 호출을 아끼기 위한 블록
-  // 이 블록을 주석 처리하면 실제 DeepL 번역이 작동합니다.
-  /*
-  {
-    console.log("🧪 테스트 모드: 번역 없이 글자수만 제한합니다.");
-    if (text.length > characterLimit) {
-      text = text.substring(0, characterLimit) + "...";
-    }
-    return text;
-  }
-  */
+  // 원본 언어는 지정하지 않습니다. 상품명에는 일본어·영문·숫자가 섞여 있는 경우가 많습니다.
+  const { text: translated } = await translateOne(text, 'KO');
+  return clamp(translated, characterLimit);
+}
 
-  let finalTitle = text;
-  // 한국어가 포함되어 있는지 확인하는 정규식
-  const koreanRegex = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/;
+/**
+ * 한국어를 일본어로 번역하고 글자 수를 제한합니다. 손님이 한국어로 검색할 때 씁니다.
+ * 한국어가 없으면(이미 일본어로 검색한 경우 등) 그대로 둡니다.
+ */
+export async function translateToJapanese(text: string, characterLimit: number = 100): Promise<string> {
+  if (!text) return '';
+  if (!HAS_KOREAN.test(text)) return clamp(text, characterLimit);
 
-  // 한국어가 포함된 경우에만 DeepL 번역 실행
-  if (koreanRegex.test(text)) {
-    try {
-      const authKey = process.env.DEEPL_API_KEY;
-
-      if (authKey) {
-        const deepLUrl = "https://api-free.deepl.com/v2/translate";
-        
-        const deepLRes = await fetch(deepLUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `DeepL-Auth-Key ${authKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            text: [text],
-            target_lang: 'JA' // 🚀 목적 언어를 일본어(JA)로 설정
-          })
-        });
-
-        if (deepLRes.ok) {
-          const data = await deepLRes.json();
-          finalTitle = data.translations[0].text;
-          console.log(`✅ 번역 완료: ${text} -> ${finalTitle}`);
-        } else {
-          console.error("⚠️ DeepL API 에러:", deepLRes.status);
-        }
-      }
-    } catch (transError) {
-      console.error("⚠️ DeepL 통신 에러:", transError);
-    }
-  }
-
-  // 최종 결과물 글자 수 제한 적용
-  if (finalTitle.length > characterLimit) {
-    finalTitle = finalTitle.substring(0, characterLimit) + "...";
-  }
-
-  return finalTitle;
+  const { text: translated } = await translateOne(text, 'JA');
+  return clamp(translated, characterLimit);
 }
