@@ -410,13 +410,22 @@ model YahooShoppingCategory {
 
 model AmazonCategory {
   id         Int      @id @default(autoincrement())
-  genreId    Int      @unique
-  genreName  String
-  genreLevel Int?     @default(1) 
-  parentId   Int
+  // 🌟 아마존 브라우즈 노드 ID. 다른 플랫폼과 달리 문자열입니다.
+  //    실제 값이 21782663051 처럼 11자리까지 나와 MySQL INT(최대 21억)에 들어가지 않습니다.
+  //    계산에 쓰는 숫자가 아니라 식별자라 문자열이 맞습니다.
+  genreId    String   @unique @db.VarChar(20)
+  // 🌟 이름은 Translation 한 곳에만 둡니다: 원문(일본어)은 translation.jp, 한국어는 translation.ko.
+  //    번역을 못 받은 경우에도 ko=jp 인 행을 만들어 참조를 보장합니다.
+  translationId Int?
+  translation   Translation? @relation(fields: [translationId], references: [id])
+  genreLevel Int?     @default(1)
+  parentId   String   @default("0") @db.VarChar(20)  // 최상위는 "0"
   isLeaf     Boolean  @default(false)
+  // 🌟 손님에게 보일지. 취급하지 않기로 한 부문을 숨길 때 씁니다. (lib/blockedCategories.ts 와 함께)
+  isActive   Boolean  @default(true)
   updatedAt  DateTime @updatedAt
 
+  @@index([parentId, isActive])
   @@map("AmazonCategory")
 }
 
@@ -495,6 +504,52 @@ model ExchangeRateConfig {
   @@map("exchange_rate_configs")
 }
 
+/// 🛒 판매처 상품의 옵션(SKU)과 가격 (상품 페이지를 파싱해 캐시)
+///
+/// 공식 API 로는 옵션별 정보를 얻을 수 없습니다.
+///   - 라쿠텐: FAQ 에서 "API 결과로 색상·사이즈를 가져올 수 없다"고 밝히고 있습니다.
+///   - 야후:   검색 API 는 상품 단위라 SKU 목록이 없습니다.
+/// 두 곳 모두 상품 페이지에 SKU 가 서버렌더링된 JSON 으로 들어 있어 그대로 읽습니다.
+/// (자바스크립트 실행이 필요 없어 헤드리스 크롬은 쓰지 않습니다)
+///
+/// 조회는 언제나 "이 상품의 SKU 전부"라서 행을 쪼개지 않고 한 덩어리로 둡니다.
+/// SKU 단위로 나누면 상품 1만 개에 84만 행이 되는데, 그렇게 얻는 이점이 없습니다.
+model ItemVariantCache {
+  id        Int      @id @default(autoincrement())
+  /// 'rakuten' | 'yahoo_shopping'
+  platform  String   @db.VarChar(32)
+  /// 파싱 대상 상품 페이지 (쿼리스트링을 떼고 정규화해서 넣습니다)
+  itemUrl   String   @db.VarChar(512)
+
+  /// 옵션 축 이름. 일본어 원문과 한국어를 함께 둡니다. (예: [{ja:"カラー", ko:"색상"}])
+  /// 손님 화면은 한국어를, 주문 저장은 일본어를 씁니다 — 직원이 판매처에서 그대로 찾아야 합니다.
+  axes      Json
+  /// 축마다 고를 수 있는 값 목록. 판매처 페이지에 적힌 순서(M·L·XL…)를 그대로 둡니다.
+  /// SKU 에서 추려내면 순서가 뒤섞여 사이즈가 뒤죽박죽 보입니다.
+  axisValues Json    @map("axis_values")
+  /// SKU 목록 [{ variantId, options: [...], price, soldOut }]
+  variants  Json
+
+  /// 🔗 같은 상품처럼 보이지만 실제로는 별개인 상품들. (야후의 "기타 변형")
+  ///    예: 탑스만 7,700엔 / 바지만 7,700엔 / 상하 세트 15,400엔 — 셋 다 다른 상품입니다.
+  ///    옵션인 척 섞어 보여주면 고른 가격과 실제 가격이 달라집니다.
+  relatedItems Json? @map("related_items")
+
+  /// 목록·상세에서 "¥2,700~" 를 보여줄 때 JSON 을 풀지 않고 바로 읽습니다.
+  minPrice  Int      @map("min_price")
+  maxPrice  Int      @map("max_price")
+
+  /// 캐시 만료 판단 기준이자, 장바구니에 "이 가격은 언제 기준인지" 남길 때 씁니다.
+  fetchedAt DateTime @default(now()) @map("fetched_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([platform, itemUrl])
+  @@index([fetchedAt]) // 오래된 캐시 정리용
+  @@map("item_variant_caches")
+}
+
 model Translation {
   id        Int      @id @default(autoincrement())
   jp        String   @unique // 일본어 원문 (중복 저장 방지 및 빠른 검색)
@@ -507,6 +562,7 @@ model Translation {
   mercariCategories       MercariCategory[]
   yahooShoppingCategories YahooShoppingCategory[]
   yahooAuctionCategories  YahooAuctionCategory[]
+  amazonCategories        AmazonCategory[]
 
   @@index([jp]) // 검색 성능을 위한 인덱스 추가
 }
