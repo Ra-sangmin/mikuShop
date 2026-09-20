@@ -1440,4 +1440,79 @@ body {
   .cs-heading { font-size: 20px; }
   .bank-panel-account { font-size: 22px; }
 }
+/* 🍮 자주 방문하는 사이트 — 원본 로고 + 젤리 받침
+   로고 자체는 건드리지 않고, 받침을 말랑하게 만듭니다.
+   - 사이트 색이 살짝 번진 반투명 흰 바탕 + 볼록한 안쪽 그림자
+   - 위쪽 광택(::before), 아래쪽 빛 반사(::after)
+   - 마우스를 올리면 젤리처럼 한 번 출렁 */
+.site-jelly {
+  position: relative;
+  width: 132px; height: 92px;
+  border-radius: 30px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px; box-sizing: border-box;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0.92) 55%, rgb(var(--brand-rgb, 148 163 184) / 0.10) 100%),
+    #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 18px 30px -18px rgb(var(--brand-rgb, 15 23 42) / 0.55),
+    0 6px 12px -8px rgb(var(--brand-rgb, 15 23 42) / 0.35),
+    0 0 0 1px rgb(var(--brand-rgb, 148 163 184) / 0.10),
+    inset 0 2px 1px rgba(255, 255, 255, 1),
+    inset 0 -10px 18px -6px rgb(var(--brand-rgb, 148 163 184) / 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.45s ease;
+  will-change: transform;
+}
+.site-jelly img {
+  position: relative; z-index: 1;
+  max-width: 100%; max-height: 100%; object-fit: contain;
+  /* 로고 PNG의 흰 바탕이 네모로 보이지 않도록 젤리 색에 녹여 냅니다. (로고 색은 그대로) */
+  mix-blend-mode: multiply;
+}
+/* 위쪽 광택 — 로고 위를 살짝 덮는 유리 하이라이트 */
+.site-jelly::before {
+  content: ''; position: absolute; z-index: 2; pointer-events: none;
+  left: 9%; right: 9%; top: 5%; height: 44%;
+  border-radius: 24px 24px 50% 50% / 24px 24px 22px 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.15) 70%, rgba(255, 255, 255, 0) 100%);
+  opacity: 0.55;
+  mix-blend-mode: screen;
+}
+/* 아래쪽 빛 반사 — 말랑한 두께감 */
+.site-jelly::after {
+  content: ''; position: absolute; z-index: 0; pointer-events: none;
+  left: 22%; right: 22%; bottom: 7%; height: 12%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(var(--brand-rgb, 148 163 184) / 0.22), rgb(var(--brand-rgb, 148 163 184) / 0));
+  filter: blur(2px);
+}
+@keyframes siteJelly {
+  0%   { transform: scale(1, 1); }
+  30%  { transform: scale(1.12, 0.9); }
+  45%  { transform: scale(0.94, 1.08); }
+  60%  { transform: scale(1.05, 0.97); }
+  75%  { transform: scale(0.99, 1.02); }
+  100% { transform: scale(1.04, 1.04); }
+}
+@media (hover: hover) {
+  .site-card-box:hover .site-jelly {
+    animation: siteJelly 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+    box-shadow:
+      0 24px 38px -18px rgb(var(--brand-rgb, 15 23 42) / 0.65),
+      0 8px 14px -8px rgb(var(--brand-rgb, 15 23 42) / 0.4),
+      0 0 0 1px rgb(var(--brand-rgb, 148 163 184) / 0.16),
+      inset 0 2px 1px rgba(255, 255, 255, 1),
+      inset 0 -12px 20px -6px rgb(var(--brand-rgb, 148 163 184) / 0.3),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  }
+}
+@media (max-width: 768px) {
+  .site-jelly { width: 96px; height: 62px; border-radius: 20px; padding: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-card-box:hover .site-jelly { animation: none; transform: scale(1.04); }
+}
+
 @import "tailwindcss";
