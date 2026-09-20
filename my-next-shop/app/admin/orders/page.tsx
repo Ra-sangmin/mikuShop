@@ -9,6 +9,7 @@ import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order
 import '../admin-common.css';
 import './orders-premium.css';
 import { toEnglishAddress, toEnglishDetailAddress, toEnglishName, toIntlPhone } from '../components/englishAddress';
+import { extractVariantId, withVariantId } from '@/lib/itemUrl';
 import { DaumPostcodeEmbed } from 'react-daum-postcode';
 import {
   Wrench, FloppyDisk, Package,
@@ -1182,11 +1183,24 @@ export default function OrderManagement() {
                               count={order.bundleItems.length}
                               onClick={() => toggleBundleExpand(order.bundleId)}
                             />
-                          ) : order.productUrl && (
-                            <a href={order.productUrl} target="_blank" rel="noopener noreferrer" className="ord-url" title="상품 원본 페이지 열기">
-                              원본 <ArrowSquareOut size={10} weight="bold" />
-                            </a>
-                          )}
+                          ) : order.productUrl && (() => {
+                            // 🔗 주문에 SKU 번호가 남아 있으면 그 옵션이 선택된 상태로 엽니다.
+                            //    직원이 색상·사이즈를 다시 찾지 않아도 됩니다. (없으면 평소대로 상품 페이지)
+                            const sku = extractVariantId(order.option);
+                            const openUrl = withVariantId(order.productUrl, sku);
+                            // 판매처가 옵션 미리 선택을 지원하지 않으면 주소가 그대로입니다.
+                            // 그때는 "옵션까지 열린다"고 적지 않습니다.
+                            const preselects = openUrl !== order.productUrl;
+                            return (
+                              <a
+                                href={openUrl}
+                                target="_blank" rel="noopener noreferrer" className="ord-url"
+                                title={preselects ? `선택한 옵션(${sku})으로 원본 페이지 열기` : '상품 원본 페이지 열기'}
+                              >
+                                원본 <ArrowSquareOut size={10} weight="bold" />
+                              </a>
+                            );
+                          })()}
                           {/* 부가 서비스 · 옵션은 아이콘으로만 (내용은 상세보기에서) */}
                           {parseServices(order.serviceRequest).map(sv => (
                             <span key={sv} className={`ord-svc-ic ${SERVICE_ICON[sv]?.cls || 'is-etc'}`} title={sv} aria-label={sv}>
@@ -1391,7 +1405,8 @@ export default function OrderManagement() {
                           name: sub.product,
                           priceText: `¥${sub.jpy}`,
                           imageUrl: sub.productImageUrl,
-                          productUrl: sub.productUrl,
+                          // 묶음 안의 상품도 고른 옵션이 선택된 채로 열리게 합니다.
+                          productUrl: withVariantId(sub.productUrl, extractVariantId(sub.option)),
                         }))}
                         highlightIds={focusedOrderIds}
                       />
