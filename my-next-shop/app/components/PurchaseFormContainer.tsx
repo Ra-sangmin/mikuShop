@@ -154,6 +154,8 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
     }
   };
 
+  // 주소를 넣고 칸을 벗어나면 상품 이름·가격·사진을 대신 채웁니다.
+  // 못 채워도 그냥 둡니다. 손님이 직접 적으면 되는 일이라 오류를 띄우지 않습니다.
   const fetchProductName = async (index: number, inputUrl: string) => {
     const product = products[index];
     if (!inputUrl || !inputUrl.startsWith('http') || inputUrl === product.lastFetchedUrl) return;
@@ -170,9 +172,14 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
       if (data.success && data.productName) {
         updateProduct(index, 'name', data.productName);
         updateProduct(index, 'lastFetchedUrl', inputUrl);
+
+        // 가격과 사진은 **비어 있을 때만** 채웁니다.
+        // 손님이 이미 적어 둔 값을 자동 수집이 덮으면, 고쳐 놓은 게 사라져 버립니다.
+        if (data.price && !product.price) updateProduct(index, 'price', String(data.price));
+        if (data.imageUrl && !product.image) updateProduct(index, 'image', data.imageUrl);
       }
     } catch (error) {
-      console.error("상품명 추출 실패:", error);
+      console.error("상품 정보 수집 실패:", error);
     } finally {
       updateProduct(index, 'isAutoFetching', false);
     }
