@@ -12,7 +12,9 @@
 //      npx tsx scripts/migrate-shipping-fees.ts         ← 실제로 옮김
 //   3) 스키마에서 옛 컬럼 5개를 지우고  npx prisma db push  ← 컬럼 삭제
 //
-// order_id 기준 upsert 라 여러 번 돌려도 결과가 같습니다.
+// 여러 번 돌려도 안전합니다 — 이미 행이 있는 주문은 금액을 건드리지 않고 건너뜁니다.
+//   (첫 실행이 orders.domestic_shipping_fee 를 0 으로 비우기 때문에, 그냥 덮어쓰면
+//    두 번째 실행에서 이관해둔 현지 배송비가 0 으로 날아갑니다)
 //
 // ⚠️ 2단계를 건너뛰고 3단계로 가면 금액이 사라집니다. 반드시 --dry 로 먼저 확인하세요.
 
@@ -50,6 +52,14 @@ async function existingColumns(): Promise<Set<string>> {
      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders'`,
   );
   return new Set(rows.map(r => r.COLUMN_NAME));
+}
+
+async function clearDomestic(orderId: string) {
+  await prisma.$executeRawUnsafe(
+    'UPDATE orders SET domestic_shipping_fee = 0 WHERE order_id = ?',
+    orderId,
+  );
+  console.log(`      ↳ orders.domestic_shipping_fee 를 0 으로 비웠습니다 (값은 domestic_fee_krw 에 보존)`);
 }
 
 async function main() {
@@ -99,20 +109,30 @@ async function main() {
     }
     if (isDryRun) continue;
 
-    await prisma.orderShippingFee.upsert({
+    // ⚠️ 이미 옮겨둔 행은 절대 덮어쓰지 않습니다.
+    //    아래에서 orders.domestic_shipping_fee 를 0 으로 비우므로, 두 번째 실행 때는
+    //    읽어온 dom_krw 가 0 입니다. 그걸 그대로 써버리면 이관해둔 현지 배송비가 날아갑니다.
+    const existing = await prisma.orderShippingFee.findUnique({
       where: { orderId_round: { orderId: r.order_id, round: 1 } },
-      create: { orderId: r.order_id, round: 1, ...data },
-      update: data,
+    });
+
+    if (existing) {
+      console.log(`      ↳ 이미 이관된 주문입니다. 금액은 그대로 둡니다. (id=${existing.id})`);
+      // 앞서 행만 만들고 중단됐을 수 있으니, 비우는 것까지만 마저 끝냅니다.
+      if (movesDomestic && Number(r.dom_krw) && existing.domesticFeeKrw === Number(r.dom_krw)) {
+        await clearDomestic(r.order_id);
+      }
+      continue;
+    }
+
+    await prisma.orderShippingFee.create({
+      data: { orderId: r.order_id, round: 1, ...data },
     });
 
     // 옮긴 값은 orders 쪽에서 비웁니다. 그대로 두면 이 컬럼을 "일본내 배송료(¥)"로 읽는
     // 마이페이지 합계(장바구니·전체내역 탭)가 원화 금액을 엔화로 더해 버립니다.
     if (movesDomestic && Number(r.dom_krw)) {
-      await prisma.$executeRawUnsafe(
-        'UPDATE orders SET domestic_shipping_fee = 0 WHERE order_id = ?',
-        r.order_id,
-      );
-      console.log(`      ↳ orders.domestic_shipping_fee 를 0 으로 비웠습니다 (값은 domestic_fee_krw 에 보존)`);
+      await clearDomestic(r.order_id);
     }
   }
 
