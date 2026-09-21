@@ -105,7 +105,7 @@ export default function DeliveryInfoPage() {
         <div style={{ marginTop: '40px', padding: '20px', backgroundColor: '#fff', border: '1px dashed #ccc', borderRadius: '6px', fontSize: '14px', color: '#777', lineHeight: '1.6' }}>
             <strong>※ 안내사항</strong><br/>
             - 위 금액은 일본 현지 물류센터에서 한국 주소지까지의 기본 순수 운임입니다.<br/>
-            - 실제 배송비는 포장 후 박스의 부피무게(가로x세로x높이/6000)와 실무게 중 큰 쪽으로 책정됩니다.<br/>
+            - 실제 배송비는 포장 후 박스의 부피무게(가로x세로x높이/5000)와 실무게 중 큰 쪽으로 책정됩니다.<br/>
             - 20만원(약 150달러) 이상의 상품 구매 시 관부가세가 별도로 발생할 수 있습니다.
         </div>
       </div>

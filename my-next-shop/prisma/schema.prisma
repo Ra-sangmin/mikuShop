@@ -255,23 +255,6 @@ model NotificationLog {
   @@map("notification_logs")
 }
 
-enum FeeType {
-  TRANSFER // 송금 수수료
-  AGENCY   // 대행 수수료
-}
-
-model FeeConfiguration {
-  id                  Int      @id @default(autoincrement())                  // 데이터베이스 내부 관리용 고유 ID (자동 증가)
-  name                String                                                  // 수수료 명칭 (예: "기본 송금 수수료", "메르카리 대행 수수료")
-  feeType             FeeType  @map("fee_type")                               // 수수료 타입 구분 (예: TRANSFER, AGENCY)
-  amount              Int      @default(0)                                    // 수수료 금액 (단위: 엔 ¥)
-  description         String?  @db.Text                                       // 관리자 메모
-  createdAt           DateTime @default(now()) @map("created_at")             // 생성 시간
-  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")  // 수정 시간
-
-  @@map("fee_configurations")
-}
-
 model MembershipGrade {
   id            Int      @id @default(autoincrement())                  // 데이터베이스 내부 관리용 고유 ID (자동 증가)
   name          String   @unique                                        // 등급 이름 (예: "NEW", "SILVER", "GOLD", "DIAMOND")

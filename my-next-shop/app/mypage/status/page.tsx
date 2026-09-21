@@ -457,7 +457,6 @@ function usePurchaseStatusLogic() {
       const productP = (Number(item.productPrice) || 0) * (Number(item.productCount) || 1);
       // ⚠️ 구매 요청 단계의 일본내 배송료(¥). 배송비 요청 탭에서는 쓰지 않습니다.
       const domesticS = Number(item.domesticShippingFee) || 0; 
-      const transferF = Number(item.transferFee) || 0;
       // 💴 배송비 요청 단계의 청구 금액 (order_shipping_fees, 전부 원화)
       const secondP = Number(item.intlFeeKrw) || 0;
       const domesticKrw = Number(item.domesticFeeKrw) || 0;
@@ -485,10 +484,11 @@ function usePurchaseStatusLogic() {
           acc.delivery += domesticS;
           acc.agency += calculateTieredAgencyFee(itemQuantity, agencyFeeRule);
         } else {
-          // ℹ️ 대행 수수료는 위 CART/BID_SUCCESS 가지에서만 구간별로 계산합니다.
-          //    여기엔 더할 값이 없습니다. (예전엔 orders.purchase_fee 를 더했는데
-          //     그 컬럼은 쓰는 코드가 없어 항상 0 이었고, 이제 제거됐습니다)
-          acc.transfer += transferF;
+          // ℹ️ 결제·대행 수수료는 위 CART/BID_SUCCESS 가지에서만 구간별로 계산합니다.
+          //    이 가지의 결과는 사실 어디에도 쓰이지 않습니다 — totals 를 읽는 PaymentSummary 가
+          //    CART·PAYMENT_REQ·BID_PENDING·BID_SUCCESS 네 탭에서만 렌더되고,
+          //    그 네 탭은 모두 위쪽 가지로 빠지기 때문입니다.
+          //    (예전엔 orders.purchase_fee 와 존재하지 않는 item.transferFee 를 더했는데 둘 다 항상 0 이었습니다)
           acc.delivery += domesticS;
         }
       }

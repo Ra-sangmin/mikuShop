@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { ORDER_STATUS } from '@/src/types/order';
 import NoticePanel from '@/app/components/NoticePanel';
 
@@ -94,54 +94,19 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
     return out;
   }, [selectedItems, orders, isPaymentRequest]);
 
-  const [feeSettings, setFeeSettings] = useState({ TRANSFER: 450, AGENCY: 100 });
-
-  useEffect(() => {
-    const fetchFees = async () => {
-      try {
-        const res = await fetch('/api/fees');
-        const data = await res.json();
-        if (data.success && data.fees) {
-          const settings = data.fees.reduce((acc: any, fee: any) => {
-            acc[fee.feeType] = fee.amount;
-            return acc;
-          }, {});
-          setFeeSettings(prev => ({ ...prev, ...settings }));
-        }
-      } catch (err) {
-        console.error("수수료 데이터를 불러오지 못했습니다. 기본값을 사용합니다.");
-      }
-    };
-    fetchFees();
-  }, []);
-
-  const calculatedTotals = useMemo(() => {
-    if (!isSingleHighlightMode && selectedItems.length > 0) {
-      // 🌟 selectedItems는 선택된 주문의 id 문자열 배열이라 item.domesticShippingFee로 직접
-      // 읽으면 항상 undefined(→0)가 되는 버그가 있었습니다. 실제 주문 객체를 기준으로 이미
-      // 정확히 합산해둔 부모의 totals.delivery를 그대로 사용합니다.
-
-      // 🌟 구매 요청(CART), 경매 낙찰 성공(BID_SUCCESS) 탭은 부모(status/page.tsx)가
-      // admin/estimate와 동일한 계산식으로 이미 정확히 합산해둔 totals.transfer/totals.agency를 그대로 사용합니다.
-      if (activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.BID_SUCCESS) {
-        return {
-          product: totals.product,
-          delivery: totals.delivery,
-          transfer: totals.transfer,
-          agency: totals.agency
-        };
-      }
-
-      const itemCount = selectedItems.length;
-      return {
-        product: totals.product,
-        delivery: totals.delivery,
-        transfer: itemCount * feeSettings.TRANSFER,
-        agency: itemCount * feeSettings.AGENCY
-      };
-    }
-    return totals;
-  }, [selectedItems, totals, isSingleHighlightMode, feeSettings, activeTab]);
+  /**
+   * 금액은 전부 부모(status/page.tsx)의 totals 를 그대로 씁니다.
+   *
+   * 예전엔 여기서 "선택 건수 × 수수료" 로 다시 계산하는 가지가 있었는데,
+   * 바깥 조건(!isSingleHighlightMode)이 이미 CART · BID_SUCCESS 만 남기고
+   * 안에서 그 둘을 다시 걸러 early return 하고 있어 닿지 않는 코드였습니다.
+   * (PaymentSummary 는 CART · PAYMENT_REQ · BID_PENDING · BID_SUCCESS 네 탭에서만 렌더됩니다)
+   *
+   * ⚠️ 수수료를 이 컴포넌트에서 다시 계산하지 마세요. selectedItems 는 주문 id 문자열 배열이라
+   *    거기서 금액을 읽으면 항상 undefined(→0) 가 됩니다. 예전에 그 버그로 배송비가 0 으로 나왔습니다.
+   *    구간별 계산(calculateTieredPaymentFee 등)은 실제 주문 객체를 쓰는 부모가 담당합니다.
+   */
+  const calculatedTotals = totals;
 
   const getHighlightTitle = () => {
     if (isPaymentRequest) return '청구된 총 배송비';
