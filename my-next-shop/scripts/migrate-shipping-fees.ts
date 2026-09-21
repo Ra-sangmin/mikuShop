@@ -38,19 +38,44 @@ type LegacyRow = {
   rate: number | null;
 };
 
+/**
+ * 서버마다 orders 에 남아 있는 옛 컬럼이 다릅니다.
+ *   · 운영 서버: second_payment_amount · domestic_shipping_fee 만 있음
+ *   · 개발 장비: 엔화·환율 컬럼까지 있을 수 있음 (중간 단계를 거쳐갔다면)
+ * 없는 컬럼을 SELECT 하면 통째로 실패하므로, 실제 있는 것만 골라 읽습니다.
+ */
+async function existingColumns(): Promise<Set<string>> {
+  const rows = await prisma.$queryRawUnsafe<{ COLUMN_NAME: string }[]>(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders'`,
+  );
+  return new Set(rows.map(r => r.COLUMN_NAME));
+}
+
 async function main() {
+  const cols = await existingColumns();
+  // 있으면 그 컬럼을, 없으면 0 을 읽습니다.
+  const col = (name: string) => (cols.has(name) ? `\`${name}\`` : '0');
+  const nonZero = ['second_payment_amount', 'extra_payment_fee', 'intl_shipping_fee_jpy', 'domestic_fee_jpy']
+    .filter(c => cols.has(c))
+    .map(c => `\`${c}\` <> 0`);
+
+  if (nonZero.length === 0) {
+    console.log('옮길 옛 컬럼이 없습니다. (이미 정리된 서버입니다)');
+    return;
+  }
+
   // 옛 컬럼은 스키마에서 이미 지웠으므로 Prisma 모델로는 읽을 수 없습니다. 생 SQL 로 읽습니다.
   const rows = await prisma.$queryRawUnsafe<LegacyRow[]>(`
     SELECT order_id, user_id, status,
-           intl_shipping_fee_jpy AS intl_jpy,
-           second_payment_amount AS intl_krw,
-           domestic_fee_jpy      AS dom_jpy,
-           domestic_shipping_fee AS dom_krw,
-           extra_payment_fee     AS extra_krw,
-           applied_exchange_rate AS rate
+           ${col('intl_shipping_fee_jpy')} AS intl_jpy,
+           ${col('second_payment_amount')} AS intl_krw,
+           ${col('domestic_fee_jpy')}      AS dom_jpy,
+           ${col('domestic_shipping_fee')} AS dom_krw,
+           ${col('extra_payment_fee')}     AS extra_krw,
+           ${col('applied_exchange_rate')} AS rate
     FROM orders
-    WHERE second_payment_amount <> 0 OR extra_payment_fee <> 0
-       OR intl_shipping_fee_jpy <> 0 OR domestic_fee_jpy <> 0
+    WHERE ${nonZero.join(' OR ')}
     ORDER BY order_id
   `);
 
