@@ -16,6 +16,7 @@ export const ADMIN_MENU: AdminMenuItem[] = [
   { name: '정산 관리', path: '/admin/settlement' },
   { name: '미쿠짱 머니', path: '/admin/refund' },
   { name: '고객 센터', path: '/admin/cs', group: 'SUPPORT' },
+  { name: '카카오톡 알림톡 관리', path: '/admin/alimtalk' },
   { name: '회원 등급 및 수수료 관리', path: '/admin/membership-grades', group: 'SETTINGS' },
   { name: '국제 배송 업체 정보 관리', path: '/admin/shipping-carriers' },
   { name: '견적 계산기', path: '/admin/estimate' },

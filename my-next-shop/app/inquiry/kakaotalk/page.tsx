@@ -77,8 +77,9 @@ export default function ContactPage() {
           icon={<ChatCircleDots weight="duotone" />}
           feature={{
             label: <span className="gp-hero-live">실시간 상담 가능</span>,
-            value: '10:00 ~ 24:00',
-            sub: '연중무휴',
+            value: '10:00 ~ 19:00',
+            sub: '평일 (토·일·공휴일 휴무)',
+            subBelow: true,
             actions: [
               {
                 onClick: handleKakaoClick,
@@ -95,8 +96,8 @@ export default function ContactPage() {
             ],
           }}
           stats={[
-            { label: '상담시간', value: '10:00 ~ 24:00', text: true },
-            { label: '운영일', value: <>365일<small>연중무휴</small></> },
+            { label: '상담시간', value: '10:00 ~ 19:00', text: true },
+            { label: '운영일', value: <>평일<small>토·일·공휴일 휴무</small></> },
             { label: '상담 방식', value: '실시간 채팅', text: true },
             { label: '자주하는 질문', value: <>보러가기 <i className="fa fa-arrow-right"></i></>, text: true, href: '/inquiry/faq' },
           ]}

@@ -925,7 +925,30 @@ body {
   .quick-icon-wrap:hover .quick-label { color: #0f172a; }
   .quick-icon-wrap:hover .quick-desc { color: #64748b; }
 }
+/* 모바일 터치: 호버와 같은 효과 (app/page.tsx 의 useTouchHover 가 is-touch-active 를 붙임) */
+.quick-icon-wrap.is-touch-active { transform: translateY(-8px); }
+.quick-icon-wrap.is-touch-active .quick-icon-box {
+  border-color: rgb(var(--qi-rgb, 148 163 184) / 0.35);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 28px 48px -24px rgb(var(--qi-rgb, 148 163 184) / 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+.quick-icon-wrap.is-touch-active .quick-icon-box::before { transform: translate(-50%, -50%) scale(1.2); }
+.quick-icon-wrap.is-touch-active .quick-icon-box::after { transform: translateX(120%); }
+.quick-icon-wrap.is-touch-active .quick-medallion {
+  transform: translateY(-3px) scale(1.06) rotate(-4deg);
+  box-shadow:
+    0 20px 32px -12px rgb(var(--qi-rgb, 148 163 184) / 0.85),
+    0 6px 10px -4px rgb(var(--qi-rgb, 148 163 184) / 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -6px 12px rgba(0, 0, 0, 0.06);
+}
+.quick-icon-wrap.is-touch-active .quick-go { opacity: 1; transform: translate(0, 0); }
+.quick-icon-wrap.is-touch-active .quick-label { color: #0f172a; }
+.quick-icon-wrap.is-touch-active .quick-desc { color: #64748b; }
 .quick-link:focus-visible { outline: none; }
+.quick-link, .site-card-link { -webkit-tap-highlight-color: transparent; }
 .quick-link:focus-visible .quick-icon-box { outline: 3px solid rgb(var(--qi-rgb, 148 163 184) / 0.5); outline-offset: 3px; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1011,6 +1034,15 @@ body {
   .site-card-box:hover .site-card-cta { background: rgb(var(--brand-rgb, 100 116 139)); color: #ffffff; }
   .site-card-box:hover .site-card-cta svg { transform: translateX(3px); }
 }
+/* 모바일 터치: 호버와 같은 효과 (app/page.tsx 의 useTouchHover 가 is-touch-active 를 붙임) */
+.site-card-box.is-touch-active {
+  transform: translateY(-10px);
+  border-color: rgb(var(--brand-rgb, 148 163 184) / 0.3);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 30px 50px -28px rgb(var(--brand-rgb, 15 23 42) / 0.45);
+}
+.site-card-box.is-touch-active .site-logo-plate { transform: scale(1.06); box-shadow: 0 16px 30px -16px rgb(var(--brand-rgb, 15 23 42) / 0.55), 0 0 0 1px rgba(15, 23, 42, 0.04); }
+.site-card-box.is-touch-active .site-card-cta { background: rgb(var(--brand-rgb, 100 116 139)); color: #ffffff; }
+.site-card-box.is-touch-active .site-card-cta svg { transform: translateX(3px); }
 
 /* -------------------------------------
  * 6. 인기 쇼핑몰 (소셜 스크롤 마스크 유지) 
@@ -1195,9 +1227,9 @@ body {
 }
 .cs-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; }
 .cs-meta-row + .cs-meta-row { border-top: 1px dashed #e3e7ee; }
-.cs-meta dt { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: #64748b; }
+.cs-meta dt { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; white-space: nowrap; font-size: 13px; font-weight: 600; color: #64748b; }
 .cs-meta dt svg { fill: var(--tone-to); font-size: 14px; }
-.cs-meta dd { margin: 0; font-size: 14px; font-weight: 800; color: #1e293b; font-variant-numeric: tabular-nums; }
+.cs-meta dd { margin: 0; min-width: 0; text-align: right; word-break: keep-all; font-size: 14px; font-weight: 800; color: #1e293b; font-variant-numeric: tabular-nums; }
 .cs-kakao-btn {
   margin-top: auto;
   width: 100%;
@@ -1508,11 +1540,22 @@ body {
       inset 0 0 0 1px rgba(255, 255, 255, 0.6);
   }
 }
+/* 모바일 터치: 호버와 같은 효과 (app/page.tsx 의 useTouchHover 가 is-touch-active 를 붙임) */
+.site-card-box.is-touch-active .site-jelly {
+  animation: siteJelly 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  box-shadow:
+    0 24px 38px -18px rgb(var(--brand-rgb, 15 23 42) / 0.65),
+    0 8px 14px -8px rgb(var(--brand-rgb, 15 23 42) / 0.4),
+    0 0 0 1px rgb(var(--brand-rgb, 148 163 184) / 0.16),
+    inset 0 2px 1px rgba(255, 255, 255, 1),
+    inset 0 -12px 20px -6px rgb(var(--brand-rgb, 148 163 184) / 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
 @media (max-width: 768px) {
   .site-jelly { width: 96px; height: 62px; border-radius: 20px; padding: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .site-card-box:hover .site-jelly { animation: none; transform: scale(1.04); }
+  .site-card-box:hover .site-jelly, .site-card-box.is-touch-active .site-jelly { animation: none; transform: scale(1.04); }
 }
 
 @import "tailwindcss";

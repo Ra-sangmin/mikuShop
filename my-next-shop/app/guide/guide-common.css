@@ -1146,7 +1146,10 @@
   content: ''; width: 7px; height: 7px; border-radius: 50%; background: #34d399;
   box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.22);
 }
-.gp-premium-hero .mp-hero-stat strong small { margin-left: 4px; font-size: 12px; font-weight: 700; color: #aeb4c2; }
+/* 통계 칸 보조 문구(예: 운영일 → 토·일·공휴일 휴무)는 값 아래 줄에 표시 */
+.gp-premium-hero .mp-hero-stat strong small { display: block; margin: 4px 0 0; font-size: 12px; font-weight: 700; line-height: 1.4; letter-spacing: -0.2px; color: #aeb4c2; word-break: keep-all; }
+/* 요약 카드의 긴 보조 문구(예: 평일 (토·일·공휴일 휴무))는 값 아래 줄에 표시 */
+.gp-premium-hero .mp-hero-money-value small.is-below { display: block; margin: 6px 0 0; font-size: 14px; font-weight: 700; letter-spacing: -0.2px; line-height: 1.4; word-break: keep-all; }
 
 /* 🌟 이용약관 등 문서 페이지: 검은색 카드 오른쪽 칸의 시행일자는 금액처럼 크지 않게 표시 */
 .gp-premium-hero .gp-hero-date { font-size: 20px; letter-spacing: -0.3px; }
@@ -1215,9 +1218,9 @@
 .gp-help-pro-text { font-size: 14px; font-weight: 600; line-height: 1.65; color: #4b5563; word-break: keep-all; }
 .gp-help-pro-text .footer-info-link { color: #6b4e00; font-weight: 900; text-decoration: none; box-shadow: inset 0 -7px 0 rgba(254,229,0,0.55); }
 
-.gp-help-pro-side { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.gp-help-pro-side { flex-shrink: 0; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
 .gp-help-pro-cta {
-  display: inline-flex; align-items: center; gap: 7px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   height: 46px; padding: 0 20px; border-radius: 14px;
   background: linear-gradient(180deg, #ffe94d 0%, #fee500 100%);
   color: #191600; font-size: 14px; font-weight: 900; white-space: nowrap;
@@ -1227,7 +1230,10 @@
 .gp-help-pro-arrow { transition: transform 0.2s ease; }
 .gp-help-pro:hover .gp-help-pro-cta { filter: brightness(1.03); }
 .gp-help-pro:hover .gp-help-pro-arrow { transform: translateX(3px); }
-.gp-help-pro-meta { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: #8a7a4a; white-space: nowrap; }
+.gp-help-pro-meta { display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: #8a7a4a; white-space: nowrap; }
+/* 운영일은 상담시간 아래 줄에 — 오른쪽 버튼 영역이 넓어져 본문을 좁히지 않도록 */
+.gp-help-pro-meta:has(.gp-help-pro-meta-days) { display: grid; grid-template-columns: auto auto; justify-content: center; align-items: center; column-gap: 5px; row-gap: 2px; }
+.gp-help-pro-meta-days { grid-column: 1 / -1; text-align: center; font-weight: 600; }
 
 @media (max-width: 768px) {
   .gp-help-pro { flex-wrap: wrap; gap: 14px 16px; padding: 20px 18px; border-radius: 20px; }

@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import {
   ChatCircleDots, ShoppingCartSimple, AirplaneTilt, Receipt, Scales, Headset, ArrowRight,
@@ -442,11 +443,11 @@ export default function HomePage() {
                 <dl className="cs-meta">
                     <div className="cs-meta-row">
                         <dt><Clock weight="bold" /> 운영시간</dt>
-                        <dd>10:00 ~ 24:00</dd>
+                        <dd>10:00 ~ 19:00</dd>
                     </div>
                     <div className="cs-meta-row">
                         <dt><CalendarCheck weight="bold" /> 운영일</dt>
-                        <dd>365일 연중무휴</dd>
+                        <dd>평일 (토·일·공휴일 휴무)</dd>
                     </div>
                 </dl>
 
@@ -532,6 +533,57 @@ export default function HomePage() {
 }
 
 // --- 하위 컴포넌트 ---
+// 🌟 모바일(터치)에서도 마우스 호버 애니메이션을 보여 주기 위한 훅
+//   - 손가락이 닿으면 is-touch-active 클래스를 붙여 호버와 같은 효과를 냅니다.
+//   - 스크롤/드래그로 손가락이 움직이면(또는 브라우저가 스크롤로 판단해 취소하면) 효과를 끕니다.
+//   - 탭으로 끝나면 애니메이션이 보이도록 navDelay(ms) 만큼 기다렸다가 이동합니다.
+//   - 마우스·펜 입력은 건드리지 않습니다 (기존 :hover 그대로).
+function useTouchHover(navDelay: number) {
+    const router = useRouter();
+    const [active, setActive] = useState(false);
+    const startRef = useRef<{ x: number; y: number } | null>(null);
+    const pointerTypeRef = useRef<string>('mouse');
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        // 뒤로 가기로 돌아왔을 때(bfcache) 눌린 상태가 남지 않도록
+        const reset = () => { setActive(false); startRef.current = null; };
+        window.addEventListener('pageshow', reset);
+        return () => {
+            window.removeEventListener('pageshow', reset);
+            if (timerRef.current) clearTimeout(timerRef.current);
+        };
+    }, []);
+
+    const onPointerDown = (e: React.PointerEvent) => {
+        pointerTypeRef.current = e.pointerType;
+        if (e.pointerType !== 'touch') return;
+        startRef.current = { x: e.clientX, y: e.clientY };
+        setActive(true);
+    };
+    const onPointerMove = (e: React.PointerEvent) => {
+        if (e.pointerType !== 'touch' || !startRef.current) return;
+        if (Math.hypot(e.clientX - startRef.current.x, e.clientY - startRef.current.y) > 10) {
+            startRef.current = null;
+            setActive(false);
+        }
+    };
+    const onPointerCancel = () => { startRef.current = null; setActive(false); };
+
+    /** 터치 탭이면 true 를 돌려주고, 잠시 뒤 href 로 이동합니다. */
+    const handleTap = (e: React.MouseEvent, href: string) => {
+        if (pointerTypeRef.current !== 'touch' || e.detail === 0) return false; // 마우스·펜·키보드(Enter)는 바로 이동
+        e.preventDefault();
+        if (!startRef.current && !active) return true; // 스크롤로 취소된 터치
+        setActive(true);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => router.push(href), navDelay);
+        return true;
+    };
+
+    return { active, handleTap, handlers: { onPointerDown, onPointerMove, onPointerCancel } };
+}
+
 // 🌟 자주 사용하는 기능 아이콘
 // 일러스트 PNG 대신 벡터 아이콘 + 항목별 그라데이션 배지로 구성합니다.
 // from/to: 배지 그라데이션, rgb: 카드 아우라·호버 그림자 색 (rgb(var(--qi-rgb) / 0.2) 형태로 사용)
@@ -547,6 +599,7 @@ const QUICK_ICONS: Record<string, { icon: React.ElementType; desc: string; from:
 function QuickIcon({ href, label }: any) {
     const meta = QUICK_ICONS[label] ?? QUICK_ICONS['견적문의'];
     const Icon = meta.icon;
+    const touch = useTouchHover(420);
     return (
         <Link
             href={href}
@@ -558,8 +611,10 @@ function QuickIcon({ href, label }: any) {
                 ['--qi-to' as any]: meta.to,
             }}
             onDragStart={(e) => e.preventDefault()}
+            {...touch.handlers}
+            onClick={(e) => { touch.handleTap(e, href); }}
         >
-            <div className="quick-icon-wrap">
+            <div className={`quick-icon-wrap${touch.active ? ' is-touch-active' : ''}`}>
                 <div className="quick-icon-box quick-box">
                     <span className="quick-medallion" aria-hidden="true">
                         <Icon className="quick-medallion-icon" weight="duotone" />
@@ -577,15 +632,18 @@ function QuickIcon({ href, label }: any) {
 
 // 🌟 자주 방문하는 사이트 카드 (brandRgb: 로고 뒤 은은한 배경·호버 테두리에 쓰는 브랜드 색)
 function SiteCard({ shopId, logoSrc, name, desc, tag, brandRgb = '148 163 184', onClick }: any) {
+    const href = `/main_shop/${shopId}`;
+    const touch = useTouchHover(560);
     return (
         <Link
-            href={`/main_shop/${shopId}`}
+            href={href}
             className="site-card-link"
             style={{ ...styles.siteCardLink, ['--brand-rgb' as any]: brandRgb }}
             onDragStart={(e) => e.preventDefault()}
-            onClick={onClick}
+            {...touch.handlers}
+            onClick={(e) => { onClick?.(e); if (!e.defaultPrevented) touch.handleTap(e, href); }}
         >
-            <div className="site-card-box">
+            <div className={`site-card-box${touch.active ? ' is-touch-active' : ''}`}>
                 {tag && <span className="site-card-tag">{tag}</span>}
                 <div className="site-logo-wrap">
                     {/* 🍮 원본 로고는 그대로, 받침만 말랑한 젤리 느낌 (광택 · 볼록한 안쪽 그림자 · 호버 시 출렁) */}

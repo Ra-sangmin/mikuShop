@@ -431,7 +431,7 @@ export default function FeeGuidePage() {
           className="animate-5"
           variant="premium"
           title="모든 수수료는 이용 시점의 환율이 적용됩니다"
-          meta={<><Clock size={12} weight="bold" /> 10:00 ~ 24:00 · 연중무휴</>}
+          meta={<><Clock size={12} weight="bold" /> 10:00 ~ 19:00<span className="gp-help-pro-meta-days">평일 (토·일·공휴일 휴무)</span></>}
         >
           궁금하신 점은 <span className="footer-info-link">카카오톡 채널</span>로 편하게 문의해 주세요.
         </GuideFooterNotice>

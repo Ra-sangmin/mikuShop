@@ -74,7 +74,7 @@ export const ALIMTALK_TEMPLATES: Record<string, AlimtalkTemplate> = {
 
   // 🏬 일본 물류센터 입고 안내
   ARRIVED: {
-    templateId: process.env.SOLAPI_TEMPLATE_ARRIVED || 'KA01TP260918071114870tP6h6qdIhYo',
+    templateId: process.env.SOLAPI_TEMPLATE_ARRIVED || 'KA01TP260920161318452jbXB7KXuwqS',
     content: [
       '[미쿠짱] 일본 물류센터 입고 안내',
       '',
@@ -93,7 +93,7 @@ export const ALIMTALK_TEMPLATES: Record<string, AlimtalkTemplate> = {
   //    ⚠️ 배송비 결제 완료(PAYMENT_DONE)가 아니라 요청(PAYMENT_REQ) 시점입니다.
   //       본문의 "승인을 완료해 주시기 바랍니다" 가 아직 결제 전임을 가리킵니다.
   PAYMENT_REQ: {
-    templateId: process.env.SOLAPI_TEMPLATE_PAYMENT_REQ || 'KA01TP260918071557237CieOaWqkaUi',
+    templateId: process.env.SOLAPI_TEMPLATE_PAYMENT_REQ || 'KA01TP260920161606939QfkdB9VmVCe',
     content: [
       '[미쿠짱] 국제 배송 진행 안내',
       '',
@@ -112,7 +112,7 @@ export const ALIMTALK_TEMPLATES: Record<string, AlimtalkTemplate> = {
 
   // 🚚 국제 배송 시작 안내
   SHIPPING: {
-    templateId: process.env.SOLAPI_TEMPLATE_SHIPPING || 'KA01TP2609180719085476uQp1RpGhAM',
+    templateId: process.env.SOLAPI_TEMPLATE_SHIPPING || 'KA01TP260920161702253korkvcMnfls',
     content: [
       '[미쿠짱] 국제 배송 시작 안내',
       '',
@@ -177,7 +177,7 @@ export function maskPhone(raw: string | null | undefined): string {
 }
 
 /** 솔라피는 HMAC-SHA256 서명을 Authorization 헤더에 담습니다. */
-function authHeader(apiKey: string, apiSecret: string): string {
+export function authHeader(apiKey: string, apiSecret: string): string {
   const date = new Date().toISOString();
   const salt = randomBytes(32).toString('hex');
   const signature = createHmac('sha256', apiSecret).update(date + salt).digest('hex');

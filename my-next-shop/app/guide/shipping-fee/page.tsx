@@ -608,7 +608,7 @@ export default function ShippingFeePage() {
         {/* Footer info (guide/customs, guide/fee-guide와 동일한 디자인) */}
         <GuideFooterNotice style={{ marginBottom: '30px' }}>
           <span style={{ display: 'block', fontSize: '15.5px', lineHeight: '1.5', color: '#1e293b', fontWeight: '700', marginBottom: '10px' }}>
-            실제 무게(kg)와 부피 무게(가로×세로×높이 ÷ 6,000㎤) 중<br />
+            실제 무게(kg)와 부피 무게(가로×세로×높이 ÷ 5,000㎤) 중<br />
             <strong style={{ color: '#b04a12', fontWeight: '900' }}>더 큰 값</strong>을 기준으로 배송비가 산정됩니다.
           </span>
           <span style={{ display: 'block', fontSize: '13.5px', lineHeight: '1.6', color: '#6b7280', fontWeight: '500' }}>

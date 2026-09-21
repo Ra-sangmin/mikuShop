@@ -134,9 +134,12 @@ export default function Footer() {
           margin: 12px 0 0; font-size: 12px; color: #aeb4c2;
         }
         .contact-hours :global(strong) { color: #ffffff; font-weight: 800; }
+        .contact-hours-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; line-height: 1.5; }
+        .contact-days { font-size: 11.5px; word-break: keep-all; }
         .contact-dot {
           display: inline-flex; align-items: center; gap: 6px;
           font-size: 11.5px; font-weight: 800; color: #7fd3a6;
+          white-space: nowrap; flex-shrink: 0;
         }
         .contact-dot::before {
           content: ''; width: 7px; height: 7px; border-radius: 50%; background: #34c77b;
@@ -312,7 +315,10 @@ export default function Footer() {
                 카카오톡 상담하기 <i className="fa fa-arrow-right" style={{ fontSize: 12 }}></i>
               </Link>
               <p className="contact-hours">
-                <span>상담시간 <strong>10:00 ~ 24:00</strong> · 연중무휴</span>
+                <span className="contact-hours-text">
+                  <span>상담시간 <strong>10:00 ~ 19:00</strong></span>
+                  <span className="contact-days">평일 (토·일·공휴일 휴무)</span>
+                </span>
                 <span className="contact-dot">상담 가능</span>
               </p>
             </div>

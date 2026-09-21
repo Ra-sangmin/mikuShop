@@ -36,6 +36,8 @@ export interface HeroFeature {
   value: React.ReactNode;
   /** value 옆에 작게 붙는 단위/보조 문구 */
   sub?: React.ReactNode;
+  /** true 면 sub 를 value 아래 줄에 표시합니다 (긴 보조 문구용, 예: 운영일 안내) */
+  subBelow?: boolean;
   actions?: HeroAction[];
 }
 
@@ -68,7 +70,7 @@ export default function GuidePremiumHero({ eyebrow, title, desc, icon, feature, 
           <span className="mp-hero-money-label">{feature.label}</span>
           <strong className="mp-hero-money-value" translate="no">
             {feature.value}
-            {feature.sub && <small>{feature.sub}</small>}
+            {feature.sub && <small className={feature.subBelow ? 'is-below' : undefined}>{feature.sub}</small>}
           </strong>
           {feature.actions && feature.actions.length > 0 && (
             <div className="mp-hero-money-actions">

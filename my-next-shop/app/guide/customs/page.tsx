@@ -284,7 +284,7 @@ export default function CustomsTaxGuidePage() {
           className="animate-6"
           variant="premium"
           title="실제 세액은 통관 시점의 기준에 따라 달라질 수 있어요"
-          meta={<><Clock size={12} weight="bold" /> 10:00 ~ 24:00 · 연중무휴</>}
+          meta={<><Clock size={12} weight="bold" /> 10:00 ~ 19:00<span className="gp-help-pro-meta-days">평일 (토·일·공휴일 휴무)</span></>}
         >
           정확한 확인은 <span className="footer-info-link">1:1 상담</span>을 통해 문의주세요.
         </GuideFooterNotice>

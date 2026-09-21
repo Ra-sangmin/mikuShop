@@ -100,7 +100,7 @@ export default function LoginPage() {
           <ul className="login-brand-points">
             <li><span className="login-point-icon"><i className="fa fa-cart-shopping"></i></span>라쿠텐 · 메루카리 · 야후 원스톱 구매대행</li>
             <li><span className="login-point-icon"><i className="fa fa-plane"></i></span>무게 기준 투명한 국제 배송비</li>
-            <li><span className="login-point-icon"><i className="fa fa-comment-dots"></i></span>카카오톡 실시간 상담 · 365일 대응</li>
+            <li><span className="login-point-icon"><i className="fa fa-comment-dots"></i></span>카카오톡 실시간 상담 · 평일 10:00~19:00</li>
           </ul>
         </aside>
 

@@ -4,7 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { ADMIN_MENU } from '@/app/admin/adminMenu';
 import {
   SquaresFour, Users, ClipboardText, Truck, ChartLineUp, ArrowUUpLeft,
-  Headset, Crown, AirplaneTilt, Calculator, Code, Package, CaretRight,
+  Headset, ChatCircleDots, Crown, AirplaneTilt, Calculator, Code, Package, CaretRight,
 } from '@phosphor-icons/react';
 import '@/app/admin/admin-shell.css';
 
@@ -17,6 +17,7 @@ const MENU_ICON: Record<string, React.ElementType> = {
   '정산 관리': ChartLineUp,
   '미쿠짱 머니': ArrowUUpLeft,
   '고객 센터': Headset,
+  '카카오톡 알림톡 관리': ChatCircleDots,
   '회원 등급 및 수수료 관리': Crown,
   '국제 배송 업체 정보 관리': AirplaneTilt,
   '견적 계산기': Calculator,
