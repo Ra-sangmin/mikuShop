@@ -371,6 +371,13 @@
    4. 배송비 입력 팝업
    ===================================================== */
 .ord-modal-overlay {
+  /* 🌟 주문 상세 팝업은 다른 화면(카카오톡 알림톡 관리)에서도 열리므로 .ord-page 의 색 변수를 여기에도 둡니다 */
+  --ord-ink: #0f172a;
+  --ord-sub: #64748b;
+  --ord-muted: #94a3b8;
+  --ord-line: #eef2f7;
+  --ord-blue: #2563eb;
+  --ord-blue-rgb: 37, 99, 235;
   position: fixed; inset: 0; z-index: 1000;
   display: flex; align-items: center; justify-content: center;
   padding: 20px;

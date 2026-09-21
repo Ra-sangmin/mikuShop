@@ -198,6 +198,12 @@ export async function notifyOrderStatusByAlimtalk(
         variables: Object.fromEntries(Object.entries(variables).map(([k, v]) => [`#{${k}}`, v])),
         // 묶음이면 주문 하나만 열어 봐야 나머지를 볼 수 없으니 마이페이지 목록으로 보냅니다.
         buttonUrl: group.orders.length > 1 ? orderListUrl(group.status) : orderDetailUrl(lead.orderId),
+        // 관리자 알림톡 관리 화면에서 "어떤 주문의 알림인지" 보여 주려고 묶인 주문번호를 모두 남깁니다.
+        // (본문의 #{주문번호} 에는 첫 주문 하나만 들어갑니다)
+        customFields: {
+          orderIds: group.orders.map(o => o.orderId).join(',').slice(0, 500),
+          orderStatus: group.status,
+        },
       });
 
       if (sendResult.success) result.sent += group.orders.length;

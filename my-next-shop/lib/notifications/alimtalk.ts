@@ -192,6 +192,11 @@ export interface SendAlimtalkParams {
   buttonUrl: string;
   /** true 면 실제로 보내지 않고 보낼 내용만 만들어 봅니다 (검증·테스트용) */
   dryRun?: boolean;
+  /**
+   * 솔라피 메시지에 함께 저장할 메모 (고객에게는 보이지 않습니다).
+   * 관리자 > 카카오톡 알림톡 관리가 어떤 주문에서 보낸 메시지인지 찾을 때 씁니다. 예: { orderIds: 'A1,A2' }
+   */
+  customFields?: Record<string, string>;
 }
 
 /**
@@ -206,10 +211,12 @@ export function buildAlimtalkPayload(params: {
   template: AlimtalkTemplate;
   variables: Record<string, string>;
   buttonUrl: string;
+  customFields?: Record<string, string>;
 }) {
   return {
     message: {
       to: params.to,
+      ...(params.customFields && Object.keys(params.customFields).length ? { customFields: params.customFields } : {}),
       // 등록된 발신번호가 없으면 from 자체를 빼야 합니다. 빈 문자열을 보내면 솔라피가 거절합니다.
       ...(params.from ? { from: params.from } : {}),
       type: 'ATA', // 알림톡
@@ -255,6 +262,7 @@ export async function sendAlimtalk(params: SendAlimtalkParams): Promise<Alimtalk
     template: params.template,
     variables: params.variables,
     buttonUrl: params.buttonUrl,
+    customFields: params.customFields,
   });
 
   // 검증용: 실제로 쏘지 않고 무엇이 나가는지만 확인합니다.

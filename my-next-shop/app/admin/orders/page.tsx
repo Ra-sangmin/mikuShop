@@ -10,14 +10,13 @@ import { useRouter } from 'next/navigation';
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
 import '../admin-common.css';
 import './orders-premium.css';
-import { toEnglishAddress, toEnglishDetailAddress, toEnglishName, toIntlPhone } from '../components/englishAddress';
 import { extractVariantId, withVariantId } from '@/lib/itemUrl';
-import { DaumPostcodeEmbed } from 'react-daum-postcode';
+import OrderDetailModal, { parseServices, SERVICE_ICON } from '../components/OrderDetailModal';
 import {
   Wrench, FloppyDisk, Package,
   MapPinLine, EnvelopeSimple, ArrowRight, Truck,
   Sparkle, ShoppingCart, Warehouse, CreditCard, ClipboardText, Gavel,
-  ArrowSquareOut, Tag, PencilSimple, CaretUp, ChatText, Camera, ShieldCheck, CaretDown, CircleNotch, CheckCircle, AirplaneTilt, HourglassMedium, UserCircle, X, Copy, Globe,
+  ArrowSquareOut, Tag, PencilSimple, CaretUp, ChatText, CaretDown, CircleNotch, CheckCircle, AirplaneTilt, HourglassMedium, UserCircle, X, Copy,
 } from '@phosphor-icons/react';
 
 // 🌟 Enum 키를 기반으로 옵션 생성
@@ -66,13 +65,7 @@ const statusWeight: Record<string, number> = {
   [ORDER_STATUS.SHIPPING]: 8
 };
 
-// 🧾 부가 서비스 ("사진 검수, 포장 보완") → 목록
-const parseServices = (v?: string | null) =>
-  String(v || '').split(',').map(x => x.trim()).filter(x => x && x !== '-');
-const SERVICE_ICON: Record<string, { icon: React.ReactNode; cls: string }> = {
-  '사진 검수': { icon: <Camera size={12} weight="fill" />, cls: 'is-photo' },
-  '포장 보완': { icon: <ShieldCheck size={12} weight="fill" />, cls: 'is-pack' },
-};
+// 🧾 부가 서비스 목록/아이콘은 주문 상세 팝업과 같이 쓰려고 OrderDetailModal.tsx 에 있습니다.
 
 // ⚡ 탭별 메인 액션 — 그 단계에서 가장 자주 하는 '다음 단계'로 바로 넘깁니다.
 //    (구매 요청 · 경매 요청 · 경매 낙찰 성공 · 입고 완료 · 배송비 요청 · 경매/구매 실패는 제외 — 회원 결제나 종료 상태라 관리자가 바로 넘기지 않음)
@@ -168,50 +161,7 @@ export default function OrderManagement() {
   const [openFeeIds, setOpenFeeIds] = useState<Set<string>>(new Set());
   // 📋 상세보기 팝업 (수취인 주소 등)
   const [detailOrder, setDetailOrder] = useState<any | null>(null);
-  const [addrCopied, setAddrCopied] = useState(false);
-  // 🌏 공식 영문 도로명 주소 (카카오/다음 우편번호 서비스에서 관리자가 한 번 골라 받아옴). 한글 주소 → 영문
-  const [officialEng, setOfficialEng] = useState<Record<string, { eng: string; zipOk: boolean }>>({});
-  const [engPickerFor, setEngPickerFor] = useState<string | null>(null); // 검색창을 연 한글 주소
-  // 영문 주소 칸은 '영문 주소' 버튼을 눌렀을 때만 펼칩니다. (주문 상세를 새로 열면 다시 접힘)
-  const [showEng, setShowEng] = useState(false);
-  useEffect(() => { setShowEng(false); setEngPickerFor(null); }, [detailOrder]);
-  useEffect(() => {
-    if (!detailOrder) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDetailOrder(null); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [detailOrder]);
-  const copyAddress = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setAddrCopied(true);
-      setTimeout(() => setAddrCopied(false), 1500);
-    } catch { /* 복사 권한이 없으면 무시 */ }
-  };
-
-  /**
-   * 📋 수취인 정보 한 항목을 눌러서 복사할 수 있게 감쌉니다.
-   *    주문자 팝업(<UserBasicInfo>)과 같은 .aui-copyable 을 써서 동작·모양을 맞춥니다.
-   *
-   *    복사되는 값과 보이는 내용이 다를 수 있습니다 — 주소는 우편번호 뱃지와 줄바꿈으로
-   *    꾸며 보여주지만, 붙여넣을 때는 한 줄짜리 원문이 필요합니다.
-   */
-  const copyableField = (value: string | null | undefined, label: string, display?: React.ReactNode) => {
-    const text = value?.trim();
-    if (!text) return <span className="ord-detail-dash">-</span>;
-    return (
-      <button
-        type="button"
-        className="aui-copyable"
-        onClick={() => navigator.clipboard?.writeText(text)
-          .then(() => pushToast('success', `${label}을(를) 복사했습니다.`))
-          .catch(() => {})}
-      >
-        {display ?? text}
-        <Copy size={11} weight="bold" />
-      </button>
-    );
-  };
+  // 🌏 영문 주소 · 복사 등 팝업 안의 상태는 OrderDetailModal 이 가지고 있습니다.
   const toggleFee = (id: string) => setOpenFeeIds(prev => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -1604,7 +1554,7 @@ export default function OrderManagement() {
                   </td>
                   
                   <td className="aft-pinned ord-manage-td" style={{ padding: '16px 12px', textAlign: 'center' }}>
-                    <button type="button" className="admin-btn-detail" onClick={() => { setAddrCopied(false); setDetailOrder(order); }}>
+                    <button type="button" className="admin-btn-detail" onClick={() => setDetailOrder(order)}>
                       <MapPinLine size={13} weight="bold" /> 상세보기
                     </button>
                     <span className={`ord-manage-addr ${order.address ? '' : 'is-empty'}`}
@@ -1663,157 +1613,10 @@ export default function OrderManagement() {
 
     <ToastStack toasts={toasts} />
 
-    {/* 📋 상세보기 — 수취인 주소 · 주문 정보 */}
-    {detailOrder && (() => {
-      const o = detailOrder;
-      const a = o.address;
-      const fullAddr = a ? `[${a.zipCode}] ${a.address} ${a.detailAddress || ''}`.trim() : '';
-      return (
-        <div className="ord-modal-overlay" onClick={() => setDetailOrder(null)}>
-          <div className="ord-modal ord-detail" role="dialog" aria-modal="true" aria-label="주문 상세" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="ord-detail-close" onClick={() => setDetailOrder(null)} aria-label="닫기">×</button>
-            <div className="ord-detail-head">
-              <span className="ord-modal-mark" aria-hidden="true"><ClipboardText size={22} weight="duotone" /></span>
-              <div>
-                <h3 className="ord-modal-title">주문 상세</h3>
-                <p className="ord-detail-sub">
-                  <span className="ord-detail-id">{o.isBundleGroup ? o.bundleId : o.id}</span>
-                  {o.isBundleGroup && <span className="ord-detail-bundle">합포장 {o.bundleItems.length}건</span>}
-                  <span>{o.date}</span>
-                </p>
-              </div>
-            </div>
-
-            <section className="ord-detail-sec">
-              <div className="ord-detail-sec-title">
-                <MapPinLine size={14} weight="bold" /> 수취인 정보
-                {a && (
-                  <button type="button" className={`ord-detail-copy ${addrCopied ? 'is-done' : ''}`} onClick={() => copyAddress(`${a.recipientName} ${a.phone}\n${fullAddr}${a.personalCustomsCode ? `\n통관번호 ${a.personalCustomsCode}` : ''}`)}>
-                    {addrCopied ? '복사됨' : '전체 복사'}
-                  </button>
-                )}
-              </div>
-              {a ? (
-                <dl className="ord-detail-list">
-                  <div><dt>받는 분</dt><dd className="is-strong">{copyableField(a.recipientName, '받는 분')}</dd></div>
-                  <div><dt>연락처</dt><dd className="is-mono">{copyableField(a.phone, '연락처')}</dd></div>
-                  {/* 우편번호는 따로, 주소는 기본 주소 + 상세 주소를 합쳐 한 번에 복사합니다.
-                      (전체가 필요하면 위 "전체 복사") */}
-                  <div><dt>우편번호</dt><dd className="is-mono">{copyableField(a.zipCode, '우편번호')}</dd></div>
-                  <div><dt>주소</dt><dd className="ord-addr-dd">{copyableField(
-                    [a.address, a.detailAddress].map((v: string | null | undefined) => v?.trim()).filter(Boolean).join(' '),
-                    '주소',
-                    <span className="ord-detail-addr">
-                      <span>{a.address}</span>
-                      {a.detailAddress?.trim() && <span className="is-detail">{a.detailAddress}</span>}
-                    </span>,
-                  )}
-                    <button type="button" className={`ord-eng-toggle ${showEng ? 'is-on' : ''}`}
-                      onClick={() => setShowEng(v => !v)} aria-expanded={showEng} title="FedEx · DHL 등 해외 배송용 영문 주소">
-                      <Globe size={12} weight="bold" /> 영문 주소
-                    </button>
-                  </dd></div>
-                  <div><dt>통관번호</dt><dd className="is-mono">{copyableField(a.personalCustomsCode, '통관번호')}</dd></div>
-                </dl>
-              ) : null}
-              {a && showEng && (() => {
-                // 🌏 FedEx · DHL 등 해외 배송용 영문 주소 (복사하는 순간 규칙으로 변환 — 회원에게 따로 받지 않음)
-                const official = officialEng[a.address || ''];
-                const engAddr = official
-                  ? [toEnglishDetailAddress(a.detailAddress || ''), official.eng].filter(Boolean).join(', ')
-                  : toEnglishAddress(a.address || '', a.detailAddress || '');
-                const engName = toEnglishName(a.recipientName || '', a.recipientEnglishName);
-                const engPhone = toIntlPhone(a.phone);
-                const engAll = [
-                  `Name: ${engName}`,
-                  `Phone: ${engPhone}`,
-                  `Address: ${engAddr}`,
-                  `Postal code: ${a.zipCode || ''}`,
-                  'Country: Republic of Korea (KR)',
-                  a.personalCustomsCode ? `PCCC: ${a.personalCustomsCode}` : '',
-                ].filter(Boolean).join('\n');
-                return (
-                  <div className="ord-eng">
-                    <div className="ord-eng-head">
-                      <span className="ord-eng-title">
-                        <Globe size={13} weight="bold" /> 영문 주소
-                        {official
-                          ? <em className={`is-official ${official.zipOk ? '' : 'is-warn'}`}>{official.zipOk ? '공식 도로명 · 상세는 자동 변환' : '우편번호가 달라요 · 확인 필요'}</em>
-                          : <em>해외 배송용 · 자동 변환</em>}
-                      </span>
-                      <button type="button" className="ord-eng-fetch" onClick={() => setEngPickerFor(engPickerFor ? null : (a.address || ''))}>
-                        {engPickerFor ? '닫기' : official ? '다시 가져오기' : '공식 영문 가져오기'}
-                      </button>
-                      <button type="button" className="ord-detail-copy"
-                        onClick={() => navigator.clipboard?.writeText(engAll).then(() => pushToast('success', '영문 배송 정보를 복사했습니다.')).catch(() => {})}>
-                        영문 전체 복사
-                      </button>
-                    </div>
-                    {engPickerFor && (
-                      <div className="ord-eng-picker">
-                        <p>검색 결과에서 <b>같은 주소</b>를 한 번 눌러 주세요. 공식 영문 도로명 주소를 받아옵니다.</p>
-                        <DaumPostcodeEmbed
-                          defaultQuery={engPickerFor}
-                          autoClose={false}
-                          style={{ height: 360 }}
-                          onComplete={(data: any) => {
-                            const eng = data.roadAddressEnglish || data.addressEnglish || '';
-                            if (eng) {
-                              setOfficialEng(prev => ({ ...prev, [engPickerFor]: { eng, zipOk: String(data.zonecode) === String(a.zipCode || '') } }));
-                              pushToast(String(data.zonecode) === String(a.zipCode || '') ? 'success' : 'error',
-                                String(data.zonecode) === String(a.zipCode || '') ? '공식 영문 주소를 받아왔습니다.' : '우편번호가 달라요. 같은 주소인지 확인해 주세요.');
-                            }
-                            setEngPickerFor(null);
-                          }}
-                        />
-                      </div>
-                    )}
-                    <dl className="ord-detail-list">
-                      <div><dt>Name</dt><dd className="is-strong">{copyableField(engName, '영문 이름')}</dd></div>
-                      <div><dt>Phone</dt><dd className="is-mono">{copyableField(engPhone, '국제 전화번호')}</dd></div>
-                      <div><dt>Address</dt><dd>{copyableField(engAddr, '영문 주소')}</dd></div>
-                    </dl>
-                  </div>
-                );
-              })()}
-              {!a && (
-                <div className="ord-detail-empty">
-                  <MapPinLine size={16} weight="bold" />
-                  {o.recipient ? `${o.recipient} (주소 정보 없음)` : '배송지가 아직 지정되지 않았습니다'}
-                </div>
-              )}
-            </section>
-
-            <section className="ord-detail-sec">
-              <div className="ord-detail-sec-title"><Package size={14} weight="bold" /> 주문 정보</div>
-              <dl className="ord-detail-list">
-                <div><dt>주문자</dt><dd>{o.user}</dd></div>
-                <div><dt>상품</dt><dd className="is-strong">{o.product}</dd></div>
-                <div><dt>상품가격</dt><dd className="is-strong">¥{o.jpy}</dd></div>
-                <div><dt>진행 상태</dt><dd>{ORDER_STATUS_LABEL[o.status as OrderStatus] || o.status}</dd></div>
-                <div><dt>옵션</dt><dd>{o.option || '-'}</dd></div>
-                <div><dt>요청</dt><dd>{o.productRequest || '-'}</dd></div>
-                <div><dt>서비스</dt><dd>
-                  {parseServices(o.serviceRequest).length ? (
-                    <span className="ord-detail-svcs">
-                      {parseServices(o.serviceRequest).map(sv => (
-                        <span key={sv} className={`ord-detail-svc ${SERVICE_ICON[sv]?.cls || 'is-etc'}`}>
-                          {SERVICE_ICON[sv]?.icon || <Sparkle size={12} weight="fill" />} {sv}
-                        </span>
-                      ))}
-                    </span>
-                  ) : '-'}
-                </dd></div>
-              </dl>
-            </section>
-
-            <div className="ord-modal-actions">
-              <button type="button" onClick={() => setDetailOrder(null)} className="ord-modal-btn is-confirm">닫기</button>
-            </div>
-          </div>
-        </div>
-      );
-    })()}
+    {/* 📋 상세보기 — 수취인 주소 · 주문 정보 (공용: app/admin/components/OrderDetailModal.tsx) */}
+    {detailOrder && (
+      <OrderDetailModal order={detailOrder} onClose={() => setDetailOrder(null)} pushToast={pushToast} />
+    )}
 
     {/* 🌟 배송 준비중 -> 배송비 요청 전환: 국제 배송비 + 일본 내 배송비를 한 팝업에서 함께 입력 */}
     {feeModal && (

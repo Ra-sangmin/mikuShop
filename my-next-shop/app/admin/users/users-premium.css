@@ -526,6 +526,20 @@
    5. 회원 상세 드로어
    ===================================================== */
 .usr-drawer-root { position: fixed; inset: 0; z-index: 1000; }
+/* 🌟 드로어는 다른 화면(카카오톡 알림톡 관리)에서도 열리므로 .usr-page 의 색 변수를 여기에도 둡니다 */
+.usr-drawer-root {
+  --usr-ink: #0f172a;
+  --usr-sub: #64748b;
+  --usr-muted: #94a3b8;
+  --usr-line: #eef2f7;
+  --usr-card: #ffffff;
+  --usr-blue-rgb: 37, 99, 235;
+  --usr-up: #059669;
+  --usr-down: #e11d48;
+  --usr-shadow: 0 10px 26px -20px rgba(15, 23, 42, 0.5);
+  --usr-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--usr-ink);
+}
 .usr-drawer-backdrop {
   position: absolute; inset: 0;
   background: rgba(15, 23, 42, 0.42);
