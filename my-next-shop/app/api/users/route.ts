@@ -29,6 +29,8 @@ export async function GET(request: Request) {
           //    주문에는 업체 ID(shippingCarrierId)만 있으므로 여기서 이름·주소를 함께 읽어 내려보냅니다.
           include: {
             shippingCarrier: { select: { id: true, name: true, url: true } },
+            // 💴 배송비 청구 내역 (추가 결제가 있을 수 있어 회차별로 여러 행)
+            shippingFees: { orderBy: { round: 'asc' } },
           },
         },
         addresses: true,

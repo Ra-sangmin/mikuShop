@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useFitTable, FitColGroup, FitTh } from '../components/useFitTable';
+import { useAdminExchangeRate, jpyToKrw } from '../components/useAdminExchangeRate';
+import { currentUnpaid, nextRound, rowTotal, paidTotal } from '@/lib/shippingFees';
 import { AdminHero, HeroButton, KpiCard, SearchField, SegFilter, EmptyRow, SkeletonRows, BundleItemsPanel, BundleBadge, BundleToggle, UserBasicInfo, type BasicInfoUser, UserSummaryStats, type SummaryUser, useToasts, ToastStack, gradeTone, toneVars } from '../components/AdminPremiumKit';
 import { useRouter } from 'next/navigation';
 // 🌟 글로벌 상수 및 라벨 임포트
@@ -216,10 +218,21 @@ export default function OrderManagement() {
     return next;
   });
 
+  // 💱 헤더에 보이는 "최종 표시 환율"(1엔당 원). 배송비를 엔화로 받아 원화로 환산할 때 씁니다.
+  const { rate: exchangeRate, basisUnit: rateBasisUnit } = useAdminExchangeRate();
+
   // 🌟 배송 준비중 -> 배송비 요청 전환 시, 국제 배송비/일본 내 배송비를 한 팝업에서 함께 입력받기 위한 상태
-  const [feeModal, setFeeModal] = useState<{ orderId: string; bundleId: string | null; count: number } | null>(null);
+  //  mode: 'full'  = 최초 배송비 요청 (국제 + 현지 + 추가)
+  //        'extra' = 배송비 결제 완료 뒤 추가로 생긴 비용 (추가 금액만, 새 회차)
+  const [feeModal, setFeeModal] = useState<
+    { orderId: string; bundleId: string | null; count: number; mode: 'full' | 'extra'; round: number } | null
+  >(null);
   const [feeModalIntl, setFeeModalIntl] = useState('');
   const [feeModalDomestic, setFeeModalDomestic] = useState('');
+  // 💸 배송비로 묶기 애매한 실비(포장 보강 · 분리 배송 등)를 따로 받는 칸. 이것만 원화입니다.
+  const [feeModalExtra, setFeeModalExtra] = useState('');
+  // 📝 추가 청구 사유. 고객 화면에도 보여서 "왜 더 내는지" 문의를 줄입니다.
+  const [feeModalMemo, setFeeModalMemo] = useState('');
 
   // 🚚 배송비 결제 완료 -> 국제배송 전환 시, 배송 업체와 송장번호를 한 팝업에서 함께 입력받습니다.
   //    업체 목록은 관리자 > 국제 배송 업체 정보 관리(shipping_carriers)에서 가져옵니다.
@@ -285,8 +298,22 @@ export default function OrderManagement() {
             status: dbOrder.status,
             // 🌟 2-1. bidStatus 맵핑 추가
             bidStatus: dbOrder.bidStatus || 'PENDING',
-            secondPaymentAmount: dbOrder.secondPaymentAmount || 0,
-            domesticShippingFee: dbOrder.domesticShippingFee || 0,
+            // 💴 배송비 청구 내역. 한 주문에 여러 회차가 붙을 수 있어서,
+            //    편집 대상인 "아직 결제 안 된 회차"만 평평하게 풀어 둡니다.
+            fees: dbOrder.shippingFees || [],
+            ...(() => {
+              const f: any = currentUnpaid<any>(dbOrder.shippingFees);
+              return {
+                feeRound: f?.round || 0,
+                feeMemo: f?.memo || '',
+                intlFeeJpy: f?.intlFeeJpy || 0,
+                intlFeeKrw: f?.intlFeeKrw || 0,
+                domesticFeeJpy: f?.domesticFeeJpy || 0,
+                domesticFeeKrw: f?.domesticFeeKrw || 0,
+                extraFeeKrw: f?.extraFeeKrw || 0,
+                appliedExchangeRate: f?.appliedExchangeRate || 0,
+              };
+            })(),
             trackingNo: dbOrder.trackingNo || '',
             shippingCarrierId: dbOrder.shippingCarrierId ?? null,
             option: dbOrder.productOption || '-',
@@ -335,12 +362,19 @@ export default function OrderManagement() {
 
     if (newStatus === ORDER_STATUS.PAYMENT_REQ && currentOrder.bundleId) {
       const bundleItems = orders.filter(o => o.bundleId === currentOrder.bundleId);
-      const originalAmount = bundleItems.reduce((sum, o) => sum + (o.secondPaymentAmount || 0), 0);
-      const originalDomesticAmount = bundleItems.reduce((sum, o) => sum + (o.domesticShippingFee || 0), 0);
+      // 배송비 두 칸은 엔화 원본으로 되돌립니다. (원화를 오늘 환율로 나누면 금액이 틀어집니다)
+      const originalIntlJpy = bundleItems.reduce((sum, o) => sum + (o.intlFeeJpy || 0), 0);
+      const originalDomesticJpy = bundleItems.reduce((sum, o) => sum + (o.domesticFeeJpy || 0), 0);
+      const originalExtraAmount = bundleItems.reduce((sum, o) => sum + (o.extraFeeKrw || 0), 0);
 
-      setFeeModalIntl(originalAmount.toString());
-      setFeeModalDomestic(originalDomesticAmount.toString());
-      setFeeModal({ orderId, bundleId: currentOrder.bundleId, count: bundleItems.length });
+      setFeeModalIntl(originalIntlJpy.toString());
+      setFeeModalDomestic(originalDomesticJpy.toString());
+      setFeeModalExtra(originalExtraAmount.toString());
+      setFeeModalMemo(bundleItems.find(o => o.feeMemo)?.feeMemo || '');
+      setFeeModal({
+        orderId, bundleId: currentOrder.bundleId, count: bundleItems.length,
+        mode: 'full', round: bundleItems[0].feeRound || nextRound(bundleItems[0].fees),
+      });
       return;
     }
 
@@ -348,7 +382,14 @@ export default function OrderManagement() {
       const bundleItems = orders.filter(o => o.bundleId === currentOrder.bundleId);
       setOrders(orders.map(order => {
         if (order.bundleId === currentOrder.bundleId) {
-          return { ...order, status: newStatus, secondPaymentAmount: 0, domesticShippingFee: 0 };
+          return {
+            ...order, status: newStatus,
+            intlFeeKrw: 0, domesticFeeKrw: 0, extraFeeKrw: 0,
+            intlFeeJpy: 0, domesticFeeJpy: 0, appliedExchangeRate: 0,
+            feeRound: 0, feeMemo: '',
+            // 아직 결제 전인 청구만 지웁니다. 이미 난 회차는 서버가 거러냅니다.
+            deleteShippingFeeRound: order.feeRound || 1,
+          };
         }
         return order;
       }));
@@ -361,9 +402,14 @@ export default function OrderManagement() {
     }
 
     if (newStatus === ORDER_STATUS.PAYMENT_REQ && currentOrder.status === ORDER_STATUS.PREPARING) {
-      setFeeModalIntl((currentOrder.secondPaymentAmount || 0).toString());
-      setFeeModalDomestic((currentOrder.domesticShippingFee || 0).toString());
-      setFeeModal({ orderId, bundleId: null, count: 1 });
+      setFeeModalIntl((currentOrder.intlFeeJpy || 0).toString());
+      setFeeModalDomestic((currentOrder.domesticFeeJpy || 0).toString());
+      setFeeModalExtra((currentOrder.extraFeeKrw || 0).toString());
+      setFeeModalMemo(currentOrder.feeMemo || '');
+      setFeeModal({
+        orderId, bundleId: null, count: 1,
+        mode: 'full', round: currentOrder.feeRound || nextRound(currentOrder.fees),
+      });
       return;
     }
 
@@ -391,7 +437,7 @@ export default function OrderManagement() {
         const originalOrder = originalOrders.find(o => o.id === id);
         const updatedOrder = orders.find(o => o.id === id);
 
-        if (originalOrder?.status !== newStatus || originalOrder?.secondPaymentAmount !== updatedOrder?.secondPaymentAmount) {
+        if (originalOrder?.status !== newStatus || originalOrder?.intlFeeKrw !== updatedOrder?.intlFeeKrw) {
           newSet.add(id);
         } else {
           newSet.delete(id);
@@ -401,39 +447,70 @@ export default function OrderManagement() {
     });
   };
 
-  // 🌟 feeModal(국제 배송비 + 일본 내 배송비 입력 팝업)에서 확인을 눌렀을 때 실제 상태 변경을 적용합니다.
+  // 🌟 feeModal(국제 배송비 + 현지 배송비 + 추가 결제 비용 입력 팝업)에서 확인을 눌렀을 때 상태 변경을 적용합니다.
+  //    배송비 두 칸은 엔화(물류센터 실지출)로 받아 그 자리에서 청구 원화로 환산하고,
+  //    나중에 금액이 달라지지 않도록 엔화 원본과 적용 환율을 함께 박아 둡니다.
   const confirmFeeModal = () => {
     if (!feeModal) return;
-    const numAmount = parseInt(feeModalIntl.replace(/[^0-9]/g, '')) || 0;
-    const numDomesticAmount = parseInt(feeModalDomestic.replace(/[^0-9]/g, '')) || 0;
+    if (!exchangeRate) {
+      alert('환율을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    const intlJpy = parseInt(feeModalIntl.replace(/[^0-9]/g, '')) || 0;
+    const domesticJpy = parseInt(feeModalDomestic.replace(/[^0-9]/g, '')) || 0;
+    const numExtraAmount = parseInt(feeModalExtra.replace(/[^0-9]/g, '')) || 0;
+    const numAmount = jpyToKrw(intlJpy, exchangeRate);
+    const numDomesticAmount = jpyToKrw(domesticJpy, exchangeRate);
+
+    const round = feeModal.round;
+    const memo = feeModalMemo.trim();
+
+    // 합포장은 첫 주문에만 금액을 넣습니다. (기존 규칙과 같음)
+    //   나머지 주문은 혹시 전에 들어간 미납 행이 있으면 지우라고 알려줍니다.
+    const feeFields = (isFirst: boolean) => {
+      if (!isFirst) {
+        return {
+          feeRound: 0, feeMemo: '',
+          intlFeeJpy: 0, intlFeeKrw: 0, domesticFeeJpy: 0, domesticFeeKrw: 0,
+          extraFeeKrw: 0, appliedExchangeRate: 0,
+          deleteShippingFeeRound: round,
+        };
+      }
+      const row = {
+        round,
+        intlFeeJpy: intlJpy,
+        intlFeeKrw: numAmount,
+        domesticFeeJpy: domesticJpy,
+        domesticFeeKrw: numDomesticAmount,
+        extraFeeKrw: numExtraAmount,
+        appliedExchangeRate: exchangeRate,
+        memo: memo || null,
+      };
+      // 화면용 평평한 값 + 저장용 shippingFee 를 함께 들려보냅니다.
+      return {
+        feeRound: round, feeMemo: memo,
+        intlFeeJpy: intlJpy, intlFeeKrw: numAmount,
+        domesticFeeJpy: domesticJpy, domesticFeeKrw: numDomesticAmount,
+        extraFeeKrw: numExtraAmount, appliedExchangeRate: exchangeRate,
+        shippingFee: row,
+      };
+    };
 
     if (quickViaModal) {
-      // ⚡ 빠른 처리: 합포장은 첫 주문에만 금액을 넣고 나머지는 0 (기존 규칙과 같음)
+      // ⚡ 빠른 처리
       const target = orders.find(o => o.id === feeModal.orderId);
       setFeeModal(null);
       setQuickViaModal(false);
-      if (target) handleQuickAdvance(target, ORDER_STATUS.PAYMENT_REQ, (_id, idx) => ({
-        secondPaymentAmount: idx === 0 ? numAmount : 0,
-        domesticShippingFee: idx === 0 ? numDomesticAmount : 0,
-      }));
+      if (target) handleQuickAdvance(target, ORDER_STATUS.PAYMENT_REQ, (_id, idx) => feeFields(idx === 0));
       return;
     }
 
     if (feeModal.bundleId) {
       const bundleId = feeModal.bundleId;
       const bundleItems = orders.filter(o => o.bundleId === bundleId);
-      setOrders(orders.map(order => {
-        if (order.bundleId === bundleId) {
-          const isFirstInBundle = bundleItems[0].id === order.id;
-          return {
-            ...order,
-            status: ORDER_STATUS.PAYMENT_REQ,
-            secondPaymentAmount: isFirstInBundle ? numAmount : 0,
-            domesticShippingFee: isFirstInBundle ? numDomesticAmount : 0
-          };
-        }
-        return order;
-      }));
+      setOrders(orders.map(order => order.bundleId === bundleId
+        ? { ...order, status: ORDER_STATUS.PAYMENT_REQ, ...feeFields(bundleItems[0].id === order.id) }
+        : order));
       setChangedOrderIds(prev => {
         const newSet = new Set(prev);
         bundleItems.forEach(item => newSet.add(item.id));
@@ -441,14 +518,43 @@ export default function OrderManagement() {
       });
     } else {
       const orderId = feeModal.orderId;
-      setOrders(orders.map(order => order.id === orderId ? { ...order, status: ORDER_STATUS.PAYMENT_REQ, secondPaymentAmount: numAmount, domesticShippingFee: numDomesticAmount } : order));
+      setOrders(orders.map(order => order.id === orderId
+        ? { ...order, status: ORDER_STATUS.PAYMENT_REQ, ...feeFields(true) }
+        : order));
       setChangedOrderIds(prev => { const newSet = new Set(prev); newSet.add(orderId); return newSet; });
     }
 
     setFeeModal(null);
   };
 
-  const cancelFeeModal = () => { setFeeModal(null); setQuickViaModal(false); };
+  const cancelFeeModal = () => { setFeeModal(null); setQuickViaModal(false); setFeeModalMemo(''); };
+
+  /**
+   * 💴 추가 결제 요청 — 배송비 결제 완료된 주문에 비용이 더 생겼을 때.
+   *    새 회차를 만들어 추가 금액만 받고, 주문을 다시 '배송비 요청' 으로 되돌립니다.
+   *    이미 낸 회차는 paidAt 이 찍혔 있어 다시 청구되지 않습니다.
+   */
+  const startExtraFeeRequest = (order: any) => {
+    const group = order.bundleId ? orders.filter(o => o.bundleId === order.bundleId) : [order];
+    const head = group[0];
+    setFeeModalIntl('0');
+    setFeeModalDomestic('0');
+    setFeeModalExtra('');
+    setFeeModalMemo('');
+    setFeeModal({
+      orderId: order.id,
+      bundleId: order.bundleId || null,
+      count: group.length,
+      mode: 'extra',
+      round: nextRound(head.fees),
+    });
+    setQuickViaModal(true);
+  };
+
+  // 💴 팝업에 보여줄 환산 결과. 확인을 누를 때 저장되는 값과 같은 식입니다.
+  const feeModalIntlWon = jpyToKrw(parseInt(feeModalIntl.replace(/[^0-9]/g, '')) || 0, exchangeRate);
+  const feeModalDomesticWon = jpyToKrw(parseInt(feeModalDomestic.replace(/[^0-9]/g, '')) || 0, exchangeRate);
+  const feeModalTotalWon = feeModalIntlWon + feeModalDomesticWon + (parseInt(feeModalExtra.replace(/[^0-9]/g, '')) || 0);
 
   // 🚚 shipModal(배송 업체 + 송장번호 입력 팝업)에서 확인을 눌렀을 때 상태 변경을 적용합니다.
   //    실제 DB 반영은 다른 변경과 마찬가지로 "변경사항 저장" 버튼에서 한 번에 이뤄집니다.
@@ -493,14 +599,45 @@ export default function OrderManagement() {
 
   const cancelShipModal = () => { setShipModal(null); setQuickViaModal(false); };
 
-  const handleSecondPaymentChange = (orderId: string, value: string) => {
-    const numValue = parseInt(value.replace(/[^0-9]/g, '')) || 0;
-    setOrders(orders.map(order => order.id === orderId ? { ...order, secondPaymentAmount: numValue } : order));
+  /**
+   * 💴 행에서 금액을 고치면, 화면용 평평한 값과 함께 저장용 shippingFee 를 다시 만듭니다.
+   *    서버는 이 키가 있을 때만 해당 회차를 씁니다. 아직 회차가 없는 주문이면 1차로 두고 새로 만듭니다.
+   */
+  const withFeePayload = (order: any) => {
+    const round = order.feeRound || nextRound(order.fees);
+    return {
+      ...order,
+      feeRound: round,
+      shippingFee: {
+        round,
+        intlFeeJpy: order.intlFeeJpy || 0,
+        intlFeeKrw: order.intlFeeKrw || 0,
+        domesticFeeJpy: order.domesticFeeJpy || 0,
+        domesticFeeKrw: order.domesticFeeKrw || 0,
+        extraFeeKrw: order.extraFeeKrw || 0,
+        appliedExchangeRate: order.appliedExchangeRate || 0,
+        memo: order.feeMemo || null,
+      },
+    };
+  };
+
+  // 💴 행의 배송비 칸도 팝업과 같이 엔화로 받습니다.
+  //    입력할 때마다 그 자리에서 청구 원화를 다시 환산하고, 적용한 환율도 같이 갱신합니다.
+  const handleFeeJpyChange = (orderId: string, field: 'intl' | 'domestic', value: string) => {
+    const jpy = parseInt(value.replace(/[^0-9]/g, '')) || 0;
+    const won = jpyToKrw(jpy, exchangeRate);
+    const patch = field === 'intl'
+      ? { intlFeeJpy: jpy, intlFeeKrw: won }
+      : { domesticFeeJpy: jpy, domesticFeeKrw: won };
+    setOrders(orders.map(order => order.id === orderId
+      ? withFeePayload({ ...order, ...patch, appliedExchangeRate: exchangeRate || order.appliedExchangeRate })
+      : order));
 
     setChangedOrderIds(prev => {
       const newSet = new Set(prev);
       const originalOrder = originalOrders.find(o => o.id === orderId);
-      if (originalOrder?.secondPaymentAmount !== numValue || originalOrder?.status !== orders.find(o => o.id === orderId)?.status) {
+      const originalJpy = field === 'intl' ? originalOrder?.intlFeeJpy : originalOrder?.domesticFeeJpy;
+      if (originalJpy !== jpy || originalOrder?.status !== orders.find(o => o.id === orderId)?.status) {
         newSet.add(orderId);
       } else {
         newSet.delete(orderId);
@@ -509,14 +646,33 @@ export default function OrderManagement() {
     });
   };
 
-  const handleDomesticFeeChange = (orderId: string, value: string) => {
-    const numValue = parseInt(value.replace(/[^0-9]/g, '')) || 0;
-    setOrders(orders.map(order => order.id === orderId ? { ...order, domesticShippingFee: numValue } : order));
+
+  // 📝 청구 사유 — 팝업을 다시 열지 않고 행에서 바로 고칠 수 있게 합니다.
+  //    고객 화면에 그대로 보이는 문구라 오타를 고칠 일이 자주 생깁니다.
+  const handleFeeMemoChange = (orderId: string, value: string) => {
+    setOrders(orders.map(order => order.id === orderId ? withFeePayload({ ...order, feeMemo: value }) : order));
 
     setChangedOrderIds(prev => {
       const newSet = new Set(prev);
       const originalOrder = originalOrders.find(o => o.id === orderId);
-      if (originalOrder?.domesticShippingFee !== numValue || originalOrder?.status !== orders.find(o => o.id === orderId)?.status) {
+      if ((originalOrder?.feeMemo || '') !== value || originalOrder?.status !== orders.find(o => o.id === orderId)?.status) {
+        newSet.add(orderId);
+      } else {
+        newSet.delete(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  // 💸 추가 결제 비용 — 배송비 두 칸과 같은 방식으로 다룹니다.
+  const handleExtraFeeChange = (orderId: string, value: string) => {
+    const numValue = parseInt(value.replace(/[^0-9]/g, '')) || 0;
+    setOrders(orders.map(order => order.id === orderId ? withFeePayload({ ...order, extraFeeKrw: numValue }) : order));
+
+    setChangedOrderIds(prev => {
+      const newSet = new Set(prev);
+      const originalOrder = originalOrders.find(o => o.id === orderId);
+      if (originalOrder?.extraFeeKrw !== numValue || originalOrder?.status !== orders.find(o => o.id === orderId)?.status) {
         newSet.add(orderId);
       } else {
         newSet.delete(orderId);
@@ -537,7 +693,7 @@ export default function OrderManagement() {
       // 기존 진행 상태, 2차 결제 금액, 그리고 새로운 경매 상태 중 하나라도 다르면 '변경됨'으로 처리
       if (
         originalOrder?.status !== updatedOrder?.status || 
-        originalOrder?.secondPaymentAmount !== updatedOrder?.secondPaymentAmount ||
+        originalOrder?.intlFeeKrw !== updatedOrder?.intlFeeKrw ||
         originalOrder?.bidStatus !== newBidStatus
       ) {
         newSet.add(orderId);
@@ -643,9 +799,14 @@ export default function OrderManagement() {
     if (!flow) return;
     if (flow.next === ORDER_STATUS.PAYMENT_REQ) {
       const group = order.bundleId ? orders.filter(o => o.bundleId === order.bundleId) : [order];
-      setFeeModalIntl(String(group.reduce((sum, o) => sum + (o.secondPaymentAmount || 0), 0)));
-      setFeeModalDomestic(String(group.reduce((sum, o) => sum + (o.domesticShippingFee || 0), 0)));
-      setFeeModal({ orderId: order.id, bundleId: order.bundleId || null, count: group.length });
+      setFeeModalIntl(String(group.reduce((sum, o) => sum + (o.intlFeeJpy || 0), 0)));
+      setFeeModalDomestic(String(group.reduce((sum, o) => sum + (o.domesticFeeJpy || 0), 0)));
+      setFeeModalExtra(String(group.reduce((sum, o) => sum + (o.extraFeeKrw || 0), 0)));
+      setFeeModalMemo(group.find(o => o.feeMemo)?.feeMemo || '');
+      setFeeModal({
+        orderId: order.id, bundleId: order.bundleId || null, count: group.length,
+        mode: 'full', round: group[0].feeRound || nextRound(group[0].fees),
+      });
       setQuickViaModal(true);
       return;
     }
@@ -1286,6 +1447,18 @@ export default function OrderManagement() {
                             ? <><CircleNotch size={13} weight="bold" className="ord-spin" /> 처리 중…</>
                             : <>{QUICK_ICON[QUICK_FLOW[order.status].next]} {QUICK_FLOW[order.status].label}</>}
                         </button>
+                        {/* 💴 배송비를 받은 뒤에 비용이 더 생겼을 때. 새 회차를 만들어 배송비 요청으로 되돌립니다. */}
+                        {order.status === ORDER_STATUS.PAYMENT_DONE && (
+                          <button
+                            type="button"
+                            className="ord-split-extra"
+                            onClick={() => startExtraFeeRequest(order)}
+                            disabled={quickBusyId !== null}
+                            title="추가로 생긴 비용을 청구합니다. 이미 낸 배송비는 다시 청구되지 않습니다."
+                          >
+                            <CreditCard size={12} weight="bold" /> 추가 청구
+                          </button>
+                        )}
                         <span className="ord-split-more" title="다른 상태로 변경 (취소 · 이전 단계 등)">
                           <CaretDown size={12} weight="bold" />
                           <select
@@ -1325,19 +1498,25 @@ export default function OrderManagement() {
                     {/* 배송비 입력칸(요약 칩)은 '배송비 요청' 탭에서만 보여줍니다. (처리 중 전체 탭에서는 숨김) */}
                     {order.status === ORDER_STATUS.PAYMENT_REQ && statusFilter === ORDER_STATUS.PAYMENT_REQ && (() => {
                       // 합포장에서 다른 주문에 이미 금액이 들어가 있으면 이 칸은 잠급니다.
-                      const intlLocked = !!order.bundleId && orders.some(o => o.bundleId === order.bundleId && o.id !== order.id && o.secondPaymentAmount > 0);
-                      const localLocked = !!order.bundleId && orders.some(o => o.bundleId === order.bundleId && o.id !== order.id && o.domesticShippingFee > 0);
+                      const intlLocked = !!order.bundleId && orders.some(o => o.bundleId === order.bundleId && o.id !== order.id && o.intlFeeJpy > 0);
+                      const localLocked = !!order.bundleId && orders.some(o => o.bundleId === order.bundleId && o.id !== order.id && o.domesticFeeJpy > 0);
+                      const extraLocked = !!order.bundleId && orders.some(o => o.bundleId === order.bundleId && o.id !== order.id && o.extraFeeKrw > 0);
                       const feeOpen = openFeeIds.has(order.id);
-                      const intl = order.secondPaymentAmount || 0;
-                      const local = order.domesticShippingFee || 0;
+                      // 배송비 두 줄은 실제 지불한 엔화를 보여주고, 추가 결제 비용과 합계만 원화입니다.
+                      const intlJpy = order.intlFeeJpy || 0;
+                      const localJpy = order.domesticFeeJpy || 0;
+                      const extra = order.extraFeeKrw || 0;
+                      const billed = (order.intlFeeKrw || 0) + (order.domesticFeeKrw || 0) + extra;
                       if (!feeOpen) {
                         return (
-                          <button type="button" className={`ord-fee-chip ${intl || local ? '' : 'is-empty'}`}
+                          <button type="button" className={`ord-fee-chip ${intlJpy || localJpy || extra ? '' : 'is-empty'}`}
                             onClick={() => toggleFee(order.id)} aria-expanded={false} title="배송비 입력칸 펼치기">
-                            {intl || local ? (
+                            {intlJpy || localJpy || extra ? (
                               <span className="ord-fee-chip-vals">
-                                <span><em>국제</em>{intl.toLocaleString()}₩</span>
-                                <span><em className="is-local">현지</em>{local.toLocaleString()}¥</span>
+                                <span><em>국제</em>¥{intlJpy.toLocaleString()}</span>
+                                <span><em className="is-local">현지</em>¥{localJpy.toLocaleString()}</span>
+                                <span><em className="is-extra">추가</em>{extra.toLocaleString()}₩</span>
+                                <span className="ord-fee-chip-sum"><em>청구</em>{billed.toLocaleString()}₩</span>
                               </span>
                             ) : (
                               <span className="ord-fee-chip-empty">배송비 입력</span>
@@ -1348,33 +1527,74 @@ export default function OrderManagement() {
                       }
                       return (
                         <div className="ord-fees">
-                          <label className={`ord-fee-row ${intlLocked ? 'is-locked' : ''}`} title={intlLocked ? '합배송 금액이 다른 상품에 입력됨' : '국제 배송비 (원)'}>
+                          <label className={`ord-fee-row ${intlLocked ? 'is-locked' : ''}`} title={intlLocked ? '합배송 금액이 다른 상품에 입력됨' : '국제 배송비 — 물류센터에 지불한 엔화'}>
                             <span className="ord-fee-tag">국제</span>
                             <input
                               type="text"
                               inputMode="numeric"
                               className="ord-fee-input"
-                              aria-label="국제 배송비(원)"
-                              value={order.secondPaymentAmount.toLocaleString()}
-                              onChange={(e) => handleSecondPaymentChange(order.id, e.target.value)}
+                              aria-label="국제 배송비(엔)"
+                              value={intlJpy.toLocaleString()}
+                              onChange={(e) => handleFeeJpyChange(order.id, 'intl', e.target.value)}
                               disabled={intlLocked}
                             />
-                            <span className="ord-fee-unit">₩</span>
+                            <span className="ord-fee-unit">¥</span>
                           </label>
-                          <label className={`ord-fee-row ${localLocked ? 'is-locked' : ''}`} title={localLocked ? '합배송 금액이 다른 상품에 입력됨' : '현지 배송비 (엔)'}>
+                          <div className="ord-fee-conv">≈ ₩ {(order.intlFeeKrw || 0).toLocaleString()}</div>
+                          <label className={`ord-fee-row ${localLocked ? 'is-locked' : ''}`} title={localLocked ? '합배송 금액이 다른 상품에 입력됨' : '현지 배송비 — 물류센터에 지불한 엔화'}>
                             <span className="ord-fee-tag is-local">현지</span>
                             <input
                               type="text"
                               inputMode="numeric"
                               className="ord-fee-input"
                               aria-label="현지 배송비(엔)"
-                              value={(order.domesticShippingFee || 0).toLocaleString()}
-                              onChange={(e) => handleDomesticFeeChange(order.id, e.target.value)}
+                              value={localJpy.toLocaleString()}
+                              onChange={(e) => handleFeeJpyChange(order.id, 'domestic', e.target.value)}
                               disabled={localLocked}
                             />
                             <span className="ord-fee-unit">¥</span>
                           </label>
-                          {(intlLocked || localLocked) && <div className="ord-fee-hint">합배송 금액이 다른 상품에 입력됨</div>}
+                          <div className="ord-fee-conv">≈ ₩ {(order.domesticFeeKrw || 0).toLocaleString()}</div>
+                          <label className={`ord-fee-row ${extraLocked ? 'is-locked' : ''}`} title={extraLocked ? '합배송 금액이 다른 상품에 입력됨' : '추가 결제 비용 (원)'}>
+                            <span className="ord-fee-tag is-extra">추가</span>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              className="ord-fee-input"
+                              aria-label="추가 결제 비용(원)"
+                              value={(order.extraFeeKrw || 0).toLocaleString()}
+                              onChange={(e) => handleExtraFeeChange(order.id, e.target.value)}
+                              disabled={extraLocked}
+                            />
+                            <span className="ord-fee-unit">₩</span>
+                          </label>
+                          {/* 📝 청구 사유. 고객 화면에도 그대로 보입니다. */}
+                          <label className={`ord-fee-row is-memo ${extraLocked ? 'is-locked' : ''}`}
+                            title={extraLocked ? '합배송 금액이 다른 상품에 입력됨' : '청구 사유 — 고객에게 보이는 문구'}>
+                            <span className="ord-fee-tag is-memo">사유</span>
+                            <input
+                              type="text"
+                              className="ord-fee-input is-memo"
+                              aria-label="청구 사유"
+                              placeholder="예: 포장 보강"
+                              value={order.feeMemo || ''}
+                              onChange={(e) => handleFeeMemoChange(order.id, e.target.value)}
+                              disabled={extraLocked}
+                            />
+                          </label>
+                          {/* 엔화 입력이 원화로 얼마로 청구되는지 바로 보여줍니다. */}
+                          <div className="ord-fee-sum">
+                            <span>{order.feeRound > 1 ? `청구액 (${order.feeRound}차)` : '청구액'}</span>
+                            <strong>₩ {billed.toLocaleString()}</strong>
+                          </div>
+                          {/* 이미 낸 회차는 고칠 수 없으므로 금액만 알려 줍니다. */}
+                          {paidTotal(order.fees) > 0 && (
+                            <div className="ord-fee-paid">
+                              결제 완료 ₩ {paidTotal(order.fees).toLocaleString()}
+                              <em>{(order.fees || []).filter((f: any) => f.paidAt).length}회차</em>
+                            </div>
+                          )}
+                          {(intlLocked || localLocked || extraLocked) && <div className="ord-fee-hint">합배송 금액이 다른 상품에 입력됨</div>}
                           <button type="button" className="ord-fee-close" onClick={() => toggleFee(order.id)}>
                             <CaretUp size={10} weight="bold" /> 접기
                           </button>
@@ -1600,33 +1820,82 @@ export default function OrderManagement() {
       <div className="ord-modal-overlay">
         <div className="ord-modal">
           <span className="ord-modal-mark" aria-hidden="true"><Truck size={22} weight="duotone" /></span>
-          <h3 className="ord-modal-title">배송비 입력</h3>
+          <h3 className="ord-modal-title">
+            {feeModal.mode === 'extra' ? `추가 결제 요청 (${feeModal.round}차)` : '배송비 입력'}
+          </h3>
           <p className="ord-modal-desc">
-            {feeModal.bundleId
-              ? `합배송 그룹 전체에 적용됩니다. (그룹 내 상품 수: ${feeModal.count}개)`
-              : '이 주문에 적용됩니다.'}
+            {feeModal.mode === 'extra'
+              ? '이미 낸 배송비는 다시 청구되지 않습니다. 여기 적은 금액만 새로 청구됩니다.'
+              : feeModal.bundleId
+                ? `합배송 그룹 전체에 적용됩니다. (그룹 내 상품 수: ${feeModal.count}개)`
+                : '이 주문에 적용됩니다.'}
           </p>
 
-          <label className="ord-modal-label">국제 배송비(₩)</label>
+          {/* 💴 배송비는 물류센터에 엔화로 지불합니다. 실지출 엔화를 받아
+              헤더의 최종 표시 환율로 청구 원화를 바로 보여줍니다. (100원 단위 올림) */}
+          {feeModal.mode === 'full' && (
+            <>
+              <label className="ord-modal-label">국제 배송비(¥)</label>
+              <input
+                type="text"
+                autoFocus
+                value={feeModalIntl}
+                onChange={(e) => setFeeModalIntl(e.target.value.replace(/[^0-9]/g, ''))}
+                className="ord-modal-input"
+              />
+              <div className="ord-modal-conv">≈ ₩ {feeModalIntlWon.toLocaleString()}</div>
+
+              <label className="ord-modal-label">현지 배송비(¥)</label>
+              <input
+                type="text"
+                value={feeModalDomestic}
+                onChange={(e) => setFeeModalDomestic(e.target.value.replace(/[^0-9]/g, ''))}
+                className="ord-modal-input"
+              />
+              <div className="ord-modal-conv">≈ ₩ {feeModalDomesticWon.toLocaleString()}</div>
+            </>
+          )}
+
+          <label className="ord-modal-label">추가 결제 비용(₩)</label>
           <input
             type="text"
-            autoFocus
-            value={feeModalIntl}
-            onChange={(e) => setFeeModalIntl(e.target.value.replace(/[^0-9]/g, ''))}
+            autoFocus={feeModal.mode === 'extra'}
+            value={feeModalExtra}
+            onChange={(e) => setFeeModalExtra(e.target.value.replace(/[^0-9]/g, ''))}
             className="ord-modal-input"
           />
 
-          <label className="ord-modal-label">현지 배송비(¥)</label>
+          {/* 📝 고객 화면에도 보입니다. 추가 청구일 땐 사유가 없으면 문의가 옵니다. */}
+          <label className="ord-modal-label">
+            청구 사유{feeModal.mode === 'extra' ? '' : ' (선택)'}
+          </label>
           <input
             type="text"
-            value={feeModalDomestic}
-            onChange={(e) => setFeeModalDomestic(e.target.value.replace(/[^0-9]/g, ''))}
+            value={feeModalMemo}
+            onChange={(e) => setFeeModalMemo(e.target.value)}
             className="ord-modal-input"
+            placeholder="예: 포장 보강 · 분리 배송"
           />
+
+          <div className="ord-modal-total">
+            <span className="ord-modal-total-label">
+              청구액
+              <em>
+                {exchangeRate
+                  ? `적용 환율 ${rateBasisUnit}엔 = ${(exchangeRate * rateBasisUnit).toFixed(2)}원`
+                  : '환율을 불러오는 중입니다…'}
+              </em>
+            </span>
+            <strong>₩ {feeModalTotalWon.toLocaleString()}</strong>
+          </div>
 
           <div className="ord-modal-actions">
             <button onClick={cancelFeeModal} className="ord-modal-btn is-cancel">취소</button>
-            <button onClick={confirmFeeModal} className="ord-modal-btn is-confirm">확인</button>
+            <button
+              onClick={confirmFeeModal}
+              className="ord-modal-btn is-confirm"
+              disabled={!exchangeRate || (feeModal.mode === 'extra' && !(parseInt(feeModalExtra.replace(/[^0-9]/g, '')) || 0))}
+            >확인</button>
           </div>
         </div>
       </div>

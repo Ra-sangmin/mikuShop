@@ -8,6 +8,7 @@
 //  4) 실패해도 예외를 던지지 않습니다. 알림 때문에 주문 처리가 막히면 안 됩니다.
 
 import prisma from '@/lib/prisma';
+import { unpaidTotal } from '@/lib/shippingFees';
 import { ORDER_STATUS } from '@/src/types/order';
 import {
   ALIMTALK_TEMPLATES,
@@ -100,8 +101,9 @@ export async function notifyOrderStatusByAlimtalk(
         productName: true,
         productPrice: true,
         myBidPrice: true,
-        secondPaymentAmount: true,
         trackingNo: true,
+        // 💴 배송비 청구 내역. 안내 금액은 이 중 미납 회차만 더합니다.
+        shippingFees: { select: { round: true, intlFeeKrw: true, domesticFeeKrw: true, extraFeeKrw: true, paidAt: true } },
         shippingCarrier: { select: { name: true } },
         user: {
           select: {
@@ -237,11 +239,15 @@ export type OrderForAlimtalk = {
   productName: string;
   productPrice: number;
   myBidPrice: number | null;
-  secondPaymentAmount: number | null;
   trackingNo: string | null;
+  shippingFees: { round: number; intlFeeKrw: number; domesticFeeKrw: number; extraFeeKrw: number; paidAt: Date | null }[];
   shippingCarrier: { name: string } | null;
   user: { name: string } | null;
 };
+
+/** 💴 지금 청구 중인 금액 = 미납 회차들의 합. (마이페이지 결제 금액과 같은 식)
+ *  이미 낸 회차를 빼야 추가 결제 안내가 1차 배송비까지 다시 청구하는 것처럼 나가지 않습니다. */
+const billedWon = (o: OrderForAlimtalk) => unpaidTotal(o.shippingFees);
 
 /**
  * 템플릿에 채워 넣을 변수. 상태마다 템플릿이 달라 필요한 값도 다릅니다.
@@ -276,8 +282,9 @@ export function buildVariables(status: string, group: OrderForAlimtalk[]): Recor
       return {
         ...base,
         // ⚠️ 템플릿 본문이 '#{결제금액}원' 이라 숫자만 넣습니다. won() 을 쓰면 "원" 이 두 번 붙습니다.
-        //    금액은 관리자가 배송비를 요청할 때 입력하는 secondPaymentAmount 입니다.
-        결제금액: sum(o => o.secondPaymentAmount).toLocaleString('ko-KR'),
+        //    안내 금액은 마이페이지가 청구하는 것과 같은 식이어야 합니다
+        //    — 국제 + 현지 배송비 + 추가 결제 비용 전부입니다. (예전엔 국제 배송비만 보냈습니다)
+        결제금액: sum(o => billedWon(o)).toLocaleString('ko-KR'),
       };
 
     case ORDER_STATUS.SHIPPING: // 국제 배송 시작 안내

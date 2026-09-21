@@ -13,6 +13,7 @@
 // 호출하는 쪽(주문 상태 변경 API)은 notifyOrderStatusChanged 만 알면 됩니다.
 
 import prisma from '@/lib/prisma';
+import { unpaidTotal } from '@/lib/shippingFees';
 import { sendMail, isDeliverableEmail } from '@/lib/mailer';
 import { ORDER_STATUS } from '@/src/types/order';
 
@@ -134,7 +135,8 @@ export async function notifyOrderStatusChanged(changes: OrderStatusChange[]): Pr
         userId: true,
         productName: true,
         trackingNo: true,
-        secondPaymentAmount: true,
+        // 💴 배송비 청구 내역. 안내 금액은 이 중 미납 회차만 더합니다.
+        shippingFees: { select: { round: true, intlFeeKrw: true, domesticFeeKrw: true, extraFeeKrw: true, paidAt: true } },
         user: { select: { id: true, name: true, email: true } },
       },
     });
@@ -243,8 +245,12 @@ export interface OrderSummaryForMail {
   orderId: string;
   productName: string;
   trackingNo: string | null;
-  secondPaymentAmount: number | null;
+  shippingFees: { round: number; intlFeeKrw: number; domesticFeeKrw: number; extraFeeKrw: number; paidAt: Date | null }[];
 }
+
+/** 💴 지금 청구 중인 금액 = 미납 회차들의 합. (마이페이지 결제 금액과 같은 식)
+ *  이미 낸 회차를 빼야 추가 결제 안내가 1차 배송비까지 다시 청구하는 것처럼 나가지 않습니다. */
+const billedWon = (o: { shippingFees: { round: number; intlFeeKrw: number; domesticFeeKrw: number; extraFeeKrw: number; paidAt: Date | null }[] }) => unpaidTotal(o.shippingFees);
 
 /**
  * 상태별 메일 제목·본문을 만듭니다.
@@ -275,7 +281,7 @@ function buildHtml({
   template: StatusTemplate;
   name: string;
   status: string;
-  orders: { orderId: string; productName: string; trackingNo: string | null; secondPaymentAmount: number | null }[];
+  orders: { orderId: string; productName: string; trackingNo: string | null; shippingFees: { round: number; intlFeeKrw: number; domesticFeeKrw: number; extraFeeKrw: number; paidAt: Date | null }[] }[];
 }): string {
   const link = `${siteUrl()}/mypage/status?tab=${encodeURIComponent(status)}`;
 
@@ -284,8 +290,9 @@ function buildHtml({
     if (status === ORDER_STATUS.SHIPPING && o.trackingNo) {
       extras.push(`송장번호 ${escapeHtml(o.trackingNo)}`);
     }
-    if (status === ORDER_STATUS.PAYMENT_REQ && o.secondPaymentAmount) {
-      extras.push(`결제 요청 금액 ${o.secondPaymentAmount.toLocaleString()}원`);
+    // 마이페이지가 청구하는 금액과 같은 식으로 안내합니다. (국제 + 현지 + 추가)
+    if (status === ORDER_STATUS.PAYMENT_REQ && billedWon(o)) {
+      extras.push(`결제 요청 금액 ${billedWon(o).toLocaleString()}원`);
     }
     return `
       <tr>

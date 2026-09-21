@@ -13,6 +13,7 @@ interface PaymentSummaryProps {
     agency: number;
     deposit?: number;
     domestic?: number;
+    extra?: number;
   };
   totalPriceWon: number;
   exchangeRate: number;
@@ -47,6 +48,50 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
       count++;
     });
     return count;
+  }, [selectedItems, orders, isPaymentRequest]);
+
+  /**
+   * 📝 선택한 주문의 청구 사유를 상품별로 모읍니다.
+   *  - 1차 배송비에도 사유를 적을 수 있어서 회차로 거르지 않습니다.
+   *  - 합포장은 표와 같이 묶음당 한 줄로 묶습니다. (금액과 사유는 묶음 첫 주문에만 들어갑니다)
+   *  - 여러 건을 고르면 어느 상품의 사유인지 구분돼야 해서 상품명을 같이 내려줍니다.
+   */
+  const extraFeeMemos = useMemo(() => {
+    if (!isPaymentRequest) return [] as { key: string; label: string; memo: string; round: number }[];
+
+    const seenBundles = new Set<string>();
+    const out: { key: string; label: string; memo: string; round: number }[] = [];
+
+    selectedItems.forEach((id: any) => {
+      const order = orders.find((o: any) => String(o.orderId) === String(id));
+      if (!order) return;
+
+      if (order.bundleId) {
+        if (seenBundles.has(order.bundleId)) return;
+        seenBundles.add(order.bundleId);
+      }
+
+      const group: any[] = order.bundleId
+        ? orders.filter((o: any) => o.bundleId === order.bundleId)
+        : [order];
+
+      const withMemo = group.find((o: any) => o.feeMemo);
+      if (!withMemo) return;
+
+      const first = group[0];
+      const label = group.length > 1
+        ? `${first.productName} 외 ${group.length - 1}건`
+        : first.productName;
+
+      out.push({
+        key: order.bundleId || String(order.orderId),
+        label,
+        memo: withMemo.feeMemo,
+        round: withMemo.feeRound || 1,
+      });
+    });
+
+    return out;
   }, [selectedItems, orders, isPaymentRequest]);
 
   const [feeSettings, setFeeSettings] = useState({ TRANSFER: 450, AGENCY: 100 });
@@ -121,6 +166,7 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
   return {
     isSingleHighlightMode,
     isPaymentRequest,
+    extraFeeMemos,
     calculatedTotals,
     getHighlightTitle,
     getButtonText,
@@ -134,7 +180,7 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
 export default function PaymentSummary(props: PaymentSummaryProps) {
   const { activeTab, totalPriceWon, exchangeRate, selectedItems, handleUpdateStatus, myMoney } = props;
   const {
-    isSingleHighlightMode, isPaymentRequest, calculatedTotals, getHighlightTitle, getButtonText, getTargetStatus
+    isSingleHighlightMode, isPaymentRequest, extraFeeMemos, calculatedTotals, getHighlightTitle, getButtonText, getTargetStatus
   } = usePaymentSummaryLogic(props);
 
   const hasItems = selectedItems.length > 0;
@@ -153,7 +199,7 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
         
         {isSingleHighlightMode ? (
           <>
-            {/* 🌟 배송비 요청 탭 전용: 일본 내 배송비 + 국제 배송비 = 청구된 총 배송비 공식 */}
+            {/* 💸 배송비 요청 탭 전용: 현지 배송비 + 국제 배송비 + 추가 결제 금액 = 청구된 총 배송비 공식 */}
             {isPaymentRequest && (
               <div className="fee-formula-box">
                 <div className="fee-formula-item">
@@ -163,6 +209,10 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
                 <div className="fee-formula-item">
                   <span className="item-label">국제 배송비</span>
                   <span className="item-val">₩ {calculatedTotals.product.toLocaleString()}</span>
+                </div>
+                <div className="fee-formula-item">
+                  <span className="item-label">추가 결제 금액</span>
+                  <span className="item-val">₩ {(calculatedTotals.extra || 0).toLocaleString()}</span>
                 </div>
               </div>
             )}
@@ -212,6 +262,32 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           </>
         )}
       </div>
+
+      {/* 📝 관리자가 적은 추가 청구 사유.
+          금액 패널과 결제 버튼 사이에 전체 폭으로 둡니다 — 문구가 길어질 수 있어서
+          좁은 칸 안에 넣으면 넘치거나 패널 높이가 틀어집니다. */}
+      {extraFeeMemos.length > 0 && (
+        <div className="extra-fee-memo">
+          <span className="memo-tag">청구 사유</span>
+          <ul>
+            {extraFeeMemos.map(m => (
+              <li key={m.key}>
+                {/* 여러 건을 고를 때만 상품명을 앞에 붙입니다. 한 건이면 어느 상품인지 명백합니다. */}
+                {extraFeeMemos.length > 1 && (
+                  <span className="memo-item">
+                    {m.label}
+                    {m.round > 1 && <em>{m.round}차 추가</em>}
+                  </span>
+                )}
+                {extraFeeMemos.length === 1 && m.round > 1 && (
+                  <span className="memo-item"><em>{m.round}차 추가</em></span>
+                )}
+                <span className="memo-text">{m.memo}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="payment-action-wrap">
         <button 
@@ -271,11 +347,11 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           margin-top: 28px;
         }
 
-        /* 🌟 배송비 요청 탭: 일본 내 배송비 + 국제 배송비 = 청구된 총 배송비 공식 */
+        /* 💸 배송비 요청 탭: 현지 배송비 + 국제 배송비 + 추가 결제 금액 = 청구된 총 배송비 공식 */
         .fee-formula-box {
           flex: 1;
           display: grid;
-          grid-template-columns: repeat(2, 1fr);
+          grid-template-columns: repeat(3, 1fr);
           align-items: center;
           background: #fafafa;
           border-radius: 20px;
@@ -283,6 +359,41 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           padding: 24px;
           box-sizing: border-box;
         }
+        /* 📝 추가 청구 사유 — 금액 패널과 결제 버튼 사이, 전체 폭 띄 */
+        .extra-fee-memo {
+          margin: 0 0 20px;
+          padding: 14px 18px;
+          border-radius: 14px;
+          background: #fff7ed;
+          border: 1px solid #fde4c8;
+          text-align: left;
+        }
+        .extra-fee-memo .memo-tag {
+          display: inline-block; margin-bottom: 5px;
+          font-size: 11px; font-weight: 800; color: #c2410c;
+        }
+        .extra-fee-memo ul { margin: 0; padding: 0; list-style: none; }
+        .extra-fee-memo li {
+          font-size: 13px; font-weight: 600; color: #475569; line-height: 1.55;
+          word-break: break-word;
+        }
+        /* 여러 건이면 사유끼리 붙어 보이지 않게 간격과 연한 구분선을 둡니다. */
+        .extra-fee-memo li + li {
+          margin-top: 9px; padding-top: 9px; border-top: 1px dashed #fcd9b6;
+        }
+        /* 상품명 · 회차 표시 */
+        .extra-fee-memo .memo-item {
+          display: block; margin-bottom: 2px;
+          font-size: 12px; font-weight: 800; color: #9a3412;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .extra-fee-memo .memo-item em {
+          font-style: normal; margin-left: 6px; padding: 1px 6px;
+          border-radius: 999px; background: #ffedd5; color: #c2410c;
+          font-size: 10.5px; font-weight: 800;
+        }
+        .extra-fee-memo .memo-text { display: block; }
+
         .fee-formula-item {
           display: flex;
           flex-direction: column;

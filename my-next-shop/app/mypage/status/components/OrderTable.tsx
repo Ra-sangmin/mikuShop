@@ -83,7 +83,7 @@ function useOrderTableLogic({ activeTab, fetchOrders }: any) {
     if ([ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(activeTab)) count += 1; // 수취인
     if (activeTab === 'BID_PENDING' || activeTab === 'BIDDING') count += 2; // 남은시간, 내 입찰금액
     if (activeTab === ORDER_STATUS.SHIPPING) count += 1; // 운송장
-    if (activeTab === ORDER_STATUS.PAYMENT_REQ) count += 2; // 일본 내 배송비, 국제 배송비
+    if (activeTab === ORDER_STATUS.PAYMENT_REQ) count += 1; // 총 결제 금액
     if ([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) count += 1; // 삭제버튼(휴지통)
     if (activeTab === 'BIDDING') count += 1; // 경매 상태
     return count;
@@ -293,7 +293,12 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           productName: group.length > 1 ? `${first.productName} 외 ${group.length - 1}건` : first.productName,
           productPrice: group.reduce((sum: number, g: any) => sum + (g.productPrice || 0), 0),
           domesticShippingFee: group.reduce((sum: number, g: any) => sum + (g.domesticShippingFee || 0), 0),
-          secondPaymentAmount: group.reduce((sum: number, g: any) => sum + (g.secondPaymentAmount || 0), 0),
+          // 💴 지금 청구 중인 회차의 금액만 합칩니다. (이미 낸 회차는 제외)
+          intlFeeKrw: group.reduce((sum: number, g: any) => sum + (g.intlFeeKrw || 0), 0),
+          domesticFeeKrw: group.reduce((sum: number, g: any) => sum + (g.domesticFeeKrw || 0), 0),
+          extraFeeKrw: group.reduce((sum: number, g: any) => sum + (g.extraFeeKrw || 0), 0),
+          feeRound: group.find((g: any) => g.feeRound)?.feeRound || 0,
+          feeMemo: group.find((g: any) => g.feeMemo)?.feeMemo || '',
           isGroup: group.length > 1,
           bundleItems: group,
         });
@@ -335,8 +340,8 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
               
               {activeTab === 'BIDDING' && <th className="th-cell th-auction-status">경매 상태</th>}
               {showBundleAndRecipientTabs.includes(activeTab) && <th className="th-cell th-recipient">수취인</th>}
-              {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell th-domestic-fee">현지 배송비(₩)</th>}
-              {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell th-shipping-fee">국제 배송비(₩)</th>}
+              {/* 💸 현지 · 국제 배송비를 따로 보여주는 대신, 추가 결제 비용까지 합친 한 금액만 보여줍니다. */}
+              {activeTab === ORDER_STATUS.PAYMENT_REQ && <th className="th-cell th-total-fee">총 결제 금액(₩)</th>}
               {activeTab === ORDER_STATUS.SHIPPING && <th className="th-cell th-tracking">운송장 번호</th>}
               
               {/* 삭제 버튼용 빈 헤더를 맨 끝으로 배치 */}
@@ -440,8 +445,14 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                           )}
                         </td>
                       )}
-                      {activeTab === ORDER_STATUS.PAYMENT_REQ && <td className="td-cell">₩ {(item.domesticShippingFee || 0).toLocaleString()}</td>}
-                      {activeTab === ORDER_STATUS.PAYMENT_REQ && <td className="td-cell font-bold">₩ {(item.secondPaymentAmount || 0).toLocaleString()}</td>}
+                      {activeTab === ORDER_STATUS.PAYMENT_REQ && (
+                        <td className="td-cell font-bold">
+                          ₩ {((item.domesticFeeKrw || 0) + (item.intlFeeKrw || 0) + (item.extraFeeKrw || 0)).toLocaleString()}
+                          {/* 💴 2차 이후는 추가 결제입니다. 청구 사유는 길어서 이 칸에 넣으면 넘치므로
+                              아래 결제 요약 박스에서 보여줍니다. (PaymentSummary) */}
+                          {item.feeRound > 1 && <span className="fee-round-note">추가 결제</span>}
+                        </td>
+                      )}
                       {activeTab === ORDER_STATUS.SHIPPING && <td className="td-cell">{item.trackingNo || '준비중'}</td>}
 
                       {/* 🛒 장바구니/보증금 대기 상태일 때만 휴지통(삭제) 아이콘 노출 */}
@@ -571,6 +582,11 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           text-align: center;
           vertical-align: middle;
           border-bottom: 1px solid #f1f5f9;
+        }
+        /* 💴 추가 결제 회차임을 금액 아래에 작게 알려 줍니다. */
+        .fee-round-note {
+          display: block; margin-top: 3px;
+          font-size: 11px; font-weight: 700; color: #c2410c;
         }
         .tr-row { transition: all 0.2s ease; }
         .tr-row.clickable { cursor: pointer; }

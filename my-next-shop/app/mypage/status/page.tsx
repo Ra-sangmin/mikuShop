@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense, useMemo, useRef, useCallback } from 'react';
+import { currentUnpaid } from '@/lib/shippingFees';
 import GuideLayout from '../../components/GuideLayout';
 import Link from 'next/link';
 import NoticePanel from '../../components/NoticePanel';
@@ -262,12 +263,25 @@ function usePurchaseStatusLogic() {
             setUserData(data.user);
             const rawOrders = data.user.orders || [];
             const userAddresses = data.user.addresses || []; 
-            const formattedOrders = rawOrders.map((order: any) => ({
+            const formattedOrders = rawOrders.map((order: any) => {
+              // 지금 청구 중인 회차 (없으면 null). 한 번만 잊고 아래에서 나눠 씁니다.
+              const fee: any = currentUnpaid<any>(order.shippingFees);
+              return {
               ...order,
+              // 💴 지금 청구 중인 회차만 평평하게 풀어 둡니다.
+              //    이미 낸 회차는 빼야 추가 결제 때 1차 배송비까지 다시 청구하지 않습니다.
+              //    orders.domesticShippingFee 와는 다른 값입니다 — 그쪽은 구매 요청 단계의 일본내 배송료(¥).
+              shippingFees: order.shippingFees || [],
+              intlFeeKrw: fee?.intlFeeKrw || 0,
+              domesticFeeKrw: fee?.domesticFeeKrw || 0,
+              extraFeeKrw: fee?.extraFeeKrw || 0,
+              feeRound: fee?.round || 0,
+              feeMemo: fee?.memo || '',
               address: order.addressId 
                 ? userAddresses.find((a: any) => String(a.id) === String(order.addressId)) 
                 : null
-            }));
+              };
+            });
             setOrders(formattedOrders);
           }
         })
@@ -441,19 +455,23 @@ function usePurchaseStatusLogic() {
       // 🌟 productCount가 0/누락이면 곱셈 결과가 통째로 0이 돼서 상품 금액이 사라지는 버그가 있었습니다.
       // Prisma 스키마의 productCount 기본값(1)과 맞춰서, 값이 없을 때는 1개로 간주합니다.
       const productP = (Number(item.productPrice) || 0) * (Number(item.productCount) || 1);
+      // ⚠️ 구매 요청 단계의 일본내 배송료(¥). 배송비 요청 탭에서는 쓰지 않습니다.
       const domesticS = Number(item.domesticShippingFee) || 0; 
       const transferF = Number(item.transferFee) || 0;
-      const agencyF = Number(item.purchaseFee) || 0;
-      const secondP = Number(item.secondPaymentAmount) || 0;
+      // 💴 배송비 요청 단계의 청구 금액 (order_shipping_fees, 전부 원화)
+      const secondP = Number(item.intlFeeKrw) || 0;
+      const domesticKrw = Number(item.domesticFeeKrw) || 0;
+      const extraP = Number(item.extraFeeKrw) || 0;
       
       const myBid = Number(item.myBidPrice) || 0;
       const fallbackDeposit = myBid > 0 ? (myBid <= 20000 ? 2000 : Math.floor(myBid * 0.1)) : 0;
       const depositAmt = Number(item.depositAmount) || fallbackDeposit; 
 
       if (activeTab === ORDER_STATUS.PAYMENT_REQ) {
+        // 💸 배송비 요청 탭은 세 항목을 각각 모으고, 청구액은 아래 totalPriceVal 에서 셋을 더해 냅니다.
         acc.product += secondP;
-        // 🌟 표시용 참고 항목: 청구 금액(product = 국제 배송비 합)에는 영향 없이, 일본 내 배송비만 별도로 집계합니다.
-        acc.domestic += domesticS;
+        acc.domestic += domesticKrw;
+        acc.extra += extraP;
       } else if (activeTab === ORDER_STATUS.BID_PENDING) {
         acc.deposit += depositAmt;
       } else {
@@ -467,18 +485,24 @@ function usePurchaseStatusLogic() {
           acc.delivery += domesticS;
           acc.agency += calculateTieredAgencyFee(itemQuantity, agencyFeeRule);
         } else {
+          // ℹ️ 대행 수수료는 위 CART/BID_SUCCESS 가지에서만 구간별로 계산합니다.
+          //    여기엔 더할 값이 없습니다. (예전엔 orders.purchase_fee 를 더했는데
+          //     그 컬럼은 쓰는 코드가 없어 항상 0 이었고, 이제 제거됐습니다)
           acc.transfer += transferF;
           acc.delivery += domesticS;
-          acc.agency += agencyF;
         }
       }
       return acc;
-    }, { product: 0, transfer: 0, delivery: 0, agency: 0, deposit: 0, domestic: 0 });
+    }, { product: 0, transfer: 0, delivery: 0, agency: 0, deposit: 0, domestic: 0, extra: 0 });
   }, [items, selectedItems, activeTab, paymentFeeRule, agencyFeeRule]);
 
-  const totalPriceVal = activeTab === ORDER_STATUS.BID_PENDING 
-    ? totals.deposit 
-    : totals.product + totals.transfer + totals.delivery + totals.agency;
+  const totalPriceVal = activeTab === ORDER_STATUS.BID_PENDING
+    ? totals.deposit
+    // 💸 배송비 요청 청구액 = 국제 배송비 + 현지 배송비 + 추가 결제 금액
+    //    (예전엔 국제 배송비만 받고 나머지는 표시만 했습니다)
+    : activeTab === ORDER_STATUS.PAYMENT_REQ
+      ? totals.product + totals.domestic + totals.extra
+      : totals.product + totals.transfer + totals.delivery + totals.agency;
 
   const rawWonBeforeRounding = totalPriceVal * exchangeRate;
   const wonRoundedToInteger = Math.round(rawWonBeforeRounding);

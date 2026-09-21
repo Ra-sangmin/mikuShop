@@ -66,7 +66,7 @@ async function main() {
     productName: i === 0 ? '기간한정 나루토 우즈마키 피규어 한정판' : `테스트 상품 ${i + 1}`,
     productPrice: 12345,
     myBidPrice: 12345,
-    secondPaymentAmount: 8000,
+    shippingFees: [{ round: 1, intlFeeKrw: 6000, domesticFeeKrw: 1500, extraFeeKrw: 500, paidAt: null }],
     trackingNo: '1234567890',
     shippingCarrier: { name: '테스트배송' },
     user: { name: '홍길동' },

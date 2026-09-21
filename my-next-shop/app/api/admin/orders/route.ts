@@ -35,11 +35,22 @@ export async function GET() {
         serviceRequest: true,
         status: true,
         deliveryStatus: true,
-        purchaseFee: true,
+        // ⚠️ 구매 요청 단계의 일본내 배송료(¥) 입니다.
+        //    배송비 요청 단계의 현지 배송비는 아래 shippingFee 쪽입니다.
         domesticShippingFee: true, 
         addressId: true,
-        secondPaymentAmount: true,
         bidStatus: true,
+        // 💴 배송비 청구 내역. 추가 결제가 있을 수 있어 한 주문에 여러 회차가 붙습니다.
+        shippingFees: {
+          select: {
+            id: true, round: true,
+            intlFeeJpy: true, intlFeeKrw: true,
+            domesticFeeJpy: true, domesticFeeKrw: true,
+            extraFeeKrw: true, appliedExchangeRate: true,
+            memo: true, paidAt: true,
+          },
+          orderBy: { round: 'asc' },
+        },
         user: {
           omit: { password: true }, // 🔒 비밀번호 해시는 내려보내지 않음
           include: {
@@ -77,12 +88,17 @@ export async function PUT(request: Request) {
     //    (이미 같은 상태였다면 실제 변경이 아니므로 알림을 보내지 않습니다)
     const orderIds: string[] = Array.isArray(updates) ? updates.map((o: any) => o.id).filter(Boolean) : [];
     const previousStatuses = new Map<string, string>();
-    if (type !== 'delivery' && orderIds.length > 0) {
+    // 💴 order_shipping_fees 행을 새로 만들 때 user_id 가 필요해서 같이 읽어 둡니다.
+    const orderUserIds = new Map<string, number>();
+    if (orderIds.length > 0) {
       const before = await prisma.order.findMany({
         where: { orderId: { in: orderIds } },
-        select: { orderId: true, status: true },
+        select: { orderId: true, status: true, userId: true },
       });
-      before.forEach(o => previousStatuses.set(o.orderId, o.status));
+      before.forEach(o => {
+        previousStatuses.set(o.orderId, o.status);
+        orderUserIds.set(o.orderId, o.userId);
+      });
     }
 
     // ✅ 인터랙티브 트랜잭션 시작 (순차적 실행 및 롤백 보장)
@@ -149,12 +165,6 @@ export async function PUT(request: Request) {
           }
         }
 
-        if (order.secondPaymentAmount !== undefined) {
-          updateData.secondPaymentAmount = order.secondPaymentAmount;
-        }
-        if (order.domesticShippingFee !== undefined) {
-          updateData.domesticShippingFee = order.domesticShippingFee;
-        }
         if (order.bundleId !== undefined) {
           updateData.bundleId = order.bundleId;
         }
@@ -178,6 +188,51 @@ export async function PUT(request: Request) {
           where: { orderId: order.id },
           data: updateData
         });
+
+        // 💴 배송비 요청 단계의 금액은 별도 테이블에 주문당 한 행으로 썽니다.
+        //    화면이 금액을 하나도 보내지 않았으면(상태만 바꾸는 저장) 건드리지 않습니다.
+        //    화면이 금액을 보냈으면 해당 회차를 쓰거나 새로 만듭니다. (상태만 바꾸는 저장은 건드리지 않음)
+        if (order.shippingFee) {
+          const f = order.shippingFee;
+          const round = Number(f.round) || 1;
+          const feeData = {
+            intlFeeJpy: Number(f.intlFeeJpy) || 0,
+            intlFeeKrw: Number(f.intlFeeKrw) || 0,
+            domesticFeeJpy: Number(f.domesticFeeJpy) || 0,
+            domesticFeeKrw: Number(f.domesticFeeKrw) || 0,
+            extraFeeKrw: Number(f.extraFeeKrw) || 0,
+            appliedExchangeRate: Number(f.appliedExchangeRate) || 0,
+            memo: typeof f.memo === 'string' && f.memo.trim() ? f.memo.trim() : null,
+          };
+          // ⚠️ 이미 결제된 회차는 고치지 않습니다. 고객이 낸 금액이 나중에 바뀌면 정산이 맞지 않습니다.
+          const existing = await tx.orderShippingFee.findUnique({ where: { orderId_round: { orderId: order.id, round } } });
+          if (existing?.paidAt) {
+            console.warn(`[배송비] ${order.id} ${round}차는 이미 결제돼 수정하지 않습니다.`);
+          } else {
+            await tx.orderShippingFee.upsert({
+              where: { orderId_round: { orderId: order.id, round } },
+              create: { orderId: order.id, userId: orderUserIds.get(order.id) ?? 0, round, ...feeData },
+              update: feeData,
+            });
+          }
+        }
+
+        // 🗑️ 관리자가 잘못 넣은 추가 청구 취소. 결제 전(미납)인 회차만 지워집니다.
+        if (order.deleteShippingFeeRound !== undefined) {
+          await tx.orderShippingFee.deleteMany({
+            where: { orderId: order.id, round: Number(order.deleteShippingFeeRound), paidAt: null },
+          });
+        }
+
+        // 💰 배송비 결제 완료로 넘어오는 순간, 미납 회차를 납부 처리합니다.
+        //    (추가 청구로 배송비 요청으로 되돌아갈 땐 건드리지 않으므로 이미 난 회차는 그대로 남습니다)
+        if (type !== 'delivery' && order.status === ORDER_STATUS.PAYMENT_DONE
+            && previousStatuses.get(order.id) !== ORDER_STATUS.PAYMENT_DONE) {
+          await tx.orderShippingFee.updateMany({
+            where: { orderId: order.id, paidAt: null },
+            data: { paidAt: new Date() },
+          });
+        }
       }
     });
 

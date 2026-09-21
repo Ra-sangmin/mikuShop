@@ -34,10 +34,19 @@ export async function GET() {
         serviceRequest: true,
         status: true,
         deliveryStatus: true,
-        purchaseFee: true,
+        // ⚠️ 구매 요청 단계의 일본내 배송료(¥). 배송비 요청 단계 금액은 shippingFee 쪽입니다.
         domesticShippingFee: true, 
         addressId: true,
-        secondPaymentAmount: true,
+        shippingFees: {
+          select: {
+            id: true, round: true,
+            intlFeeJpy: true, intlFeeKrw: true,
+            domesticFeeJpy: true, domesticFeeKrw: true,
+            extraFeeKrw: true, appliedExchangeRate: true,
+            memo: true, paidAt: true,
+          },
+          orderBy: { round: 'asc' },
+        },
         bidStatus: true,
         user: {
           omit: { password: true }, // 🔒 비밀번호 해시는 내려보내지 않음
@@ -325,7 +334,6 @@ export async function PUT(request: Request) {
           if (previous && previous.status !== order.status) updateData.statusChangedAt = new Date();
         }
 
-        if (order.secondPaymentAmount !== undefined) updateData.secondPaymentAmount = order.secondPaymentAmount;
         if (order.bundleId !== undefined) {
           updateData.bundleId = order.bundleId === 'AUTO' ? generatedBundleId : order.bundleId;
         }
@@ -339,6 +347,16 @@ export async function PUT(request: Request) {
           where: { orderId: order.id },
           data: updateData
         });
+
+        // 💰 배송비를 결제해 '배송비 결제 완료' 로 넘어오면, 그때 청구 중이던 회차를 납부 처리합니다.
+        //    이 표시가 있어야 나중에 추가 청구가 붙어도 이미 낸 회차가 다시 청구되지 않습니다.
+        if (type !== 'delivery' && order.status === ORDER_STATUS.PAYMENT_DONE
+            && previousOrders.get(order.id)?.status !== ORDER_STATUS.PAYMENT_DONE) {
+          await tx.orderShippingFee.updateMany({
+            where: { orderId: order.id, paidAt: null },
+            data: { paidAt: new Date() },
+          });
+        }
       }
     });
 
