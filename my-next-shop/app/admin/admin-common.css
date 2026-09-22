@@ -196,3 +196,8 @@
   text-align: center;
   color: #94a3b8;
 }
+
+/* 🗑️ 배송 업체 삭제 — 되돌릴 수 없어 같은 줄에서 한 번 더 확인받습니다. */
+.sc-del-btn { color: #e11d48; }
+.sc-del-btn:hover:not(:disabled) { background: #fff1f2; }
+.sc-del-ask { font-size: 12px; font-weight: 800; color: #9f1239; white-space: nowrap; }

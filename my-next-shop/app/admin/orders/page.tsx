@@ -58,6 +58,7 @@ const statusWeight: Record<string, number> = {
   [ORDER_STATUS.CART]: 1,
   [ORDER_STATUS.FAILED]: 99,
   [ORDER_STATUS.PAID]: 2,
+  [ORDER_STATUS.WAITING]: 3,
   [ORDER_STATUS.ARRIVED]: 4,
   [ORDER_STATUS.PREPARING]: 5,
   [ORDER_STATUS.PAYMENT_REQ]: 6,
@@ -74,6 +75,7 @@ const QUICK_FLOW: Record<string, { next: OrderStatus; label: string }> = {
   [ORDER_STATUS.BIDDING]:      { next: ORDER_STATUS.BID_SUCCESS,  label: '낙찰 처리' },
   // 경매 낙찰 성공도 회원 결제 후에 넘어가므로 메인 버튼을 두지 않습니다.
   [ORDER_STATUS.PAID]:         { next: ORDER_STATUS.ARRIVED,      label: '입고 처리' },
+  [ORDER_STATUS.WAITING]:      { next: ORDER_STATUS.ARRIVED,      label: '입고 처리' },
   // 입고 완료도 메인 버튼 없이 선택 칸만 둡니다.
   [ORDER_STATUS.PREPARING]:    { next: ORDER_STATUS.PAYMENT_REQ,  label: '배송비 요청' },
   // 배송비 요청도 회원이 배송비를 결제해야 넘어가므로 메인 버튼을 두지 않습니다.
@@ -85,6 +87,7 @@ const QUICK_TONE: Record<string, string> = {
   [ORDER_STATUS.BIDDING]: '#d97706',
   [ORDER_STATUS.BID_SUCCESS]: '#059669',
   [ORDER_STATUS.PAID]: '#2563eb',
+  [ORDER_STATUS.WAITING]: '#0891b2',
   [ORDER_STATUS.ARRIVED]: '#059669',
   [ORDER_STATUS.PREPARING]: '#7c3aed',
   [ORDER_STATUS.PAYMENT_REQ]: '#ea580c',
@@ -95,6 +98,7 @@ const QUICK_ICON: Record<string, React.ReactNode> = {
   [ORDER_STATUS.BIDDING]: <Gavel size={13} weight="bold" />,
   [ORDER_STATUS.BID_SUCCESS]: <CheckCircle size={13} weight="bold" />,
   [ORDER_STATUS.PAID]: <CreditCard size={13} weight="bold" />,
+  [ORDER_STATUS.WAITING]: <HourglassMedium size={13} weight="bold" />,
   [ORDER_STATUS.ARRIVED]: <Warehouse size={13} weight="bold" />,
   [ORDER_STATUS.PREPARING]: <Package size={13} weight="bold" />,
   [ORDER_STATUS.PAYMENT_REQ]: <Truck size={13} weight="bold" />,
@@ -105,7 +109,7 @@ const QUICK_ICON: Record<string, React.ReactNode> = {
 // 🗂 상단 탭 묶음 — 누가 처리할 차례인지
 //    관리자 처리 필요: 관리자가 확인 · 처리해야 다음으로 넘어가는 단계
 //    회원 처리 대기  : 회원의 결제 · 요청을 기다리는 단계
-const ADMIN_TABS: string[] = [ORDER_STATUS.BIDDING, ORDER_STATUS.FAILED, ORDER_STATUS.PAID, ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_DONE];
+const ADMIN_TABS: string[] = [ORDER_STATUS.BIDDING, ORDER_STATUS.FAILED, ORDER_STATUS.PAID, ORDER_STATUS.WAITING, ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_DONE];
 const USER_TABS: string[] = [ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ];
 
 export default function OrderManagement() {
@@ -147,6 +151,15 @@ export default function OrderManagement() {
   // 메인 액션 버튼은 팝업을 거쳐 호출되기도 하므로, 누른 순간의 토글 값을 ref 로 읽습니다.
   const skipAlimtalkRef = React.useRef(skipAlimtalk);
   useEffect(() => { skipAlimtalkRef.current = skipAlimtalk; }, [skipAlimtalk]);
+  // 🧪 로컬(localhost / 127.0.0.1)에서 테스트할 때는 실제 고객에게 알림톡이 나가지 않도록 기본으로 켜 둡니다.
+  //    (운영 사이트에서는 기본 꺼짐. 로컬에서도 필요하면 스위치를 꺼서 보낼 수 있습니다)
+  useEffect(() => {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+      setSkipAlimtalk(true);
+      skipAlimtalkRef.current = true;
+    }
+  }, []);
 
   // 📨 알림 발송 이력 (CS 문의 대응용)
   //    알림톡은 여러 주문을 한 통으로 묶어 보내므로, 고객이 대표 주문번호 하나만 들고 문의합니다.
@@ -833,6 +846,7 @@ export default function OrderManagement() {
       case ORDER_STATUS.BIDDING: return { bg: '#fffbeb', text: '#d97706', border: '#fcd34d' };
       case ORDER_STATUS.BID_SUCCESS: return { bg: '#ecfdf5', text: '#059669', border: '#6ee7b7' };
       case ORDER_STATUS.PAID: return { bg: '#eff6ff', text: '#3b82f6', border: '#93c5fd' };
+      case ORDER_STATUS.WAITING: return { bg: '#ecfeff', text: '#0891b2', border: '#67e8f9' };
       case ORDER_STATUS.ARRIVED: return { bg: '#f0fdf4', text: '#22c55e', border: '#86efac' };
       case ORDER_STATUS.PREPARING: return { bg: '#f5f3ff', text: '#8b5cf6', border: '#c4b5fd' };
       case ORDER_STATUS.PAYMENT_REQ: return { bg: '#fff7ed', text: '#ea580c', border: '#fdba74' };

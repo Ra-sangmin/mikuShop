@@ -6,16 +6,17 @@ import GuideLayout from '../../components/GuideLayout';
 import Link from 'next/link';
 import NoticePanel from '../../components/NoticePanel';
 import { useSearchParams, useRouter } from 'next/navigation';
-import OrderTable from './components/OrderTable';
+import OrderTable, { OrderTableStyles } from './components/OrderTable';
 import AddressForm from './components/AddressForm';
 import PaymentSummary from './components/PaymentSummary';
-import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
+import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus, orderStatusLabel } from '@/src/types/order';
 import { useSession } from 'next-auth/react';
 import { loginUrlWithReturn } from '@/lib/authRedirect';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 import '../mypage-premium.css';
 import { calculateTieredPaymentFee, calculateTieredAgencyFee, toChargeableWon, DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule } from '@/src/utils/feeCalculator';
+import { buildTrackingUrl } from '@/lib/shippingCarriers';
 
 // 🌟 "현재 진행중인 현황" = 국제 배송(도착 완료 전 단계)을 제외한 나머지 모든 주문
 const isProgressStatus = (status: string) => status !== ORDER_STATUS.SHIPPING;
@@ -44,12 +45,37 @@ function getLastRoadAddressPart(address?: string) {
   return roadTokenIndex >= 0 ? tokens.slice(roadTokenIndex).join(' ') : (tokens[tokens.length - 1] || '');
 }
 
+// 🌟 카드를 눌렀을 때 여러 상태를 한 표에 모아 보여 주는 단계
+const PHASE_VIEW_STATUSES: Record<string, string[]> = {
+  progress: [ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE],
+  // 🛒 장바구니 카드: 구매 요청과 경매 요청을 한 표에 모아 봅니다.
+  //    예전엔 카드를 누르면 둘 중 하나(구매 요청)로만 가서 경매 요청 상품을 열 방법이 없었습니다.
+  request: [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING],
+  // ✈️ 국제 배송중 카드 · 상단 '국제 배송 중': 국제 배송 상품을 위쪽 표에 모아 보고, 누르면 상세 정보 확인에서 배송 조회까지 봅니다.
+  shipping: [ORDER_STATUS.SHIPPING],
+};
+// 🌟 '신청 내역 보기' 카드에서 보여 줄 상태.
+//    구매대행·배송대행의 진행 중 상태에 더해 경매 진행·결과까지 한 표에서 봅니다.
+//    (장바구니 카드가 맡는 구매 요청·경매 요청과, 아래 단계 카드가 맡는 입고 이후는 제외합니다)
+const REQUEST_VIEW_STATUSES: string[] = [
+  ORDER_STATUS.BIDDING,      // 경매 상황
+  ORDER_STATUS.BID_SUCCESS,  // 경매 낙찰 성공
+  ORDER_STATUS.PAID,         // 상품 결제 완료 (구매대행)
+  ORDER_STATUS.WAITING,      // 입고 대기중 (배송대행)
+  ORDER_STATUS.FAILED,       // 경매/구매 실패
+];
+
+// 🕒 최근 수정순 정렬 기준: 진행 상태가 마지막으로 바뀐 시각(statusChangedAt) → 없으면 신청 시각(registeredAt)
+const touchedAt = (o: any) => new Date(o?.statusChangedAt || o?.registeredAt || 0).getTime() || 0;
+const byRecentlyTouched = (a: any, b: any) => (touchedAt(b) - touchedAt(a)) || ((b?.id || 0) - (a?.id || 0));
+
 const STATUS_PRIORITY: Record<string, number> = {
   [ORDER_STATUS.CART]: 1,
   [ORDER_STATUS.BID_PENDING]: 2,
   [ORDER_STATUS.BIDDING]: 3,
   [ORDER_STATUS.BID_SUCCESS]: 4,
   [ORDER_STATUS.PAID]: 5,
+  [ORDER_STATUS.WAITING]: 5.5,
   [ORDER_STATUS.FAILED]: 6,
   [ORDER_STATUS.ARRIVED]: 7,
   [ORDER_STATUS.PREPARING]: 8,
@@ -66,6 +92,7 @@ const STATUS_DESCRIPTIONS: Record<string, string> = {
   [ORDER_STATUS.BID_SUCCESS]: '경매 낙찰 성공, 1차결제 대기',
   [ORDER_STATUS.FAILED]: '상품 결제 완료 전 구매불가 목록',
   [ORDER_STATUS.PAID]: '1차결제완료 목록(구매진행)',
+  [ORDER_STATUS.WAITING]: '배송대행 신청, 현지창고 도착 대기',
   [ORDER_STATUS.ARRIVED]: '현지창고 도착, 합포장신청',
   [ORDER_STATUS.PREPARING]: '미쿠짱창고 포장진행중',
   [ORDER_STATUS.PAYMENT_REQ]: '합포장완료 2차결제견적',
@@ -91,8 +118,12 @@ function usePurchaseStatusLogic() {
   // 🌟 "전체" 패널의 "전체 내역 보기"가 실제로 선택(클릭)됐는지 여부.
   // progressFilterActive와 별도로 관리해서, 토글을 그냥 껐을 때는 자동으로 선택 표시되지 않게 합니다.
   const [allViewSelected, setAllViewSelected] = useState(false);
+  // 🌟 단계 카드(예: 입고 완료)를 눌렀을 때, 그 단계에 속한 여러 상태를 한 표에 모아 보여 줍니다.
+  //    탭은 '전체(ALL)' 를 그대로 쓰고 표에 나올 상태만 이 단계의 상태로 좁힙니다. (행 클릭 → 상세 정보 확인 패널도 그대로 동작)
+  const [phaseView, setPhaseView] = useState<string | null>(null);
   const setActiveTab = useCallback((value: string) => {
     setAllViewSelected(false);
+    setPhaseView(null);
     setActiveTabRaw(value);
   }, []);
   const [userData, setUserData] = useState<any>(null);
@@ -303,6 +334,7 @@ function usePurchaseStatusLogic() {
         '전체내역': ORDER_STATUS.ALL,
         '장바구니': ORDER_STATUS.CART,
         '상품 결제 완료': ORDER_STATUS.PAID,
+        '입고 대기중': ORDER_STATUS.WAITING,
         '입고완료': ORDER_STATUS.ARRIVED,
         '배송비 요청': ORDER_STATUS.PAYMENT_REQ,
       };
@@ -311,50 +343,82 @@ function usePurchaseStatusLogic() {
     }
   }, [searchParams]);
 
-  // 🔗 /mypage/status?orderId=M260918-a3f9
-  //    받는 값: 주문번호(M…) · 묶음번호(MB…) · orders.id 숫자. 알림톡 버튼처럼 바깥에서 들어오는 링크가 씁니다.
-  //    그 주문이 속한 상태 탭으로 옮기고, 해당 행을 선택 상태로 만든 뒤 화면에 보이도록 스크롤합니다.
+  /**
+   * 🔗 /mypage/status?phase=request
+   *    단계 카드(장바구니 = 구매 요청 + 경매 요청)를 선택된 상태로 열어 줍니다.
+   *    각 쇼핑몰 상세에서 장바구니에 담은 뒤 이동할 때 씁니다.
+   *    주문번호(orderId)까지 함께 오면 아래 효과가 그 상품을 선택하고 스크롤합니다.
+   */
+  const phaseParam = (searchParams.get('phase') || '').trim();
+  const phaseHandled = useRef(false);
+  useEffect(() => {
+    if (!phaseParam || phaseHandled.current) return;
+    if (!PHASE_VIEW_STATUSES[phaseParam]) return; // 모르는 값이면 무시합니다.
+    phaseHandled.current = true;
+    setActiveTabRaw(ORDER_STATUS.ALL);
+    setAllViewSelected(false);
+    setPhaseView(phaseParam);
+  }, [phaseParam]);
+
+  // 🔗 /mypage/status?orderId=M260918-a3f9  (쉼표로 여러 개도 됩니다: ?orderId=A,B)
+  //    받는 값: 주문번호(M…) · 묶음번호(MB…) · orders.id 숫자.
+  //    알림톡 버튼과, 구매대행 신청 후 "장바구니 담기" 이동이 씁니다.
+  //    그 주문이 속한 상태 탭으로 옮기고 해당 행들을 선택 상태로 만든 뒤,
+  //    "전체 진행 현황" 패널이 통째로 보이도록 패널 맨 위로 스크롤합니다.
   //    주문 목록은 비동기로 오므로 목록이 채워진 뒤에 한 번만 실행합니다.
   const focusOrderParam = (searchParams.get('orderId') || searchParams.get('order') || '').trim();
   const focusHandled = useRef(false);
   useEffect(() => {
     if (!focusOrderParam || focusHandled.current || isLoading) return;
 
+    const keys = focusOrderParam.split(',').map(v => v.trim()).filter(Boolean);
     // 묶음번호로 들어오면 그 묶음의 아무 주문이나 잡으면 됩니다. 아래에서 묶음 전체를 선택하기 때문입니다.
-    const target = orders.find(
-      (o: any) =>
-        String(o.orderId) === focusOrderParam ||
-        String(o.id) === focusOrderParam ||
-        (!!o.bundleId && String(o.bundleId) === focusOrderParam)
-    );
-    if (!target) {
+    const matched = keys
+      .map(key => orders.find(
+        (o: any) =>
+          String(o.orderId) === key ||
+          String(o.id) === key ||
+          (!!o.bundleId && String(o.bundleId) === key)
+      ))
+      .filter(Boolean) as any[];
+
+    if (matched.length === 0) {
       focusHandled.current = true;
       showAlert('해당 주문을 찾을 수 없습니다.', 'warning');
       return;
     }
     focusHandled.current = true;
 
-    // 국제 배송 상품은 위쪽 표에 나오지 않으므로 탭을 바꾸지 않고, 아래 패널의 그 행으로 데려갑니다.
-    if (target.status !== ORDER_STATUS.SHIPPING) setActiveTab(target.status);
+    // 여러 건이면 첫 주문의 탭으로 옮깁니다. (한 번에 담은 상품은 모두 같은 상태입니다)
+    const lead = matched[0];
+    // 🛒 ?phase= 로 단계 카드를 지정해 들어왔고 그 단계가 이 주문을 품고 있으면 그대로 둡니다.
+    //    (setActiveTab 은 phaseView 를 지우므로, 여기서 탭을 바꾸면 카드 선택이 풀립니다)
+    const keepPhase = !!phaseParam && PHASE_VIEW_STATUSES[phaseParam]?.includes(lead.status);
+    // ✈️ 국제 배송 상품은 '국제 배송중' 카드 보기(phaseView 'shipping')로 위쪽 표에 보여 줍니다.
+    if (!keepPhase) {
+      if (lead.status === ORDER_STATUS.SHIPPING) { setActiveTab(ORDER_STATUS.ALL); setPhaseView('shipping'); }
+      else setActiveTab(lead.status);
+    }
+
     // 합포장 묶음은 표에서 한 행으로 합쳐지므로, 묶음 전체를 선택해야 그 행이 선택 상태로 보입니다.
-    const ids = target.bundleId
-      ? orders
-          .filter((o: any) => o.bundleId === target.bundleId && o.status === target.status)
-          .map((o: any) => String(o.orderId))
-      : [String(target.orderId)];
-    setSelectedItems(ids);
+    const ids = new Set<string>();
+    matched.forEach((t: any) => {
+      if (t.bundleId) {
+        orders
+          .filter((o: any) => o.bundleId === t.bundleId && o.status === t.status)
+          .forEach((o: any) => ids.add(String(o.orderId)));
+      } else {
+        ids.add(String(t.orderId));
+      }
+    });
+    setSelectedItems([...ids]);
 
     // 탭이 바뀌어 표가 다시 그려진 뒤에 스크롤해야 해서 한 박자 늦춥니다.
-    // (주문번호에 없는 문자를 걸러 선택자가 깨지지 않게 합니다)
-    const rowKey = String(target.orderId).replace(/[^A-Za-z0-9_-]/g, '');
     const timer = setTimeout(() => {
-      if (!rowKey) return;
-      document
-        .querySelector(`[data-order-ids~="${rowKey}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('miku-progress-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 150);
     return () => clearTimeout(timer);
-  }, [focusOrderParam, orders, isLoading, setActiveTab, showAlert]);
+  }, [focusOrderParam, phaseParam, orders, isLoading, setActiveTab, showAlert]);
 
   // 하위 상태 아이템 생성 시 상세 설명(desc) 데이터 추가
   const shippingPhases = useMemo(() => {
@@ -385,7 +449,13 @@ function usePurchaseStatusLogic() {
       statusKeys
         .map(key => ({
           key,
-          name: ORDER_STATUS_LABEL[key as OrderStatus] || key,
+          // 🌟 이 단계의 주문이 모두 배송대행이면 "상품 결제 완료" 대신 "입고 대기중" 으로 보여 줍니다
+          name: (() => {
+            const inStatus = baseOrders.filter(item => item.status === key);
+            return inStatus.length > 0 && inStatus.every((item: any) => item.type === 'DELIVERY')
+              ? orderStatusLabel(key, 'DELIVERY')
+              : (ORDER_STATUS_LABEL[key as OrderStatus] || key);
+          })(),
           count: bundleAware ? getBundleAwareCount([key]) : baseOrders.filter(item => item.status === key).length,
           desc: STATUS_DESCRIPTIONS[key] || ''
         }))
@@ -393,29 +463,41 @@ function usePurchaseStatusLogic() {
 
     const phases = [
       {
-        id: 'request', title: '요청', theme: 'theme-blue', icon: 'fa-cart-shopping',
+        id: 'request', title: '장바구니', theme: 'theme-blue', icon: 'fa-cart-shopping',
         statuses: [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING],
         totalCount: getCount([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING]),
         subItems: createSubItems([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING])
       },
       {
-        id: 'progress', title: '진행 중', theme: 'theme-purple', icon: 'fa-hourglass-half',
-        statuses: [ORDER_STATUS.BIDDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.PAID, ORDER_STATUS.FAILED],
-        totalCount: getCount([ORDER_STATUS.BIDDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.PAID, ORDER_STATUS.FAILED]),
-        subItems: createSubItems([ORDER_STATUS.BIDDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.PAID, ORDER_STATUS.FAILED])
+        // 🌟 예전 '구매 진행중' 자리. 카드를 누르면 입고 완료 · 배송 준비중 · 배송비 요청 · 배송비 결제 완료를 한 표에 모아 봅니다.
+        //    (경매 · 상품 결제 완료 · 입고 대기중 · 실패는 '신청 내역 보기' 에서 봅니다)
+        id: 'progress', title: '입고 완료', theme: 'theme-green', icon: 'fa-warehouse',
+        statuses: PHASE_VIEW_STATUSES.progress,
+        totalCount: getBundleAwareCount(PHASE_VIEW_STATUSES.progress),
+        subItems: createSubItems(PHASE_VIEW_STATUSES.progress, true)
       },
       {
         // 🌟 배송 준비중(PREPARING)부터는 합포장(bundleId)으로 묶일 수 있으므로 창고 패널도 합포장 묶음 기준으로 집계합니다.
-        id: 'warehouse', title: '창고', theme: 'theme-green', icon: 'fa-warehouse',
+        id: 'warehouse', title: '현지 입고', theme: 'theme-green', icon: 'fa-warehouse',
         statuses: [ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING],
         totalCount: getBundleAwareCount([ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING]),
         subItems: createSubItems([ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING], true)
       },
       {
-        id: 'shipping', title: '배송 준비', theme: 'theme-rose', icon: 'fa-truck',
-        statuses: [ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE],
-        totalCount: getBundleAwareCount([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE]),
-        subItems: createSubItems([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE], true)
+        // 🌟 예전 '배송 준비' 자리 → '국제 배송중'. 카드를 누르면 국제 배송 상품을 위쪽 표에 모아 보여 주고(phaseView 'shipping'),
+        //    상품을 누르면 상세 정보 확인에서 주소 · 배송업체 · 운송장을 보여 줍니다. 건수는 합포장 묶음을 1건으로 셉니다. ('진행중인 목록만 보기'와 상관없이 항상 셈)
+        id: 'shipping', title: '국제 배송중', theme: 'theme-rose', icon: 'fa-plane',
+        statuses: [ORDER_STATUS.SHIPPING],
+        totalCount: (() => {
+          const seen = new Set<string>();
+          let count = 0;
+          orders.filter(o => o.status === ORDER_STATUS.SHIPPING).forEach((o: any) => {
+            if (o.bundleId) { if (seen.has(o.bundleId)) return; seen.add(o.bundleId); }
+            count++;
+          });
+          return count;
+        })(),
+        subItems: [] as any[]
       }
     ];
 
@@ -429,8 +511,13 @@ function usePurchaseStatusLogic() {
     // 1. 탭 필터링.
     //    국제 배송(SHIPPING)은 어떤 탭에서도 이 표에 넣지 않습니다. 아래 "국제 배송 현황" 패널에서만 보여 주며,
     //    두 곳에 같은 상품이 나오면 진행 상황을 두 번 세는 것처럼 보이기 때문입니다.
+    //    🛒 "전체 내역 보기"에서는 구매 요청(CART, 장바구니) 상품을 빼고 보여 줍니다. 장바구니는 '장바구니' 카드에서만 봅니다.
     const filtered = orders.filter(
-      item => isProgressStatus(item.status) && (activeTab === ORDER_STATUS.ALL || item.status === activeTab),
+      item => (isProgressStatus(item.status) || (activeTab === ORDER_STATUS.ALL && phaseView === 'shipping')) && (
+        activeTab === ORDER_STATUS.ALL
+          ? (phaseView ? PHASE_VIEW_STATUSES[phaseView]?.includes(item.status) : REQUEST_VIEW_STATUSES.includes(item.status))
+          : item.status === activeTab
+      ),
     );
 
     // 2. 🌟 어떤 탭이든 상관없이 항상 우선순위 및 id 기준 정렬 적용
@@ -446,10 +533,38 @@ function usePurchaseStatusLogic() {
       // 우선순위가 같으면 id 기준 내림차순(최신순) 정렬
       return (b.id || 0) - (a.id || 0);
     });
-  }, [orders, activeTab]);
+  }, [orders, activeTab, phaseView]);
+
+  // 🔎 "상세 정보 확인" 패널(전체 내역 보기에서 배송비 요청 등을 눌렀을 때)은 탭이 '전체' 인 채로 결제해야 해서,
+  //    결제 금액 계산만 그 패널의 상태 기준으로 합니다. (패널이 닫혀 있으면 평소처럼 현재 탭 기준)
+  const [calcTabOverride, setCalcTabOverride] = useState<string | null>(null);
+
+  /**
+   * 🛒 장바구니 카드는 구매 요청과 경매 요청을 한 표에 모아 보여 줍니다.
+   *    두 상태는 결제 방식이 달라서(상품값 + 수수료 vs 보증금), 무엇을 골랐는지로 결제 방식을 정합니다.
+   *      · 한 가지 상태만 골랐다 → 그 상태 기준으로 계산·결제
+   *      · 아무것도 안 골랐다   → 구매 요청 기준으로 패널만 띄워 둠 (버튼은 어차피 비활성)
+   *      · 두 상태를 섞어 골랐다 → null. 함께 결제할 수 없다고 알려 줍니다.
+   */
+  const requestViewStatus = useMemo(() => {
+    if (phaseView !== 'request') return null;
+    const picked = items.filter((i: any) => selectedItems.map(String).includes(String(i.orderId)));
+    if (picked.length === 0) return ORDER_STATUS.CART as string;
+    const statuses = new Set(picked.map((i: any) => i.status));
+    return statuses.size === 1 ? ([...statuses][0] as string) : null;
+  }, [phaseView, items, selectedItems]);
+
+  // 결제 금액 계산에 쓸 상태. 상세 정보 패널(calcTabOverride) > 장바구니 카드 > 현재 탭 순입니다.
+  const payStatus = calcTabOverride ?? requestViewStatus ?? activeTab;
+  const calcTab = payStatus;
+  const statusOverride = calcTabOverride ?? requestViewStatus;
+  const calcItems = useMemo(
+    () => (statusOverride ? orders.filter((o: any) => o.status === statusOverride) : items),
+    [statusOverride, orders, items],
+  );
 
   const totals = useMemo(() => {
-    const selectedOrders = items.filter(item => selectedItems.map(String).includes(String(item.orderId)));
+    const selectedOrders = calcItems.filter(item => selectedItems.map(String).includes(String(item.orderId)));
 
     return selectedOrders.reduce((acc, item) => {
       // ⚠️ orders.productPrice 는 "단가"가 아니라 **그 주문 줄의 합계**(단가 × 수량)입니다.
@@ -467,17 +582,17 @@ function usePurchaseStatusLogic() {
       const fallbackDeposit = myBid > 0 ? (myBid <= 20000 ? 2000 : Math.floor(myBid * 0.1)) : 0;
       const depositAmt = Number(item.depositAmount) || fallbackDeposit; 
 
-      if (activeTab === ORDER_STATUS.PAYMENT_REQ) {
+      if (calcTab === ORDER_STATUS.PAYMENT_REQ) {
         // 💸 배송비 요청 탭은 세 항목을 각각 모으고, 청구액은 아래 totalPriceVal 에서 셋을 더해 냅니다.
         acc.product += secondP;
         acc.domestic += domesticKrw;
         acc.extra += extraP;
-      } else if (activeTab === ORDER_STATUS.BID_PENDING) {
+      } else if (calcTab === ORDER_STATUS.BID_PENDING) {
         acc.deposit += depositAmt;
       } else {
         acc.product += productP;
         // 🌟 구매 요청(CART), 경매 낙찰 성공(BID_SUCCESS) 탭은 admin/estimate와 동일한 계산식을 적용합니다.
-        if (activeTab === ORDER_STATUS.CART || activeTab === ORDER_STATUS.BID_SUCCESS) {
+        if (calcTab === ORDER_STATUS.CART || calcTab === ORDER_STATUS.BID_SUCCESS) {
           // 🌟 purchase/quote(PurchaseFormContainer)와 공유하는 계산식: 결제 수수료는
           // 상품 총액(30,000엔) 기준, 대행 수수료는 수량(4개) 기준으로 구간별 정액 부과합니다.
           const itemQuantity = Number(item.productCount) || 1;
@@ -495,19 +610,19 @@ function usePurchaseStatusLogic() {
       }
       return acc;
     }, { product: 0, transfer: 0, delivery: 0, agency: 0, deposit: 0, domestic: 0, extra: 0 });
-  }, [items, selectedItems, activeTab, paymentFeeRule, agencyFeeRule]);
+  }, [calcItems, selectedItems, calcTab, paymentFeeRule, agencyFeeRule]);
 
-  const totalPriceVal = activeTab === ORDER_STATUS.BID_PENDING
+  const totalPriceVal = calcTab === ORDER_STATUS.BID_PENDING
     ? totals.deposit
     // 💸 배송비 요청 청구액 = 국제 배송비 + 현지 배송비 + 추가 결제 금액
     //    (예전엔 국제 배송비만 받고 나머지는 표시만 했습니다)
-    : activeTab === ORDER_STATUS.PAYMENT_REQ
+    : calcTab === ORDER_STATUS.PAYMENT_REQ
       ? totals.product + totals.domestic + totals.extra
       : totals.product + totals.transfer + totals.delivery + totals.agency;
 
   // 🌟 배송비 요청 탭의 금액은 관리자가 이미 원화로 넣은 값이라 환산하지 않습니다.
   //    나머지는 견적 화면과 같은 규칙(100원 단위 올림)으로 맞춥니다. — src/utils/feeCalculator.ts
-  const totalPriceWon = activeTab === ORDER_STATUS.PAYMENT_REQ
+  const totalPriceWon = calcTab === ORDER_STATUS.PAYMENT_REQ
     ? totalPriceVal
     : toChargeableWon(totalPriceVal, exchangeRate);
 
@@ -600,7 +715,8 @@ function usePurchaseStatusLogic() {
             const currentMoney = uData.user.cyberMoney || 0;
             if (currentMoney < totalPriceWon) {
               const chargeConfirmed = await showConfirm(`미쿠짱 금액이 부족합니다.\n부족한 금액: ₩${(totalPriceWon - currentMoney).toLocaleString()}\n충전하시겠습니까?`);
-              if (chargeConfirmed) window.location.href = '/mypage/money/charge';
+              // 🌟 충전 화면의 충전 금액에 부족한 금액이 자동으로 들어가도록 넘깁니다 (money/charge 가 ?amount= 를 읽음)
+              if (chargeConfirmed) window.location.href = `/mypage/money/charge?amount=${Math.ceil(totalPriceWon - currentMoney)}`;
               return;
             }
           }
@@ -645,8 +761,10 @@ function usePurchaseStatusLogic() {
   return {
     isAuthChecking, isLoading, shippingPhases, activeTab, setActiveTab, items, orders, userData,
     selectedItems, setSelectedItems, selectedAddress, setSelectedAddress, exchangeRate,
-    totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus,
-    progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected,
+    totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus, setCalcTabOverride,
+    progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected, phaseView, setPhaseView,
+    // 🛒 장바구니 카드(구매 요청 + 경매 요청 한 표)에서 쓸 결제 기준 상태
+    requestViewStatus, payStatus,
     orderTypeFilter, allOrders
   };
 }
@@ -675,16 +793,36 @@ const SubStatusChip = ({ item, isActive, onClick }: { item: any, isActive: boole
   );
 };
 
-const PhaseModule = ({ phase, activeTab, onTabClick }: { phase: any, activeTab: string, onTabClick: (key: string) => void }) => {
-  const isPhaseActive = (phase.statuses as string[]).includes(activeTab);
+const PhaseModule = ({ phase, activeTab, onTabClick, onPhaseView, phaseView, onCardClick }: {
+  phase: any, activeTab: string, onTabClick: (key: string) => void,
+  onPhaseView?: (phaseId: string) => void, phaseView?: string | null,
+  /** 카드 클릭을 직접 처리할 때 (예: 국제 배송중 → 아래 국제 배송 현황 패널로 이동) */
+  onCardClick?: () => void,
+}) => {
+  // 여러 상태를 모아 보는 카드(입고 완료)는 그 모아 보기가 켜졌을 때만 선택 표시합니다
+  const isGroupView = Boolean(onPhaseView && PHASE_VIEW_STATUSES[phase.id]);
+  const isPhaseActive = isGroupView
+    ? phaseView === phase.id
+    : (phase.statuses as string[]).includes(activeTab);
   // 🌟 하위 항목이 1개뿐일 때(예: 진행중인 목록만 보기로 나머지가 숨겨진 경우)는
   // 모듈 가로 폭을 넓게 유지할 이유가 없어 컴팩트하게 줄입니다.
   const isCompact = phase.subItems.length <= 1;
+  // 🌟 하위 칩은 숨기므로 카드 전체를 눌러 이동합니다. (건수가 있는 첫 항목 → 없으면 첫 항목)
+  const firstKey = (phase.subItems.find((it: any) => it.count > 0) || phase.subItems[0])?.key;
+  const handleCardClick = () => {
+    if (onCardClick) { onCardClick(); return; }
+    if (isGroupView) { onPhaseView!(phase.id); return; }
+    if (firstKey) onTabClick(firstKey);
+  };
 
   return (
     <div
       data-phase={phase.id}
-      className={`miku-phase-module ${phase.theme} ${isPhaseActive ? 'phase-active' : ''} ${isCompact ? 'phase-compact' : ''}`}
+      className={`miku-phase-module ${phase.theme} ${isPhaseActive ? 'phase-active' : ''} phase-compact is-clickable`}
+      role="button"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCardClick(); } }}
     >
       <div className="phase-header">
         <div className="phase-title-group">
@@ -719,8 +857,10 @@ function MyPurchaseStatusContent() {
   const {
     isAuthChecking, isLoading, shippingPhases, activeTab, setActiveTab, items, orders, userData,
     selectedItems, setSelectedItems, selectedAddress, setSelectedAddress, exchangeRate,
-    totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus,
-    progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected,
+    totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus, setCalcTabOverride,
+    progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected, phaseView, setPhaseView,
+    // 🛒 장바구니 카드(구매 요청 + 경매 요청 한 표)에서 쓸 결제 기준 상태
+    requestViewStatus, payStatus,
     orderTypeFilter, allOrders
   } = usePurchaseStatusLogic();
 
@@ -745,46 +885,161 @@ function MyPurchaseStatusContent() {
     });
   };
 
+  // 🌟 좌/우 화살표를 누르면 다음(이전) 단계 카드의 시작 위치에 딱 맞춰 넘깁니다. (스냅은 화살표에서만)
+  //    드래그는 손가락/마우스를 움직인 만큼만 자연스럽게 움직이고 멈춘 자리에 그대로 둡니다.
+  const scrollPipeline = (dir: -1 | 1) => {
+    const slider = sliderRef.current;
+    if (!slider) return;
+    stopMomentum();
+    const cards = Array.from(slider.querySelectorAll<HTMLElement>('.miku-phase-module'));
+    const max = slider.scrollWidth - slider.clientWidth;
+    const cur = slider.scrollLeft;
+    const starts = cards.map(c => Math.min(max, c.offsetLeft - cards[0].offsetLeft));
+    const target = dir > 0
+      ? (starts.find(x => x > cur + 4) ?? max)
+      : ([...starts].reverse().find(x => x < cur - 4) ?? 0);
+    slider.scrollTo({ left: target, behavior: 'smooth' });
+  };
+
   useEffect(() => {
     updateScrollEdges();
     window.addEventListener('resize', updateScrollEdges);
     return () => window.removeEventListener('resize', updateScrollEdges);
   }, [shippingPhases.length, orders.length]);
 
+  // 드래그 속도 추적 (놓은 뒤 관성으로 조금 더 미끄러지게) — 매 프레임 렌더를 피하려고 ref 로 둡니다.
+  const dragVelRef = useRef(0);
+  const dragLastRef = useRef<{ x: number; t: number } | null>(null);
+  const momentumRafRef = useRef<number | null>(null);
+  const stopMomentum = () => {
+    if (momentumRafRef.current !== null) cancelAnimationFrame(momentumRafRef.current);
+    momentumRafRef.current = null;
+  };
+  useEffect(() => () => stopMomentum(), []);
+
   const startDragging = (e: React.MouseEvent<HTMLDivElement>) => {
+    stopMomentum();
     setIsMouseDown(true);
     setIsDragging(false); // 처음 누를 때는 드래그 상태 아님
     if (!sliderRef.current) return;
     setStartX(e.pageX - sliderRef.current.offsetLeft);
     setScrollLeft(sliderRef.current.scrollLeft);
+    dragVelRef.current = 0;
+    dragLastRef.current = { x: e.pageX, t: performance.now() };
   };
 
   const onDrag = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isMouseDown || !sliderRef.current) return;
-    
+
     const x = e.pageX - sliderRef.current.offsetLeft;
-    const walk = (x - startX) * 1.5;
-    
-    // 🌟 마우스가 5픽셀 이상 실제로 이동했을 때만 드래그로 인정
-    if (Math.abs(walk) > 5) {
-      setIsDragging(true);
+    const walk = x - startX; // 🌟 움직인 만큼 그대로 (예전엔 1.5배라 손보다 빨리 움직였음)
+
+    // 마우스가 5픽셀 이상 실제로 이동했을 때만 드래그로 인정 (클릭과 구분)
+    if (isDragging || Math.abs(walk) > 5) {
+      if (!isDragging) setIsDragging(true);
       e.preventDefault();
       sliderRef.current.scrollLeft = scrollLeft - walk;
+
+      const now = performance.now();
+      const last = dragLastRef.current;
+      if (last && now > last.t) {
+        const v = (e.pageX - last.x) / (now - last.t); // px/ms
+        dragVelRef.current = dragVelRef.current * 0.6 + v * 0.4; // 튀는 값을 부드럽게
+      }
+      dragLastRef.current = { x: e.pageX, t: now };
     }
   };
 
   const stopDragging = () => {
+    if (!isMouseDown) return;
     setIsMouseDown(false);
+
+    // 🌟 놓는 순간의 속도로 조금 더 미끄러지다 서서히 멈춥니다. (카드에 맞춰 붙지 않음)
+    const slider = sliderRef.current;
+    const recent = dragLastRef.current && performance.now() - dragLastRef.current.t < 80;
+    let v = recent ? dragVelRef.current : 0;
+    if (slider && Math.abs(v) > 0.05) {
+      let prev = performance.now();
+      const step = (now: number) => {
+        const dt = Math.min(32, now - prev);
+        prev = now;
+        slider.scrollLeft -= v * dt;
+        v *= Math.pow(0.94, dt / 16); // 마찰
+        const atEdge = slider.scrollLeft <= 0 || slider.scrollLeft >= slider.scrollWidth - slider.clientWidth;
+        if (Math.abs(v) > 0.02 && !atEdge) momentumRafRef.current = requestAnimationFrame(step);
+        else momentumRafRef.current = null;
+      };
+      momentumRafRef.current = requestAnimationFrame(step);
+    }
+
     // 약간의 딜레이를 주어 onClick 이벤트가 끝난 뒤에 드래그 상태가 풀리도록 함
     setTimeout(() => {
       setIsDragging(false);
     }, 50);
   };
 
+  // 🔎 "전체 내역 보기" 표에서 입고 대기중(상품 결제 완료) · 입고 완료 상품을 누르면 탭을 옮기지 않고,
+  //    아래 "상세 정보 확인" 패널에 같은 상태의 상품 전체를 체크 해제된 채로 보여 줍니다. (배송 준비중도 같음 — 합포장은 묶음 한 줄)
+  //    입고 완료는 포장 요청 · 배송지 선택까지 함께 보여 줍니다.
+  //    🌟 신청 내역 보기에 나오는 모든 상태(장바구니 제외)가 같은 방식으로 상세 패널을 엽니다.
+  //    🛒 장바구니 카드의 구매 요청도 경매 요청처럼 상세 패널에서 금액 확인 · 결제까지 합니다.
+  const DETAIL_STATUSES: string[] = Object.values(ORDER_STATUS).filter((st) => st !== ORDER_STATUS.ALL);
+  // 상세 패널 안에서 바로 결제하는 상태 (구매 요청 · 경매 요청 · 낙찰 · 배송비 요청)
+  const DETAIL_PAY_STATUSES: string[] = [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.PAYMENT_REQ];
+  // 상세 패널 제목 옆 아이콘 (상태별)
+  const DETAIL_ICONS: Record<string, string> = {
+    [ORDER_STATUS.CART]: 'fa-cart-shopping',
+    [ORDER_STATUS.BID_PENDING]: 'fa-gavel',
+    [ORDER_STATUS.BIDDING]: 'fa-gavel',
+    [ORDER_STATUS.BID_SUCCESS]: 'fa-trophy',
+    [ORDER_STATUS.FAILED]: 'fa-circle-exclamation',
+    [ORDER_STATUS.PAID]: 'fa-credit-card',
+    [ORDER_STATUS.WAITING]: 'fa-hourglass-half',
+    [ORDER_STATUS.ARRIVED]: 'fa-warehouse',
+    [ORDER_STATUS.PREPARING]: 'fa-box',
+    [ORDER_STATUS.PAYMENT_REQ]: 'fa-credit-card',
+    [ORDER_STATUS.PAYMENT_DONE]: 'fa-circle-check',
+    [ORDER_STATUS.SHIPPING]: 'fa-plane',
+  };
+  // 전체 진행 현황에서 숨길 단계 카드
+  const HIDDEN_PHASES = ['warehouse'];
+  const [detailStatus, setDetailStatus] = useState<string | null>(null);
+  // 같은 "상품 결제 완료(PAID)" 라도 배송대행은 "입고 대기중" 이라 구매대행과 섞어 보여 주지 않습니다.
+  // 누른 상품이 배송대행이면 배송대행만, 구매대행이면 구매대행만 보여 줍니다. (입고 완료는 구분 없이 전체)
+  const [detailIsDelivery, setDetailIsDelivery] = useState(false);
+  // 배송비 요청 패널에서 결제할 때 금액 계산이 이 패널 기준이 되도록 알려 줍니다
+  useEffect(() => {
+    setCalcTabOverride(activeTab === ORDER_STATUS.ALL ? detailStatus : null);
+  }, [activeTab, detailStatus, setCalcTabOverride]);
+  // 🕒 상세 정보 확인은 최근에 수정(상태 변경)된 상품이 위로 오게 정렬합니다.
+  const detailItems = useMemo(() => orders.filter((o: any) =>
+    o.status === detailStatus &&
+    (detailStatus !== ORDER_STATUS.PAID || (o.type === 'DELIVERY') === detailIsDelivery)
+  ).sort(byRecentlyTouched), [orders, detailStatus, detailIsDelivery]);
+  const arrivedDetailOpen = detailStatus !== null;
+  const setArrivedDetailOpen = (open: boolean) => { if (!open) setDetailStatus(null); };
+  const detailPanelRef = useRef<HTMLDivElement>(null);
+  const [detailFocusIds, setDetailFocusIds] = useState<string[]>([]);
+  const handleAllRowClick = (status: string, ids?: string[]) => {
+    if (DETAIL_STATUSES.includes(status) && ids?.length) {
+      // 🌟 누른 상품 하나만이 아니라 같은 상태 상품 전체를 보여 주고, 체크는 모두 해제된 채로 시작합니다.
+      setSelectedItems([]);
+      const clicked: any = orders.find((o: any) => ids.map(String).includes(String(o.orderId)));
+      setDetailIsDelivery(clicked?.type === 'DELIVERY');
+      setDetailFocusIds(ids.map(String));
+      setDetailStatus(status);
+      setTimeout(() => detailPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+      return;
+    }
+    handleTabChange(status);
+  };
+  const closeArrivedDetail = () => { setArrivedDetailOpen(false); setSelectedItems([]); };
+
   // 🌟 탭 변경 핸들러에 드래그 중일 때의 가드 추가
   const handleTabChange = (key: string) => {
     // 드래그 중이었다면 클릭(탭 변경)을 무시합니다.
     if (isDragging) return;
+    setArrivedDetailOpen(false);
 
     setActiveTab(key);
     setSelectedItems([]);
@@ -793,7 +1048,10 @@ function MyPurchaseStatusContent() {
       if (!sliderRef.current) return;
 
       if (key === ORDER_STATUS.ALL) {
-        sliderRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+        // '전체' 카드는 장바구니 다음(두 번째)에 있어서 그 위치로 이동합니다
+        const allModule = sliderRef.current.querySelector('[data-phase="all"]') as HTMLElement | null;
+        const left = allModule ? allModule.offsetLeft - 15 : 0;
+        sliderRef.current.scrollTo({ left: left > 0 ? left : 0, behavior: 'smooth' });
         return;
       }
 
@@ -828,6 +1086,13 @@ function MyPurchaseStatusContent() {
     setAllViewSelected(true);
   };
 
+  // 🌟 입고 완료 카드: 입고 완료 · 배송 준비중 · 배송비 요청 · 배송비 결제 완료를 한 표에 모아 봅니다
+  const handleShowPhaseView = (phaseId: string) => {
+    if (isDragging) return;
+    handleTabChange(ORDER_STATUS.ALL);
+    setPhaseView(phaseId);
+  };
+
   // 🌟 "진행중인 목록만 보기" 토글 스위치 전용 핸들러.
   const handleToggleProgressFilter = () => {
     if (isDragging) return;
@@ -843,7 +1108,8 @@ function MyPurchaseStatusContent() {
   // 🌟 "전체" 카드의 합계/전체 내역 보기 숫자도 합포장 묶음을 1건으로 집계합니다.
   // "전체 내역 보기"는 토글 상태와 무관하게 항상 국제 배송을 제외하므로, 실제 테이블 개수와 일치시킵니다.
   const totalCount = useMemo(
-    () => countBundleAware(orders.filter((o: any) => isProgressStatus(o.status))),
+    // 🛒 전체 내역 보기 표와 같이 구매 요청(장바구니)은 세지 않습니다.
+    () => countBundleAware(orders.filter((o: any) => REQUEST_VIEW_STATUSES.includes(o.status))),
     [orders]
   );
 
@@ -851,20 +1117,19 @@ function MyPurchaseStatusContent() {
   // 각 배송의 물류 단계(deliveryStatus)를 함께 보여줍니다.
   // 🚚 국제 배송 상품은 위쪽 표가 아니라 아래 "국제 배송 현황" 패널에서만 봅니다.
   //    예전에는 이 패널의 행이나 상단 요약을 누르면 위쪽 표가 국제 배송 탭으로 바뀌어 같은 상품이 두 곳에 보였습니다.
-  const scrollToShipmentPanel = () => {
-    document.getElementById('miku-shipment-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
 
   // 🚚 운송장 번호를 누르면 그 주문에 저장된 배송 업체(Order.shippingCarrierId)의 사이트를 새 창으로 엽니다.
   //    업체 이름·주소는 /api/users 가 shippingCarrier 로 함께 내려줍니다.
+  //    업체 주소에 {tracking} 자리가 있으면 운송장 번호를 넣어 조회 결과로 바로 보냅니다.
   const openCarrierSite = (shipment: any) => {
-    const url = shipment?.shippingCarrier?.url;
+    const url = buildTrackingUrl(shipment?.shippingCarrier?.url, shipment?.trackingNo);
     if (!url) return;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const internationalShipments = useMemo(() => {
-    const shippingOrders = orders.filter((o: any) => o.status === ORDER_STATUS.SHIPPING);
+    // 🕒 상세 정보 확인에서 최근에 수정(발송)된 배송이 위로 오게 정렬합니다. (합포장은 묶음에서 가장 최근 것 기준)
+    const shippingOrders = orders.filter((o: any) => o.status === ORDER_STATUS.SHIPPING).sort(byRecentlyTouched);
     const seenBundles = new Set<string>();
     const result: any[] = [];
     shippingOrders.forEach((o: any) => {
@@ -889,265 +1154,11 @@ function MyPurchaseStatusContent() {
     return result;
   }, [orders]);
 
-  const actionRequiredItems = useMemo(() => {
-    if (!orders || orders.length === 0) return [];
-    
-    const requiredStatuses = [
-      { key: ORDER_STATUS.CART, type: 'payment', title: '상품 결제 대기', desc: '장바구니 상품의 결제를 진행해주세요.' },
-      { key: ORDER_STATUS.BID_PENDING, type: 'payment', title: '경매 보증금 대기', desc: '경매 입찰을 위해 보증금을 결제해주세요.' },
-      { key: ORDER_STATUS.BID_SUCCESS, type: 'payment', title: '낙찰 상품 결제 대기', desc: '낙찰된 경매 상품의 1차 결제를 진행해주세요.' },
-      { key: ORDER_STATUS.ARRIVED, type: 'action', title: '배송 요청 대기', desc: '입고된 상품의 배송(합포장)을 요청해주세요.' },
-      { key: ORDER_STATUS.PAYMENT_REQ, type: 'payment', title: '배송비 결제 대기', desc: '국제 배송비를 결제해주세요.' },
-      { key: ORDER_STATUS.FAILED, type: 'alert', title: '경매/구매 실패 내역', desc: '실패 사유를 확인하고 처리해주세요.' },
-    ];
-
-    return requiredStatuses
-      .map(status => {
-        const count = orders.filter(order => order.status === status.key).length;
-        return count > 0 ? { ...status, count } : null;
-      })
-      .filter(Boolean);
-  }, [orders]);
-
-
-  if (isAuthChecking) return <div style={{ height: '100vh', backgroundColor: '#f8fafc' }} />;
-  if (isLoading) return <div style={{ padding: '100px', textAlign: 'center', color: '#64748b' }}>데이터를 불러오는 중입니다...</div>;
-
-  const actionTotal = actionRequiredItems.reduce((sum: number, item: any) => sum + (item?.count || 0), 0);
-  const typeLabel = orderTypeFilter === 'PURCHASE' ? '구매대행' : orderTypeFilter === 'DELIVERY' ? '배송대행' : '전체';
-
-  return (
-    <div className="miku-status-wrapper mp-skin">
-
-      {/* 🌟 주문 현황 요약 카드 */}
-      <section className="mp-hero is-compact mp-anim" aria-label="주문 현황 요약">
-        <div className="mp-hero-main">
-          <div className="mp-avatar" aria-hidden="true"><i className="fa fa-box-open"></i></div>
-          <div className="mp-hero-text">
-            <span className="mp-eyebrow-dark">ORDER STATUS</span>
-            <h2 className="mp-hero-title">나의 <em>{typeLabel}</em> 주문 현황</h2>
-            <p className="mp-hero-desc">
-              {actionTotal > 0
-                ? `확인이 필요한 주문이 ${actionTotal}건 있어요. 아래에서 결제·요청을 진행해 주세요.`
-                : '진행 단계를 눌러 주문을 확인하고, 결제와 포장 요청을 한 곳에서 처리하세요.'}
-            </p>
-          </div>
-        </div>
-
-        <div className="mp-hero-money">
-          <span className="mp-hero-money-label"><i className="fa fa-sack-dollar"></i> 미쿠짱머니</span>
-          <strong className="mp-hero-money-value" translate="no">{(userData?.cyberMoney || 0).toLocaleString()}<small>원</small></strong>
-          <div className="mp-hero-money-actions">
-            <Link href="/mypage/money/charge" className="is-primary"><i className="fa fa-plus"></i> 충전</Link>
-            <Link href="/mypage/money/history"><i className="fa fa-receipt"></i> 이용 내역</Link>
-          </div>
-        </div>
-
-        <div className="mp-hero-stats">
-          <button type="button" className="mp-hero-stat" onClick={() => handleShowAllOverview()}>
-            <span>{typeLabel} 주문</span><strong>{totalCount}<small>건</small></strong>
-          </button>
-          <div className={`mp-hero-stat ${actionTotal > 0 ? 'is-warn' : ''}`}>
-            <span>확인 필요</span><strong>{actionTotal}<small>건</small></strong>
-          </div>
-          <button type="button" className="mp-hero-stat" onClick={() => handleTabChange(ORDER_STATUS.ARRIVED)}>
-            <span>입고 완료</span><strong>{orders.filter((o: any) => o.status === ORDER_STATUS.ARRIVED).length}<small>건</small></strong>
-          </button>
-          <button type="button" className="mp-hero-stat" onClick={scrollToShipmentPanel}>
-            <span>국제 배송 중</span><strong>{internationalShipments.length}<small>건</small></strong>
-          </button>
-        </div>
-      </section>
-
-      {/* 🌟 서비스별 내역 필터 (전체 / 구매대행 / 배송대행) */}
-      <nav className="miku-order-type-filter anim-slide-up" aria-label="서비스별 내역">
-        {([
-          { key: null, label: '전체', href: '/mypage/status' },
-          { key: 'PURCHASE', label: '구매대행', href: '/mypage/status?type=PURCHASE' },
-          { key: 'DELIVERY', label: '배송대행', href: '/mypage/status?type=DELIVERY' },
-        ] as const).map(opt => {
-          const count = opt.key ? allOrders.filter((o: any) => o.type === opt.key).length : allOrders.length;
-          const isActive = orderTypeFilter === opt.key;
-          return (
-            <Link
-              key={opt.label}
-              href={opt.href}
-              scroll={false}
-              className={`type-filter-btn ${isActive ? 'active' : ''}`}
-              aria-current={isActive ? 'page' : undefined}
-            >
-              {opt.label}
-              <span className="type-filter-count">{count}</span>
-            </Link>
-          );
-        })}
-      </nav>
-      
-      {actionRequiredItems.length > 0 && (
-        <>
-        <div className="miku-status-section-header anim-slide-up">
-          <span className="mp-eyebrow" style={{ flexBasis: '100%', marginBottom: '-10px' }}>Action Required</span>
-          <h2>결제 및 요청 대기 <span className="section-icon-badge badge-amber"><i className="fa fa-credit-card"></i></span></h2>
-        </div>
-        <div className="miku-action-required-container anim-slide-up">
-          <div className="container-header">
-            <span className="header-icon"><i className="fa fa-triangle-exclamation"></i></span>
-            <h2 className="header-title">고객님의 확인 및 처리가 필요한 항목이 있습니다</h2>
-          </div>
-          <div className="action-cards-grid">
-            {actionRequiredItems.map((item: any) => (
-              <div 
-                key={item.key} 
-                className={`miku-action-card ${item.type}`} 
-                onClick={() => handleTabChange(item.key)}
-              >
-                <div className="card-info">
-                  <span className="card-badge">{ORDER_STATUS_LABEL[item.key as OrderStatus]}</span>
-                  <h4 className="card-title">{item.title} <span className="card-count">{item.count}</span></h4>
-                  <p className="card-desc">{item.desc}</p>
-                </div>
-                <button className="card-action-btn">확인 →</button>
-              </div>
-            ))}
-          </div>
-        </div>
-        </>
-      )}
-
-      <div className="miku-status-section-header anim-slide-up delay-1">
-        <span className="mp-eyebrow" style={{ flexBasis: '100%', marginBottom: '-10px' }}>Progress</span>
-        <h2>전체 진행 현황 <span className="section-icon-badge badge-blue"><i className="fa fa-chart-line"></i></span></h2>
-        <button
-          type="button"
-          className={`progress-only-toggle ${progressFilterActive ? 'on' : ''}`}
-          onClick={handleToggleProgressFilter}
-          aria-pressed={progressFilterActive}
-        >
-          <span className="toggle-label">진행중인 목록만 보기</span>
-          <span className="toggle-track"><span className="toggle-thumb"></span></span>
-        </button>
-      </div>
-
-      <div className="miku-progress-panel">
-      <div className="miku-unified-pipeline-container anim-slide-up delay-1">
-
-        <div className="pipeline-slider-shell">
-          <span className={`pipeline-arrow pipeline-arrow-left ${scrollEdges.left ? 'visible' : ''}`} aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-          </span>
-          <span className={`pipeline-arrow pipeline-arrow-right ${scrollEdges.right ? 'visible' : ''}`} aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </span>
-          <div 
-            className={`pipeline-modules-wrapper ${isMouseDown ? 'is-dragging' : ''} ${scrollEdges.left ? 'edge-left' : ''} ${scrollEdges.right ? 'edge-right' : ''}`}
-            ref={sliderRef}
-            onMouseDown={startDragging}
-            onMouseLeave={stopDragging}
-            onMouseUp={stopDragging}
-            onMouseMove={onDrag}
-            onScroll={updateScrollEdges}
-          >
-            <div
-              data-phase="all"
-              className={`miku-phase-module theme-slate phase-compact ${activeTab === ORDER_STATUS.ALL ? 'phase-active' : ''}`}
-            >
-              <div className="phase-header">
-                <div className="phase-title-group">
-                  <span className="phase-icon"><i className="fa fa-layer-group"></i></span>
-                  <h3 className="phase-title">전체</h3>
-                </div>
-                <div className="phase-total-badge">
-                  합계 <span className="total-count">{totalCount}</span>
-                </div>
-              </div>
-
-              <div className="phase-body phase-body-single">
-                <button
-                  type="button"
-                  className={`miku-sub-status-chip ${allViewSelected ? 'active' : ''} ${totalCount > 0 ? 'has-count' : ''}`}
-                  onClick={(e) => { e.stopPropagation(); handleShowAllOverview(); }}
-                >
-                  <span className="status-name">전체 내역 보기</span>
-                  <span className="status-count">{totalCount}</span>
-                  <div className="miku-tooltip">전체 진행 내역 가져오기</div>
-                </button>
-              </div>
-
-              <div className="phase-connector">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M9 18l6-6-6-6"/></svg>
-              </div>
-            </div>
-
-            {shippingPhases.map((phase) => (
-              <PhaseModule
-                key={phase.id}
-                phase={phase}
-                activeTab={activeTab}
-                onTabClick={handleTabChange}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="anim-slide-up delay-2">
-        <OrderTable
-          items={items} orders={orders} activeTab={activeTab}
-          selectedItems={selectedItems} setSelectedItems={setSelectedItems}
-          fetchOrders={fetchOrders} selectedAddress={selectedAddress}
-          onIndividualPacking={handleIndividualPacking} onDelete={handleDeleteOrder}
-          onStatusClick={handleTabChange}
-          myMoney={userData?.cyberMoney || 0} exchangeRate={exchangeRate}
-        />
-       </div>
-      
-      {/* 🌟 입고 완료 상태 시 노출되는 합포장/개별포장 통합 액션 버튼 영역 */}
-      {activeTab === ORDER_STATUS.ARRIVED && (
-        <div className="anim-slide-up delay-3">
-          <div className="package-action-group">
-            <button 
-              className={`btn-package btn-individual ${selectedItems.length > 0 ? 'active' : 'disabled'}`}
-              onClick={() => handleUpdateStatus(ORDER_STATUS.PREPARING, false)} 
-              disabled={selectedItems.length === 0}
-            >
-              개별 포장 요청
-            </button>
-            <button 
-              className={`btn-package btn-combine ${selectedItems.length >= 2 ? 'active' : 'disabled'}`}
-              onClick={() => handleUpdateStatus(ORDER_STATUS.PREPARING, true)} 
-              disabled={selectedItems.length < 2}
-            >
-              📦 합포장 요청
-            </button>
-          </div>
-          {selectedItems.length < 2 && <p className="bundle-helper">* 합포장은 2개 이상의 상품을 선택해야 가능합니다.</p>}
-          <NoticePanel tone="rose" className="address-change-warning">
-            <strong>배송비 결제 후에는 주소 변경이 어렵습니다.</strong><br />
-            결제 전 배송지를 꼭 확인해주세요.
-          </NoticePanel>
-          <AddressForm userData={userData} selectedItems={selectedItems} fetchOrders={fetchOrders} selectedAddress={selectedAddress} setSelectedAddress={setSelectedAddress} />
-        </div>
-      )}
-
-      {(([ORDER_STATUS.CART, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS] as string[]).includes(activeTab)) && (
-        <div className="anim-slide-up delay-3">
-          <PaymentSummary
-            activeTab={activeTab} totals={totals} totalPriceWon={totalPriceWon}
-            exchangeRate={exchangeRate} selectedItems={selectedItems}
-            handleUpdateStatus={handleUpdateStatus}
-            myMoney={userData?.cyberMoney || 0}
-            orders={orders}
-          />
-        </div>
-      )}
-      </div>
-
-      <div className="miku-status-section-header anim-slide-up delay-3">
-        <span className="mp-eyebrow" style={{ flexBasis: '100%', marginBottom: '-10px' }}>Shipment</span>
-        <h2>국제 배송 현황 <span className="section-icon-badge badge-amber"><i className="fa fa-plane"></i></span></h2>
-      </div>
-
-      <div className="miku-shipment-panel" id="miku-shipment-panel">
+  // ✈️ 국제 배송 표 — 아래 '국제 배송 현황' 패널과 상세 정보 확인(국제 배송 상품을 눌렀을 때)이 같이 씁니다.
+  const renderShipmentTable = (list: any[], focusIds?: string[]) => (
+    <>
+    {/* 표 모양(.premium-table 등)은 OrderTable 공통 스타일을 씁니다. OrderTable 이 없는 화면에서도 모양이 유지되도록 함께 넣습니다. */}
+    <OrderTableStyles />
         <div className="table-container anim-slide-up delay-3">
           <table className="premium-table">
             <thead>
@@ -1158,15 +1169,17 @@ function MyPurchaseStatusContent() {
               </tr>
             </thead>
             <tbody>
-              {internationalShipments.length === 0 ? (
+              {list.length === 0 ? (
                 <tr><td colSpan={3} className="empty-row">현재 국제 배송 중인 상품이 없습니다.</td></tr>
               ) : (
-                internationalShipments.map((shipment: any) => {
+                list.map((shipment: any) => {
                   const shipmentIds: string[] = shipment.orderIds || [shipment.orderId];
                   // 🔗 주소(?orderId=…)로 들어와 고른 주문이면 선택된 것으로 표시합니다.
                   //    합포장은 묶음 구성원이 모두 선택돼 있어야 그 행이 선택 상태입니다.
-                  const isSelected =
-                    shipmentIds.length > 0 && shipmentIds.every(id => selectedItems.includes(String(id)));
+                  //    상세 정보 확인에서는 누른 상품(focusIds)을 강조합니다.
+                  const isSelected = shipmentIds.length > 0 && (focusIds
+                    ? shipmentIds.some(id => focusIds.includes(String(id)))
+                    : shipmentIds.every(id => selectedItems.includes(String(id))));
                   return (
                   <tr
                     key={shipment.orderId}
@@ -1227,7 +1240,350 @@ function MyPurchaseStatusContent() {
             </tbody>
           </table>
         </div>
+    </>
+  );
+
+
+  const actionRequiredItems = useMemo(() => {
+    if (!orders || orders.length === 0) return [];
+    
+    const requiredStatuses = [
+      { key: ORDER_STATUS.CART, type: 'payment', title: '상품 결제 대기', desc: '장바구니 상품의 결제를 진행해주세요.' },
+      { key: ORDER_STATUS.BID_PENDING, type: 'payment', title: '경매 보증금 대기', desc: '경매 입찰을 위해 보증금을 결제해주세요.' },
+      { key: ORDER_STATUS.BID_SUCCESS, type: 'payment', title: '낙찰 상품 결제 대기', desc: '낙찰된 경매 상품의 1차 결제를 진행해주세요.' },
+      { key: ORDER_STATUS.ARRIVED, type: 'action', title: '배송 요청 대기', desc: '입고된 상품의 배송(합포장)을 요청해주세요.' },
+      { key: ORDER_STATUS.PAYMENT_REQ, type: 'payment', title: '배송비 결제 대기', desc: '국제 배송비를 결제해주세요.' },
+      { key: ORDER_STATUS.FAILED, type: 'alert', title: '경매/구매 실패 내역', desc: '실패 사유를 확인하고 처리해주세요.' },
+    ];
+
+    return requiredStatuses
+      .map(status => {
+        const count = orders.filter(order => order.status === status.key).length;
+        return count > 0 ? { ...status, count } : null;
+      })
+      .filter(Boolean);
+  }, [orders]);
+
+
+  if (isAuthChecking) return <div style={{ height: '100vh', backgroundColor: '#f8fafc' }} />;
+  if (isLoading) return <div style={{ padding: '100px', textAlign: 'center', color: '#64748b' }}>데이터를 불러오는 중입니다...</div>;
+
+  const actionTotal = actionRequiredItems.reduce((sum: number, item: any) => sum + (item?.count || 0), 0);
+  const typeLabel = orderTypeFilter === 'PURCHASE' ? '구매대행' : orderTypeFilter === 'DELIVERY' ? '배송대행' : '전체';
+
+  return (
+    <div className="miku-status-wrapper mp-skin">
+
+      {/* 🌟 주문 현황 요약 카드 */}
+      <section className="mp-hero is-compact mp-anim" aria-label="주문 현황 요약">
+        <div className="mp-hero-main">
+          <div className="mp-avatar" aria-hidden="true"><i className="fa fa-box-open"></i></div>
+          <div className="mp-hero-text">
+            <span className="mp-eyebrow-dark">ORDER STATUS</span>
+            <h2 className="mp-hero-title">나의 <em>{typeLabel}</em> 주문 현황</h2>
+            <p className="mp-hero-desc">
+              {actionTotal > 0
+                ? `확인이 필요한 주문이 ${actionTotal}건 있어요. 아래 진행 현황에서 결제·요청을 진행해 주세요.`
+                : '진행 단계를 눌러 주문을 확인하고, 결제와 포장 요청을 한 곳에서 처리하세요.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="mp-hero-money">
+          <span className="mp-hero-money-label"><i className="fa fa-sack-dollar"></i> 미쿠짱머니</span>
+          <strong className="mp-hero-money-value" translate="no">{(userData?.cyberMoney || 0).toLocaleString()}<small>원</small></strong>
+          <div className="mp-hero-money-actions">
+            <Link href="/mypage/money/charge" className="is-primary"><i className="fa fa-plus"></i> 충전</Link>
+            <Link href="/mypage/money/history"><i className="fa fa-receipt"></i> 이용 내역</Link>
+          </div>
+        </div>
+
+        <div className="mp-hero-stats">
+          {/* 🌟 전체 주문 대신 장바구니(구매 요청 상태) 건수를 보여 주고, 누르면 장바구니 탭으로 이동합니다 */}
+          <button type="button" className="mp-hero-stat" onClick={() => handleTabChange(ORDER_STATUS.CART)}>
+            <span>장바구니</span><strong>{orders.filter((o: any) => o.status === ORDER_STATUS.CART).length}<small>건</small></strong>
+          </button>
+          {/* 🌟 확인 필요 대신 "전체 내역 보기" (장바구니 제외 · 국제 배송 제외 — 아래 전체 카드와 같은 숫자) */}
+          <button type="button" className="mp-hero-stat" onClick={() => handleShowAllOverview()}>
+            <span>신청 내역 보기</span><strong>{totalCount}<small>건</small></strong>
+          </button>
+          {/* 🌟 입고 완료 · 배송 준비중 · 배송비 요청 · 배송비 결제 완료를 더한 건수 (아래 '입고 완료' 카드와 같은 숫자, 합포장은 1건)
+              누르면 그 카드처럼 네 상태를 한 표에 모아 보여 줍니다 */}
+          <button type="button" className="mp-hero-stat" onClick={() => handleShowPhaseView('progress')}>
+            <span>입고 완료</span><strong>{shippingPhases.find(p => p.id === 'progress')?.totalCount ?? 0}<small>건</small></strong>
+          </button>
+          <button type="button" className="mp-hero-stat" onClick={() => handleShowPhaseView('shipping')}>
+            <span>국제 배송 중</span><strong>{internationalShipments.length}<small>건</small></strong>
+          </button>
+        </div>
+      </section>
+
+      {/* 🌟 서비스별 내역 필터 (전체 / 구매대행 / 배송대행) */}
+      <nav className="miku-order-type-filter anim-slide-up" aria-label="서비스별 내역">
+        {([
+          { key: null, label: '전체', href: '/mypage/status' },
+          { key: 'PURCHASE', label: '구매대행', href: '/mypage/status?type=PURCHASE' },
+          { key: 'DELIVERY', label: '배송대행', href: '/mypage/status?type=DELIVERY' },
+        ] as const).map(opt => {
+          const count = opt.key ? allOrders.filter((o: any) => o.type === opt.key).length : allOrders.length;
+          const isActive = orderTypeFilter === opt.key;
+          return (
+            <Link
+              key={opt.label}
+              href={opt.href}
+              scroll={false}
+              className={`type-filter-btn ${isActive ? 'active' : ''}`}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              {opt.label}
+              <span className="type-filter-count">{count}</span>
+            </Link>
+          );
+        })}
+      </nav>
+      
+
+      <div className="miku-status-section-header anim-slide-up delay-1" id="miku-progress-panel">
+        <span className="mp-eyebrow" style={{ flexBasis: '100%', marginBottom: '-10px' }}>Progress</span>
+        <h2>전체 진행 현황 <span className="section-icon-badge badge-blue"><i className="fa fa-chart-line"></i></span></h2>
+        {/* 🚫 '진행중인 목록만 보기' 토글은 없앴습니다. 필터는 항상 켜진 상태(국제 배송 제외 · 0건 항목 숨김)로 동작합니다. */}
       </div>
+
+      <div className="miku-progress-panel">
+      <div className="miku-unified-pipeline-container anim-slide-up delay-1">
+
+        <div className="pipeline-slider-shell">
+          {/* 🌟 누르면 단계 카드를 한 장씩 넘깁니다. 더 넘길 곳이 없으면 숨고 눌리지 않습니다. */}
+          <button
+            type="button"
+            className={`pipeline-arrow pipeline-arrow-left ${scrollEdges.left ? 'visible' : ''}`}
+            onClick={() => scrollPipeline(-1)}
+            aria-label="이전 단계 보기"
+            tabIndex={scrollEdges.left ? 0 : -1}
+            aria-hidden={!scrollEdges.left}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <button
+            type="button"
+            className={`pipeline-arrow pipeline-arrow-right ${scrollEdges.right ? 'visible' : ''}`}
+            onClick={() => scrollPipeline(1)}
+            aria-label="다음 단계 보기"
+            tabIndex={scrollEdges.right ? 0 : -1}
+            aria-hidden={!scrollEdges.right}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+          <div 
+            className={`pipeline-modules-wrapper ${isMouseDown && isDragging ? 'is-dragging' : ''} ${scrollEdges.left ? 'edge-left' : ''} ${scrollEdges.right ? 'edge-right' : ''}`}
+            ref={sliderRef}
+            onMouseDown={startDragging}
+            onMouseLeave={stopDragging}
+            onMouseUp={stopDragging}
+            onMouseMove={onDrag}
+            onScroll={updateScrollEdges}
+          >
+            {/* 🌟 순서: 장바구니 → 신청 내역 보기 → 입고 완료 → 국제 배송중 */}
+            {shippingPhases.filter(p => p.id === 'request').map((phase) => (
+              <PhaseModule
+                key={phase.id}
+                phase={phase}
+                activeTab={activeTab}
+                onTabClick={handleTabChange}
+                onPhaseView={handleShowPhaseView}
+                phaseView={phaseView}
+              />
+            ))}
+
+            <div
+              data-phase="all"
+              className={`miku-phase-module theme-slate phase-compact is-clickable ${activeTab === ORDER_STATUS.ALL && !phaseView ? 'phase-active' : ''}`}
+              role="button"
+              tabIndex={0}
+              onClick={handleShowAllOverview}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleShowAllOverview(); } }}
+            >
+              <div className="phase-header">
+                <div className="phase-title-group">
+                  <span className="phase-icon"><i className="fa fa-layer-group"></i></span>
+                  <h3 className="phase-title">신청 내역 보기</h3>
+                </div>
+                <div className="phase-total-badge">
+                  합계 <span className="total-count">{totalCount}</span>
+                </div>
+              </div>
+
+              <div className="phase-body phase-body-single">
+                <button
+                  type="button"
+                  className={`miku-sub-status-chip ${allViewSelected ? 'active' : ''} ${totalCount > 0 ? 'has-count' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); handleShowAllOverview(); }}
+                >
+                  <span className="status-name">전체 내역 보기</span>
+                  <span className="status-count">{totalCount}</span>
+                  <div className="miku-tooltip">전체 진행 내역 가져오기</div>
+                </button>
+              </div>
+
+              <div className="phase-connector">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M9 18l6-6-6-6"/></svg>
+              </div>
+            </div>
+
+            {/* 🚫 현지 입고(warehouse) 카드는 숨깁니다. 입고 완료 상품은 '전체 내역 보기'에서 눌러 상세 정보 확인 패널로 봅니다.
+                다시 보이게 하려면 HIDDEN_PHASES 에서 'warehouse' 를 빼면 됩니다. */}
+            {shippingPhases.filter(p => p.id !== 'request' && !HIDDEN_PHASES.includes(p.id)).map((phase) => (
+              <PhaseModule
+                key={phase.id}
+                phase={phase}
+                activeTab={activeTab}
+                onTabClick={handleTabChange}
+                onPhaseView={handleShowPhaseView}
+                phaseView={phaseView}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="anim-slide-up delay-2">
+        {activeTab === ORDER_STATUS.ALL && phaseView === 'shipping' ? (
+          // ✈️ 국제 배송중: 상태가 하나뿐이라 상태 칸 없이, 상세 정보 확인과 같은 배송 정보(주소 · 배송업체 · 운송장)를 바로 보여 줍니다.
+          <div className="miku-shipment-panel is-embedded">
+            {renderShipmentTable(internationalShipments)}
+          </div>
+        ) : (
+        <OrderTable
+          items={items} orders={orders} activeTab={activeTab}
+          selectedItems={selectedItems} setSelectedItems={setSelectedItems}
+          fetchOrders={fetchOrders} selectedAddress={selectedAddress}
+          onIndividualPacking={handleIndividualPacking} onDelete={handleDeleteOrder}
+          onStatusClick={handleAllRowClick}
+          myMoney={userData?.cyberMoney || 0} exchangeRate={exchangeRate}
+        />
+        )}
+       </div>
+      
+      {/* 🌟 입고 완료 상태 시 노출되는 합포장/개별포장 통합 액션 버튼 영역 */}
+      {activeTab === ORDER_STATUS.ARRIVED && (
+        <div className="anim-slide-up delay-3">
+          <div className="package-action-group">
+            <button 
+              className={`btn-package btn-individual ${selectedItems.length > 0 ? 'active' : 'disabled'}`}
+              onClick={() => handleUpdateStatus(ORDER_STATUS.PREPARING, false)} 
+              disabled={selectedItems.length === 0}
+            >
+              개별 포장 요청
+            </button>
+            <button 
+              className={`btn-package btn-combine ${selectedItems.length >= 2 ? 'active' : 'disabled'}`}
+              onClick={() => handleUpdateStatus(ORDER_STATUS.PREPARING, true)} 
+              disabled={selectedItems.length < 2}
+            >
+              📦 합포장 요청
+            </button>
+          </div>
+          {selectedItems.length < 2 && <p className="bundle-helper">* 합포장은 2개 이상의 상품을 선택해야 가능합니다.</p>}
+          <NoticePanel tone="rose" className="address-change-warning">
+            <strong>배송비 결제 후에는 주소 변경이 어렵습니다.</strong><br />
+            결제 전 배송지를 꼭 확인해주세요.
+          </NoticePanel>
+          <AddressForm userData={userData} selectedItems={selectedItems} fetchOrders={fetchOrders} selectedAddress={selectedAddress} setSelectedAddress={setSelectedAddress} />
+        </div>
+      )}
+
+      {/* 🛒 장바구니 카드에서 두 상태를 섞어 고르면 함께 결제할 수 없습니다. */}
+      {phaseView === 'request' && requestViewStatus === null && !(arrivedDetailOpen && activeTab === ORDER_STATUS.ALL) && (
+        <NoticePanel tone="amber" className="anim-slide-up delay-3">
+          구매 요청과 경매 요청은 결제 방식이 달라 <strong>함께 결제할 수 없습니다</strong>.
+          한 종류만 선택해 주세요. (경매 요청은 보증금을 먼저 결제합니다)
+        </NoticePanel>
+      )}
+
+      {/* 상세 정보 확인 패널이 열려 있으면 결제는 그 패널 안에서 합니다 (같은 결제 카드가 두 번 나오지 않게) */}
+      {!(arrivedDetailOpen && activeTab === ORDER_STATUS.ALL) && (([ORDER_STATUS.CART, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS] as string[]).includes(payStatus)) && (
+        <div className="anim-slide-up delay-3">
+          <PaymentSummary
+            activeTab={payStatus} totals={totals} totalPriceWon={totalPriceWon}
+            exchangeRate={exchangeRate} selectedItems={selectedItems}
+            handleUpdateStatus={handleUpdateStatus}
+            myMoney={userData?.cyberMoney || 0}
+            orders={orders}
+          />
+        </div>
+      )}
+      </div>
+
+      {/* 🔎 상세 정보 확인 — 신청 내역 보기에서 상품을 누르면 같은 상태 상품 전체를 보여 줍니다 */}
+      {arrivedDetailOpen && activeTab === ORDER_STATUS.ALL && (
+        <div ref={detailPanelRef} className="miku-detail-section">
+          <div className="miku-status-section-header anim-slide-up">
+            <span className="mp-eyebrow" style={{ flexBasis: '100%', marginBottom: '-10px' }}>Detail</span>
+            <h2>
+              상세 정보 확인
+              <span className="section-icon-badge badge-green"><i className={`fa ${DETAIL_ICONS[detailStatus || ''] || 'fa-circle-info'}`}></i></span>
+              <span className="miku-detail-status">{orderStatusLabel(detailStatus || '', detailIsDelivery ? 'DELIVERY' : null)}</span>
+            </h2>
+            <button type="button" className="miku-detail-close" onClick={closeArrivedDetail} aria-label="상세 정보 닫기">
+              <i className="fa fa-xmark"></i> 닫기
+            </button>
+          </div>
+          <div className="miku-progress-panel miku-detail-panel anim-slide-up">
+            {detailStatus === ORDER_STATUS.SHIPPING ? (
+              // ✈️ 국제 배송: 아래 '국제 배송 현황'과 같은 정보(주소 · 배송업체 · 운송장)를 보여 줍니다. 누른 상품은 강조됩니다.
+              <div className="miku-shipment-panel is-embedded">
+                {renderShipmentTable(internationalShipments, detailFocusIds)}
+              </div>
+            ) : (
+            <OrderTable
+              items={detailItems} orders={orders} activeTab={detailStatus}
+              selectedItems={selectedItems} setSelectedItems={setSelectedItems}
+              fetchOrders={fetchOrders} selectedAddress={selectedAddress}
+              onIndividualPacking={handleIndividualPacking} onDelete={handleDeleteOrder}
+              myMoney={userData?.cyberMoney || 0} exchangeRate={exchangeRate}
+            />
+            )}
+            {detailStatus === ORDER_STATUS.ARRIVED && (<>
+            <div className="package-action-group">
+              <button
+                className={`btn-package btn-individual ${selectedItems.length > 0 ? 'active' : 'disabled'}`}
+                onClick={() => handleUpdateStatus(ORDER_STATUS.PREPARING, false)}
+                disabled={selectedItems.length === 0}
+              >
+                개별 포장 요청
+              </button>
+              <button
+                className={`btn-package btn-combine ${selectedItems.length >= 2 ? 'active' : 'disabled'}`}
+                onClick={() => handleUpdateStatus(ORDER_STATUS.PREPARING, true)}
+                disabled={selectedItems.length < 2}
+              >
+                📦 합포장 요청
+              </button>
+            </div>
+            {selectedItems.length < 2 && <p className="bundle-helper">* 합포장은 2개 이상의 상품을 선택해야 가능합니다.</p>}
+            <NoticePanel tone="rose" className="address-change-warning">
+              <strong>배송비 결제 후에는 주소 변경이 어렵습니다.</strong><br />
+              결제 전 배송지를 꼭 확인해주세요.
+            </NoticePanel>
+            <AddressForm userData={userData} selectedItems={selectedItems} fetchOrders={fetchOrders} selectedAddress={selectedAddress} setSelectedAddress={setSelectedAddress} />
+            </>)}
+            {detailStatus && DETAIL_PAY_STATUSES.includes(detailStatus) && (
+              <div className="miku-detail-payment">
+                <PaymentSummary
+                  activeTab={detailStatus} totals={totals} totalPriceWon={totalPriceWon}
+                  exchangeRate={exchangeRate} selectedItems={selectedItems}
+                  handleUpdateStatus={handleUpdateStatus}
+                  myMoney={userData?.cyberMoney || 0}
+                  orders={orders}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 🚫 맨 아래 '국제 배송 현황' 패널은 없앴습니다. 국제 배송 상품은 '국제 배송중' 카드(또는 상단 '국제 배송 중')를 눌러
+          위쪽 표에서 보고, 상품을 누르면 상세 정보 확인에서 주소 · 배송업체 · 운송장을 봅니다. */}
 
       {/* ================================================================= */}
       {/* 3. 디자인 영역 (CSS Layer) */}
@@ -1283,6 +1639,10 @@ function MyPurchaseStatusContent() {
           padding-bottom: 60px;
         }
 
+        /* 🔗 구매 후 이동·알림톡 링크가 이 지점으로 스크롤합니다.
+           상단 고정 헤더(약 80px)가 "전체 진행 현황" 제목을 가리지 않게 여백을 둡니다. */
+        #miku-progress-panel { scroll-margin-top: 104px; }
+
         .miku-status-section-header {
           margin-bottom: 16px;
           display: flex; align-items: center; justify-content: space-between;
@@ -1326,6 +1686,28 @@ function MyPurchaseStatusContent() {
           box-shadow: 0 6px 14px -5px rgba(37, 99, 235, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
         }
 
+        .miku-status-section-header .section-icon-badge.badge-green {
+          background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+          box-shadow: 0 6px 14px -5px rgba(5, 150, 105, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+        }
+        /* 🔎 상세 정보 확인 패널 */
+        .miku-detail-section { scroll-margin-top: 90px; }
+        .miku-detail-close {
+          margin-left: auto;
+          display: inline-flex; align-items: center; gap: 6px;
+          height: 32px; padding: 0 12px; border-radius: 10px;
+          border: 1px solid var(--border-subtle); background: #fff; color: #64748b;
+          font-family: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer;
+          transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+        }
+        .miku-detail-status {
+          display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px;
+          font-size: 12px; font-weight: 800; color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0;
+        }
+        .miku-detail-close:hover { color: #0f172a; border-color: #cbd5e1; background: #f8fafc; }
+        .miku-detail-panel .package-action-group { margin-top: 20px; }
+        .miku-detail-panel .miku-detail-payment { margin-top: 20px; }
+
         /* 🌟 국제 배송 현황 패널 */
         .miku-shipment-panel {
           background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
@@ -1338,6 +1720,9 @@ function MyPurchaseStatusContent() {
           background: linear-gradient(90deg, #fb923c 0%, #ea580c 50%, #fb923c 100%);
         }
         .miku-shipment-panel .table-container { margin-bottom: 0; }
+        /* 상세 정보 확인 안에 넣을 때는 패널 테두리 · 여백 없이 표만 */
+        .miku-shipment-panel.is-embedded { padding: 0; margin: 0; border: 0; background: transparent; box-shadow: none; border-radius: 0; overflow: visible; }
+        .miku-shipment-panel.is-embedded::before { display: none; }
         /* 🌟 상품명 칸은 주소/운송장 번호를 제외한 나머지 영역을 모두 차지합니다.
            table-layout: fixed로 각 칸의 폭을 실제 크기로 고정해서, 글자수로 미리 자르지 않고도
            칸 폭보다 텍스트가 클 때만 CSS 말줄임(...)으로 정확히 줄어들도록 합니다. */
@@ -1456,6 +1841,38 @@ function MyPurchaseStatusContent() {
           box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
         }
         .miku-action-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-elevated); background: #fff; border-color: rgba(148, 163, 184, 0.45); }
+
+        /* 🌟 상단 "확인 필요" 를 눌렀을 때: 확인이 필요한 카드만 잠시 커졌다 돌아오며 색이 바뀝니다.
+           ⚠️ 패널(.miku-action-required-container)에는 애니메이션을 걸지 않습니다.
+              패널의 등장 애니메이션(anim-slide-up)을 덮어써서, 끝날 때 등장 효과가 다시 재생돼
+              "잠깐 사라졌다 돌아오는" 것처럼 보였기 때문입니다. */
+        .miku-action-required-container.is-attention .miku-action-card {
+          --attn-bg: #f5f3ff; --attn-bd: #c4b5fd; --attn-glow: rgba(124, 58, 237, 0.28);
+          animation: mikuCardHighlight 1.5s var(--smooth-easing);
+        }
+        .miku-action-required-container.is-attention .miku-action-card.alert { --attn-bg: #ffe4e6; --attn-bd: #fda4af; --attn-glow: rgba(225, 29, 72, 0.25); }
+        .miku-action-required-container.is-attention .miku-action-card.action { --attn-bg: #ecfdf5; --attn-bd: #6ee7b7; --attn-glow: rgba(5, 150, 105, 0.25); }
+        .miku-action-required-container.is-attention .miku-action-card:nth-child(2) { animation-delay: 0.08s; }
+        .miku-action-required-container.is-attention .miku-action-card:nth-child(3) { animation-delay: 0.16s; }
+        .miku-action-required-container.is-attention .miku-action-card:nth-child(n+4) { animation-delay: 0.24s; }
+        .miku-action-required-container.is-attention .card-count { display: inline-block; animation: mikuCountPop 0.6s var(--smooth-easing) 0.15s; }
+        @keyframes mikuCardHighlight {
+          0%   { transform: scale(1);     background-color: #ffffff;       border-color: var(--border-subtle); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03); }
+          22%  { transform: scale(1.045); background-color: var(--attn-bg); border-color: var(--attn-bd);    box-shadow: 0 14px 28px -14px var(--attn-glow); }
+          45%  { transform: scale(1);     background-color: var(--attn-bg); border-color: var(--attn-bd);    box-shadow: 0 8px 18px -12px var(--attn-glow); }
+          65%  { transform: scale(1.025); background-color: var(--attn-bg); border-color: var(--attn-bd);    box-shadow: 0 12px 24px -14px var(--attn-glow); }
+          100% { transform: scale(1);     background-color: #ffffff;       border-color: var(--border-subtle); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03); }
+        }
+        @keyframes mikuCountPop {
+          0% { transform: scale(1); }
+          40% { transform: scale(1.4); }
+          100% { transform: scale(1); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .miku-action-required-container.is-attention .miku-action-card,
+          .miku-action-required-container.is-attention .card-count { animation: none; }
+          .miku-action-required-container.is-attention .miku-action-card { background-color: var(--attn-bg); border-color: var(--attn-bd); }
+        }
         .miku-action-card.payment { border-left: 3px solid var(--color-purple); }
         .miku-action-card.alert { border-left: 3px solid var(--color-red); background: linear-gradient(180deg, #fff5f5 0%, #fff1f2 100%); }
         .miku-action-card.alert:hover { border-color: #fecdd3; }
@@ -1546,7 +1963,14 @@ function MyPurchaseStatusContent() {
           transition: opacity 0.2s ease;
           z-index: 5;
         }
-        .pipeline-arrow.visible { opacity: 1; }
+        .pipeline-arrow.visible { opacity: 1; pointer-events: auto; cursor: pointer; }
+        .pipeline-arrow { padding: 0; font: inherit; -webkit-tap-highlight-color: transparent; }
+        /* 아이콘은 작아도 누르기 쉽게 보이지 않는 터치 영역을 넓힙니다 */
+        .pipeline-arrow::before { content: ''; position: absolute; inset: -10px; border-radius: 50%; }
+        .pipeline-arrow.visible:hover { color: #1e293b; border-color: #94a3b8; transform: translateY(-50%) scale(1.12); }
+        .pipeline-arrow.visible:active { transform: translateY(-50%) scale(0.94); }
+        .pipeline-arrow:focus-visible { outline: 2px solid #94a3b8; outline-offset: 2px; }
+        .pipeline-arrow { transition: opacity 0.2s ease, transform 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
         .pipeline-arrow svg { width: 12px; height: 12px; }
         .pipeline-arrow-left { left: -14px; }
         .pipeline-arrow-right { right: -14px; }
@@ -1559,8 +1983,9 @@ function MyPurchaseStatusContent() {
           margin: -24px 0 -10px 0;
           scrollbar-width: none; -webkit-overflow-scrolling: touch;
           overscroll-behavior-x: contain;
-          scroll-behavior: smooth;
-          scroll-snap-type: x proximity;
+          /* ⚠️ scroll-behavior: smooth / scroll-snap 을 쓰지 않습니다.
+             드래그 중 scrollLeft 를 바꿀 때마다 부드러운 스크롤이 걸려 한 박자 늦게 따라오고,
+             놓으면 카드 위치로 튕겨 붙었습니다. 카드에 맞춰 붙는 이동은 좌우 화살표에서만 합니다. */
           user-select: none;
           cursor: grab;
         }
@@ -1578,7 +2003,6 @@ function MyPurchaseStatusContent() {
           transition: all 0.4s var(--smooth-easing);
           display: flex; flex-direction: column; gap: 16px;
           box-shadow: var(--shadow-module);
-          scroll-snap-align: start;
         }
 
         .pipeline-modules-wrapper.is-dragging .miku-phase-module { pointer-events: none; }
@@ -1587,7 +2011,10 @@ function MyPurchaseStatusContent() {
         /* 🌟 하위 항목이 1개뿐인 모듈(예: 진행중인 목록만 보기)은 넓게 늘어나지 않도록 폭을 줄입니다. */
         .miku-phase-module.phase-compact { flex: 0 0 auto; min-width: 220px; }
 
-        .phase-header { display: flex; justify-content: space-between; align-items: center; }
+        /* 🌟 단계 이름이 길어져도(구매 진행중 · 현지 입고) 합계 뱃지와 부딪혀 줄바꿈되지 않게 합니다 */
+        .phase-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .phase-title { white-space: nowrap; }
+        .phase-total-badge { white-space: nowrap; flex-shrink: 0; }
         .phase-title-group { display: flex; align-items: center; gap: 8px; }
 
         .phase-icon {
@@ -1604,6 +2031,24 @@ function MyPurchaseStatusContent() {
           gap: 8px;
         }
         .phase-body.phase-body-single { grid-template-columns: 1fr; }
+        /* 🌟 전체 진행 현황 카드의 하단 하위 칩 영역은 숨깁니다. (카드 전체를 눌러 이동) */
+        .pipeline-modules-wrapper .phase-body { display: none; }
+        .miku-phase-module.is-clickable { cursor: pointer; }
+        .miku-phase-module.is-clickable:focus-visible { outline: 2px solid #94a3b8; outline-offset: 2px; }
+        /* 🌟 PC: 카드 4개(장바구니 · 신청 내역 보기 · 구매 진행중 · 배송 준비)가 스크롤 없이 한 줄에 다 보이도록 나눠 가집니다 */
+        @media (min-width: 769px) {
+          .pipeline-modules-wrapper { gap: 12px; }
+          .pipeline-modules-wrapper .miku-phase-module,
+          .pipeline-modules-wrapper .miku-phase-module.phase-compact {
+            flex: 1 1 auto; min-width: 0; padding: 14px 14px; border-radius: 18px;
+          }
+          .pipeline-modules-wrapper .phase-header { gap: 6px; }
+          .pipeline-modules-wrapper .phase-title-group { gap: 8px; min-width: 0; }
+          .pipeline-modules-wrapper .phase-icon { width: 30px; height: 30px; border-radius: 10px; font-size: 12px; }
+          .pipeline-modules-wrapper .phase-title { font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; }
+          .pipeline-modules-wrapper .phase-total-badge { font-size: 11.5px; padding: 3px 8px; }
+          .pipeline-modules-wrapper .phase-connector { right: -14px; }
+        }
 
         .miku-sub-status-chip {
           background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 13px;

@@ -122,6 +122,14 @@ function useMyPageLogic() {
       icon: 'fa-credit-card'
     },
     {
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.WAITING] || "입고 대기중",
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.WAITING).length,
+      desc: '배송대행 신청, 현지창고 도착 대기',
+      href: `/mypage/status?tab=${ORDER_STATUS.WAITING}`,
+      key: ORDER_STATUS.WAITING,
+      icon: 'fa-hourglass-half'
+    },
+    {
       label: ORDER_STATUS_LABEL[ORDER_STATUS.ARRIVED] || "입고 완료",
       count: userOrders.filter((i: any) => i.status === ORDER_STATUS.ARRIVED).length,
       desc: '현지창고 도착, 합포장신청',
@@ -177,7 +185,7 @@ type StatusItem = { label: string; count: number; desc: string; href: string; ic
 const FLOW_GROUPS = [
   { title: '구매 · 결제', icon: 'fa-cart-shopping', tone: 'mp-tone-rose', keys: [ORDER_STATUS.CART, ORDER_STATUS.PAID, ORDER_STATUS.FAILED] as string[] },
   { title: '경매', icon: 'fa-gavel', tone: 'mp-tone-violet', keys: [ORDER_STATUS.BID_PENDING, ORDER_STATUS.BIDDING, ORDER_STATUS.BID_SUCCESS] as string[] },
-  { title: '입고 · 배송', icon: 'fa-plane', tone: 'mp-tone-sky', keys: [ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING] as string[] },
+  { title: '입고 · 배송', icon: 'fa-plane', tone: 'mp-tone-sky', keys: [ORDER_STATUS.WAITING, ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING] as string[] },
 ];
 
 const QUICK_LINKS = [
@@ -210,7 +218,7 @@ export default function MyPage() {
   const countOf = (keys: string[]) => keys.reduce((sum, k) => sum + (byKey(k)?.count || 0), 0);
   const totalCount = byKey(ORDER_STATUS.ALL)?.count || 0;
   const actionCount = countOf([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.ARRIVED]);
-  const progressCount = countOf([ORDER_STATUS.PAID, ORDER_STATUS.BIDDING, ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_DONE]);
+  const progressCount = countOf([ORDER_STATUS.PAID, ORDER_STATUS.WAITING, ORDER_STATUS.BIDDING, ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_DONE]);
   const shippingCount = byKey(ORDER_STATUS.SHIPPING)?.count || 0;
   const initial = (userInfo.name || '고').trim().charAt(0) || '고';
 

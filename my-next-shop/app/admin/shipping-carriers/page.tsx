@@ -11,8 +11,7 @@ import {
   AdminHero, HeroButton, KpiCard, SearchField, EmptyRow, SkeletonRows, useToasts, ToastStack, fmtDate,
 } from '../components/AdminPremiumKit';
 import {
-  Truck, ArrowClockwise, Plus, PencilSimple, Check, X, ArrowSquareOut, Info, ClockCounterClockwise, Link, Sparkle,
-} from '@phosphor-icons/react';
+  Truck, ArrowClockwise, Plus, PencilSimple, Check, X, ArrowSquareOut, Info, ClockCounterClockwise, Link, Sparkle, Trash,} from '@phosphor-icons/react';
 
 const COLUMNS = ['name', 'url', 'updatedAt', 'manage'] as const;
 const DEFAULT_WIDTHS = { name: 240, url: 520, updatedAt: 160, manage: 170 };
@@ -33,6 +32,9 @@ export default function ShippingCarrierManagement() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const [editingId, setEditingId] = useState<number | null>(null);
+  // 🗑️ 삭제는 되돌릴 수 없어서, 같은 줄에서 한 번 더 확인받습니다.
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editForm, setEditForm] = useState(emptyForm);
   const [addForm, setAddForm] = useState(emptyForm);
 
@@ -119,6 +121,32 @@ export default function ShippingCarrierManagement() {
     }
   };
 
+  /**
+   * 🗑️ 배송 업체 삭제.
+   *    이 업체로 발송한 주문이 있으면 서버가 막고 몇 건인지 알려 줍니다.
+   *    (외래키가 ON DELETE SET NULL 이라 그냥 지우면 그 주문들의 송장 추적 링크가 끊깁니다)
+   */
+  const handleDelete = async (carrier: Carrier) => {
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/shipping-carriers?id=${carrier.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        pushToast('success', `'${carrier.name}' 업체를 삭제했습니다.`);
+        setDeletingId(null);
+        fetchCarriers();
+      } else {
+        pushToast('error', data.error || '삭제에 실패했습니다.');
+        setDeletingId(null);
+      }
+    } catch (error) {
+      console.error('배송 업체 삭제 에러:', error);
+      pushToast('error', '서버 오류가 발생했습니다.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const startEditing = (carrier: Carrier) => {
     setEditingId(carrier.id);
     setEditForm({ name: carrier.name, url: carrier.url });
@@ -166,7 +194,12 @@ export default function ShippingCarrierManagement() {
       <section className="ap-panel">
         <div className="ap-help">
           <Info size={15} weight="bold" />
-          <span>주소는 <code>https://</code> 를 빼고 적어도 자동으로 붙습니다. 업체 이름·주소를 바꾸면 이 업체로 발송한 주문에도 바로 반영됩니다.</span>
+          <span>
+            주소는 <code>https://</code> 를 빼고 적어도 자동으로 붙습니다. 업체 이름·주소를 바꾸면 이 업체로 발송한 주문에도 바로 반영됩니다.
+            <br />
+            주소에 <code>{'{tracking}'}</code> 을 넣으면 그 자리에 <b>운송장 번호</b>가 채워져 조회 결과로 바로 열립니다.
+            예: <code>{'...comm?ems_gubun=E&POST_CODE={tracking}'}</code> · 넣지 않으면 조회 첫 화면만 열립니다.
+          </span>
         </div>
 
         {/* ===== 추가 ===== */}
@@ -260,10 +293,25 @@ export default function ShippingCarrierManagement() {
                             <Check size={13} weight="bold" /> 저장
                           </button>
                         </span>
+                      ) : deletingId === carrier.id ? (
+                        <span className="ap-actions">
+                          <span className="sc-del-ask">삭제할까요?</span>
+                          <button type="button" className="ap-btn is-ghost" onClick={() => setDeletingId(null)} disabled={isDeleting}>취소</button>
+                          <button type="button" className="ap-btn is-danger" onClick={() => handleDelete(carrier)} disabled={isDeleting}>
+                            {isDeleting ? '삭제 중…' : '삭제'}
+                          </button>
+                        </span>
                       ) : (
-                        <button type="button" className="ap-btn is-ghost" onClick={() => startEditing(carrier)}>
-                          <PencilSimple size={13} weight="bold" /> 수정
-                        </button>
+                        <span className="ap-actions">
+                          <button type="button" className="ap-btn is-ghost" onClick={() => startEditing(carrier)}>
+                            <PencilSimple size={13} weight="bold" /> 수정
+                          </button>
+                          <button type="button" className="ap-btn is-ghost sc-del-btn"
+                            onClick={() => { setEditingId(null); setDeletingId(carrier.id); }}
+                            title="이 업체로 발송한 주문이 있으면 삭제할 수 없습니다">
+                            <Trash size={13} weight="bold" /> 삭제
+                          </button>
+                        </span>
                       )}
                     </td>
                   </tr>

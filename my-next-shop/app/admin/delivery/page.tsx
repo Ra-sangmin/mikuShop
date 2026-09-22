@@ -5,6 +5,7 @@ import '../admin-common.css';
 import './delivery-premium.css';
 import { DELIVERY_STATUS, DELIVERY_STATUS_LABEL, ORDER_STATUS, type DeliveryStatus } from '@/src/types/order';
 import { useFitTable, FitColGroup, FitTh } from '../components/useFitTable';
+import { buildTrackingUrl, hasTrackingPlaceholder } from '@/lib/shippingCarriers';
 import {
   AdminHero, HeroButton, KpiCard, SearchField, SegFilter, EmptyRow, SkeletonRows,
   useToasts, ToastStack, fmtDateTime, BundleItemsPanel,
@@ -277,10 +278,15 @@ export default function DeliveryManagement() {
 
   const openTracking = (row: DeliveryRow) => {
     const carrier = carriers.find(c => c.id === row.carrierId);
-    if (row.trackingNo) navigator.clipboard?.writeText(row.trackingNo).catch(() => {});
+    // 🔎 업체 주소에 {tracking} 자리가 있으면 조회 결과로 바로 갑니다.
+    //    그런 경우엔 붙여넣을 필요가 없어 복사하지 않고 안내 문구도 달라집니다.
+    const direct = hasTrackingPlaceholder(carrier?.url) && !!row.trackingNo;
+    if (row.trackingNo && !direct) navigator.clipboard?.writeText(row.trackingNo).catch(() => {});
     if (carrier?.url) {
-      window.open(carrier.url, '_blank', 'noopener,noreferrer');
-      pushToast('success', row.trackingNo ? `송장번호를 복사했습니다. ${carrier.name} 조회 페이지에 붙여넣으세요.` : `${carrier.name} 조회 페이지를 열었습니다.`);
+      window.open(buildTrackingUrl(carrier.url, row.trackingNo) || carrier.url, '_blank', 'noopener,noreferrer');
+      pushToast('success', direct
+        ? `${carrier.name} 에서 ${row.trackingNo} 조회 화면을 열었습니다.`
+        : row.trackingNo ? `송장번호를 복사했습니다. ${carrier.name} 조회 페이지에 붙여넣으세요.` : `${carrier.name} 조회 페이지를 열었습니다.`);
     } else if (row.trackingNo) {
       pushToast('success', '송장번호를 복사했습니다. (배송 업체가 지정되지 않은 주문입니다)');
     }

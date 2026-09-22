@@ -29,6 +29,7 @@ const ORDER_TONE: Record<string, { text: string; rgb: string }> = {
   [ORDER_STATUS.BIDDING]: { text: '#b45309', rgb: '245, 158, 11' },
   [ORDER_STATUS.BID_SUCCESS]: { text: '#0f766e', rgb: '13, 148, 136' },
   [ORDER_STATUS.PAID]: { text: '#15803d', rgb: '34, 197, 94' },
+  [ORDER_STATUS.WAITING]: { text: '#0e7490', rgb: '6, 182, 212' },
   [ORDER_STATUS.ARRIVED]: { text: '#1d4ed8', rgb: '59, 130, 246' },
   [ORDER_STATUS.PREPARING]: { text: '#6d28d9', rgb: '139, 92, 246' },
   [ORDER_STATUS.PAYMENT_REQ]: { text: '#c2410c', rgb: '234, 88, 12' },

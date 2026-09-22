@@ -34,6 +34,33 @@ function useProfileEditLogic() {
   const [nameEnInput, setNameEnInput] = useState('');
   const [savingNameEn, setSavingNameEn] = useState(false);
 
+  // 📱 휴대폰 번호 — 주문 상태 안내(알림톡)가 이 번호로 나갑니다.
+  //    SNS 로그인은 제공사가 번호를 주지 않으면 비어 있어서, 회원이 직접 채울 곳이 여기뿐입니다.
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
+  const [savingPhone, setSavingPhone] = useState(false);
+
+  const savePhone = async () => {
+    const value = phoneInput.trim();
+    setSavingPhone(true);
+    try {
+      const res = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: user.id, phone: value }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) return showAlert(data.error || '저장하지 못했습니다.', 'warning');
+      setUser(prev => ({ ...prev, phone: data.user.phone || '' }));
+      setEditingPhone(false);
+      showAlert(value ? '휴대폰 번호를 저장했습니다.' : '휴대폰 번호를 지웠습니다.', 'success');
+    } catch {
+      showAlert('통신 중 오류가 발생했습니다.', 'warning');
+    } finally {
+      setSavingPhone(false);
+    }
+  };
+
   const saveNameEnglish = async () => {
     const value = nameEnInput.trim();
     if (value && !isValidNameEnglish(value)) {
@@ -151,7 +178,9 @@ function useProfileEditLogic() {
     loading, user, addresses, isAddressModalOpen, editingAddress,
     handleAddressAction, deleteAddress, openNewAddress, openEditAddress, closeAddressModal,
     // 🔤 영문 이름 편집
-    editingNameEn, setEditingNameEn, nameEnInput, setNameEnInput, savingNameEn, saveNameEnglish
+    editingNameEn, setEditingNameEn, nameEnInput, setNameEnInput, savingNameEn, saveNameEnglish,
+    // 📱 휴대폰 번호 편집
+    editingPhone, setEditingPhone, phoneInput, setPhoneInput, savingPhone, savePhone
   };
 }
 
@@ -263,7 +292,8 @@ function ProfileEditContent() {
   const {
     loading, user, addresses, isAddressModalOpen, editingAddress,
     handleAddressAction, deleteAddress, openNewAddress, openEditAddress, closeAddressModal,
-    editingNameEn, setEditingNameEn, nameEnInput, setNameEnInput, savingNameEn, saveNameEnglish
+    editingNameEn, setEditingNameEn, nameEnInput, setNameEnInput, savingNameEn, saveNameEnglish,
+    editingPhone, setEditingPhone, phoneInput, setPhoneInput, savingPhone, savePhone
   } = useProfileEditLogic();
 
   // 🌟 로딩 중엔 실제 콘텐츠(및 #jp-address-section)가 아직 DOM에 없어서 브라우저의
@@ -318,6 +348,46 @@ function ProfileEditContent() {
             <span>일본 배송주소</span><strong style={{ fontSize: '16px' }}>확인하기 <i className="fa fa-arrow-down"></i></strong>
           </button>
         </div>
+      </section>
+
+      {/* 📱 내 휴대폰 번호 — 주문 안내 알림톡이 나가는 번호라 배송지보다 먼저 보여 줍니다. */}
+      <section className="mp-phone-box anim-slide-up" aria-label="내 휴대폰 번호">
+        <div className="mp-phone-head">
+          <span className="mp-phone-icon" aria-hidden="true"><i className="fa fa-mobile-screen-button"></i></span>
+          <div className="mp-phone-title">
+            <strong>내 휴대폰 번호</strong>
+            <span>주문 진행 상황을 카카오톡 알림톡으로 안내해 드립니다.</span>
+          </div>
+        </div>
+
+        {editingPhone ? (
+          <div className="mp-phone-edit">
+            <input
+              className="mp-phone-input" type="tel" inputMode="numeric" maxLength={13}
+              value={phoneInput} placeholder="010-1234-5678" autoFocus
+              onChange={(e) => setPhoneInput(e.target.value.replace(/[^0-9-]/g, ''))}
+              onKeyDown={(e) => { if (e.key === 'Enter') savePhone(); }}
+            />
+            <button type="button" className="mp-phone-btn is-primary" onClick={savePhone} disabled={savingPhone}>
+              {savingPhone ? '저장 중…' : '저장'}
+            </button>
+            <button type="button" className="mp-phone-btn" onClick={() => setEditingPhone(false)} disabled={savingPhone}>
+              취소
+            </button>
+          </div>
+        ) : (
+          <div className="mp-phone-view">
+            <span className={`mp-phone-value ${user.phone ? '' : 'is-empty'}`} translate="no">
+              {user.phone || '미등록 — 등록하시면 주문 안내를 받아보실 수 있습니다'}
+            </span>
+            <button
+              type="button" className="mp-phone-btn"
+              onClick={() => { setPhoneInput(user.phone || ''); setEditingPhone(true); }}
+            >
+              {user.phone ? '수정' : '등록'}
+            </button>
+          </div>
+        )}
       </section>
 
       {/* 🌟 나의 한국 배송지 주소 제목 (나의 일본 배송지 주소와 동일한 스타일) */}
@@ -465,6 +535,55 @@ function ProfileEditContent() {
       {/* 글로벌 오염 방지를 위해 .miku-profile- 접두사를 일관되게 사용합니다. */}
       {/* ================================================================= */}
       <style jsx global>{`
+        /* 📱 내 휴대폰 번호 — 알림톡이 나가는 번호라 배송지보다 먼저 보여 줍니다. */
+        .mp-phone-box {
+          margin: 18px 0 8px; padding: 18px 20px;
+          background: #ffffff; border: 1px solid #e8edf4; border-radius: 18px;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+        }
+        .mp-phone-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+        .mp-phone-icon {
+          flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+          width: 38px; height: 38px; border-radius: 12px;
+          background: linear-gradient(135deg, #fee500 0%, #ffd400 100%); color: #191600; font-size: 16px;
+        }
+        .mp-phone-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .mp-phone-title strong { font-size: 15px; font-weight: 800; color: #0f172a; }
+        .mp-phone-title span { font-size: 12.5px; font-weight: 600; color: #94a3b8; }
+
+        .mp-phone-view, .mp-phone-edit {
+          display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+        }
+        .mp-phone-value {
+          flex: 1; min-width: 0;
+          font-size: 16px; font-weight: 800; color: #0f172a; letter-spacing: 0.02em;
+        }
+        .mp-phone-value.is-empty { font-size: 13px; font-weight: 600; color: #94a3b8; letter-spacing: 0; }
+
+        .mp-phone-input {
+          flex: 1; min-width: 180px; height: 42px; padding: 0 14px;
+          border: 1px solid #dbe3ee; border-radius: 11px; background: #fff;
+          font-family: inherit; font-size: 15px; font-weight: 700; color: #0f172a; letter-spacing: 0.02em;
+          transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .mp-phone-input:focus {
+          outline: none; border-color: #c0606a; box-shadow: 0 0 0 3px rgba(192, 96, 106, 0.14);
+        }
+        .mp-phone-btn {
+          flex-shrink: 0; height: 42px; padding: 0 18px;
+          border: 1px solid #dbe3ee; border-radius: 11px; background: #fff; color: #475569;
+          font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer;
+          transition: background 0.18s ease, border-color 0.18s ease, filter 0.18s ease;
+        }
+        .mp-phone-btn:hover { background: #f8fafc; border-color: #c7d2e0; }
+        .mp-phone-btn.is-primary { border-color: transparent; background: #c0606a; color: #fff; }
+        .mp-phone-btn.is-primary:hover { filter: brightness(0.95); background: #c0606a; }
+        .mp-phone-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+        @media (max-width: 520px) {
+          .mp-phone-btn { flex: 1; }
+        }
+
         /* 🔤 영문 이름 줄 — 일본 배송지 카드 바로 위 */
         .jp-nameen-box {
           display: flex; align-items: center; flex-wrap: wrap; gap: 10px;

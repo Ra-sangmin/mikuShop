@@ -261,7 +261,11 @@ export default function GlobalProductDetailShop({ product, onClose }: Props) {
       const data = await response.json();
       if (data.success) {
         const isConfirmed = await showConfirm("🛒 장바구니에 담겼습니다!\n페이지로 이동하시겠습니까?");
-        if (isConfirmed) router.push('/mypage/status?tab=장바구니');
+        // 🛒 장바구니 카드(구매 요청 + 경매 요청)를 펼친 채로 열고, 방금 담은 상품을 선택해 줍니다.
+        if (isConfirmed) {
+          const newId = data.order?.orderId;
+          router.push(`/mypage/status?phase=request${newId ? `&orderId=${encodeURIComponent(newId)}` : ''}`);
+        }
       }
     } catch (error) { showAlert("서버 통신 오류"); }
   };

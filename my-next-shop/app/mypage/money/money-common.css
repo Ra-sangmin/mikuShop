@@ -199,6 +199,17 @@
 .mm-input-wrap:focus-within .mm-input-icon { color: var(--mm-accent); }
 
 /* 큰 금액 입력 */
+/* 🌟 다른 화면에서 부족한 금액을 넘겨받아 충전 금액을 미리 채웠을 때 보이는 안내 */
+.mm-prefill-note {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-bottom: 10px; padding: 10px 13px; border-radius: 12px;
+  background: #fff7ed; border: 1px solid #fed7aa;
+  font-size: 12.5px; font-weight: 700; line-height: 1.55; color: #9a3412; word-break: keep-all;
+}
+.mm-prefill-note i { margin-top: 3px; color: #ea580c; }
+.mm-prefill-note b { font-weight: 900; color: #7c2d12; }
+.mm-prefill-note em { font-style: normal; font-weight: 600; color: #b45309; }
+
 .mm-amount-box {
   position: relative;
   padding: 16px 20px 14px;
@@ -349,6 +360,9 @@
   border: 1px solid #dfe5f1;
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
 }
+/* 은행 로고 이미지를 쓸 때: 흰 바탕 위에 로고만 */
+.mm-bank-icon.is-logo { background: #ffffff; border: 1px solid #eef0f4; box-shadow: 0 6px 14px -10px rgba(15, 23, 42, 0.35); }
+.mm-bank-icon.is-logo img { width: 26px; height: 26px; object-fit: contain; display: block; }
 .mm-bank-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 180px; }
 .mm-bank-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; color: #6b7280; }
 .mm-bank-number { font-size: 19px; font-weight: 900; color: #111827; letter-spacing: -0.2px; font-variant-numeric: tabular-nums; word-break: keep-all; }

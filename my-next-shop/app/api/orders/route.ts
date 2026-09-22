@@ -5,6 +5,7 @@ import iconv from 'iconv-lite';
 import { requireAdmin, requireUser } from '@/lib/apiAuth';
 import { ORDER_STATUS } from '@/src/types/order';
 import { generateOrderId, generateBundleId, isDuplicateOrderId } from '@/lib/orderId';
+import { translateToKorean } from '@/lib/translate';
 
 // 🟢 [GET] 1. 주문 목록 및 유저 정보 조회
 export async function GET() {
@@ -124,6 +125,18 @@ export async function POST(req: Request) {
     let finalTitle = productName;
     if (!finalTitle) finalTitle = "구매대행 요청 (상품명 추출 불가)";
 
+    // 🈯 상품명은 한국어로 저장합니다. 주문 관리·마이페이지·알림톡이 모두 이 값을 그대로 보여 줍니다.
+    //
+    //    예전엔 화면이 각자 알아서 한국어를 만들어 보냈습니다. 쇼핑 상세(GlobalProductDetailShop)는
+    //    브라우저 구글 번역이 바꿔 놓은 제목을 DOM 에서 긁어 왔고, 경매 상세는 아예 원문을 그대로 보냈습니다.
+    //    그래서 플랫폼마다 결과가 달랐습니다 — 라쿠텐은 한국어로, 야후 옥션·야후 쇼핑·메루카리는 일본어로 남았습니다.
+    //    보내는 쪽이 아니라 저장하는 이 자리에서 한 번만 맞춥니다.
+    //
+    //    translateToKorean 은 일본어(히라가나·가타카나)가 없으면 DeepL 을 부르지 않습니다.
+    //    구매대행 신청 폼처럼 이미 한국어로 온 이름은 그대로 지나가고 할당량도 쓰지 않습니다.
+    //    번역에 실패해도 원문을 돌려주므로(lib/deepl.ts) 주문 생성이 막히지 않습니다.
+    finalTitle = await translateToKorean(finalTitle, 100);
+
     // 🔒 로그인 회원 본인 명의로만 주문 생성 (userId는 세션 값을 사용)
     const auth = await requireUser(requestedUserId);
     if (!auth.ok) return auth.response;
@@ -188,7 +201,10 @@ export async function POST(req: Request) {
           serviceRequest: serviceRequest || "",
           productRequest: productRequest || "",
           auctionEndDate: formattedDate,
-          status: status === "장바구니" ? "CART" : (status || "CART"),
+          // 🌟 배송대행 신청은 "입고 대기중(WAITING)" 으로 저장합니다. (예전 화면이 PAID 로 보내도 바꿔 저장)
+          status: status === "장바구니" ? "CART"
+            : (type === "DELIVERY" && (status === "PAID" || status === "WAITING")) ? "WAITING"
+            : (status || "CART"),
           
           // 경매가 아니면 null/0이 들어가므로 문제없음
           myBidPrice: Number(myBidPrice) || null,

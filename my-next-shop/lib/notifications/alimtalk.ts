@@ -41,6 +41,13 @@ export interface AlimtalkTemplate {
   content: string;
   /** 버튼 이름. 템플릿에 등록한 문구와 같아야 합니다. (이건 실제로 전송됩니다) */
   buttonName: string;
+  /**
+   * 버튼 종류. **카카오에 등록한 종류와 같아야 하며, 다르면 발송이 거절됩니다.**
+   *   WL 웹링크        linkMo/linkPc 가 필요합니다 (기본값)
+   *   MD 메시지 전달   고객이 누르면 받은 메시지가 채널 상담방으로 전달됩니다. 주소가 필요 없습니다.
+   *   BC 상담톡 전환 / BT 봇 전환  — 역시 주소가 필요 없습니다.
+   */
+  buttonType?: 'WL' | 'MD' | 'BC' | 'BT';
 }
 
 /**
@@ -95,7 +102,7 @@ export const ALIMTALK_TEMPLATES: Record<string, AlimtalkTemplate> = {
   PAYMENT_REQ: {
     templateId: process.env.SOLAPI_TEMPLATE_PAYMENT_REQ || 'KA01TP260920161606939QfkdB9VmVCe',
     content: [
-      '[미쿠짱] 국제 배송 진행 안내',
+      '[미쿠짱] 국제 배송비 측정 완료 안내',
       '',
       '#{고객명}님, 입고 완료된 상품의 국제 배송비 측정이 완료되어 다음 단계 진행을 안내해 드립니다.',
       '',
@@ -114,7 +121,7 @@ export const ALIMTALK_TEMPLATES: Record<string, AlimtalkTemplate> = {
   SHIPPING: {
     templateId: process.env.SOLAPI_TEMPLATE_SHIPPING || 'KA01TP260920161702253korkvcMnfls',
     content: [
-      '[미쿠짱] 국제 배송 시작 안내',
+      '[미쿠짱] 한국행 배송 출발 안내',
       '',
       '#{고객명}님, 주문하신 상품이 한국을 향해 성공적으로 발송되었습니다.',
       '',
@@ -123,7 +130,7 @@ export const ALIMTALK_TEMPLATES: Record<string, AlimtalkTemplate> = {
       '▪ 배송업체 : #{배송업체}',
       '▪ 송장번호 : #{송장번호}',
       '',
-      '세관 통관 절차를 거친 후 등록하신 주소로 안전하게 배송될 예정입니다.',
+      '세관 통관 절차를 거친 후 등록하신 주소지로 안전하게 배송될 예정입니다.',
       '통관 상황에 따라 수령일까지 며칠이 더 소요될 수 있는 점 양해 부탁드립니다.',
     ].join('\n'),
     buttonName: '배송 조회하기',
@@ -150,6 +157,36 @@ export function fillTemplate(content: string, variables: Record<string, string>)
  * (가입할 때 번호를 정리하는 규칙과 어긋나면 안 되므로 lib/phone.ts의 함수를 그대로 씁니다)
  */
 export const normalizePhone = normalizeKoreanMobile;
+
+/**
+ * 💬 관리자가 회원 관리 화면에서 직접 보내는 "안내 및 확인 요청" 알림톡.
+ *
+ * 주문 상태와 무관하게 사람이 판단해서 보내는 것이라 ALIMTALK_TEMPLATES 에 넣지 않습니다.
+ * (그 객체의 키는 orderStatusAlimtalk 가 "알림톡을 보내는 주문 상태" 목록으로 그대로 씁니다)
+ *
+ * 카카오 검수 승인 완료 (2026-09-22). 콘솔의 템플릿 이름은 "고객센터 안내" 입니다.
+ * ⚠️ 버튼은 '메시지 전달(MD)' 로 등록돼 있습니다. 고객이 누르면 받은 메시지가 채널
+ *    상담방으로 전달됩니다. 주소가 없는 종류라 buttonUrl 을 넘기지 않습니다.
+ * ⚠️ 본문·버튼이 카카오 등록 내용과 글자 하나라도 다르면 발송이 거절됩니다.
+ */
+export const CONSULT_TEMPLATE: AlimtalkTemplate = {
+  templateId: process.env.SOLAPI_TEMPLATE_CONSULT || 'KA01TP2609220319066896pKoxQ54Fb8',
+  content: [
+    '[미쿠짱] 안내 및 확인 요청',
+    '',
+    '#{고객명}님, 미쿠짱을 이용해 주셔서 감사합니다.',
+    '고객님의 주문(또는 배송) 건과 관련하여 긴급히 확인이 필요한 사항이 발생하였습니다.',
+    '',
+    "안전하고 신속한 처리를 위해 번거로우시더라도 아래의 '상담원 연결 요청' 버튼을 눌러 고객센터로 문의해 주시기 바랍니다.",
+    '',
+    '메시지를 남겨주시면 확인 후 즉시 답변드리겠습니다.',
+    // ℹ️ 실제 메시지 맨 아래의 "▪ 운영시간 : 평일 10:00 ~ 19:00 (토·일·공휴일 휴무)" 는
+    //    본문이 아니라 카카오에 등록한 **부가정보(extra)** 입니다. 카카오가 알아서 붙이므로
+    //    여기에 넣으면 등록 본문과 달라집니다.
+  ].join('\n'),
+  buttonName: '상담원 연결 요청',
+  buttonType: 'MD',
+};
 
 // ---------------------------------------------------------------- 발송
 
@@ -188,8 +225,8 @@ export interface SendAlimtalkParams {
   to: string;
   template: AlimtalkTemplate;
   variables: Record<string, string>;
-  /** 버튼이 열 주소 (템플릿에 등록한 도메인이어야 합니다) */
-  buttonUrl: string;
+  /** 버튼이 열 주소 (템플릿에 등록한 도메인이어야 합니다). 웹링크(WL) 버튼에만 필요합니다. */
+  buttonUrl?: string;
   /** true 면 실제로 보내지 않고 보낼 내용만 만들어 봅니다 (검증·테스트용) */
   dryRun?: boolean;
   /**
@@ -210,9 +247,19 @@ export function buildAlimtalkPayload(params: {
   pfId: string;
   template: AlimtalkTemplate;
   variables: Record<string, string>;
-  buttonUrl: string;
+  buttonUrl?: string;
   customFields?: Record<string, string>;
 }) {
+  // 웹링크만 주소를 싣습니다. 나머지 종류에 linkMo/linkPc 를 넣으면 솔라피가 거절합니다.
+  const buttonType = params.template.buttonType ?? 'WL';
+  const button = buttonType === 'WL'
+    ? {
+        buttonName: params.template.buttonName,
+        buttonType,
+        linkMo: params.buttonUrl,
+        linkPc: params.buttonUrl,
+      }
+    : { buttonName: params.template.buttonName, buttonType };
   return {
     message: {
       to: params.to,
@@ -225,14 +272,7 @@ export function buildAlimtalkPayload(params: {
         templateId: params.template.templateId,
         // 검수 통과한 본문에 변수를 채운 결과. 대행사가 템플릿과 대조합니다.
         variables: params.variables,
-        buttons: [
-          {
-            buttonName: params.template.buttonName,
-            buttonType: 'WL', // 웹링크
-            linkMo: params.buttonUrl,
-            linkPc: params.buttonUrl,
-          },
-        ],
+        buttons: [button],
       },
     },
   };

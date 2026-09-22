@@ -614,6 +614,35 @@
   background: #ffffff; border: 1px solid var(--usr-line);
 }
 
+/* 접었다 펼 수 있는 패널 — 제목 줄 전체가 버튼 */
+.usr-dsec.is-collapsible { padding: 0; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.usr-dsec.is-collapsible:hover { border-color: #e2e8f0; }
+.usr-dsec.is-collapsible.is-open { box-shadow: 0 10px 22px -20px rgba(15, 23, 42, 0.45); }
+.usr-sec-toggle {
+  width: 100%; margin: 0; padding: 14px 16px;
+  border: 0; background: transparent; border-radius: 16px;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.usr-dsec.is-open .usr-sec-toggle { padding-bottom: 12px; }
+.usr-sec-toggle:focus-visible { outline: 2px solid rgba(99, 102, 241, 0.5); outline-offset: -2px; }
+.usr-sec-toggle-right { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.usr-sec-caret {
+  width: 24px; height: 24px; flex-shrink: 0; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #94a3b8; background: #f8fafc; border: 1px solid #eef2f7;
+  transition: transform 0.28s var(--usr-ease), color 0.2s ease, background 0.2s ease;
+}
+.usr-sec-toggle:hover .usr-sec-caret { color: #4338ca; background: #eef2ff; border-color: #e0e7ff; }
+.usr-dsec.is-open .usr-sec-caret { transform: rotate(180deg); color: #6366f1; }
+/* 높이 애니메이션: 0fr ↔ 1fr */
+.usr-dsec-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s var(--usr-ease); }
+.usr-dsec.is-open .usr-dsec-body { grid-template-rows: 1fr; }
+.usr-dsec-inner { min-height: 0; overflow: hidden; padding: 0 16px; transition: padding 0.3s var(--usr-ease), opacity 0.2s ease; opacity: 0; }
+.usr-dsec.is-open .usr-dsec-inner { padding-bottom: 16px; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .usr-dsec-body, .usr-dsec-inner, .usr-sec-caret { transition: none; }
+}
+
 /* 기본 정보 */
 .usr-info {
   display: grid; grid-template-columns: 96px 1fr; gap: 9px 12px; margin: 0;
@@ -649,6 +678,115 @@
 .usr-secret button:hover { color: #4338ca; border-color: #c7d2fe; }
 
 /* 등급 선택 */
+/* 💬 상담 요청 알림톡 — 건당 비용이 드는 발송이라 확인 단계를 한 번 둡니다.
+   카드(카카오 옐로 톤) → 헤더(템플릿 · 받는 번호) → 미리보기 말풍선 → 흐름 3단계 → 발송 버튼/확인 */
+.usr-talk {
+  position: relative; overflow: hidden; isolation: isolate; contain: paint;
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 14px; border-radius: 14px;
+  border: 1px solid #f3e7a6;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(254, 229, 0, 0.28) 0%, rgba(254, 229, 0, 0) 55%),
+    linear-gradient(180deg, #fffdf3 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 10px 24px -20px rgba(161, 116, 0, 0.55);
+}
+.usr-talk-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.usr-talk-logo {
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #ffe94d 0%, #fee500 100%); color: #191600;
+  box-shadow: 0 8px 16px -10px rgba(161, 116, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.usr-talk-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.usr-talk-titles strong { font-size: 13.5px; font-weight: 900; color: var(--usr-ink); letter-spacing: -0.2px; }
+.usr-talk-titles span { font-size: 11px; font-weight: 700; color: #a17400; }
+.usr-talk-to {
+  flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
+  padding: 5px 9px; border-radius: 10px; background: #ffffff; border: 1px solid #f1e6b0;
+}
+.usr-talk-to em { font-style: normal; font-size: 10px; font-weight: 800; color: var(--usr-muted); }
+.usr-talk-to b { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; font-weight: 800; color: var(--usr-ink); }
+
+/* 미리보기 — 카카오톡 대화방 배경 위의 알림톡 말풍선 */
+.usr-talk-preview { padding: 12px; border-radius: 12px; background: #bacee0; }
+.usr-talk-bubble { max-width: 290px; border-radius: 12px; overflow: hidden; background: #ffffff; box-shadow: 0 6px 16px -12px rgba(15, 23, 42, 0.6); }
+.usr-talk-bubble-top { display: block; padding: 7px 11px; background: #fee500; font-size: 11px; font-weight: 900; color: #191600; }
+.usr-talk-bubble-body { display: flex; flex-direction: column; gap: 6px; padding: 10px 11px 11px; }
+.usr-talk-bubble-body strong { font-size: 12px; font-weight: 900; color: #191919; }
+.usr-talk-bubble-body p { margin: 0; font-size: 11.5px; line-height: 1.55; color: #3c3c3c; word-break: keep-all; }
+.usr-talk-bubble-btn {
+  display: block; margin-top: 2px; padding: 8px 0; border-radius: 6px; text-align: center;
+  background: #f2f2f2; font-size: 11.5px; font-weight: 800; color: #191919;
+}
+
+/* 흐름 3단계 */
+.usr-talk-flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.usr-talk-flow li {
+  position: relative; display: flex; align-items: center; gap: 6px; min-width: 0;
+  padding: 7px 8px; border-radius: 9px; background: #ffffff; border: 1px solid #f1ead0;
+  font-size: 11px; font-weight: 700; color: #64748b; line-height: 1.3; word-break: keep-all;
+}
+.usr-talk-flow i {
+  width: 17px; height: 17px; flex-shrink: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-style: normal; font-size: 10px; font-weight: 900; color: #191600; background: #fee500;
+}
+
+/* 발송 버튼 */
+.usr-talk-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; height: 44px; padding: 0 16px;
+  border: 0; border-radius: 12px;
+  background: linear-gradient(180deg, #ffe94d 0%, #fee500 100%); color: #191600;
+  font-family: inherit; font-size: 13.5px; font-weight: 900; letter-spacing: -0.2px; cursor: pointer;
+  box-shadow: 0 12px 22px -14px rgba(161, 116, 0, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s var(--usr-ease), filter 0.18s ease, box-shadow 0.2s ease;
+}
+.usr-talk-btn:hover { transform: translateY(-1px); filter: brightness(1.02); box-shadow: 0 16px 26px -14px rgba(161, 116, 0, 1), inset 0 1px 0 rgba(255, 255, 255, 0.6); }
+.usr-talk-btn:focus-visible { outline: 3px solid rgba(234, 179, 8, 0.45); outline-offset: 2px; }
+
+/* 보낼 번호가 없을 때 — 버튼 대신 이유를 보여 줍니다. */
+.usr-talk-blocked {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 12px 13px; border-radius: 12px;
+  background: #fff7ed; border: 1px solid #fde4c8;
+  font-size: 12.5px; font-weight: 700; color: #9a3412; line-height: 1.55;
+}
+.usr-talk-blocked svg { flex-shrink: 0; margin-top: 1px; color: #ea580c; }
+.usr-talk-blocked em {
+  display: block; margin-top: 2px;
+  font-style: normal; font-weight: 600; color: #b45309;
+}
+
+/* 한 번 더 확인 */
+.usr-talk-confirm {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  padding: 11px 12px; border-radius: 12px;
+  background: #ffffff; border: 1px solid #fcd34d;
+  box-shadow: 0 0 0 3px rgba(254, 229, 0, 0.22);
+  animation: usrFade 0.2s ease;
+}
+.usr-talk-confirm-text { display: flex; align-items: flex-start; gap: 7px; font-size: 12.5px; font-weight: 700; color: #92400e; line-height: 1.5; }
+.usr-talk-confirm-text svg { flex-shrink: 0; margin-top: 2px; color: #f59e0b; }
+.usr-talk-confirm-text b { font-family: 'SFMono-Regular', Consolas, monospace; font-weight: 900; color: #78350f; }
+.usr-talk-confirm-text em { display: block; font-style: normal; font-size: 11.5px; font-weight: 600; color: #b45309; }
+.usr-talk-confirm-actions { display: flex; gap: 7px; margin-left: auto; }
+.usr-talk-cancel, .usr-talk-send {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 34px; padding: 0 14px; border-radius: 10px;
+  font-family: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer;
+  transition: filter 0.18s ease;
+}
+.usr-talk-cancel { border: 1px solid #e2e8f0; background: #fff; color: #64748b; }
+.usr-talk-send { border: 0; background: linear-gradient(180deg, #ffe94d 0%, #fee500 100%); color: #191600; box-shadow: 0 8px 16px -10px rgba(161, 116, 0, 0.9); }
+.usr-talk-cancel:hover, .usr-talk-send:hover { filter: brightness(0.97); }
+.usr-talk-cancel:disabled, .usr-talk-send:disabled { opacity: 0.55; cursor: not-allowed; }
+@media (max-width: 420px) {
+  .usr-talk-flow { grid-template-columns: 1fr; }
+  .usr-talk-head { flex-wrap: wrap; }
+  .usr-talk-to { align-items: flex-start; }
+}
+
 .usr-grade-picker { display: flex; flex-wrap: wrap; gap: 7px; }
 .usr-grade-option {
   display: inline-flex; align-items: center; gap: 6px;

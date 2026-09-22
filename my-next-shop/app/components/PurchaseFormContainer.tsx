@@ -248,7 +248,8 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
       // 3. 주문 생성 로직
       const promises = products.map((p, idx) => {
         const totalPrice = parseFloat(p.price) * (parseInt(p.quantity) || 1);
-        const initialStatus = isPurchase ? ORDER_STATUS.CART : ORDER_STATUS.PAID;
+        // 🌟 배송대행은 신청하자마자 '입고 대기중' — 관리자가 입고 완료로 바꾸기 전까지 이 상태를 유지합니다
+        const initialStatus = isPurchase ? ORDER_STATUS.CART : ORDER_STATUS.WAITING;
         // 🌟 상품 이름을 입력하지 않았다면 카드 헤더에 표시되는 순번(예: "1")과 동일한
         // 기준으로 "상품 N"을 자동으로 채워줍니다.
         const productName = p.name.trim() || `상품 ${idx + 1}`;
@@ -287,7 +288,15 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
 
       if (allSuccess) {
         showAlert(isPurchase ? '🛒 모든 상품이 장바구니에 담겼습니다!' : '🚀 배송 신청이 완료되었습니다!', 'success');
-        setTimeout(() => router.push(`/mypage/status?tab=${isPurchase ? ORDER_STATUS.CART : ORDER_STATUS.PAID}`), 1500);
+        // 🔗 방금 만든 주문번호를 함께 넘겨, 마이페이지가 그 상품들을 바로 선택된 상태로 보여 줍니다.
+        //    (여러 건을 한 번에 담을 수 있어 쉼표로 이어 붙입니다)
+        const newOrderIds = results
+          .map((r: any) => r?.order?.orderId)
+          .filter(Boolean)
+          .join(',');
+        const tab = isPurchase ? ORDER_STATUS.CART : ORDER_STATUS.WAITING;
+        const query = newOrderIds ? `?tab=${tab}&orderId=${encodeURIComponent(newOrderIds)}` : `?tab=${tab}`;
+        setTimeout(() => router.push(`/mypage/status${query}`), 1500);
       } else {
         showAlert(`일부 상품 저장 중 오류가 발생했습니다.`, 'error');
         setIsSubmitting(false);
@@ -488,14 +497,23 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
                 <div className="pf-field pf-span-2">
                   <FieldLabel>부가 서비스 <span className="pf-label-sub">필요한 항목을 선택하세요</span></FieldLabel>
                   <div className="pf-service-grid">
-                    <ServiceOption
-                      active={product.photoService === 'apply'}
-                      onToggle={() => updateProduct(index, 'photoService', product.photoService === 'none' ? 'apply' : 'none')}
-                      iconClass="icon-sky"
-                      icon={<Camera size={17} strokeWidth={2.2} />}
-                      title="사진 검수"
-                      desc="현지 도착 후 상품 촬영"
-                    />
+                    <div className="pf-service-cell">
+                      <ServiceOption
+                        active={product.photoService === 'apply'}
+                        onToggle={() => updateProduct(index, 'photoService', product.photoService === 'none' ? 'apply' : 'none')}
+                        iconClass="icon-sky"
+                        icon={<Camera size={17} strokeWidth={2.2} />}
+                        title="사진 검수"
+                        desc="현지 도착 후 상품 촬영"
+                      />
+                      {/* 🌟 사진 검수를 고르면 추가 요금 안내를 작게 붙입니다 */}
+                      {product.photoService === 'apply' && (
+                        <p className="pf-service-note" role="note">
+                          <CircleAlert size={12} strokeWidth={2.4} aria-hidden="true" />
+                          사진 검수는 추가 요금이 발생할 수 있습니다.
+                        </p>
+                      )}
+                    </div>
                     <ServiceOption
                       active={product.packingService === 'apply'}
                       onToggle={() => updateProduct(index, 'packingService', product.packingService === 'none' ? 'apply' : 'none')}
@@ -513,7 +531,12 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
               <div className="pf-card-foot" translate="no">
                 <span className="pf-foot-label">이 상품 예상 금액</span>
                 <span className="pf-foot-detail">
-                  상품 ¥{summary.priceTotal.toLocaleString()} + 수수료 ¥{(summary.transfer + summary.agency + summary.shipping).toLocaleString()}
+                  {/* 🌟 수수료를 뭉쳐 보이지 않고 결제 · 대행 수수료로 나눠 보여 줍니다 (아래 결제 예상 금액 카드와 같은 이름).
+                      일본내 배송료를 입력한 경우에만 그 금액도 따로 붙입니다. */}
+                  상품 가격 ¥{summary.priceTotal.toLocaleString()}
+                  {' + '}결제 수수료 ¥{summary.transfer.toLocaleString()}
+                  {' + '}대행 수수료 ¥{summary.agency.toLocaleString()}
+                  {summary.shipping > 0 && <>{' + '}일본내 배송료 ¥{summary.shipping.toLocaleString()}</>}
                 </span>
                 <strong className="pf-foot-total">¥{summary.total.toLocaleString()}</strong>
               </div>

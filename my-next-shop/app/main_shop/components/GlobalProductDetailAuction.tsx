@@ -166,7 +166,11 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
       const data = await response.json();
       if (data.success) {
         const isConfirmed = await showConfirm(`¥${numericBid.toLocaleString()} 경매 요청이 완료되었습니다.\n(보증금: ¥${depositAmount.toLocaleString()})\n경매 요청 페이지로 이동하시겠습니까?`);
-        if (isConfirmed) router.push('/mypage/status?tab=BID_PENDING');
+        // 🛒 경매 요청도 장바구니 카드에 함께 들어갑니다. 같은 카드를 펼친 채로 엽니다.
+        if (isConfirmed) {
+          const newId = data.order?.orderId;
+          router.push(`/mypage/status?phase=request${newId ? `&orderId=${encodeURIComponent(newId)}` : ''}`);
+        }
       } else {
         // 🚨 실패 시 로직 (명확한 errorCode로 구분)
         if (data.errorCode === 'INSUFFICIENT_FUNDS') {

@@ -61,25 +61,53 @@ export async function GET(request: Request) {
  */
 export async function PATCH(request: Request) {
   try {
-    const { id, nameEnglish } = await request.json();
+    const { id, nameEnglish, phone } = await request.json();
 
     // 🔒 본인만 수정 가능
     const auth = await requireUser(id);
     if (!auth.ok) return auth.response;
 
-    if (typeof nameEnglish !== 'string') {
-      return NextResponse.json({ success: false, error: '영문 이름이 필요합니다.' }, { status: 400 });
+    // 보낸 항목만 고칩니다. 둘 다 없으면 잘못된 요청입니다.
+    const data: { nameEnglish?: string | null; phone?: string | null } = {};
+
+    if (nameEnglish !== undefined) {
+      if (typeof nameEnglish !== 'string') {
+        return NextResponse.json({ success: false, error: '영문 이름이 필요합니다.' }, { status: 400 });
+      }
+      // 빈 문자열이면 지웁니다. (등록했다가 취소하는 경우)
+      const trimmed = nameEnglish.trim();
+      if (trimmed && !isValidNameEnglish(trimmed)) {
+        return NextResponse.json({ success: false, error: '영문 이름은 영문·공백·하이픈만 사용할 수 있습니다.' }, { status: 400 });
+      }
+      data.nameEnglish = trimmed ? normalizeNameEnglish(trimmed) : null;
     }
 
-    // 빈 문자열이면 지웁니다. (등록했다가 취소하는 경우)
-    const trimmed = nameEnglish.trim();
-    if (trimmed && !isValidNameEnglish(trimmed)) {
-      return NextResponse.json({ success: false, error: '영문 이름은 영문·공백·하이픈만 사용할 수 있습니다.' }, { status: 400 });
+    // 📱 휴대폰 번호 — SNS 가입에서 제공사가 번호를 주지 않으면 비어 있는데, 예전엔 회원이
+    //    스스로 채울 방법이 없었습니다. 주문 상태 안내(알림톡)가 이 번호로 나갑니다.
+    //    저장 형식은 가입할 때와 같은 010-1234-5678 로 통일합니다. (lib/phone.ts)
+    if (phone !== undefined) {
+      if (typeof phone !== 'string') {
+        return NextResponse.json({ success: false, error: '휴대폰 번호가 필요합니다.' }, { status: 400 });
+      }
+      const trimmed = phone.trim();
+      if (!trimmed) {
+        data.phone = null; // 지우기
+      } else {
+        const normalized = formatKoreanMobile(trimmed);
+        if (!normalized) {
+          return NextResponse.json({ success: false, error: '휴대폰 번호 형식이 올바르지 않습니다. (예: 010-1234-5678)' }, { status: 400 });
+        }
+        data.phone = normalized;
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ success: false, error: '수정할 항목이 없습니다.' }, { status: 400 });
     }
 
     const user = await prisma.user.update({
       where: { id: auth.userId },
-      data: { nameEnglish: trimmed ? normalizeNameEnglish(trimmed) : null },
+      data,
       omit: { password: true },
     });
 

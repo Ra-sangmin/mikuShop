@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
-import { ORDER_STATUS, ORDER_STATUS_LABEL } from '@/src/types/order';
+import { ORDER_STATUS, orderStatusLabel } from '@/src/types/order';
 
 // 🌟 상태 우선순위 정의 (요청 -> 진행중 -> 창고 -> 배송 순)
 const STATUS_PRIORITY: Record<string, number> = {
@@ -11,6 +11,7 @@ const STATUS_PRIORITY: Record<string, number> = {
   [ORDER_STATUS.BIDDING]: 3,
   [ORDER_STATUS.BID_SUCCESS]: 4,
   [ORDER_STATUS.PAID]: 5,
+  [ORDER_STATUS.WAITING]: 5.5,
   [ORDER_STATUS.FAILED]: 6,
   [ORDER_STATUS.ARRIVED]: 7,
   [ORDER_STATUS.PREPARING]: 8,
@@ -190,10 +191,19 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
   const isAllTab = activeTab === 'ALL';
 
   // 상태값에 따른 테마 색상 반환 함수
-  const getBadgeTheme = (status: string) => {
-    if ([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(status as any)) return 'theme-blue';
+  const getBadgeTheme = (status: string, type?: string) => {
+    // 🌟 입고 대기중(배송대행)은 상품 결제 완료(보라)와 구분되도록 청록색으로 보여 줍니다. (예전 배송대행 PAID 주문도 같음)
+    if (status === ORDER_STATUS.WAITING || (status === ORDER_STATUS.PAID && type === 'DELIVERY')) return 'theme-cyan';
+    if (status === ORDER_STATUS.CART) return 'theme-blue';
+    // 🌟 경매 요청은 구매 요청(파랑)과 구분되도록 호박색으로 보여 줍니다
+    if (status === ORDER_STATUS.BID_PENDING) return 'theme-amber';
     if ([ORDER_STATUS.FAILED].includes(status as any)) return 'theme-red';
-    if ([ORDER_STATUS.BIDDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.PAID].includes(status as any)) return 'theme-purple';
+    // 🎨 '신청 내역 보기' 카드는 경매 상황·낙찰 성공·상품 결제 완료·입고 대기중·실패를
+    //    한 표에 모아 보여 줍니다. 세이 모두 보라였어서 눈으로 가를 수 없었습니다.
+    //    경매 상황 = 남보라, 낙찰 성공 = 분홍, 상품 결제 완료 = 보라 로 갈라 둡니다.
+    if (status === ORDER_STATUS.BIDDING) return 'theme-indigo';
+    if (status === ORDER_STATUS.BID_SUCCESS) return 'theme-pink';
+    if (status === ORDER_STATUS.PAID) return 'theme-purple';
     if ([ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING].includes(status as any)) return 'theme-green';
     if ([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(status as any)) return 'theme-orange';
     return 'theme-default';
@@ -369,7 +379,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                       data-order-ids={ids.join(' ')}
                       className={`tr-row ${isChecked ? 'selected' : ''} ${hasCheckbox || isAllTab ? 'clickable' : ''}`}
                       onClick={() => {
-                        if (isAllTab) { onStatusClick?.(item.status); return; }
+                        if (isAllTab) { onStatusClick?.(item.status, ids); return; } // 🔎 두 번째 값: 누른 행의 주문번호들 (입고 완료는 상세 정보 확인 패널에서 엽니다)
                         if (hasCheckbox) toggleCheck(ids);
                       }}
                     >
@@ -386,8 +396,8 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                       {/* 상태 뱃지 */}
                       {activeTab === 'ALL' && (
                         <td className="td-cell td-status">
-                          <span className={`badge-status ${getBadgeTheme(item.status)}`}>
-                            {ORDER_STATUS_LABEL[item.status as keyof typeof ORDER_STATUS_LABEL] || item.status}
+                          <span className={`badge-status ${getBadgeTheme(item.status, item.type)}`}>
+                            {orderStatusLabel(item.status, item.type)}
                           </span>
                         </td>
                       )}
@@ -520,7 +530,19 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
       {/* ================================================================= */}
       {/* 3. 디자인 영역 (CSS Layer) */}
       {/* ================================================================= */}
-      <style jsx global>{`
+      <OrderTableStyles />
+    </div>
+  );
+}
+
+/**
+ * 🎨 주문 표 공통 스타일 (.table-container · .premium-table · .th-cell · .td-cell · 뱃지 등)
+ *    OrderTable 밖에서 같은 표 모양을 쓰는 곳(예: mypage/status 의 '국제 배송중' 표)도 이 컴포넌트를 함께 렌더링합니다.
+ *    예전엔 OrderTable 안에만 있어서, OrderTable 이 화면에 없으면 그 표의 모양이 모두 사라졌습니다.
+ */
+export function OrderTableStyles() {
+  return (
+    <style jsx global>{`
         .miku-ordertable-wrapper {
           width: 100%;
           font-family: 'Pretendard', "Noto Sans KR", sans-serif;
@@ -639,9 +661,13 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         }
         .badge-status.theme-blue { background: #dbeafe; color: var(--color-blue); box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.15); }
         .badge-status.theme-purple { background: #f3e8ff; color: var(--color-purple); box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.15); }
+        .badge-status.theme-amber { background: #fef3c7; color: #b45309; box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.25); }
+        .badge-status.theme-cyan { background: #cffafe; color: #0e7490; box-shadow: inset 0 0 0 1px rgba(6, 182, 212, 0.22); }
         .badge-status.theme-green { background: #d1fae5; color: var(--color-green); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.15); }
         .badge-status.theme-orange { background: #ffedd5; color: var(--color-orange); box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.15); }
         .badge-status.theme-red { background: #fee2e2; color: var(--color-red); box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.15); }
+        .badge-status.theme-indigo { background: #e0e7ff; color: #4338ca; box-shadow: inset 0 0 0 1px rgba(79, 70, 229, 0.2); }
+        .badge-status.theme-pink { background: #fce7f3; color: #be185d; box-shadow: inset 0 0 0 1px rgba(219, 39, 119, 0.2); }
         .badge-status.theme-default { background: #f1f5f9; color: #64748b; }
 
         .badge-bid { padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 800; white-space: nowrap; }
@@ -770,6 +796,5 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .anim-slide-up { opacity: 0; animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       `}</style>
-    </div>
   );
 }

@@ -7,15 +7,15 @@ import {
   AdminHero, HeroButton, KpiCard, SkeletonRows, EmptyRow, useToasts, ToastStack,
 } from '../components/AdminPremiumKit';
 import {
-  Crown, Receipt, AirplaneTilt, Package, Scales, ArrowClockwise, PencilSimple, Check, X, Info, Sparkle, Percent,
+  Crown, Receipt, AirplaneTilt, Package, ArrowClockwise, PencilSimple, Check, X, Info, Sparkle, Percent, Plus, Trash,
 } from '@phosphor-icons/react';
+import { SHIPPING_RATE_LABEL, type ShippingRateMethod } from '@/lib/shippingRates';
 
 /* ============================================================
    👑 회원 등급 · 수수료 · 배송비 규칙 관리
    - src/utils/feeCalculator.ts 의 등급별 국제 배송비 할인율(membership_grades)
    - 결제/대행 수수료 구간(order_fee_rules)
-   - guide/shipping-fee 의 항공 / EMS / 우체국해운 요금 계산식이 참조하는 3개 테이블
-     (air_shipping_fee_rules / ems_shipping_fee_breakpoints / shipping_fee_extra_rates)
+   - guide/shipping-fee 의 국제 배송 요금표 (미쿠짱 특송 / EMS — shipping_rates, 등급 구분 없음)
    를 이 화면 한 곳에서 조회·수정합니다.
    ============================================================ */
 
@@ -26,30 +26,9 @@ const GRADE_DEFAULT_WIDTHS = { sortOrder: 80, name: 160, requiredOrders: 150, di
 const ORDER_FEE_COLUMNS = ['feeType', 'thresholdValue', 'belowThresholdFee', 'atOrAboveThresholdAmount', 'manage'] as const;
 const ORDER_FEE_DEFAULT_WIDTHS = { feeType: 170, thresholdValue: 190, belowThresholdFee: 220, atOrAboveThresholdAmount: 260, manage: 170 };
 
-const AIR_FIELDS = ['firstStepFee', 'baseFeeAtStepTwo', 'stepIncrement', 'discountVsGoldLow', 'discountVsGoldMid', 'discountVsGoldHigh'] as const;
-const AIR_COLUMNS = ['grade', ...AIR_FIELDS, 'manage'] as const;
-const AIR_DEFAULT_WIDTHS = {
-  grade: 120, firstStepFee: 150, baseFeeAtStepTwo: 130, stepIncrement: 140,
-  discountVsGoldLow: 190, discountVsGoldMid: 190, discountVsGoldHigh: 190, manage: 170,
-};
-const AIR_LABELS: Record<(typeof AIR_FIELDS)[number], string> = {
-  firstStepFee: '0.5kg 이하 기본가',
-  baseFeeAtStepTwo: '1.0kg 기준가',
-  stepIncrement: '0.5kg당 증가액',
-  discountVsGoldLow: '골드대비 할인(4.5kg 이하)',
-  discountVsGoldMid: '골드대비 할인(4.5~5.0kg)',
-  discountVsGoldHigh: '골드대비 할인(5.0kg 초과)',
-};
-
-const EMS_COLUMNS = ['weightKg', 'fee', 'manage'] as const;
-const EMS_DEFAULT_WIDTHS = { weightKg: 200, fee: 300, manage: 170 };
-
-const EXTRA_COLUMNS = ['method', 'thresholdWeightKg', 'baseFeeAtThreshold', 'extraPerKg', 'manage'] as const;
-const EXTRA_DEFAULT_WIDTHS = { method: 190, thresholdWeightKg: 190, baseFeeAtThreshold: 190, extraPerKg: 230, manage: 170 };
-
-// 🌟 air_shipping_fee_rules.grade는 코드(NEW/SILVER/GOLD/DIAMOND) 고정값이고, 화면에
-// 보여줄 실제 이름은 membership_grades.name(관리자가 위 표에서 바꿀 수 있음)을 따릅니다.
-const AIR_GRADE_CODE_ORDER = ['NEW', 'SILVER', 'GOLD', 'DIAMOND'];
+// ✈️ 국제 배송 요금표 (미쿠짱 특송 / EMS) — 무게별 고정 요금, 등급 구분 없음
+const RATE_COLUMNS = ['weightKg', 'fee', 'manage'] as const;
+const RATE_DEFAULT_WIDTHS = { weightKg: 220, fee: 300, manage: 210 };
 
 const ORDER_FEE_TYPE_LABEL: Record<string, string> = { PAYMENT: '결제 수수료', AGENCY: '대행 수수료' };
 
@@ -84,32 +63,22 @@ export default function MembershipGradeManagement() {
   // 🌟 공통 표 5개
   const gradeTable = useFitTable({ storageKey: 'admin_membership_grades_column_widths_v2', columns: GRADE_COLUMNS, defaultWidths: GRADE_DEFAULT_WIDTHS, pinned: { key: 'manage', minWidth: 150 } });
   const orderFeeTable = useFitTable({ storageKey: 'admin_membership_order_fee_column_widths_v2', columns: ORDER_FEE_COLUMNS, defaultWidths: ORDER_FEE_DEFAULT_WIDTHS, pinned: { key: 'manage', minWidth: 150 } });
-  const airTable = useFitTable({ storageKey: 'admin_membership_air_column_widths_v2', columns: AIR_COLUMNS, defaultWidths: AIR_DEFAULT_WIDTHS, pinned: { key: 'manage', minWidth: 150 } });
-  const emsTable = useFitTable({ storageKey: 'admin_membership_ems_column_widths_v2', columns: EMS_COLUMNS, defaultWidths: EMS_DEFAULT_WIDTHS, pinned: { key: 'manage', minWidth: 150 } });
-  const extraTable = useFitTable({ storageKey: 'admin_membership_extra_column_widths_v2', columns: EXTRA_COLUMNS, defaultWidths: EXTRA_DEFAULT_WIDTHS, pinned: { key: 'manage', minWidth: 150 } });
+  const mikuTable = useFitTable({ storageKey: 'admin_membership_miku_rate_column_widths_v1', columns: RATE_COLUMNS, defaultWidths: RATE_DEFAULT_WIDTHS, pinned: { key: 'manage', minWidth: 190 } });
+  const emsTable = useFitTable({ storageKey: 'admin_membership_ems_rate_column_widths_v1', columns: RATE_COLUMNS, defaultWidths: RATE_DEFAULT_WIDTHS, pinned: { key: 'manage', minWidth: 190 } });
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ name: '', discountRate: 0, requiredOrders: 0, sortOrder: 0, description: '' });
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // 항공/EMS/우체국해운 요금 규칙
-  const [airRules, setAirRules] = useState<any[]>([]);
-  const [emsBreakpoints, setEmsBreakpoints] = useState<any[]>([]);
-  const [extraRates, setExtraRates] = useState<any[]>([]);
+  // ✈️ 국제 배송 요금표 (shipping_rates)
+  const [shippingRates, setShippingRates] = useState<any[]>([]);
   const [isShippingLoading, setIsShippingLoading] = useState(true);
-
-  const [editingAirId, setEditingAirId] = useState<number | null>(null);
-  const [airEditForm, setAirEditForm] = useState<Record<(typeof AIR_FIELDS)[number], any>>({
-    firstStepFee: '', baseFeeAtStepTwo: '', stepIncrement: '',
-    discountVsGoldLow: '', discountVsGoldMid: '', discountVsGoldHigh: '',
+  const [shippingError, setShippingError] = useState<string | null>(null);
+  const [editingRateId, setEditingRateId] = useState<number | null>(null);
+  const [rateEditForm, setRateEditForm] = useState<{ weightKg: any; fee: any }>({ weightKg: '', fee: '' });
+  const [newRate, setNewRate] = useState<Record<ShippingRateMethod, { weightKg: string; fee: string }>>({
+    MIKU: { weightKg: '', fee: '' }, EMS: { weightKg: '', fee: '' },
   });
-
-  const [editingEmsId, setEditingEmsId] = useState<number | null>(null);
-  const [emsEditForm, setEmsEditForm] = useState<{ fee: any }>({ fee: '' });
-
-  const [editingExtraId, setEditingExtraId] = useState<number | null>(null);
-  const [extraEditForm, setExtraEditForm] = useState<{ thresholdWeightKg: any; baseFeeAtThreshold: any; extraPerKg: any }>({ thresholdWeightKg: '', baseFeeAtThreshold: '', extraPerKg: '' });
-
   const [isShippingUpdating, setIsShippingUpdating] = useState(false);
 
   // 결제/대행 수수료 구간 규칙 (src/utils/feeCalculator.ts가 참조하는 order_fee_rules)
@@ -173,50 +142,37 @@ export default function MembershipGradeManagement() {
     }
   };
 
-  // 🐛 grades는 id 순으로 내려오고 sortOrder·등급 추가/삭제로 순번이 어긋날 수 있어,
-  //    membership_grades.name(고유, 코드값과 같음)으로 항공 요금 행과 맞춥니다.
-  const airGradeDisplayNameByCode = useMemo(() => {
-    const byName = new Map<string, any>(grades.map((g: any) => [String(g.name).toUpperCase(), g]));
-    const map: Record<string, string> = {};
-    AIR_GRADE_CODE_ORDER.forEach((code) => {
-      map[code] = byName.get(code.toUpperCase())?.name ?? code;
-    });
-    return map;
-  }, [grades]);
-
-  /* ---------------- 배송비 규칙 ---------------- */
+  /* ---------------- 국제 배송 요금표 ---------------- */
   const fetchShippingRules = async () => {
     setIsShippingLoading(true);
     try {
-      const res = await fetch('/api/admin/shipping-fee-rules');
+      const res = await fetch('/api/admin/shipping-rates');
       const data = await res.json();
-      if (data.success) {
-        setAirRules(data.airRules);
-        setEmsBreakpoints(data.emsBreakpoints);
-        setExtraRates(data.extraRates);
-      }
+      if (data.success) { setShippingRates(data.rates); setShippingError(null); }
+      else setShippingError(data.error || '요금표를 불러오지 못했습니다.');
     } catch (error) {
-      console.error("배송비 규칙 가져오기 실패:", error);
+      console.error("국제 배송 요금표 가져오기 실패:", error);
+      setShippingError('요금표를 불러오지 못했습니다.');
     } finally {
       setIsShippingLoading(false);
     }
   };
 
-  const patchShipping = async (body: Record<string, any>, onDone: () => void, label: string) => {
+  const callRates = async (method: 'PATCH' | 'POST' | 'DELETE' | 'PUT', body: any, okMsg: string, onDone?: () => void, query = '') => {
     setIsShippingUpdating(true);
     try {
-      const res = await fetch('/api/admin/shipping-fee-rules', {
-        method: 'PATCH',
+      const res = await fetch(`/api/admin/shipping-rates${query}`, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: method === 'DELETE' ? undefined : JSON.stringify(body),
       });
       const data = await res.json();
       if (data.success) {
-        pushToast('success', `${label}을(를) 수정했습니다.`);
-        onDone();
+        pushToast('success', okMsg);
+        onDone?.();
         fetchShippingRules();
       } else {
-        pushToast('error', data.error || '수정에 실패했습니다.');
+        pushToast('error', data.error || '처리에 실패했습니다.');
       }
     } catch {
       pushToast('error', '서버 오류가 발생했습니다.');
@@ -225,34 +181,21 @@ export default function MembershipGradeManagement() {
     }
   };
 
-  const startEditingAir = (rule: any) => {
-    setEditingAirId(rule.id);
-    setAirEditForm({
-      firstStepFee: rule.firstStepFee ?? '',
-      baseFeeAtStepTwo: rule.baseFeeAtStepTwo ?? '',
-      stepIncrement: rule.stepIncrement ?? '',
-      discountVsGoldLow: rule.discountVsGoldLow ?? '',
-      discountVsGoldMid: rule.discountVsGoldMid ?? '',
-      discountVsGoldHigh: rule.discountVsGoldHigh ?? '',
-    });
+  const ratesOf = (m: ShippingRateMethod) => shippingRates.filter(r => r.method === m).sort((a, b) => a.weightKg - b.weightKg);
+  const startEditingRate = (r: any) => { setEditingRateId(r.id); setRateEditForm({ weightKg: r.weightKg, fee: r.fee }); };
+  const handleUpdateRate = (r: any) =>
+    callRates('PATCH', { id: r.id, ...rateEditForm }, `${SHIPPING_RATE_LABEL[r.method as ShippingRateMethod]} ${rateEditForm.weightKg}kg 요금을 수정했습니다.`, () => setEditingRateId(null));
+  const handleDeleteRate = (r: any) => {
+    if (!confirm(`${SHIPPING_RATE_LABEL[r.method as ShippingRateMethod]} ${r.weightKg}kg 구간을 삭제할까요?`)) return;
+    callRates('DELETE', null, `${r.weightKg}kg 구간을 삭제했습니다.`, undefined, `?id=${r.id}`);
   };
-  const handleUpdateAir = (id: number) => patchShipping({ type: 'air', id, ...airEditForm }, () => setEditingAirId(null), '항공 배송비 변수');
-
-  const startEditingEms = (bp: any) => {
-    setEditingEmsId(bp.id);
-    setEmsEditForm({ fee: bp.fee });
+  const handleAddRate = (m: ShippingRateMethod) =>
+    callRates('POST', { method: m, ...newRate[m] }, `${SHIPPING_RATE_LABEL[m]} ${newRate[m].weightKg}kg 구간을 추가했습니다.`,
+      () => setNewRate(prev => ({ ...prev, [m]: { weightKg: '', fee: '' } })));
+  const handleResetRates = (m: ShippingRateMethod) => {
+    if (!confirm(`${SHIPPING_RATE_LABEL[m]} 요금표를 기본 요금표로 되돌릴까요? 직접 고친 값은 모두 사라집니다.`)) return;
+    callRates('PUT', { method: m }, `${SHIPPING_RATE_LABEL[m]} 요금표를 기본값으로 되돌렸습니다.`);
   };
-  const handleUpdateEms = (id: number) => patchShipping({ type: 'ems', id, ...emsEditForm }, () => setEditingEmsId(null), 'EMS 요금');
-
-  const startEditingExtra = (rate: any) => {
-    setEditingExtraId(rate.id);
-    setExtraEditForm({
-      thresholdWeightKg: rate.thresholdWeightKg,
-      baseFeeAtThreshold: rate.baseFeeAtThreshold,
-      extraPerKg: rate.extraPerKg,
-    });
-  };
-  const handleUpdateExtra = (id: number) => patchShipping({ type: 'extra', id, ...extraEditForm }, () => setEditingExtraId(null), '초과 규칙');
 
   /* ---------------- 회원 등급 ---------------- */
   const fetchGrades = async () => {
@@ -348,9 +291,8 @@ export default function MembershipGradeManagement() {
           <div className="ap-jump">
             <a href="#mg-grades"><Crown size={13} weight="bold" /> 등급</a>
             <a href="#mg-fees"><Receipt size={13} weight="bold" /> 수수료</a>
-            <a href="#mg-air"><AirplaneTilt size={13} weight="bold" /> 항공</a>
+            <a href="#mg-miku"><AirplaneTilt size={13} weight="bold" /> 미쿠짱 특송</a>
             <a href="#mg-ems"><Package size={13} weight="bold" /> EMS</a>
-            <a href="#mg-extra"><Scales size={13} weight="bold" /> 초과 규칙</a>
           </div>
           <HeroButton onClick={refreshAll} disabled={anyLoading}>
             <ArrowClockwise size={15} weight="bold" className={anyLoading ? 'ap-spin' : ''} /> 새로고침
@@ -506,154 +448,141 @@ export default function MembershipGradeManagement() {
         </div>
       </section>
 
-      {/* ================= 항공 요금 변수 ================= */}
-      <section className="ap-panel" id="mg-air">
+
+      {/* ================= ✈️ 국제 배송 요금표 — MIKU ================= */}
+      <section className="ap-panel" id="mg-miku">
         <div className="ap-sec-head">
-          <span className="ap-section-title"><AirplaneTilt size={15} weight="duotone" /> 항공 배송비 등급별 변수</span>
-          <span className="ap-section-hint">단위: 엔(¥)</span>
+          <span className="ap-section-title"><AirplaneTilt size={15} weight="duotone" /> {SHIPPING_RATE_LABEL.MIKU} 요금표</span>
+          <span className="ap-section-hint">회원 등급 구분 없음 · 단위: 엔(¥)</span>
+          <button type="button" className="ap-btn is-ghost" style={{ marginLeft: 'auto' }} disabled={isShippingUpdating} onClick={() => handleResetRates('MIKU')}>
+            <ArrowClockwise size={13} weight="bold" /> 기본 요금표로 되돌리기
+          </button>
         </div>
         <div className="ap-help">
           <Info size={15} weight="bold" />
-          <span>무게 0.5kg 이하는 ‘0.5kg 이하 기본가’ 고정, 0.5kg 초과는 ‘1.0kg 기준가 + 1.0kg을 넘어 0.5kg 늘어날 때마다 0.5kg당 증가액’으로 계산됩니다. <strong>DIAMOND</strong>는 GOLD 요금에서 할인액을 빼는 방식이라 1.0kg 기준가·0.5kg당 증가액이 없습니다.</span>
+          <span>무게는 그 구간의 <strong>상한</strong>입니다. 예) 1.1kg 은 다음 구간인 1.25kg 요금이 적용됩니다. 여기서 고친 값은 <strong>이용가이드 &gt; 국제배송 요금표</strong>에 바로 반영됩니다. {shippingError && <strong style={{ color: '#b45309' }}> · {shippingError}</strong>}</span>
         </div>
-        <div className="ap-table-wrap" ref={airTable.wrapRef}>
-          <table className={`admin-table-resizable ${airTable.tableClassName}`} style={airTable.tableStyle}>
-            <FitColGroup table={airTable} />
+        <div className="ap-table-wrap" ref={mikuTable.wrapRef} style={{ maxHeight: 520 }}>
+          <table className={`admin-table-resizable ${mikuTable.tableClassName}`} style={mikuTable.tableStyle}>
+            <FitColGroup table={mikuTable} />
             <thead>
               <tr className="admin-table-head-row">
-                <FitTh table={airTable} columnKey="grade">등급</FitTh>
-                {AIR_FIELDS.map(f => <FitTh key={f} table={airTable} columnKey={f}>{AIR_LABELS[f]}</FitTh>)}
-                <FitTh table={airTable} columnKey="manage">관리</FitTh>
+                <FitTh table={mikuTable} columnKey="weightKg">무게 (kg 이하)</FitTh>
+                <FitTh table={mikuTable} columnKey="fee">요금</FitTh>
+                <FitTh table={mikuTable} columnKey="manage">관리</FitTh>
               </tr>
             </thead>
             <tbody>
               {isShippingLoading ? (
-                <SkeletonRows columns={AIR_COLUMNS} rows={4} pinnedKey="manage" />
-              ) : airRules.length === 0 ? (
-                <EmptyRow colSpan={AIR_COLUMNS.length} title="등록된 항공 요금 규칙이 없습니다" />
-              ) : airRules.map((rule) => {
-                const isEditing = editingAirId === rule.id;
+                <SkeletonRows columns={RATE_COLUMNS} rows={6} pinnedKey="manage" />
+              ) : ratesOf('MIKU').length === 0 ? (
+                <EmptyRow colSpan={RATE_COLUMNS.length} title={shippingError || '등록된 요금 구간이 없습니다'} />
+              ) : ratesOf('MIKU').map((r) => {
+                const isEditing = editingRateId === r.id;
                 return (
-                  <tr key={rule.id} className={`admin-table-body-row aft-row ${isEditing ? 'is-editing' : ''}`}>
-                    <td className="ap-td"><GradeChip name={airGradeDisplayNameByCode[rule.grade] ?? rule.grade} /></td>
-                    {AIR_FIELDS.map((field) => (
-                      <td key={field} className="ap-td">
-                        {isEditing
-                          ? numInput(airEditForm[field], v => setAirEditForm({ ...airEditForm, [field]: v }))
-                          : (rule[field] === null || rule[field] === undefined
-                            ? <span className="ap-empty-mark">-</span>
-                            : <span className={field.startsWith('discount') ? 'ap-money is-sub' : 'ap-money'}>{field.startsWith('discount') ? '−' : ''}{yen(rule[field])}</span>)}
-                      </td>
-                    ))}
-                    <td className={airTable.pinnedCellClass('manage', 'ap-td')}>
-                      {renderEditActions(isEditing, isShippingUpdating, () => handleUpdateAir(rule.id), () => setEditingAirId(null), () => startEditingAir(rule))}
+                  <tr key={r.id} className={`admin-table-body-row aft-row ${isEditing ? 'is-editing' : ''}`}>
+                    <td className="ap-td">
+                      {isEditing
+                        ? numInput(rateEditForm.weightKg, v => setRateEditForm({ ...rateEditForm, weightKg: v }), 'kg')
+                        : <span className="ap-strong ap-tabnum">{r.weightKg}<span className="ap-section-hint"> kg</span></span>}
+                    </td>
+                    <td className="ap-td">
+                      {isEditing
+                        ? numInput(rateEditForm.fee, v => setRateEditForm({ ...rateEditForm, fee: v }), '¥')
+                        : <span className="ap-money">{yen(r.fee)}</span>}
+                    </td>
+                    <td className={mikuTable.pinnedCellClass('manage', 'ap-td')}>
+                      <span className="ap-actions">
+                        {renderEditActions(isEditing, isShippingUpdating, () => handleUpdateRate(r), () => setEditingRateId(null), () => startEditingRate(r))}
+                        {!isEditing && (
+                          <button type="button" className="ap-btn is-ghost" aria-label="구간 삭제" disabled={isShippingUpdating} onClick={() => handleDeleteRate(r)}>
+                            <Trash size={13} weight="bold" />
+                          </button>
+                        )}
+                      </span>
                     </td>
                   </tr>
                 );
               })}
+              {!isShippingLoading && !shippingError && (
+                <tr className="admin-table-body-row aft-row">
+                  <td className="ap-td">{numInput(newRate.MIKU.weightKg, v => setNewRate(prev => ({ ...prev, MIKU: { ...prev.MIKU, weightKg: v } })), 'kg')}</td>
+                  <td className="ap-td">{numInput(newRate.MIKU.fee, v => setNewRate(prev => ({ ...prev, MIKU: { ...prev.MIKU, fee: v } })), '¥')}</td>
+                  <td className={mikuTable.pinnedCellClass('manage', 'ap-td')}>
+                    <button type="button" className="ap-btn is-primary" disabled={isShippingUpdating || !newRate.MIKU.weightKg || newRate.MIKU.fee === ''} onClick={() => handleAddRate('MIKU')}>
+                      <Plus size={13} weight="bold" /> 구간 추가
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </section>
 
-      {/* ================= EMS 구간표 ================= */}
+      {/* ================= ✈️ 국제 배송 요금표 — EMS ================= */}
       <section className="ap-panel" id="mg-ems">
         <div className="ap-sec-head">
-          <span className="ap-section-title"><Package size={15} weight="duotone" /> EMS 요금 구간표 (0.5 ~ 7.0kg)</span>
-          <span className="ap-section-hint">등급과 무관한 공통 요금 · 7kg 초과분은 아래 ‘초과 규칙’을 따릅니다</span>
+          <span className="ap-section-title"><Package size={15} weight="duotone" /> {SHIPPING_RATE_LABEL.EMS} 요금표</span>
+          <span className="ap-section-hint">회원 등급 구분 없음 · 단위: 엔(¥)</span>
+          <button type="button" className="ap-btn is-ghost" style={{ marginLeft: 'auto' }} disabled={isShippingUpdating} onClick={() => handleResetRates('EMS')}>
+            <ArrowClockwise size={13} weight="bold" /> 기본 요금표로 되돌리기
+          </button>
         </div>
-        <div className="ap-table-wrap" ref={emsTable.wrapRef} style={{ maxHeight: 420 }}>
+        
+        <div className="ap-table-wrap" ref={emsTable.wrapRef} style={{ maxHeight: 520 }}>
           <table className={`admin-table-resizable ${emsTable.tableClassName}`} style={emsTable.tableStyle}>
             <FitColGroup table={emsTable} />
             <thead>
               <tr className="admin-table-head-row">
-                <FitTh table={emsTable} columnKey="weightKg">무게 (kg)</FitTh>
+                <FitTh table={emsTable} columnKey="weightKg">무게 (kg 이하)</FitTh>
                 <FitTh table={emsTable} columnKey="fee">요금</FitTh>
                 <FitTh table={emsTable} columnKey="manage">관리</FitTh>
               </tr>
             </thead>
             <tbody>
               {isShippingLoading ? (
-                <SkeletonRows columns={EMS_COLUMNS} rows={5} pinnedKey="manage" />
-              ) : emsBreakpoints.length === 0 ? (
-                <EmptyRow colSpan={EMS_COLUMNS.length} title="등록된 EMS 구간이 없습니다" />
-              ) : emsBreakpoints.map((bp) => {
-                const isEditing = editingEmsId === bp.id;
+                <SkeletonRows columns={RATE_COLUMNS} rows={6} pinnedKey="manage" />
+              ) : ratesOf('EMS').length === 0 ? (
+                <EmptyRow colSpan={RATE_COLUMNS.length} title={shippingError || '등록된 요금 구간이 없습니다'} />
+              ) : ratesOf('EMS').map((r) => {
+                const isEditing = editingRateId === r.id;
                 return (
-                  <tr key={bp.id} className={`admin-table-body-row aft-row ${isEditing ? 'is-editing' : ''}`}>
-                    <td className="ap-td"><span className="ap-strong ap-tabnum">{bp.weightKg}<span className="ap-section-hint"> kg</span></span></td>
+                  <tr key={r.id} className={`admin-table-body-row aft-row ${isEditing ? 'is-editing' : ''}`}>
                     <td className="ap-td">
                       {isEditing
-                        ? numInput(emsEditForm.fee, v => setEmsEditForm({ fee: v }), '¥')
-                        : <span className="ap-money">{yen(bp.fee)}</span>}
+                        ? numInput(rateEditForm.weightKg, v => setRateEditForm({ ...rateEditForm, weightKg: v }), 'kg')
+                        : <span className="ap-strong ap-tabnum">{r.weightKg}<span className="ap-section-hint"> kg</span></span>}
+                    </td>
+                    <td className="ap-td">
+                      {isEditing
+                        ? numInput(rateEditForm.fee, v => setRateEditForm({ ...rateEditForm, fee: v }), '¥')
+                        : <span className="ap-money">{yen(r.fee)}</span>}
                     </td>
                     <td className={emsTable.pinnedCellClass('manage', 'ap-td')}>
-                      {renderEditActions(isEditing, isShippingUpdating, () => handleUpdateEms(bp.id), () => setEditingEmsId(null), () => startEditingEms(bp))}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* ================= EMS/우체국해운 초과 규칙 ================= */}
-      <section className="ap-panel" id="mg-extra">
-        <div className="ap-sec-head">
-          <span className="ap-section-title"><Scales size={15} weight="duotone" /> EMS / 우체국해운 기준 무게 초과 규칙</span>
-        </div>
-        <div className="ap-help">
-          <Info size={15} weight="bold" />
-          <span>기준 무게까지는 ‘기준 요금’ 고정, 초과분부터는 1kg마다 ‘초과 1kg당 추가금’이 더해집니다. (우체국해운은 구간표 없이 이 규칙 하나로 전체 계산됩니다.)</span>
-        </div>
-        <div className="ap-table-wrap" ref={extraTable.wrapRef}>
-          <table className={`admin-table-resizable ${extraTable.tableClassName}`} style={extraTable.tableStyle}>
-            <FitColGroup table={extraTable} />
-            <thead>
-              <tr className="admin-table-head-row">
-                <FitTh table={extraTable} columnKey="method">구분</FitTh>
-                <FitTh table={extraTable} columnKey="thresholdWeightKg">기준 무게 (kg)</FitTh>
-                <FitTh table={extraTable} columnKey="baseFeeAtThreshold">기준 요금</FitTh>
-                <FitTh table={extraTable} columnKey="extraPerKg">초과 1kg당 추가금</FitTh>
-                <FitTh table={extraTable} columnKey="manage">관리</FitTh>
-              </tr>
-            </thead>
-            <tbody>
-              {isShippingLoading ? (
-                <SkeletonRows columns={EXTRA_COLUMNS} rows={2} pinnedKey="manage" />
-              ) : extraRates.length === 0 ? (
-                <EmptyRow colSpan={EXTRA_COLUMNS.length} title="등록된 초과 규칙이 없습니다" />
-              ) : extraRates.map((rate) => {
-                const isEditing = editingExtraId === rate.id;
-                return (
-                  <tr key={rate.id} className={`admin-table-body-row aft-row ${isEditing ? 'is-editing' : ''}`}>
-                    <td className="ap-td">
-                      <span className="ap-badge" style={{ ['--b-rgb' as string]: rate.method === 'EMS' ? '37, 99, 235' : '13, 148, 136' } as CSSProperties}>
-                        {rate.method === 'OCEAN' ? '우체국해운 (OCEAN)' : rate.method}
+                      <span className="ap-actions">
+                        {renderEditActions(isEditing, isShippingUpdating, () => handleUpdateRate(r), () => setEditingRateId(null), () => startEditingRate(r))}
+                        {!isEditing && (
+                          <button type="button" className="ap-btn is-ghost" aria-label="구간 삭제" disabled={isShippingUpdating} onClick={() => handleDeleteRate(r)}>
+                            <Trash size={13} weight="bold" />
+                          </button>
+                        )}
                       </span>
                     </td>
-                    <td className="ap-td">
-                      {isEditing
-                        ? numInput(extraEditForm.thresholdWeightKg, v => setExtraEditForm({ ...extraEditForm, thresholdWeightKg: v }), 'kg')
-                        : <span className="ap-strong ap-tabnum">{rate.thresholdWeightKg}<span className="ap-section-hint"> kg</span></span>}
-                    </td>
-                    <td className="ap-td">
-                      {isEditing
-                        ? numInput(extraEditForm.baseFeeAtThreshold, v => setExtraEditForm({ ...extraEditForm, baseFeeAtThreshold: v }), '¥')
-                        : <span className="ap-money">{yen(rate.baseFeeAtThreshold)}</span>}
-                    </td>
-                    <td className="ap-td">
-                      {isEditing
-                        ? numInput(extraEditForm.extraPerKg, v => setExtraEditForm({ ...extraEditForm, extraPerKg: v }), '¥/kg')
-                        : <span className="ap-money">+{yen(rate.extraPerKg)}<span className="ap-section-hint"> /kg</span></span>}
-                    </td>
-                    <td className={extraTable.pinnedCellClass('manage', 'ap-td')}>
-                      {renderEditActions(isEditing, isShippingUpdating, () => handleUpdateExtra(rate.id), () => setEditingExtraId(null), () => startEditingExtra(rate))}
-                    </td>
                   </tr>
                 );
               })}
+              {!isShippingLoading && !shippingError && (
+                <tr className="admin-table-body-row aft-row">
+                  <td className="ap-td">{numInput(newRate.EMS.weightKg, v => setNewRate(prev => ({ ...prev, EMS: { ...prev.EMS, weightKg: v } })), 'kg')}</td>
+                  <td className="ap-td">{numInput(newRate.EMS.fee, v => setNewRate(prev => ({ ...prev, EMS: { ...prev.EMS, fee: v } })), '¥')}</td>
+                  <td className={emsTable.pinnedCellClass('manage', 'ap-td')}>
+                    <button type="button" className="ap-btn is-primary" disabled={isShippingUpdating || !newRate.EMS.weightKg || newRate.EMS.fee === ''} onClick={() => handleAddRate('EMS')}>
+                      <Plus size={13} weight="bold" /> 구간 추가
+                    </button>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -467,6 +467,19 @@
 
 /* 부가 서비스 */
 .pf-service-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+/* 부가 서비스 칸 + 아래 작은 안내 (사진 검수 추가 요금). 안내가 붙어도 옆 칸(포장 보완)이 늘어나지 않게 위쪽 정렬 */
+.pf-service-grid { align-items: start; }
+.pf-service-cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pf-service-note {
+  display: flex; align-items: center; gap: 5px;
+  margin: 0; padding: 0 4px;
+  font-size: 11.5px; font-weight: 600; line-height: 1.4; color: #b45309;
+  word-break: keep-all;
+  animation: pfNoteIn 0.2s ease;
+}
+.pf-service-note svg { flex-shrink: 0; color: #d97706; }
+@keyframes pfNoteIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pf-service-note { animation: none; } }
 .quote-service-box {
   width: 100%;
   border: 1.5px solid #e5e7eb;

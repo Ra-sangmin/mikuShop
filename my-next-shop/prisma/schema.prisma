@@ -103,6 +103,7 @@ enum OrderStatus {
   CART           // 장바구니
   FAILED         // 낙찰/구매실패
   PAID           // 상품 결제 완료
+  WAITING        // 입고 대기중 (배송대행 신청 후 일본 창고 도착 전까지)
   ARRIVED        // 입고완료
   PREPARING      // 배송 준비중
   PAYMENT_REQ    // 배송비 요청
@@ -271,6 +272,23 @@ model MembershipGrade {
   users         User[]                                                 // 이 등급을 가진 회원들 (users.membership_grade FK 역참조)
 
   @@map("membership_grades")
+}
+
+// ✈️ 국제 배송 요금표 (무게별 고정 요금 · 회원 등급 구분 없음) — lib/shippingRates.ts
+//   method: "MIKU"(미쿠짱 특송 = 롯데 특송 요금) | "EMS"
+//   weightKg 는 그 구간의 상한입니다. (예: 1.1kg → 1.25kg 행의 요금)
+//   guide/shipping-fee 와 관리자 > 회원 등급 관리가 이 표를 씁니다.
+//   (아래 AirShippingFeeRule · EmsShippingFeeBreakpoint · ShippingFeeExtraRate 는 예전 계산식용이라 더 이상 쓰지 않습니다)
+model ShippingRate {
+  id        Int      @id @default(autoincrement())
+  method    String                                                           // "MIKU" | "EMS"
+  weightKg  Float    @map("weight_kg")                                       // 구간 상한 무게 (kg)
+  fee       Int                                                              // 요금 (엔)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([method, weightKg])
+  @@index([method])
+  @@map("shipping_rates")
 }
 
 // 🌟 guide/shipping-fee의 "항공" 배송비 계산식(calculateAirShippingFee)에 쓰이는

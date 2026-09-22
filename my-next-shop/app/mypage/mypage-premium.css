@@ -198,6 +198,10 @@ button.mp-tag:hover, a.mp-tag:hover { background: rgba(255, 255, 255, 0.14); col
 }
 a.mp-hero-stat:hover, button.mp-hero-stat:hover { background: rgba(255, 255, 255, 0.1); }
 button.mp-hero-stat { cursor: pointer; font-family: inherit; text-align: left; color: inherit; }
+/* 누를 대상이 없을 때(예: 확인 필요 0건)는 눌리지 않는 모양으로 */
+button.mp-hero-stat:disabled { cursor: default; }
+button.mp-hero-stat:disabled:hover { background: rgba(255, 255, 255, 0.05); }
+button.mp-hero-stat.is-warn:not(:disabled):hover { background: rgba(253, 180, 185, 0.12); border-color: rgba(253, 180, 185, 0.35); }
 .mp-hero-stat span { font-size: 11.5px; font-weight: 700; color: #aeb4c2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mp-hero-stat strong { font-size: 20px; font-weight: 900; color: #ffffff; letter-spacing: -0.4px; font-variant-numeric: tabular-nums; }
 .mp-hero-stat strong small { margin-left: 2px; font-size: 12px; font-weight: 700; color: #aeb4c2; }

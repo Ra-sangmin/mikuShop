@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { BANK_ACCOUNT } from '@/lib/bankAccount';
 import GuideLayout from '@/app/components/GuideLayout';
 import '@/app/guide/guide-common.css';
 import { loadPaymentWidget, PaymentWidgetInstance } from "@tosspayments/payment-widget-sdk";
@@ -70,6 +71,19 @@ function useMoneyChargeLogic() {
 
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [amount, setAmount] = useState<string>('');
+  // 🌟 다른 화면(예: 주문 결제 중 머니 부족)에서 ?amount= 로 부족한 금액을 넘겨받으면 충전 금액에 미리 채웁니다.
+  //    최소 충전 금액보다 적으면 최소 금액으로, 1회 최대보다 많으면 최대 금액으로 맞춥니다.
+  const [prefill, setPrefill] = useState<{ shortfall: number; filled: number } | null>(null);
+  useEffect(() => {
+    try {
+      const raw = new URLSearchParams(window.location.search).get('amount');
+      const shortfall = Math.ceil(Number(raw));
+      if (!raw || !Number.isFinite(shortfall) || shortfall <= 0) return;
+      const filled = Math.min(1000000, Math.max(5000, shortfall));
+      setAmount(String(filled));
+      setPrefill({ shortfall, filled });
+    } catch { /* 주소를 읽지 못하면 빈 칸 그대로 */ }
+  }, []);
   const [depositor, setDepositor] = useState<string>('');
   const [method, setMethod] = useState<'card' | 'transfer'>('transfer');
   const [currentMoney, setCurrentMoney] = useState<number>(0);
@@ -244,14 +258,14 @@ function useMoneyChargeLogic() {
     isAuthChecking,
     amount, depositor, setDepositor, method, setMethod,
     currentMoney, isFocused, setIsFocused, loading,
-    formatDisplay, handleChargeRequest, handleAmountChange
+    formatDisplay, handleChargeRequest, handleAmountChange, prefill
   };
 }
 
 // ==========================================
 // 🖥️ 3. 메인 컴포넌트
 // ==========================================
-const BANK_ACCOUNT = { bank: '신한은행', number: '110-629-593784', owner: '미쿠짱' };
+// 입금 계좌는 lib/bankAccount.ts 한 곳에서 관리합니다 (홈 화면과 같은 값)
 const QUICK_AMOUNTS = [10000, 30000, 50000, 100000];
 const MIN_AMOUNT = 5000;
 const MAX_AMOUNT = 1000000;
@@ -261,7 +275,7 @@ export default function MoneyChargePage() {
     isAuthChecking,
     amount, depositor, setDepositor, method, setMethod,
     currentMoney, setIsFocused, loading,
-    formatDisplay, handleChargeRequest, handleAmountChange
+    formatDisplay, handleChargeRequest, handleAmountChange, prefill
   } = useMoneyChargeLogic();
   const [copied, setCopied] = useState(false);
 
@@ -310,6 +324,21 @@ export default function MoneyChargePage() {
                 <h3 className="mm-section-title"><span className="mm-step">01</span>충전 금액</h3>
                 <span className="mm-section-sub">최소 5,000원 · 1회 최대 100만원</span>
               </div>
+              {prefill && (
+                <div className="mm-prefill-note" role="status">
+                  <i className="fa fa-circle-info" aria-hidden="true"></i>
+                  <span>
+                    주문 결제에 부족한 금액 <b>{prefill.shortfall.toLocaleString()}원</b>을 충전 금액에 넣어 두었어요.
+                    {prefill.filled !== prefill.shortfall && (
+                      <em>
+                        {prefill.filled > prefill.shortfall
+                          ? ` 최소 충전 금액이 ${prefill.filled.toLocaleString()}원이라 ${prefill.filled.toLocaleString()}원으로 맞췄어요.`
+                          : ` 1회 최대 ${prefill.filled.toLocaleString()}원까지만 충전할 수 있어요.`}
+                      </em>
+                    )}
+                  </span>
+                </div>
+              )}
               <div className={`mm-amount-box ${isTooSmall ? 'is-error' : ''}`}>
                 <div className="mm-amount-row">
                   <input
@@ -384,7 +413,7 @@ export default function MoneyChargePage() {
                   <h3 className="mm-section-title"><span className="mm-step">03</span>입금 정보</h3>
                 </div>
                 <div className="mm-bank">
-                  <span className="mm-bank-icon"><Landmark size={20} strokeWidth={2} /></span>
+                  <span className="mm-bank-icon is-logo"><img src={BANK_ACCOUNT.icon} alt="" /></span>
                   <div className="mm-bank-text">
                     <span className="mm-bank-eyebrow">입금 계좌 · {BANK_ACCOUNT.bank}</span>
                     <span className="mm-bank-number" translate="no">{BANK_ACCOUNT.number}</span>

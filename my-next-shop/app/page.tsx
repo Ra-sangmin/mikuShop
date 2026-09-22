@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { BANK_ACCOUNT } from '@/lib/bankAccount';
 import { useRouter } from 'next/navigation';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import {
@@ -503,18 +504,18 @@ export default function HomePage() {
                 <div className="bank-panel">
                     <div className="bank-panel-top">
                         <span className="bank-panel-name">
-                            <span className="bank-panel-logo"><img src="/images/sinhan_bank.png" alt="" /></span>
-                            신한은행
+                            <span className="bank-panel-logo"><img src={BANK_ACCOUNT.icon} alt="" /></span>
+                            {BANK_ACCOUNT.bank}
                         </span>
                         <span className="bank-panel-chip" aria-hidden="true"></span>
                     </div>
-                    <div className="bank-panel-account">110-629-593784</div>
+                    <div className="bank-panel-account" translate="no">{BANK_ACCOUNT.number}</div>
                     <div className="bank-panel-bottom">
-                        <span className="bank-panel-owner"><span>예금주</span> 미쿠짱</span>
+                        <span className="bank-panel-owner"><span>예금주</span> {BANK_ACCOUNT.owner}</span>
                         <button
                           type="button"
                           className="bank-copy-btn"
-                          onClick={() => { navigator.clipboard.writeText('110-629-593784'); showAlert('계좌번호가 복사되었습니다.', 'success'); }}
+                          onClick={() => { navigator.clipboard.writeText(BANK_ACCOUNT.number); showAlert('계좌번호가 복사되었습니다.', 'success'); }}
                         >
                           <Copy weight="bold" /> 복사
                         </button>

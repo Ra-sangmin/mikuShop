@@ -2,7 +2,7 @@
 import React from 'react';
 import GuideLayout from '../../components/GuideLayout';
 import '../guide-common.css';
-import { Package, MagnifyingGlass, ShoppingCartSimple, Truck, Receipt as ReceiptIcon, Camera, ShieldCheck, Cube, FileText, Clock } from '@phosphor-icons/react';
+import { Package, MagnifyingGlass, ShoppingCartSimple, Truck, Receipt as ReceiptIcon, Camera, ShieldCheck, Cube, Clock } from '@phosphor-icons/react';
 import GuideFooterNotice from '../components/GuideFooterNotice';
 import GuidePremiumHero from '../components/GuidePremiumHero';
 import GuideTitle from '../components/GuideTitle';
@@ -85,6 +85,7 @@ export default function FeeGuidePage() {
           }
           .fg-policy-text { margin: 0; font-size: 15px; font-weight: 600; color: #475569; word-break: keep-all; line-height: 1.55; }
           .fg-policy-text strong { color: #0f172a; font-weight: 900; box-shadow: inset 0 -8px 0 rgba(245,196,81,0.45); }
+          .fg-policy-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
           .fg-policy-tag { margin-left: auto; white-space: nowrap; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; color: #b04a12; }
 
           /* 2) 수수료 카드 2장 */
@@ -144,6 +145,7 @@ export default function FeeGuidePage() {
           .insp-title { display: block; font-size: 15.5px; font-weight: 900; color: #0f172a; margin-bottom: 3px; }
           .insp-desc { margin: 0; font-size: 13px; color: #64748b; word-break: keep-all; }
           .insp-price { font-size: 19px; font-weight: 900; color: #0f172a; white-space: nowrap; font-variant-numeric: tabular-nums; }
+          .inspection-paid-box.is-fragile .insp-icon { color: #047857; background: #ecfdf5; border-color: #bbf7d0; }
           .insp-price small { font-size: 12px; font-weight: 700; color: #94a3b8; margin-right: 2px; }
 
           /* 3) 토탈 케어 다크 박스 */
@@ -334,7 +336,10 @@ export default function FeeGuidePage() {
 
           <div className="fg-policy">
             <span className="fg-policy-icon" aria-hidden="true"><ReceiptIcon weight="fill" /></span>
-            <p className="fg-policy-text">모든 수수료는 <strong>주문서 1건당 발생</strong>하며, 상품 개수와 상관없이 경제적입니다.</p>
+            <div className="fg-policy-body">
+              <p className="fg-policy-text">모든 수수료는 <strong>주문서 1건당 발생</strong>하며, 상품 개수와 상관없이 경제적입니다.</p>
+              <p className="fg-policy-text">상품은 현지 도착 박스 그대로 발송하며, <strong>재포장 시 별도 수수료가 발생</strong>합니다.</p>
+            </div>
             <span className="fg-policy-tag">FEE POLICY</span>
           </div>
         </div>
@@ -352,7 +357,7 @@ export default function FeeGuidePage() {
             <div className="fee-list">
               {[
                 { label: '일반 웹사이트 주문', price: '100' },
-                { label: '프리마켓(메르카리) 주문', price: '100' },
+                { label: '프리마켓(메루카리 라쿠마) 주문', price: '200' },
                 { label: '야후 입찰 및 경매', price: '200' },
                 { label: '배송대행 수수료', price: '200', highlight: true },
               ].map((item, i) => (
@@ -390,6 +395,15 @@ export default function FeeGuidePage() {
                 </div>
                 <span className="insp-price"><small>¥</small>200</span>
               </div>
+              {/* 🌟 깨지기 쉬운 상품 특수 포장 — ¥300 부터 (상품 크기·재질에 따라 달라짐) */}
+              <div className="inspection-paid-box is-fragile">
+                <span className="insp-icon" aria-hidden="true"><Package weight="fill" /></span>
+                <div className="insp-text">
+                  <span className="insp-title">깨지기 쉬운 상품 특수 포장</span>
+                  <p className="insp-desc">에어캡 · 완충재로 파손 방지 안전 재포장</p>
+                </div>
+                <span className="insp-price"><small>¥</small>300~</span>
+              </div>
             </div>
           </div>
         </div>
@@ -398,11 +412,10 @@ export default function FeeGuidePage() {
         <div className="animate-4 total-care-box" style={{ borderRadius: '28px', padding: '48px 44px', color: '#fff', marginBottom: '44px', textAlign: 'center' }}>
           <span className="gp-hero-eyebrow">TOTAL CARE</span>
           <h4 className="total-care-title">안전 배송 관리 <em>토탈 케어</em></h4>
-          <p className="total-care-sub">포장재, 박스 패킹, 세관 신고 대행 포함 필수 비용</p>
+          <p className="total-care-sub">포장재, 박스 패킹 포함 필수 비용</p>
           <ul className="total-care-includes">
             <li><Package weight="fill" />포장재</li>
             <li><Cube weight="fill" />박스 패킹</li>
-            <li><FileText weight="fill" />세관 신고 대행</li>
           </ul>
 
           <div className="total-care-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>

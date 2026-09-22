@@ -314,9 +314,9 @@ export function buildVariables(status: string, group: OrderForAlimtalk[]): Recor
  * 예전에는 users.defaultAddressId 도 같이 봤는데, 같은 사실을 두 곳에 저장하다 보니
  * 한쪽만 갱신되면 화면에 보이는 기본 배송지와 알림톡이 쓰는 번호가 달라졌습니다.
  */
-function pickPhone(user: {
+export function pickPhone(user: {
   phone: string | null;
-  addresses: { id: number; phone: string; isDefault: boolean }[];
+  addresses: { phone: string; isDefault: boolean }[];
 }): string | null {
   const own = normalizePhone(user.phone);
   if (own) return own;

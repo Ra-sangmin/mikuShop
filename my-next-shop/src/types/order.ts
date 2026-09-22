@@ -21,6 +21,8 @@ export const ORDER_STATUS = {
   FAILED: "FAILED",
   /** 상품 결제 완료 */
   PAID: "PAID",
+  /** 입고 대기중 — 배송대행 신청 후 일본 창고에 도착(입고 완료)하기 전까지 */
+  WAITING: "WAITING",
   /** 입고완료 */
   ARRIVED: "ARRIVED",
   /** 배송 준비중 */
@@ -44,12 +46,24 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   [ORDER_STATUS.CART]: "구매 요청",
   [ORDER_STATUS.FAILED]: "경매/구매 실패",
   [ORDER_STATUS.PAID]: "상품 결제 완료",
+  [ORDER_STATUS.WAITING]: "입고 대기중",
   [ORDER_STATUS.ARRIVED]: "입고 완료",
   [ORDER_STATUS.PREPARING]: "배송 준비중",
   [ORDER_STATUS.PAYMENT_REQ]: "배송비 요청",
   [ORDER_STATUS.PAYMENT_DONE]: "배송비 결제 완료",
   [ORDER_STATUS.SHIPPING]: "국제 배송",
 };
+
+/**
+ * 🌟 주문 종류까지 고려한 상태 이름.
+ *    배송대행(DELIVERY)은 고객이 직접 산 상품을 창고로 보내는 서비스라,
+ *    "상품 결제 완료(PAID)" 단계가 실제로는 창고 도착을 기다리는 중이므로 "입고 대기중" 으로 보여 줍니다.
+ *    (지금은 배송대행 신청 시 입고 대기중(WAITING) 상태로 바로 저장합니다. 예전 주문이 남아 있을 때를 위한 처리입니다)
+ */
+export function orderStatusLabel(status: string, type?: string | null): string {
+  if (type === 'DELIVERY' && status === ORDER_STATUS.PAID) return '입고 대기중';
+  return ORDER_STATUS_LABEL[status as OrderStatus] || status;
+}
 
 export const BID_STATUS_LABEL: Record<string, string> = {
   PENDING: "입찰 대기중",
