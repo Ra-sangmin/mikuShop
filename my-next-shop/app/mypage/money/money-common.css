@@ -640,6 +640,39 @@
 .mm-empty strong { font-size: 15px; font-weight: 800; color: #374151; }
 .mm-empty span { font-size: 13px; font-weight: 600; color: #6b7280; word-break: keep-all; }
 
+/* 🛟 불러오기 실패 안내 — 내역이 없는 것과 못 불러온 것은 다릅니다 */
+.mm-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid #fecdd3;
+  border-radius: 16px;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: 13px;
+  font-weight: 700;
+  word-break: keep-all;
+}
+.mm-error button {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border: 1px solid #fda4af;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #9f1239;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.mm-error button:hover { background: #ffe4e6; }
+@media (max-width: 480px) {
+  .mm-error { flex-direction: column; align-items: stretch; text-align: center; }
+}
+
 .mm-pager { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 24px; }
 .mm-page-btn {
   min-width: 38px;

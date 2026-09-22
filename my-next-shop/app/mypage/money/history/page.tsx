@@ -97,6 +97,9 @@ function useMoneyHistoryLogic() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentMoney, setCurrentMoney] = useState(0);
+  // 🛟 불러오기에 실패하면 화면에 알려 줍니다. 예전에는 조용히 0원·빈 목록으로 보여서
+  //    "내역이 없다"와 "못 불러왔다"를 구분할 수 없었습니다.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [period, setPeriod] = useState('all');
   const [filterType, setFilterType] = useState('ALL');
@@ -135,16 +138,46 @@ function useMoneyHistoryLogic() {
         url += `&startDate=${customDates.start}&endDate=${customDates.end}`;
       } else { url += `&period=${period}`; }
 
-      const [logRes, userRes] = await Promise.all([fetch(url), fetch(`/api/users?id=${userId}`)]);
-      const logData = await logRes.json();
-      const userData = await userRes.json();
-      
-      if (logData.success) {
-        setLogs(logData.logs);
+      // 🛟 목록과 보유 머니는 서로 다른 API 입니다. 한쪽이 실패해도 나머지는 살립니다.
+      //
+      // ⚠️ 예전에는 Promise.all 로 묶고 곧장 .json() 을 불렀습니다.
+      //    목록 API 가 없어서 Next 가 HTML 404 를 주자 파싱 예외가 났고,
+      //    catch 가 그걸 삼키면서 그 아래 보유 머니 반영까지 통째로 건너뛰어
+      //    잔액이 초깃값 0원으로 남았습니다. (실제로 운영에서 난 버그입니다)
+      const readJson = async (res: Response) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      };
+
+      const [logResult, userResult] = await Promise.allSettled([
+        fetch(url).then(readJson),
+        fetch(`/api/users?id=${userId}`).then(readJson),
+      ]);
+
+      const failed: string[] = [];
+
+      if (logResult.status === 'fulfilled' && logResult.value?.success) {
+        setLogs(Array.isArray(logResult.value.logs) ? logResult.value.logs : []);
         setCurrentPage(1);
+      } else {
+        console.error('[이용 내역] 목록을 불러오지 못했습니다.',
+          logResult.status === 'rejected' ? logResult.reason : logResult.value);
+        setLogs([]);
+        failed.push('이용 내역');
       }
-      if (userData.success) setCurrentMoney(userData.user.cyberMoney);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+
+      if (userResult.status === 'fulfilled' && userResult.value?.success) {
+        setCurrentMoney(Number(userResult.value.user?.cyberMoney) || 0);
+      } else {
+        console.error('[이용 내역] 보유 머니를 불러오지 못했습니다.',
+          userResult.status === 'rejected' ? userResult.reason : userResult.value);
+        failed.push('보유 머니');
+      }
+
+      setLoadError(failed.length ? `${failed.join(' · ')} 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.` : null);
+    } finally {
+      setLoading(false);
+    }
   }, [period, filterType, customDates]);
 
   useEffect(() => {
@@ -179,7 +212,7 @@ function useMoneyHistoryLogic() {
 
   return {
     isAuthChecking, // 🌟 UI에서 깜빡임 방지를 위해 내보냄
-    loading, currentMoney, period, setPeriod, filterType, setFilterType,
+    loading, loadError, fetchHistory, currentMoney, period, setPeriod, filterType, setFilterType,
     customDates, setCustomDates, currentPage, setCurrentPage,
     showPicker, setShowPicker, viewDate, setViewDate, pickerWrapperRef,
     logs, currentLogs, totalPages, pageNumbers
@@ -217,7 +250,7 @@ const formatLogDate = (value: string) => {
 export default function MoneyHistoryPage() {
   const {
     isAuthChecking, // 🌟 상태 받아오기
-    loading, currentMoney, period, setPeriod, filterType, setFilterType,
+    loading, loadError, fetchHistory, currentMoney, period, setPeriod, filterType, setFilterType,
     customDates, setCustomDates, currentPage, setCurrentPage,
     showPicker, setShowPicker, viewDate, setViewDate, pickerWrapperRef,
     logs, currentLogs, totalPages, pageNumbers
@@ -378,6 +411,14 @@ export default function MoneyHistoryPage() {
                 </button>
                 {showPicker === 'end' && renderCalendar('end')}
               </div>
+            </div>
+          )}
+
+          {/* 🛟 불러오기 실패 안내 — 빈 목록·0원과 구분되어야 합니다 */}
+          {loadError && (
+            <div className="mm-error" role="alert">
+              <span>{loadError}</span>
+              <button type="button" onClick={() => fetchHistory()}>다시 시도</button>
             </div>
           )}
 
