@@ -7,7 +7,6 @@ import { ExchangeRateProvider } from './context/ExchangeRateContext';
 import { CartProvider } from './context/CartContext';
 import { Providers } from './Providers';
 import { useEffect, useRef } from "react";
-import { feeManager } from "@/src/models/FeeManager";
 
 const FORCE_TOP_KEY = 'miku:force-scroll-top';
 
@@ -16,14 +15,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const isAdminPage = pathname?.startsWith('/admin');
   const isShopPage = pathname?.startsWith('/main_shop'); 
   const prevPathname = useRef(pathname);
-
-  useEffect(() => {
-    const initializeFees = async () => {
-      console.log("[RootLayout] 공용 수수료 모델 초기화 시작...");
-      await feeManager.loadFees();
-    };
-    initializeFees();
-  }, []);
 
   // 쇼핑 페이지(구글 번역 적용)에서 빠져나올 때만 새로고침한다.
   // 이때 브라우저가 직전 스크롤 위치를 복원해 Footer가 먼저 보이는 문제가 있어
