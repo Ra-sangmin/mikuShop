@@ -27,3 +27,17 @@ export function calculateTieredAgencyFee(quantity: number, rule: OrderFeeRule = 
   if (quantity <= 0) return 0;
   return quantity < rule.thresholdValue ? rule.belowThresholdFee : quantity * rule.atOrAboveThresholdAmount;
 }
+
+/**
+ * 💴 엔화 합계를 실제로 청구할 원화로 바꿉니다. **100원 단위로 올립니다.**
+ *
+ * 견적 화면(구매대행 신청 · 견적문의 · 배송대행 신청)과 마이페이지가 같은 값을 보여줘야 하는데,
+ * 예전엔 견적만 Math.floor 로 1원 단위까지 내려 ₩68,642 로 나오고 마이페이지는 ₩68,700 이라
+ * 같은 주문인데 금액이 달라 보였습니다. 두 화면 모두 이 함수를 씁니다.
+ *
+ * 올림인 이유: 표시 금액보다 더 많이 차감되는 일이 없어야 합니다.
+ */
+export function toChargeableWon(totalJpy: number, exchangeRate: number): number {
+  if (totalJpy <= 0 || !exchangeRate) return 0;
+  return Math.ceil(Math.round(totalJpy * exchangeRate) / 100) * 100;
+}

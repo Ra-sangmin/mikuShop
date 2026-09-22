@@ -250,7 +250,9 @@ export default function GlobalProductDetailShop({ product, onClose }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId, platform: product.platform, productName: getKoreanProductName(),
-          productPrice: unitPrice, productCount: quantity,
+          // ⚠️ productPrice 는 그 주문 줄의 합계(단가 × 수량)로 저장합니다.
+          //    구매대행 신청 폼(PurchaseFormContainer)과 같은 규칙이어야 정산·마이페이지 금액이 맞습니다.
+          productPrice: unitPrice * quantity, productCount: quantity,
           // 다른 구성을 골랐다면 그 상품의 사진·주소로 주문합니다. (원래 상품이 아닙니다)
           productImageUrl: activeProduct.thumbnail, productUrl: activeProduct.url,
           productOption: optionText, status: "장바구니",

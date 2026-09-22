@@ -147,7 +147,10 @@ model Order {
 
   // 4. 상품 상세 정보
   productImageUrl     String?        @db.Text @map("product_image_url")
-  productPrice        Int            @map("product_price") // 현재 최고가 또는 낙찰가로 활용
+  // ⚠️ **그 주문 줄의 합계**(단가 × 수량)입니다. 단가가 아닙니다.
+  //    (경매는 수량이 1이라 현재 최고가·낙찰가와 같은 값이 됩니다)
+  //    읽는 쪽에서 productCount 를 다시 곱하면 안 됩니다 — 예전에 마이페이지가 그래서 금액이 10배로 나왔습니다.
+  productPrice        Int            @map("product_price")
   productCount        Int?           @default(1)
   productName         String         @map("product_name")
   productUrl          String?        @db.Text @map("product_url")

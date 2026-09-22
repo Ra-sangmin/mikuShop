@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 // 🌟 MikuAlertContext 임포트 경로 확인
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { ORDER_TYPE, OrderType, ORDER_STATUS } from '@/src/types/order';
-import { calculateTieredPaymentFee, calculateTieredAgencyFee, DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule } from '@/src/utils/feeCalculator';
+import { calculateTieredPaymentFee, calculateTieredAgencyFee, toChargeableWon, DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule } from '@/src/utils/feeCalculator';
 import {
   Camera, PackageCheck, ImagePlus, Link2, Trash2, RotateCcw, Plus, Minus, PenLine, Loader2,
   ShoppingCart, Truck, Lightbulb, Wallet, ChevronRight, ClipboardList, CreditCard, RefreshCw,
@@ -122,7 +122,8 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
       totalTransferFee: sum('transfer'),
       totalAgencyFee: sum('agency'),
       totalJPY: jpySum,
-      totalKRW: Math.floor(jpySum * exchangeRate)
+      // 마이페이지 결제 금액과 같은 규칙(100원 단위 올림)을 씁니다.
+      totalKRW: toChargeableWon(jpySum, exchangeRate)
     };
   }, [itemSummaries, exchangeRate]);
 

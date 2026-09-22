@@ -15,7 +15,7 @@ import { loginUrlWithReturn } from '@/lib/authRedirect';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 import '../mypage-premium.css';
-import { calculateTieredPaymentFee, calculateTieredAgencyFee, DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule } from '@/src/utils/feeCalculator';
+import { calculateTieredPaymentFee, calculateTieredAgencyFee, toChargeableWon, DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule } from '@/src/utils/feeCalculator';
 
 // 🌟 "현재 진행중인 현황" = 국제 배송(도착 완료 전 단계)을 제외한 나머지 모든 주문
 const isProgressStatus = (status: string) => status !== ORDER_STATUS.SHIPPING;
@@ -452,9 +452,10 @@ function usePurchaseStatusLogic() {
     const selectedOrders = items.filter(item => selectedItems.map(String).includes(String(item.orderId)));
 
     return selectedOrders.reduce((acc, item) => {
-      // 🌟 productCount가 0/누락이면 곱셈 결과가 통째로 0이 돼서 상품 금액이 사라지는 버그가 있었습니다.
-      // Prisma 스키마의 productCount 기본값(1)과 맞춰서, 값이 없을 때는 1개로 간주합니다.
-      const productP = (Number(item.productPrice) || 0) * (Number(item.productCount) || 1);
+      // ⚠️ orders.productPrice 는 "단가"가 아니라 **그 주문 줄의 합계**(단가 × 수량)입니다.
+      //    여기서 수량을 한 번 더 곱해 ¥620 × 10개가 ¥62,000 으로 부풀던 버그가 있었습니다.
+      //    (상품 목록·정산·대시보드 등 다른 곳은 전부 합계로 읽고 있어 여기만 어긋나 있었습니다)
+      const productP = Number(item.productPrice) || 0;
       // ⚠️ 구매 요청 단계의 일본내 배송료(¥). 배송비 요청 탭에서는 쓰지 않습니다.
       const domesticS = Number(item.domesticShippingFee) || 0; 
       // 💴 배송비 요청 단계의 청구 금액 (order_shipping_fees, 전부 원화)
@@ -504,12 +505,11 @@ function usePurchaseStatusLogic() {
       ? totals.product + totals.domestic + totals.extra
       : totals.product + totals.transfer + totals.delivery + totals.agency;
 
-  const rawWonBeforeRounding = totalPriceVal * exchangeRate;
-  const wonRoundedToInteger = Math.round(rawWonBeforeRounding);
+  // 🌟 배송비 요청 탭의 금액은 관리자가 이미 원화로 넣은 값이라 환산하지 않습니다.
+  //    나머지는 견적 화면과 같은 규칙(100원 단위 올림)으로 맞춥니다. — src/utils/feeCalculator.ts
   const totalPriceWon = activeTab === ORDER_STATUS.PAYMENT_REQ
     ? totalPriceVal
-    // 🌟 10원, 1원 단위는 올림해서 100원 단위로 맞춥니다 (화면 표시값과 실제 결제 차감액을 일치시킵니다).
-    : Math.ceil(wonRoundedToInteger / 100) * 100;
+    : toChargeableWon(totalPriceVal, exchangeRate);
 
   // 🌟 디버깅용 로그: 최종 결제예상액 계산식을 그대로 콘솔에 남깁니다.
   useEffect(() => {
@@ -519,9 +519,8 @@ function usePurchaseStatusLogic() {
       `totals=${JSON.stringify(totals)}`,
       `totalPriceVal(${totals.product}+${totals.transfer}+${totals.delivery}+${totals.agency})=${totalPriceVal}`,
       `exchangeRate=${exchangeRate}`,
-      `rawWonBeforeRounding(${totalPriceVal}*${exchangeRate})=${rawWonBeforeRounding}`,
-      `wonRoundedToInteger=${wonRoundedToInteger}`,
-      `totalPriceWon(ceil to 100)=${totalPriceWon}`
+      `raw(${totalPriceVal}*${exchangeRate})=${totalPriceVal * exchangeRate}`,
+      `totalPriceWon(100원 단위 올림)=${totalPriceWon}`
     );
   }, [totalPriceVal, exchangeRate, activeTab]);
 
