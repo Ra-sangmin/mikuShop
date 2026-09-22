@@ -69,6 +69,15 @@ export default function MoneyRequestManagement() {
   // 💬 켜 두면 이번 승인에서 충전·환불 완료 알림톡을 보내지 않습니다. (주문 관리와 같은 스위치)
   //    건당 비용이 들고, 테스트나 일괄 처리처럼 같은 안내가 연달아 나가면 고객도 불편합니다.
   const [skipAlimtalk, setSkipAlimtalk] = useState(false);
+  // 🧪 로컬(localhost / 127.0.0.1)에서 테스트할 때는 실제 고객에게 알림톡이 나가지 않도록 기본으로 켜 둡니다.
+  //    (운영 사이트에서는 기본 꺼짐. 로컬에서도 필요하면 스위치를 꺼서 보낼 수 있습니다)
+  //    ⚠️ 알림톡은 개발 장비에서 보내도 진짜 고객 휴대폰으로 갑니다. 주문 관리와 같은 안전장치입니다.
+  useEffect(() => {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+      setSkipAlimtalk(true);
+    }
+  }, []);
   const [rejectNote, setRejectNote] = useState('');
   const [processingId, setProcessingId] = useState<number | null>(null);
 
