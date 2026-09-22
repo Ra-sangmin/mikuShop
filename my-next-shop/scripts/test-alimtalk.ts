@@ -20,6 +20,7 @@ import {
   CONSULT_TEMPLATE,
   REFUND_DONE_TEMPLATE,
   CHARGE_DONE_TEMPLATE,
+  moneyHistoryUrl,
   buildAlimtalkPayload,
   fillTemplate,
   isAlimtalkConfigured,
@@ -115,10 +116,19 @@ async function main() {
   line('정리된 값', phone ?? '❌ 국내 휴대폰 형식이 아닙니다');
   if (!phone) process.exit(1);
 
-  // 묶음이면 목록 탭으로, 단건이면 그 주문으로. (orderStatusAlimtalk.ts 와 같은 규칙)
-  const buttonUrl = count > 1
-    ? `${buttonBase}/mypage/status?tab=${encodeURIComponent(status)}`
-    : `${buttonBase}/mypage/status?orderId=M260918-a3f9`;
+  // 🔗 버튼 주소는 템플릿마다 다릅니다. 실제 발송 경로와 같은 값을 써야 미리보기를 믿을 수 있습니다.
+  //    (예전엔 주문 상세 주소를 종류와 상관없이 박아 둬서, 머니 템플릿 미리보기가
+  //     실제로 나가는 주소와 다르게 보였습니다)
+  //    · 충전·환불 완료 → 이용 내역 화면 (moneyHistoryUrl — api/money/approve 등과 같은 함수)
+  //    · 고객센터 안내  → 버튼이 '메시지 전달(MD)' 이라 주소를 싣지 않습니다
+  //    · 주문 상태     → 묶음이면 목록 탭, 단건이면 그 주문 (orderStatusAlimtalk.ts 와 같은 규칙)
+  const buttonUrl = (status === 'CHARGE_DONE' || status === 'REFUND_DONE')
+    ? moneyHistoryUrl()
+    : status === 'CONSULT'
+      ? undefined
+      : count > 1
+        ? `${buttonBase}/mypage/status?tab=${encodeURIComponent(status)}`
+        : `${buttonBase}/mypage/status?orderId=M260918-a3f9`;
 
   console.log('\n===== 4. 솔라피에 보낼 내용 =====');
   const payload = buildAlimtalkPayload({
