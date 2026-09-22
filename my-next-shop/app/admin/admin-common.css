@@ -201,3 +201,33 @@
 .sc-del-btn { color: #e11d48; }
 .sc-del-btn:hover:not(:disabled) { background: #fff1f2; }
 .sc-del-ask { font-size: 12px; font-weight: 800; color: #9f1239; white-space: nowrap; }
+
+/* 💬 알림톡 보내지 않기 스위치 — 주문 관리(.ord-switch)와 같은 모양입니다.
+   관리자 화면 여러 곳에서 쓰도록 공용 css 에 둡니다. */
+.ap-switch {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 40px; padding: 0 13px;
+  border-radius: 12px;
+  background: #ffffff; border: 1px solid #e2e8f0;
+  font-size: 12.5px; font-weight: 700; color: #64748b;
+  cursor: pointer; white-space: nowrap; user-select: none;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+.ap-switch:hover { border-color: #cbd5e1; background: #fbfcfe; }
+.ap-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.ap-switch .ap-switch-track {
+  position: relative; flex-shrink: 0;
+  width: 30px; height: 17px; border-radius: 99px;
+  background: #dde3ec;
+  transition: background-color 0.2s ease;
+}
+.ap-switch .ap-switch-track::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ap-switch.is-on { color: #b45309; border-color: #fde68a; background: #fffbeb; }
+.ap-switch.is-on .ap-switch-track { background: #f59e0b; }
+.ap-switch.is-on .ap-switch-track::after { transform: translateX(13px); }

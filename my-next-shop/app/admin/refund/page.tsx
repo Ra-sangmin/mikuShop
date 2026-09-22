@@ -66,6 +66,9 @@ export default function MoneyRequestManagement() {
 
   // 승인/반려 확인 단계
   const [confirming, setConfirming] = useState<{ id: number; action: 'APPROVED' | 'REJECTED' } | null>(null);
+  // 💬 켜 두면 이번 승인에서 충전·환불 완료 알림톡을 보내지 않습니다. (주문 관리와 같은 스위치)
+  //    건당 비용이 들고, 테스트나 일괄 처리처럼 같은 안내가 연달아 나가면 고객도 불편합니다.
+  const [skipAlimtalk, setSkipAlimtalk] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
   const [processingId, setProcessingId] = useState<number | null>(null);
 
@@ -107,6 +110,8 @@ export default function MoneyRequestManagement() {
         body: JSON.stringify({
           requestId: req.id,
           status,
+          // 반려는 원래 알림톡을 보내지 않지만, 서버가 한 곳에서 판단하도록 그대로 실어 보냅니다.
+          skipAlimtalk,
           ...(status === 'REJECTED' && rejectNote.trim() ? { adminNote: rejectNote.trim() } : {}),
         }),
       });
@@ -237,6 +242,19 @@ export default function MoneyRequestManagement() {
             />
           </div>
           <div className="ap-toolbar-right">
+            {/* 💬 알림톡은 건당 비용이 듭니다. 테스트하거나 한 번에 여러 건을 처리할 때 꺼 두세요. */}
+            <label
+              className={`ap-switch ${skipAlimtalk ? 'is-on' : ''}`}
+              title="켜면 승인할 때 충전·환불 완료 알림톡을 보내지 않습니다."
+            >
+              <input
+                type="checkbox"
+                checked={skipAlimtalk}
+                onChange={(e) => setSkipAlimtalk(e.target.checked)}
+              />
+              <span className="ap-switch-track" aria-hidden="true" />
+              알림톡 보내지 않기
+            </label>
             <span className="ap-count">표시 <b>{rendered.length.toLocaleString()}</b>건</span>
           </div>
         </div>

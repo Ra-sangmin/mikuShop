@@ -188,6 +188,102 @@ export const CONSULT_TEMPLATE: AlimtalkTemplate = {
   buttonType: 'MD',
 };
 
+/**
+ * 💸 미쿠짱머니 환불 승인이 끝났을 때 보내는 안내.
+ *
+ * 주문 상태와 무관해서 CONSULT_TEMPLATE 과 같은 이유로 ALIMTALK_TEMPLATES 에 넣지 않습니다.
+ * (그 객체의 키는 orderStatusAlimtalk 가 "알림톡을 보내는 주문 상태" 목록으로 그대로 씁니다)
+ *
+ * 카카오 검수 승인 완료 (2026-09-22). 콘솔의 템플릿 이름은 "미쿠짱머니 환불 완료" 입니다.
+ * ⚠️ 변수는 #{고객명} · #{환불금액} · #{환불수단} 셋뿐입니다. 이름이 다르면 발송이 거절됩니다.
+ * ⚠️ 본문에 '원' 이 이미 붙어 있습니다. #{환불금액} 에는 숫자와 쉼표만 넣어야
+ *    "50,000원원" 이 되지 않습니다. (PAYMENT_REQ 의 #{결제금액} 과 같은 규칙)
+ */
+export const REFUND_DONE_TEMPLATE: AlimtalkTemplate = {
+  templateId: process.env.SOLAPI_TEMPLATE_REFUND_DONE || 'KA01TP260922032817854XskY4fiVzX8',
+  content: [
+    '[미쿠짱] 미쿠짱머니 환불 처리 완료 안내',
+    '',
+    '#{고객명}님, 요청하신 미쿠짱머니 환불 처리가 정상적으로 완료되었습니다.',
+    '',
+    '▪ 환불 금액 : #{환불금액}원',
+    '▪ 처리 내역 : #{환불수단}',
+    '',
+    '결제 수단 및 금융사 사정에 따라 실제 환불 반영까지 영업일 기준 1~3일 정도 소요될 수 있습니다.',
+  ].join('\n'),
+  buttonName: '환불 내역 확인하기',
+  // 버튼은 웹링크(WL)라 주소가 필요합니다. 보내는 쪽에서 buttonUrl 로 넘깁니다.
+};
+
+/**
+ * 💰 미쿠짱머니 충전이 끝났을 때 보내는 안내.
+ *
+ * 두 곳에서 씁니다.
+ *   · 관리자가 /admin/refund 에서 무통장 충전 신청을 승인할 때 (api/money/approve)
+ *   · 회원이 카드로 결제해 바로 충전될 때 (api/payment/confirm)
+ *
+ * REFUND_DONE_TEMPLATE 과 같은 이유로 ALIMTALK_TEMPLATES 에 넣지 않습니다. (주문 상태가 아님)
+ * 카카오 검수 승인 완료 (2026-09-22). 콘솔 이름은 "미쿠짱머니 충전 완료" 입니다.
+ *
+ * ⚠️ 변수는 #{고객명} · #{충전금액} · #{현재잔액} 셋뿐입니다. 이름이 다르면 발송이 거절됩니다.
+ * ⚠️ 본문에 '원' 이 이미 붙어 있어 값에는 숫자와 쉼표만 넣습니다.
+ */
+export const CHARGE_DONE_TEMPLATE: AlimtalkTemplate = {
+  templateId: process.env.SOLAPI_TEMPLATE_CHARGE_DONE || 'KA01TP260922032556819iUTs66Fgy64',
+  content: [
+    '[미쿠짱] 미쿠짱머니 충전 완료 안내',
+    '',
+    '#{고객명}님, 결제하신 미쿠짱머니 충전이 정상적으로 완료되었습니다.',
+    '상세 내역은 마이페이지에서 확인하실 수 있습니다.',
+    '',
+    '▪ 충전 금액 : #{충전금액}원',
+    '▪ 현재 잔액 : #{현재잔액}원',
+    '',
+    '이용해 주셔서 감사합니다.',
+  ].join('\n'),
+  buttonName: '충전 내역 확인하기',
+  // 버튼은 웹링크(WL). 주소는 환불 안내와 같은 이용 내역 화면입니다.
+};
+
+/** 💸 환불 안내 버튼이 열 주소. 템플릿에 등록된 주소와 같아야 합니다. */
+export const REFUND_HISTORY_PATH = '/mypage/money/history';
+
+/**
+ * 🔗 머니 관련 알림톡 버튼이 열 주소.
+ *
+ * ⚠️ NEXTAUTH_URL 을 쓰지 않고 운영 도메인을 고정으로 둡니다. 이유가 둘입니다.
+ *   1) 카카오 템플릿에 등록된 버튼 주소와 다르면 발송이 거절됩니다.
+ *   2) 알림톡은 개발 장비에서 보내더라도 **실제 고객**에게 갑니다.
+ *      localhost 주소를 받으면 고객은 열 수 없습니다.
+ */
+const SITE_ORIGIN = 'https://mikushop.co.kr';
+
+export function moneyHistoryUrl(): string {
+  return `${SITE_ORIGIN}${REFUND_HISTORY_PATH}`;
+}
+
+/**
+ * 🏦 환불 계좌를 안내 문구로 만듭니다. "국민은행 ****1234 (홍길동)" 처럼요.
+ *
+ * 계좌번호는 뒤 4자리만 남깁니다. 카카오톡 대화방에 전체 계좌번호가 평문으로
+ * 남지 않도록 하기 위해서입니다. (maskPhone 과 같은 취지)
+ * 신청할 때 계좌를 적지 않았을 수도 있어(모두 String?) 비어 있으면 대체 문구를 씁니다.
+ */
+export function formatRefundAccount(account: {
+  bankName?: string | null;
+  accountNumber?: string | null;
+  accountHolder?: string | null;
+}): string {
+  const bank = account.bankName?.trim();
+  const holder = account.accountHolder?.trim();
+  const digits = String(account.accountNumber ?? '').replace(/[^0-9]/g, '');
+  const masked = digits.length >= 4 ? `****${digits.slice(-4)}` : '';
+
+  const parts = [bank, masked].filter(Boolean);
+  if (parts.length === 0) return '등록하신 환불 계좌';
+  return holder ? `${parts.join(' ')} (${holder})` : parts.join(' ');
+}
+
 // ---------------------------------------------------------------- 발송
 
 function solapiConfig() {

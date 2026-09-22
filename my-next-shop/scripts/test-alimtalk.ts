@@ -7,7 +7,8 @@
 //   npx tsx scripts/test-alimtalk.ts 01012345678            보낼 내용만 만들어 보여줍니다 (발송 안 함)
 //   npx tsx scripts/test-alimtalk.ts 01012345678 --send     실제로 한 통 보냅니다 (건당 비용 발생)
 //   npx tsx scripts/test-alimtalk.ts 01012345678 --status=ARRIVED       다른 템플릿으로
-//     쓸 수 있는 상태: BID_SUCCESS(낙찰) ARRIVED(입고) PAYMENT_REQ(배송승인) SHIPPING(배송시작)
+//     주문 상태: BID_SUCCESS(낙찰) ARRIVED(입고) PAYMENT_REQ(배송승인) SHIPPING(배송시작)
+//     그 외  : CONSULT(고객센터 안내) REFUND_DONE(환불 완료) CHARGE_DONE(충전 완료)
 //   npx tsx scripts/test-alimtalk.ts 01012345678 --count=3   묶음 발송("외 2건") 미리보기
 //
 // ⚠️ --send 는 실제 카카오톡이 나가고 잔액이 차감됩니다. 받는 번호를 꼭 확인하세요.
@@ -16,12 +17,16 @@
 import 'dotenv/config';
 import {
   ALIMTALK_TEMPLATES,
+  CONSULT_TEMPLATE,
+  REFUND_DONE_TEMPLATE,
+  CHARGE_DONE_TEMPLATE,
   buildAlimtalkPayload,
   fillTemplate,
   isAlimtalkConfigured,
   maskPhone,
   missingSolapiEnv,
   sendAlimtalk,
+  type AlimtalkTemplate,
 } from '../lib/notifications/alimtalk';
 import { buildVariables } from '../lib/notifications/orderStatusAlimtalk';
 import { formatKoreanMobile, normalizeKoreanMobile } from '../lib/phone';
@@ -50,10 +55,19 @@ async function main() {
   if (!isAlimtalkConfigured()) process.exit(1);
 
   console.log('\n===== 2. 템플릿 =====');
-  const template = ALIMTALK_TEMPLATES[status];
+  // 📋 주문 상태 템플릿(ALIMTALK_TEMPLATES) 외에, 상태와 무관한 템플릿도 골라 볼 수 있습니다.
+  //    이 둘은 ALIMTALK_TEMPLATES 에 넣으면 orderStatusAlimtalk 가 주문 상태로 오인하므로
+  //    따로 export 돼 있습니다. (lib/notifications/alimtalk.ts 참고)
+  const EXTRA_TEMPLATES: Record<string, AlimtalkTemplate> = {
+    CONSULT: CONSULT_TEMPLATE,          // 고객센터 안내 (관리자가 회원에게 직접)
+    REFUND_DONE: REFUND_DONE_TEMPLATE,  // 미쿠짱머니 환불 완료
+    CHARGE_DONE: CHARGE_DONE_TEMPLATE,  // 미쿠짱머니 충전 완료
+  };
+  const template = ALIMTALK_TEMPLATES[status] ?? EXTRA_TEMPLATES[status];
   if (!template) {
-    console.log(`  ❌ ${status} 상태에 등록된 템플릿이 없습니다.`);
-    console.log(`     쓸 수 있는 상태: ${Object.keys(ALIMTALK_TEMPLATES).join(', ')}`);
+    console.log(`  ❌ ${status} 에 등록된 템플릿이 없습니다.`);
+    console.log(`     주문 상태: ${Object.keys(ALIMTALK_TEMPLATES).join(', ')}`);
+    console.log(`     그 외    : ${Object.keys(EXTRA_TEMPLATES).join(', ')}`);
     process.exit(1);
   }
   line('상태', status);
@@ -71,7 +85,14 @@ async function main() {
     shippingCarrier: { name: '테스트배송' },
     user: { name: '홍길동' },
   }));
-  const variables = buildVariables(status, sampleOrders);
+  // 주문 상태 템플릿만 buildVariables 로 채웁니다. 그 외는 예시 값을 직접 넣습니다.
+  const variables = ALIMTALK_TEMPLATES[status]
+    ? buildVariables(status, sampleOrders)
+    : status === 'REFUND_DONE'
+      ? { '고객명': '홍길동', '환불금액': (50000).toLocaleString('ko-KR'), '환불수단': '국민은행 ****1234 (홍길동)' }
+      : status === 'CHARGE_DONE'
+        ? { '고객명': '홍길동', '충전금액': (50000).toLocaleString('ko-KR'), '현재잔액': (97294).toLocaleString('ko-KR') }
+        : { '고객명': '홍길동' };
 
   console.log('\n  --- 이 템플릿에 채워 보낼 변수 (콘솔 등록값과 이름이 같아야 합니다) ---');
   Object.entries(variables).forEach(([k, v]) => console.log(`  | #{${k}} = ${v}`));

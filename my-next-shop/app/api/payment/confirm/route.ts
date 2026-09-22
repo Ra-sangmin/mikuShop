@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { sendAlimtalk, CHARGE_DONE_TEMPLATE, moneyHistoryUrl, maskPhone } from '@/lib/notifications/alimtalk';
+import { normalizeKoreanMobile } from '@/lib/phone';
 import prisma from '@/lib/prisma'; // 🌟 Prisma 클라이언트 임포트 필수
 import { requireUser } from '@/lib/apiAuth';
 
@@ -89,6 +91,40 @@ export async function POST(request: Request) {
     });
 
     console.log(`[결제성공] 유저 ID: ${userId} 에게 ${amountNum}원 충전이 완료되었습니다.`);
+
+    // 💰 충전이 끝나면 회원에게 알림톡으로 알려 줍니다.
+    //
+    // ⚠️ 트랜잭션이 끝난 **뒤**에 보냅니다. 안에서 외부 API 를 부르면 DB 커넥션을 오래 잡고,
+    //    발송이 실패하면 이미 받은 결제까지 롤백됩니다.
+    // ⚠️ 알림톡 실패가 결제 응답을 막으면 안 됩니다. 전부 삼키고 로그만 남깁니다.
+    //    (돈은 이미 빠져나갔고 충전도 끝난 상태입니다)
+    //
+    // ℹ️ 관리자 화면의 '알림톡 보내지 않기' 스위치는 여기에 영향을 주지 않습니다.
+    //    그 스위치는 관리자가 직접 승인할 때(무통장 충전·환불) 쓰는 것이고,
+    //    카드 결제는 회원이 스스로 한 것이라 끌 사람이 없습니다.
+    try {
+      const phone = normalizeKoreanMobile(dbResult.user.phone);
+      if (!phone) {
+        console.warn(`[알림톡] 충전 완료 안내를 건너뜁니다 — 보낼 수 있는 번호가 없습니다. (회원 ${userId})`);
+      } else {
+        const sendResult = await sendAlimtalk({
+          to: phone,
+          template: CHARGE_DONE_TEMPLATE,
+          variables: {
+            '#{고객명}': dbResult.user.name || '고객',
+            // ⚠️ 본문에 '원' 이 이미 붙어 있어 값에는 숫자와 쉼표만 넣습니다.
+            '#{충전금액}': amountNum.toLocaleString('ko-KR'),
+            '#{현재잔액}': dbResult.user.cyberMoney.toLocaleString('ko-KR'),
+          },
+          buttonUrl: moneyHistoryUrl(),
+          customFields: { kind: 'charge', source: 'card', userId: String(userId) },
+        });
+        console.log('[알림톡] 충전 완료 안내',
+          { 회원: userId, 번호: maskPhone(phone), 결과: sendResult });
+      }
+    } catch (error) {
+      console.error('[알림톡] 충전 완료 안내 발송 중 오류 (충전은 이미 처리됨):', error);
+    }
 
     // 🔒 프론트엔드에 필요한 값만 내려보냅니다.
     // (토스 응답 원문과 유저 레코드 전체를 그대로 넘기면 불필요한 개인정보까지 노출됩니다.)
