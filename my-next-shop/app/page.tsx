@@ -8,18 +8,123 @@ import {
   ChatCircleDots, ShoppingCartSimple, AirplaneTilt, Receipt, Scales, Headset, ArrowRight,
   ArrowUpRight, CaretLeft, CaretRight,
   Megaphone, Bank, Clock, CalendarCheck, Copy, ShieldCheck, Medal, Sparkle,
+  Package, Gavel, MagnifyingGlass, Gift, Crown, Coins, LinkSimple,
 } from '@phosphor-icons/react';
 
 const HERO_AUTOPLAY_MS = 5000;
 
 export const dynamic = "force-dynamic";
 
+/* 🎁 배너 주제 소품 ---------------------------------------------------------
+   캐릭터 그림이 모든 배너에서 같아 보이는 것을 덜어 주려고, 배너마다 다른 소품을
+   캐릭터 주변에 띄웁니다. 색은 배너 포인트색(--hero-accent)을 따라갑니다.
+   나중에 배너별 캐릭터 그림을 넣으면 <HeroProps /> 한 줄만 지우면 됩니다. */
+const HERO_PROPS: Record<HeroPropKind, React.ReactNode[]> = {
+  // 배송대행 — 택배 상자 · 비행기 경로 · 방울 포장재
+  delivery: [
+    <svg key="box" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <path d="M16 4 28 9v14l-12 5-12-5V9z" /><path d="M4 9l12 5 12-5" /><path d="M16 14v14" />
+      <path d="M10 6.5 22 11.5" strokeDasharray="2 2" />
+    </svg>,
+    <svg key="air" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 26c6-2 10-6 13-11" strokeDasharray="3 3" />
+      <path d="M27 5 17 13l-6-1-2 2 5 3 2 5 2-2-1-6z" />
+    </svg>,
+    <svg key="wrap" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="5" y="7" width="22" height="18" rx="4" />
+      <circle cx="11" cy="13" r="2" /><circle cx="17" cy="13" r="2" /><circle cx="23" cy="13" r="2" />
+      <circle cx="11" cy="19" r="2" /><circle cx="17" cy="19" r="2" /><circle cx="23" cy="19" r="2" />
+    </svg>,
+  ],
+  // 구매대행 — 쇼핑백 · 가격표 · 카드
+  purchase: [
+    <svg key="bag" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <path d="M7 11h18l-2 16H9z" /><path d="M12 11V8a4 4 0 0 1 8 0v3" strokeLinecap="round" />
+    </svg>,
+    <svg key="tag" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <path d="M16 4h11v11L15 27 4 16z" /><circle cx="22" cy="10" r="2" fill="currentColor" stroke="none" />
+    </svg>,
+    <svg key="card" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <rect x="4" y="8" width="24" height="16" rx="3" /><path d="M4 14h24" /><path d="M9 19h5" strokeLinecap="round" />
+    </svg>,
+  ],
+  // 경매 — 입찰 망치 · 시세 그래프 · 스마트폰 입찰
+  auction: [
+    <svg key="gavel" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="14" y="4" width="11" height="7" rx="2" transform="rotate(45 19.5 7.5)" />
+      <path d="M13 13 6 20l3 3 7-7" /><path d="M5 28h12" />
+    </svg>,
+    <svg key="chart" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 22l6-6 4 3 8-9" /><path d="M27 6v6h-6" /><path d="M5 27h22" />
+    </svg>,
+    <svg key="phone" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <rect x="9" y="3" width="14" height="26" rx="3" /><path d="M14 25h4" strokeLinecap="round" />
+      <path d="M13 17l3-4 3 4" strokeLinecap="round" /><path d="M16 13v7" strokeLinecap="round" />
+    </svg>,
+  ],
+  // 혜택 — 쿠폰 · 선물 상자 · 등급 왕관
+  benefit: [
+    <svg key="coupon" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <path d="M4 9h24v5a3 3 0 0 0 0 6v4H4v-4a3 3 0 0 0 0-6z" /><path d="M12 12v10" strokeDasharray="3 3" />
+    </svg>,
+    <svg key="gift" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <rect x="4" y="12" width="24" height="15" rx="2" /><path d="M4 17h24" /><path d="M16 12v15" />
+      <path d="M16 12c-4 0-6-1-6-3.5S12 5 16 12zM16 12c4 0 6-1 6-3.5S20 5 16 12z" />
+    </svg>,
+    <svg key="crown" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <path d="M5 23 4 9l7 5 5-8 5 8 7-5-1 14z" /><path d="M5 27h22" strokeLinecap="round" />
+    </svg>,
+  ],
+};
+
+/** 배너 캐릭터 그림 — 파일이 아직 없으면 기본 그림(/images/hero.png)으로 대신 보여 줍니다. */
+function HeroImage({ src }: { src: string }) {
+  const [current, setCurrent] = useState(src);
+  const imgRef = useRef<HTMLImageElement>(null);
+  useEffect(() => { setCurrent(src); }, [src]);
+  useEffect(() => {
+    // 서버에서 그려진 뒤(=이벤트를 듣기 전에) 이미 실패한 경우도 잡아 줍니다.
+    const img = imgRef.current;
+    if (img && img.complete && img.naturalWidth === 0) setCurrent(HERO_FALLBACK_IMAGE);
+  }, [current]);
+  return (
+    <img
+      ref={imgRef}
+      src={current}
+      alt="Miku"
+      className="premium-floating-img"
+      draggable="false"
+      onError={() => setCurrent(HERO_FALLBACK_IMAGE)}
+    />
+  );
+}
+
+function HeroProps({ kind }: { kind: HeroPropKind }) {
+  return (
+    <>
+      {HERO_PROPS[kind].map((icon, i) => (
+        <span key={i} className={`hero-prop pp${i + 1}`} aria-hidden="true">{icon}</span>
+      ))}
+    </>
+  );
+}
+
+// 🖼 배너마다 다른 캐릭터 그림을 씁니다. (public/images/hero/ 아래)
+//    아직 파일을 넣지 않은 배너는 예전 그림(/images/hero.png)으로 자동으로 대신 보여 줍니다.
+const HERO_FALLBACK_IMAGE = '/images/hero.png';
+
 // 1. 배너 데이터 구조 정의
+type HeroPropKind = 'delivery' | 'purchase' | 'auction' | 'benefit';
+
 interface Banner {
   title: React.ReactNode;
   subTitle: string;
   desc: string;
   image: string;
+  /** 배너 주제에 맞는 주변 소품 (캐릭터 그림이 같아도 배너마다 다르게 보이도록) */
+  props: HeroPropKind;
+  /** 캐릭터 주변 유리 칩 문구 3개 */
+  chips: { icon: React.ReactNode; label: string }[];
   bgColor: string;   // 배경 파스텔 색
   accent: string;    // 배지 점·장식 링에 쓰는 진한 색
   primary: { label: string; href: string };
@@ -35,31 +140,59 @@ const hexToRgb = (hex: string) => {
 
 export default function HomePage() {
   const banners: Banner[] = [
-    {
-      title: <>안전포장 빠른배송<br />평일 매일 국제발송</>, subTitle: "합리적이고 저렴한 배송비",
-      desc: "도착한 상품을 꼼꼼히 포장해 한국까지 보내드려요.",
-      bgColor: "#E2F0D9", accent: "#5c9a6f", image: "/images/hero.png",
-      primary: { label: '배송대행 신청', href: '/delivery/request' },
-      secondary: { label: '배송 요금표', href: '/guide/shipping-fee' },
-    },
+    // 1. 구매대행 (위로 올림)
     {
       title: <>일본 쇼핑의 시작<br />미쿠짱과 함께하세요</>, subTitle: "최저가 구매대행 서비스",
       desc: "상품 링크만 알려주시면 구매부터 배송까지 대신해 드려요.",
-      bgColor: "#FFF4CC", accent: "#c99612", image: "/images/hero.png",
+      bgColor: "#FFF4CC", accent: "#c99612", image: "/images/hero/hero_purchase.png",
+      props: 'purchase',
+      chips: [
+        { icon: <Medal weight="fill" />, label: '14년 노하우' },
+        { icon: <LinkSimple weight="bold" />, label: '링크만 보내면 끝' },
+        { icon: <Receipt weight="fill" />, label: '수수료 ¥100부터' },
+      ],
       primary: { label: '구매대행 신청', href: '/purchase/request' },
       secondary: { label: '견적 문의', href: '/purchase/quote' },
     },
+    // 2. 배송대행 (아래로 내림)
+    {
+      title: <>안전포장 빠른배송<br />평일 매일 국제발송</>, subTitle: "합리적이고 저렴한 배송비",
+      desc: "도착한 상품을 꼼꼼히 포장해 한국까지 보내드려요.",
+      bgColor: "#E2F0D9", accent: "#5c9a6f", image: "/images/hero/hero_delivery.png",
+      props: 'delivery',
+      chips: [
+        { icon: <Package weight="fill" />, label: '안전 포장' },
+        { icon: <AirplaneTilt weight="fill" />, label: '항공 · EMS · 해운' },
+        { icon: <ShieldCheck weight="fill" />, label: '기본 검수 무료' },
+      ],
+      primary: { label: '배송대행 신청', href: '/delivery/request' },
+      secondary: { label: '배송 요금표', href: '/guide/shipping-fee' },
+    },
+    // 3. 메루카리·야후옥션 (유지)
     {
       title: <>메루카리·야후옥션<br />실시간 입찰 및 구매</>, subTitle: "간편한 일본 직구 솔루션",
       desc: "원하는 상품을 찾아 입찰과 구매를 한 번에 신청하세요.",
-      bgColor: "#E1F5FE", accent: "#2f8fc4", image: "/images/hero.png",
+      bgColor: "#E1F5FE", accent: "#2f8fc4", image: "/images/hero/hero_auction.png",
+      props: 'auction',
+      chips: [
+        { icon: <Gavel weight="fill" />, label: '실시간 입찰' },
+        { icon: <MagnifyingGlass weight="bold" />, label: '메루카리 · 라쿠마' },
+        { icon: <Clock weight="fill" />, label: '마감 시간 관리' },
+      ],
       primary: { label: '메루카리 둘러보기', href: '/main_shop/mercari' },
       secondary: { label: '야후옥션', href: '/main_shop/yahoo_auction' },
     },
+    // 4. 회원 혜택 (유지)
     {
       title: <>다양한 혜택과 이벤트<br />회원 등급별 포인트 적립</>, subTitle: "신규 가입 시 적립금 증정",
       desc: "등급이 오를수록 국제 배송비 할인 혜택이 커져요.",
-      bgColor: "#FFEBEE", accent: "#d27377", image: "/images/hero.png",
+      bgColor: "#FFEBEE", accent: "#d27377", image: "/images/hero/hero_benefit.png",
+      props: 'benefit',
+      chips: [
+        { icon: <Gift weight="fill" />, label: '신규 적립금' },
+        { icon: <Crown weight="fill" />, label: '등급별 할인' },
+        { icon: <Coins weight="fill" />, label: '미쿠짱머니 적립' },
+      ],
       primary: { label: '등급별 혜택 보기', href: '/guide/membership' },
       secondary: { label: '회원가입', href: '/auth/register' },
     },
@@ -308,10 +441,12 @@ export default function HomePage() {
                       <span className="hero-sparkle s1" aria-hidden="true"><Sparkle weight="fill" /></span>
                       <span className="hero-sparkle s2" aria-hidden="true"><Sparkle weight="fill" /></span>
                       <span className="hero-sparkle s3" aria-hidden="true"><Sparkle weight="fill" /></span>
-                      <img src={banner.image} alt="Miku" className="premium-floating-img" draggable="false" />
-                      <span className="hero-chip c1" aria-hidden="true"><i><Medal weight="fill" /></i>14년 노하우</span>
-                      <span className="hero-chip c2" aria-hidden="true"><i><AirplaneTilt weight="fill" /></i>항공 · EMS · 해운</span>
-                      <span className="hero-chip c3" aria-hidden="true"><i><ShieldCheck weight="fill" /></i>기본 검수 무료</span>
+                      <HeroImage src={banner.image} />
+                      {banner.chips.map((chip, ci) => (
+                        <span key={chip.label} className={`hero-chip c${ci + 1}`} aria-hidden="true"><i>{chip.icon}</i>{chip.label}</span>
+                      ))}
+                      {/* 🎁 배너 주제에 맞는 소품 (캐릭터 그림이 준비되면 HERO_PROPS 를 지우면 됩니다) */}
+                      <HeroProps kind={banner.props} />
                     </div>
                   </div>
               </div>
