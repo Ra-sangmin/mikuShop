@@ -249,14 +249,18 @@ export const CHARGE_DONE_TEMPLATE: AlimtalkTemplate = {
 export const REFUND_HISTORY_PATH = '/mypage/money/history';
 
 /**
- * 🔗 머니 관련 알림톡 버튼이 열 주소.
+ * 🔗 알림톡 버튼이 여는 주소의 기준 도메인. **모든 알림톡이 이 값을 씁니다.**
+ * (머니 안내는 moneyHistoryUrl(), 주문 상태 안내는 orderStatusAlimtalk.ts)
  *
  * ⚠️ NEXTAUTH_URL 을 쓰지 않고 운영 도메인을 고정으로 둡니다. 이유가 둘입니다.
  *   1) 카카오 템플릿에 등록된 버튼 주소와 다르면 발송이 거절됩니다.
  *   2) 알림톡은 개발 장비에서 보내더라도 **실제 고객**에게 갑니다.
  *      localhost 주소를 받으면 고객은 열 수 없습니다.
+ *
+ * 미리보기 스크립트(scripts/test-alimtalk.ts)도 같은 값을 써야 합니다.
+ * 미리보기가 실제와 다른 주소를 보여주면 검수 대조가 거짓말을 하게 됩니다.
  */
-const SITE_ORIGIN = 'https://mikushop.co.kr';
+export const SITE_ORIGIN = 'https://mikushop.co.kr';
 
 export function moneyHistoryUrl(): string {
   return `${SITE_ORIGIN}${REFUND_HISTORY_PATH}`;

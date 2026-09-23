@@ -18,8 +18,6 @@
 import { useCallback, useState, type CSSProperties, type ReactNode } from 'react';
 import { MagnifyingGlass, X, CheckCircle, WarningCircle, Tray, Package, ArrowSquareOut, Stack, CaretDown, Camera, ShieldCheck, Sparkle, Tag, ChatText, Copy } from '@phosphor-icons/react';
 import './admin-premium.css';
-// 🌟 받는사람 표기는 마이페이지의 일본 배송지 카드와 같은 함수를 씁니다.
-import { japanRecipientName } from '@/lib/japanAddress';
 
 /* ---------------- 히어로 ---------------- */
 export function AdminHero({ eyebrow, icon, title, description, actions, children, accentRgb }: {
@@ -469,16 +467,14 @@ export function UserBasicInfo({ user, onCopy }: {
       <dd>{copyable(user.phone, '휴대폰 번호')}</dd>
 
 
-      {/* 📮 회원이 일본 쇼핑몰 주소칸에 그대로 넣는 값입니다. (예: RA SANGMIN MK-NXJV9)
-          사서함 번호와 영문 이름을 따로 두지 않는 이유는, 둘 다 이 값에 들어 있어
-          같은 정보가 세 줄로 나뉘었기 때문입니다.
-          마이페이지의 일본 배송지 카드와 같은 함수로 만들어 문구가 어긋나지 않게 합니다. */}
-      <dt>이름 + 식별 번호</dt>
-      <dd>{copyable(
-        japanRecipientName(user.nameEnglish, user.japanMailboxNumber) || null,
-        '이름 + 식별 번호',
-        '사서함 번호 미발급',
-      )}</dd>
+      {/* 📮 일본 배송지에 쓰는 두 값입니다. 회원 화면(JapanAddressCard)에서도 따로 적게 안내하므로
+          여기서도 따로 보여줍니다. 붙여 두면 한쪽만 복사할 수가 없어, 운송장에 이름만
+          넣거나 번호만 확인하려는 상담에서 매번 지워야 했습니다. */}
+      <dt>영문 이름</dt>
+      <dd>{copyable(user.nameEnglish, '영문 이름')}</dd>
+
+      <dt>식별 번호</dt>
+      <dd>{copyable(user.japanMailboxNumber, '식별 번호', '사서함 번호 미발급')}</dd>
 
       <dt>가입일시</dt>
       <dd>{fmtDateTime(user.createdAt)}</dd>

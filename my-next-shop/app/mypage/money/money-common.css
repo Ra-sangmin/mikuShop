@@ -361,8 +361,9 @@
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
 }
 /* 은행 로고 이미지를 쓸 때: 흰 바탕 위에 로고만 */
-.mm-bank-icon.is-logo { background: #ffffff; border: 1px solid #eef0f4; box-shadow: 0 6px 14px -10px rgba(15, 23, 42, 0.35); }
-.mm-bank-icon.is-logo img { width: 26px; height: 26px; object-fit: contain; display: block; }
+/* 🏦 은행 로고 파일은 정사각 타일(흰 바탕 · 테두리 포함)이라 덧대지 않고 칸에 꽉 채웁니다 */
+.mm-bank-icon.is-logo { background: transparent; border: 0; padding: 0; overflow: hidden; border-radius: 12px; box-shadow: 0 6px 14px -11px rgba(15, 23, 42, 0.4); }
+.mm-bank-icon.is-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .mm-bank-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 180px; }
 .mm-bank-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; color: #6b7280; }
 .mm-bank-number { font-size: 19px; font-weight: 900; color: #111827; letter-spacing: -0.2px; font-variant-numeric: tabular-nums; word-break: keep-all; }
@@ -761,3 +762,76 @@
 .mm-hero .mp-hero-stat.mm-tone-minus strong { color: #fcd9a8; }
 .mm-hero .mp-hero-stat.mm-tone-warn { background: rgba(248, 113, 113, 0.12); border-color: rgba(248, 113, 113, 0.3); }
 .mm-hero .mp-hero-stat.mm-tone-warn strong { color: #fecaca; }
+
+/* ============================================================
+   🏦 은행 선택 드롭다운 (mypage/money/refund)
+   기본 datalist 대신 직접 만든 목록입니다. 직접 입력 + 목록 선택 둘 다 됩니다.
+   ============================================================ */
+.mm-bank-select { position: relative; }
+.mm-bank-input { padding-right: 46px; }
+.mm-bank-chip {
+  width: 26px; height: 26px; border-radius: 9px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 900; letter-spacing: -0.3px;
+  box-shadow: 0 4px 10px -6px rgba(15, 23, 42, 0.6), inset 0 1px 0 rgba(255,255,255,0.28);
+}
+.mm-bank-chip.is-inline { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; z-index: 1; }
+.mm-bank-toggle {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; border-radius: 10px; border: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: #8b919e;
+  transition: transform 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+.mm-bank-toggle:hover { background: #f1f3f7; color: #475569; }
+.mm-bank-select.is-open .mm-bank-toggle { color: var(--mm-accent); transform: translateY(-50%) rotate(180deg); }
+
+/* 목록 패널 */
+.mm-bank-menu {
+  position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 30;
+  background: #ffffff; border: 1px solid #ececf1; border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 22px 44px -20px rgba(15, 23, 42, 0.34);
+  overflow: hidden;
+  animation: mmBankIn 0.16s ease-out both;
+}
+@keyframes mmBankIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+.mm-bank-menu-head {
+  display: flex; align-items: center; gap: 6px;
+  padding: 11px 14px 9px; border-bottom: 1px solid #f4f5f8;
+  font-size: 11.5px; font-weight: 800; letter-spacing: -0.2px; color: #9199a8;
+  background: linear-gradient(180deg, #fcfcfd 0%, #ffffff 100%);
+}
+.mm-bank-menu-head svg { color: var(--mm-accent); }
+.mm-bank-list { list-style: none; margin: 0; padding: 6px; max-height: 268px; overflow-y: auto; overscroll-behavior: contain; }
+.mm-bank-list::-webkit-scrollbar { width: 8px; }
+.mm-bank-list::-webkit-scrollbar-thumb { background: #e3e6ec; border-radius: 99px; border: 2px solid #fff; }
+.mm-bank-option {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border: 0; border-radius: 11px; cursor: pointer;
+  background: transparent; font-family: inherit; text-align: left;
+  transition: background 0.14s ease;
+}
+.mm-bank-option.is-cursor { background: #f6f7fa; }
+.mm-bank-option.is-picked { background: var(--mm-ring, rgba(234, 88, 12, 0.1)); }
+.mm-bank-name { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 700; color: #1f2430; letter-spacing: -0.3px; }
+.mm-bank-option.is-picked .mm-bank-name { color: var(--mm-accent); font-weight: 800; }
+.mm-bank-check { color: var(--mm-accent); flex-shrink: 0; }
+.mm-bank-menu-foot {
+  margin: 0; padding: 9px 14px 11px; border-top: 1px solid #f4f5f8;
+  font-size: 11.5px; font-weight: 600; color: #9199a8; background: #fcfcfd;
+}
+
+@media (max-width: 768px) {
+  .mm-bank-list { max-height: 232px; }
+  .mm-bank-name { font-size: 14px; }
+}
+
+/* 🏦 로고 파일(피그마 타일 버전 · 80×80 정사각, 흰 바탕 + 테두리 포함)은 칸에 꽉 채워 그대로 보여 줍니다.
+   파일 안에서 여백·모서리가 이미 맞춰져 있어, 여기서는 크기만 정합니다. */
+.mm-bank-chip.is-logo {
+  width: 32px; height: 32px; padding: 0; border: 0; overflow: hidden;
+  border-radius: 8px; background: transparent; box-shadow: none;
+}
+.mm-bank-chip.is-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mm-bank-chip.is-logo.is-inline { left: 9px; }
+.mm-bank-select .mm-bank-input.has-icon { padding-left: 50px; }

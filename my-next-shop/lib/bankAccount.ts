@@ -7,7 +7,7 @@ export const BANK_ACCOUNT = {
   number: '598001-01-282084',
   owner: '미쿠짱',
   /** 은행 아이콘 (public 기준 경로) */
-  icon: '/images/bankIcon/kookmin_bank.png',
+  icon: '/images/bankIcon/kookmin_bank.svg',
 } as const;
 
 /** 은행 앱에 붙여넣기 편한 숫자만 */

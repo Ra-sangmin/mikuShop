@@ -1,11 +1,12 @@
 "use client";
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { ADMIN_MENU } from '@/app/admin/adminMenu';
 import {
   SquaresFour, Users, ClipboardText, Truck, ChartLineUp, ArrowUUpLeft,
   Headset, ChatCircleDots, Crown, AirplaneTilt, Calculator, Code, Package, CaretRight,
 } from '@phosphor-icons/react';
+import { ADMIN_ORDERS_CHANGED_EVENT } from '@/app/admin/adminEvents';
 import '@/app/admin/admin-shell.css';
 
 // 🌟 메뉴 이름 → 아이콘. adminMenu.ts 는 순수 데이터 파일이라 아이콘은 여기서 붙입니다.
@@ -24,6 +25,10 @@ const MENU_ICON: Record<string, React.ElementType> = {
   '개발자 전용': Code,
 };
 
+// 🔔 '주문 관리' 옆에 관리자가 처리해야 하는 주문 건수(주문 관리의 '관리자 처리 필요' 숫자와 같음)를 보여 줍니다.
+const BADGE_MENU = '주문 관리';
+const BADGE_REFRESH_MS = 60_000;
+
 export default function AdminSidebar({
   isOpen = false,
   onClose = () => {},
@@ -33,6 +38,29 @@ export default function AdminSidebar({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+
+  const [adminTodoCount, setAdminTodoCount] = useState(0);
+  const loadAdminTodoCount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/orders/today-count', { cache: 'no-store' });
+      const data = await res.json();
+      if (data?.success) setAdminTodoCount(Number(data.count) || 0);
+    } catch { /* 숫자는 보조 정보라 실패해도 조용히 넘어갑니다 */ }
+  }, []);
+  useEffect(() => {
+    loadAdminTodoCount();
+    // 1분마다 · 다른 화면에서 주문을 처리하고 돌아왔을 때도 다시 셉니다.
+    const timer = setInterval(loadAdminTodoCount, BADGE_REFRESH_MS);
+    const onFocus = () => loadAdminTodoCount();
+    window.addEventListener('focus', onFocus);
+    // 🔔 주문 상태를 바꾼 직후(주문 관리 화면)에는 기다리지 않고 바로 다시 셉니다.
+    window.addEventListener(ADMIN_ORDERS_CHANGED_EVENT, onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener(ADMIN_ORDERS_CHANGED_EVENT, onFocus);
+    };
+  }, [loadAdminTodoCount, pathname]);
 
   return (
     <>
@@ -70,6 +98,11 @@ export default function AdminSidebar({
                     >
                       <span className="ash-item-icon" aria-hidden="true"><Icon size={15} weight="duotone" /></span>
                       <span className="ash-item-label">{item.name}</span>
+                      {item.name === BADGE_MENU && adminTodoCount > 0 && (
+                        <span className="ash-item-badge" title={`관리자 처리가 필요한 주문 ${adminTodoCount}건`}>
+                          {adminTodoCount > 99 ? '99+' : adminTodoCount}
+                        </span>
+                      )}
                       <CaretRight className="ash-item-caret" size={11} weight="bold" />
                     </button>
                   </li>

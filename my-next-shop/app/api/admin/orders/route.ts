@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/apiAuth';
 import { notifyOrderStatusChanged, shouldNotify } from '@/lib/notifications/orderStatusMail';
 import { notifyOrderStatusByAlimtalk, shouldSendAlimtalk } from '@/lib/notifications/orderStatusAlimtalk';
 import { ORDER_STATUS } from '@/src/types/order';
+import { moneyLogText } from '@/lib/moneyLogText';
 
 // 🌟 1. GET: DB에서 주문 목록과 유저 정보를 함께 가져옵니다.
 export async function GET() {
@@ -131,7 +132,7 @@ export async function PUT(request: Request) {
           data: {
             userId: uid,
             type: 'USE', // 이용내역 페이지 필터용
-            content: paymentTitle || '주문/배송비 결제', 
+            content: moneyLogText.orderPayment(paymentTitle),
             amount: -Math.abs(amount), // 차감액은 마이너스 표시
             balanceAfter: updatedUser.cyberMoney // 차감 후 잔액
           }

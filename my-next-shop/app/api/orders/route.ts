@@ -6,6 +6,7 @@ import { requireAdmin, requireUser } from '@/lib/apiAuth';
 import { ORDER_STATUS } from '@/src/types/order';
 import { generateOrderId, generateBundleId, isDuplicateOrderId } from '@/lib/orderId';
 import { translateToKorean } from '@/lib/translate';
+import { moneyLogText } from '@/lib/moneyLogText';
 
 // 🟢 [GET] 1. 주문 목록 및 유저 정보 조회
 export async function GET() {
@@ -223,7 +224,7 @@ export async function POST(req: Request) {
           data: {
             userId: userId,
             type: 'USE',
-            content: `[경매 보증금] ${finalTitle.substring(0, 15)}...`, 
+            content: moneyLogText.bidDeposit(finalTitle),
             amount: -Math.abs(Number(depositAmount)),
             balanceAfter: updatedUser.cyberMoney
           }
@@ -323,7 +324,7 @@ export async function PUT(request: Request) {
           data: {
             userId: uid,
             type: 'USE', // 이용내역 페이지 필터용
-            content: paymentTitle || '주문/배송비 결제', 
+            content: moneyLogText.orderPayment(paymentTitle),
             amount: -Math.abs(amount), // 마이너스 표시
             balanceAfter: updatedUser.cyberMoney // 차감 후 잔액
           }

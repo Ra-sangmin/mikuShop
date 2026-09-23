@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAdmin } from '@/lib/apiAuth';
+import { moneyLogText } from '@/lib/moneyLogText';
 
 /**
  * GET /api/admin/users          → 회원 목록
@@ -149,9 +150,8 @@ export async function PATCH(req: Request) {
           data: {
             userId,
             type: actual > 0 ? 'CHARGE' : 'USE',
-            content: `[관리자 조정] ${before.cyberMoney.toLocaleString()}원 → ${user.cyberMoney.toLocaleString()}원`
-              + (reasonText ? ` · 사유: ${reasonText}` : '')
-              + ` · 처리: ${adminAuth.admin.name || adminAuth.admin.adminId}`,
+            // 🙈 금액·잔액은 화면에 따로 나오고, 처리한 관리자 이름은 회원에게 보일 필요가 없어 남기지 않습니다.
+            content: moneyLogText.adminAdjust(reasonText),
             amount: actual,
             balanceAfter: user.cyberMoney,
           },

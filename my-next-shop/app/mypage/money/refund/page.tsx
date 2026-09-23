@@ -5,7 +5,7 @@ import GuideLayout from '@/app/components/GuideLayout';
 import '@/app/guide/guide-common.css';
 import { useRouter } from 'next/navigation'; // 🌟 라우터 임포트
 import { useMikuAlert } from '@/app/context/MikuAlertContext'; // 🌟 미쿠짱 Alert 임포트
-import { Landmark, Hash, User, ShieldCheck, Coins, Undo2, Loader2, ArrowRight } from 'lucide-react';
+import { Landmark, Hash, User, ShieldCheck, Coins, Undo2, Loader2, ArrowRight, ChevronDown, Check, Search } from 'lucide-react';
 import MoneyBalanceCard from '../MoneyBalanceCard';
 import GuideTitle from '@/app/guide/components/GuideTitle';
 
@@ -146,7 +146,149 @@ function useMoneyRefundLogic() {
 // ==========================================
 // 🖥️ 3. 메인 컴포넌트 (UI 렌더링 전용)
 // ==========================================
-const BANK_SUGGESTIONS = ['KB국민은행', '신한은행', '우리은행', '하나은행', 'NH농협은행', 'IBK기업은행', '카카오뱅크', '토스뱅크', '케이뱅크', 'SC제일은행', '우체국'];
+// 🏦 은행 목록 — 이름 · 짧은 표기 · 상징색 · 로고 파일
+//    logo 는 public/images/bankIcon/ 아래 파일명입니다. 파일이 없으면 색 뱃지(short)로 대신 보여 줍니다.
+//    로고를 추가하려면 그 폴더에 파일을 넣고 여기 logo 값만 채우면 됩니다. (png · svg 모두 가능)
+type Bank = { name: string; short: string; color: string; text?: string; logo?: string };
+const BANK_LOGO_DIR = '/images/bankIcon/';
+const BANKS: Bank[] = [
+  // 로고 파일은 피그마의 '색 타일' 버전(80×80 정사각, 색 배경 + 흰 심볼)을 씁니다.
+  // 여백이 파일 안에서 이미 맞춰져 있어, 화면에서는 칸에 꽉 채워 그대로 보여 줍니다.
+  { name: 'KB국민은행',  short: 'KB',  color: '#ffbc00', text: '#3b2f00', logo: 'kookmin_bank.svg' },
+  { name: '신한은행',    short: '신한', color: '#0046ff', logo: 'sinhan_bank.svg' },
+  { name: '우리은행',    short: '우리', color: '#0067ac', logo: 'woori_bank.svg' },
+  { name: '하나은행',    short: '하나', color: '#008b84', logo: 'hana_bank.svg' },
+  { name: 'NH농협은행',  short: 'NH',  color: '#00a64f', logo: 'nh_bank.svg' },
+  { name: 'IBK기업은행', short: 'IBK', color: '#0067b1', logo: 'ibk_bank.svg' },
+  { name: '카카오뱅크',  short: 'kakao', color: '#ffe300', text: '#3c1e1e', logo: 'kakao_bank.svg' },
+  { name: '토스뱅크',    short: 'toss', color: '#0064ff', logo: 'toss_bank.svg' },
+  { name: '케이뱅크',    short: 'K',   color: '#ff6600', logo: 'k_bank.svg' },
+  { name: 'SC제일은행',  short: 'SC',  color: '#00a19c', logo: 'sc_bank.svg' },
+  { name: '우체국',      short: '우편', color: '#e4002b', logo: 'post_bank.svg' },
+];
+
+/** 은행 뱃지 — 로고 파일이 있으면 로고를, 없으면(또는 로고를 못 읽으면) 색 뱃지를 보여 줍니다. */
+function BankMark({ bank, className = '' }: { bank: Bank; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (bank.logo && !failed) {
+    return (
+      <span className={`mm-bank-chip is-logo ${className}`} aria-hidden="true">
+        <img src={`${BANK_LOGO_DIR}${bank.logo}`} alt="" onError={() => setFailed(true)} />
+      </span>
+    );
+  }
+  return (
+    <span className={`mm-bank-chip ${className}`} style={{ background: bank.color, color: bank.text || '#fff' }} aria-hidden="true">
+      {bank.short}
+    </span>
+  );
+}
+
+/** 🏦 은행 선택 드롭다운 — 직접 입력도 되고, 목록에서 고를 수도 있습니다. */
+function BankSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [cursor, setCursor] = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  const keyword = value.trim();
+  const matched = BANKS.filter(b => !keyword || b.name.replace(/\s/g, '').includes(keyword.replace(/\s/g, '')));
+  const list = matched.length > 0 ? matched : BANKS;
+  const picked = BANKS.find(b => b.name === value) || null;
+
+  // 바깥을 누르면 닫습니다
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  // 키보드로 고른 항목이 목록 밖으로 나가지 않게 따라갑니다
+  useEffect(() => {
+    if (!open) return;
+    listRef.current?.querySelectorAll('li')[cursor]?.scrollIntoView({ block: 'nearest' });
+  }, [cursor, open]);
+
+  const choose = (bank: Bank) => { onChange(bank.name); setOpen(false); };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!open) { setOpen(true); setCursor(0); return; }
+      setCursor(c => (e.key === 'ArrowDown' ? (c + 1) % list.length : (c - 1 + list.length) % list.length));
+    } else if (e.key === 'Enter' && open) {
+      e.preventDefault();
+      if (list[cursor]) choose(list[cursor]);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div className={`mm-bank-select ${open ? 'is-open' : ''}`} ref={wrapRef}>
+      <div className="mm-input-wrap">
+        {picked
+          ? <BankMark bank={picked} className="is-inline" />
+          : <Landmark size={17} strokeWidth={2} className="mm-input-icon" aria-hidden="true" />}
+        <input
+          id="mm-bank-name"
+          type="text"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls="mm-bank-listbox"
+          aria-autocomplete="list"
+          autoComplete="off"
+          value={value}
+          onChange={(e) => { onChange(e.target.value); setOpen(true); setCursor(0); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={onKeyDown}
+          placeholder="은행을 고르거나 직접 입력하세요"
+          className="mm-input has-icon refund-input mm-bank-input"
+        />
+        <button
+          type="button"
+          className="mm-bank-toggle"
+          aria-label={open ? '은행 목록 닫기' : '은행 목록 열기'}
+          tabIndex={-1}
+          onMouseDown={(e) => { e.preventDefault(); setOpen(o => !o); }}
+        >
+          <ChevronDown size={17} strokeWidth={2.4} />
+        </button>
+      </div>
+
+      {open && (
+        <div className="mm-bank-menu" role="presentation">
+          <div className="mm-bank-menu-head">
+            <Search size={13} strokeWidth={2.4} aria-hidden="true" />
+            <span>{keyword && matched.length > 0 ? `'${keyword}' 검색 결과 ${matched.length}곳` : '자주 쓰는 은행'}</span>
+          </div>
+          <ul className="mm-bank-list" id="mm-bank-listbox" role="listbox" ref={listRef}>
+            {list.map((b, i) => (
+              <li key={b.name}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={value === b.name}
+                  className={`mm-bank-option ${i === cursor ? 'is-cursor' : ''} ${value === b.name ? 'is-picked' : ''}`}
+                  onMouseEnter={() => setCursor(i)}
+                  onMouseDown={(e) => { e.preventDefault(); choose(b); }}
+                >
+                  <BankMark bank={b} />
+                  <span className="mm-bank-name">{b.name}</span>
+                  {value === b.name && <Check size={15} strokeWidth={3} className="mm-bank-check" aria-hidden="true" />}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mm-bank-menu-foot">목록에 없으면 직접 입력해도 돼요</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function MoneyRefundPage() {
   const {
@@ -226,18 +368,7 @@ export default function MoneyRefundPage() {
 
               <div className="mm-field">
                 <label className="mm-label" htmlFor="mm-bank-name">은행명</label>
-                <div className="mm-input-wrap">
-                  <Landmark size={17} strokeWidth={2} className="mm-input-icon" aria-hidden="true" />
-                  <input
-                    id="mm-bank-name"
-                    type="text" value={bankName} onChange={(e) => setBankName(e.target.value)}
-                    placeholder="예: 신한은행" className="mm-input has-icon refund-input"
-                    list="mm-bank-list" autoComplete="off"
-                  />
-                  <datalist id="mm-bank-list">
-                    {BANK_SUGGESTIONS.map(b => <option key={b} value={b} />)}
-                  </datalist>
-                </div>
+                <BankSelect value={bankName} onChange={setBankName} />
               </div>
 
               <div className="mm-field">

@@ -27,6 +27,7 @@ import {
   maskPhone,
   missingSolapiEnv,
   sendAlimtalk,
+  SITE_ORIGIN,
   type AlimtalkTemplate,
 } from '../lib/notifications/alimtalk';
 import { buildVariables } from '../lib/notifications/orderStatusAlimtalk';
@@ -39,9 +40,9 @@ const rawPhone = args.find(a => !a.startsWith('--'));
 // 묶음 발송 미리보기용 건수 (기본 1건)
 const count = Math.max(1, Number(args.find(a => a.startsWith('--count='))?.split('=')[1] || 1));
 
-// 버튼 주소는 템플릿에 등록한 도메인이어야 합니다. localhost 는 카카오가 거절하므로 쓰지 않습니다.
-const siteUrl = (process.env.NEXTAUTH_URL || '').replace(/\/+$/, '');
-const buttonBase = siteUrl && !siteUrl.includes('localhost') ? siteUrl : 'https://mikushop.co.kr';
+// 버튼 주소는 발송 코드와 **같은 값**을 씁니다. (lib/notifications/alimtalk.ts 의 SITE_ORIGIN)
+// 여기서 NEXTAUTH_URL 을 참고하면 장비마다 미리보기가 달라져, 실제로 나갈 주소를 못 믿게 됩니다.
+const buttonBase = SITE_ORIGIN;
 
 function line(label: string, value: string) {
   console.log(`  ${label.padEnd(16)} ${value}`);

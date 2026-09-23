@@ -7,7 +7,11 @@ import { currentUnpaid, nextRound, rowTotal, paidTotal } from '@/lib/shippingFee
 import { AdminHero, HeroButton, KpiCard, SearchField, SegFilter, EmptyRow, SkeletonRows, BundleItemsPanel, BundleBadge, BundleToggle, UserBasicInfo, type BasicInfoUser, UserSummaryStats, type SummaryUser, useToasts, ToastStack, gradeTone, toneVars } from '../components/AdminPremiumKit';
 import { useRouter } from 'next/navigation';
 // 🌟 글로벌 상수 및 라벨 임포트
-import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus } from '@/src/types/order';
+import { ORDER_STATUS, ORDER_STATUS_LABEL as BASE_STATUS_LABEL, OrderStatus } from '@/src/types/order';
+import { ADMIN_ORDERS_CHANGED_EVENT } from '@/app/admin/adminEvents';
+
+// 🏷 관리자 주문 관리에서만 쓰는 상태 이름 — 장바구니(CART)는 회원 화면과 같은 말(장바구니)로 보여 줍니다.
+const ORDER_STATUS_LABEL: Record<OrderStatus, string> = { ...BASE_STATUS_LABEL, [ORDER_STATUS.CART]: '장바구니' };
 import '../admin-common.css';
 import './orders-premium.css';
 import { extractVariantId, withVariantId } from '@/lib/itemUrl';
@@ -109,8 +113,9 @@ const QUICK_ICON: Record<string, React.ReactNode> = {
 // 🗂 상단 탭 묶음 — 누가 처리할 차례인지
 //    관리자 처리 필요: 관리자가 확인 · 처리해야 다음으로 넘어가는 단계
 //    회원 처리 대기  : 회원의 결제 · 요청을 기다리는 단계
+// 🔔 주문 상태를 바꾼 뒤, 왼쪽 메뉴 '주문 관리' 옆 숫자를 바로 다시 세게 알리는 이벤트 이름
 const ADMIN_TABS: string[] = [ORDER_STATUS.BIDDING, ORDER_STATUS.FAILED, ORDER_STATUS.PAID, ORDER_STATUS.WAITING, ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_DONE];
-const USER_TABS: string[] = [ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ];
+const USER_TABS: string[] = [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ];
 
 export default function OrderManagement() {
   const router = useRouter();
@@ -748,6 +753,8 @@ export default function OrderManagement() {
         return next;
       });
       pushToast('success', `${order.isBundleGroup ? `합포장 ${ids.length}건` : order.id} → ${ORDER_STATUS_LABEL[nextStatus]} 처리했습니다.${noTalk ? ' (알림톡 없이)' : ''}`);
+      // 🔔 왼쪽 메뉴 '주문 관리' 옆 숫자를 바로 다시 세게 합니다. (AdminSidebar 가 듣습니다)
+      window.dispatchEvent(new Event(ADMIN_ORDERS_CHANGED_EVENT));
     } catch {
       pushToast('error', '처리하지 못했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
@@ -815,6 +822,8 @@ export default function OrderManagement() {
       });
 
       if (res.ok) {
+        // 🔔 왼쪽 메뉴 숫자도 바로 다시 세게 합니다. (아래 새로고침 전에 한 번 알려 둡니다)
+        window.dispatchEvent(new Event(ADMIN_ORDERS_CHANGED_EVENT));
         alert("성공적으로 저장되었습니다!");
         window.location.reload(); // 단순화를 위해 리로드 처리 (필요시 기존 fetch로직 복구)
       } else {
@@ -1061,16 +1070,16 @@ export default function OrderManagement() {
         }
       >
         <div className="ap-kpis">
+          <KpiCard icon={<ShoppingCart size={18} weight="duotone" />} label="신규 장바구니" toneRgb="147, 197, 253" loading={isLoading}
+            value={<>{(orderStats.byStatus[ORDER_STATUS.CART] || 0).toLocaleString()}<small>건</small></>}
+            foot={<><Gavel size={11} weight="bold" style={{ verticalAlign: '-1px' }} /> 경매 요청 {(orderStats.byStatus[ORDER_STATUS.BID_PENDING] || 0).toLocaleString()}건 · 경매 중 {(orderStats.byStatus[ORDER_STATUS.BIDDING] || 0).toLocaleString()}건</>}
+            active={statusFilter === ORDER_STATUS.CART} onClick={() => setStatusFilter(ORDER_STATUS.CART)} />
           <KpiCard icon={<ClipboardText size={18} weight="duotone" />} label="처리 중 주문" loading={isLoading}
             value={<>{orderStats.active.toLocaleString()}<small>건</small></>}
             foot={changedOrderIds.size > 0
               ? <span className="is-warn">저장하지 않은 변경 {changedOrderIds.size}건</span>
               : '장바구니·구매실패·국제배송 제외'}
             active={statusFilter === '전체'} onClick={() => setStatusFilter('전체')} />
-          <KpiCard icon={<ShoppingCart size={18} weight="duotone" />} label="신규 구매 요청" toneRgb="147, 197, 253" loading={isLoading}
-            value={<>{(orderStats.byStatus[ORDER_STATUS.CART] || 0).toLocaleString()}<small>건</small></>}
-            foot={<><Gavel size={11} weight="bold" style={{ verticalAlign: '-1px' }} /> 경매 요청 {(orderStats.byStatus[ORDER_STATUS.BID_PENDING] || 0).toLocaleString()}건 · 경매 중 {(orderStats.byStatus[ORDER_STATUS.BIDDING] || 0).toLocaleString()}건</>}
-            active={statusFilter === ORDER_STATUS.CART} onClick={() => setStatusFilter(ORDER_STATUS.CART)} />
           <KpiCard icon={<Warehouse size={18} weight="duotone" />} label="일본 창고 입고" toneRgb="196, 181, 253" loading={isLoading}
             value={<>{(orderStats.byStatus[ORDER_STATUS.ARRIVED] || 0).toLocaleString()}<small>건</small></>}
             foot={`배송 준비중 ${(orderStats.byStatus[ORDER_STATUS.PREPARING] || 0).toLocaleString()}건`}

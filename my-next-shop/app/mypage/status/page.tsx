@@ -51,9 +51,14 @@ const PHASE_VIEW_STATUSES: Record<string, string[]> = {
   // 🛒 장바구니 카드: 구매 요청과 경매 요청을 한 표에 모아 봅니다.
   //    예전엔 카드를 누르면 둘 중 하나(구매 요청)로만 가서 경매 요청 상품을 열 방법이 없었습니다.
   request: [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING],
+  // 🛒 상단 '장바구니' 숫자: 장바구니 상품만 목록으로 보여 줍니다. (결제 카드 없이 — 결제는 상품을 눌러 상세 정보 확인에서)
+  cart: [ORDER_STATUS.CART],
   // ✈️ 국제 배송중 카드 · 상단 '국제 배송 중': 국제 배송 상품을 위쪽 표에 모아 보고, 누르면 상세 정보 확인에서 배송 조회까지 봅니다.
   shipping: [ORDER_STATUS.SHIPPING],
 };
+// 🌟 상단 '장바구니' 숫자로 연 보기(cart)는 '장바구니' 카드(request)가 선택된 것으로 표시합니다.
+const PHASE_VIEW_CARD: Record<string, string> = { cart: 'request' };
+
 // 🌟 '신청 내역 보기' 카드에서 보여 줄 상태.
 //    구매대행·배송대행의 진행 중 상태에 더해 경매 진행·결과까지 한 표에서 봅니다.
 //    (장바구니 카드가 맡는 구매 요청·경매 요청과, 아래 단계 카드가 맡는 입고 이후는 제외합니다)
@@ -539,25 +544,12 @@ function usePurchaseStatusLogic() {
   //    결제 금액 계산만 그 패널의 상태 기준으로 합니다. (패널이 닫혀 있으면 평소처럼 현재 탭 기준)
   const [calcTabOverride, setCalcTabOverride] = useState<string | null>(null);
 
-  /**
-   * 🛒 장바구니 카드는 구매 요청과 경매 요청을 한 표에 모아 보여 줍니다.
-   *    두 상태는 결제 방식이 달라서(상품값 + 수수료 vs 보증금), 무엇을 골랐는지로 결제 방식을 정합니다.
-   *      · 한 가지 상태만 골랐다 → 그 상태 기준으로 계산·결제
-   *      · 아무것도 안 골랐다   → 구매 요청 기준으로 패널만 띄워 둠 (버튼은 어차피 비활성)
-   *      · 두 상태를 섞어 골랐다 → null. 함께 결제할 수 없다고 알려 줍니다.
-   */
-  const requestViewStatus = useMemo(() => {
-    if (phaseView !== 'request') return null;
-    const picked = items.filter((i: any) => selectedItems.map(String).includes(String(i.orderId)));
-    if (picked.length === 0) return ORDER_STATUS.CART as string;
-    const statuses = new Set(picked.map((i: any) => i.status));
-    return statuses.size === 1 ? ([...statuses][0] as string) : null;
-  }, [phaseView, items, selectedItems]);
-
-  // 결제 금액 계산에 쓸 상태. 상세 정보 패널(calcTabOverride) > 장바구니 카드 > 현재 탭 순입니다.
-  const payStatus = calcTabOverride ?? requestViewStatus ?? activeTab;
+  // 결제 금액 계산에 쓸 상태. 상세 정보 확인 패널(calcTabOverride)이 열려 있으면 그 상태, 아니면 현재 탭입니다.
+  //    🛒 단계 카드로 연 목록(장바구니 · 신청 내역 보기 등)은 탭이 '전체'라 결제 카드가 나오지 않습니다.
+  //       결제는 상품을 눌러 연 상세 정보 확인 패널 안에서 합니다.
+  const payStatus = calcTabOverride ?? activeTab;
   const calcTab = payStatus;
-  const statusOverride = calcTabOverride ?? requestViewStatus;
+  const statusOverride = calcTabOverride;
   const calcItems = useMemo(
     () => (statusOverride ? orders.filter((o: any) => o.status === statusOverride) : items),
     [statusOverride, orders, items],
@@ -639,17 +631,20 @@ function usePurchaseStatusLogic() {
     );
   }, [totalPriceVal, exchangeRate, activeTab]);
 
-  const handleDeleteOrder = async (orderId: string) => {
+  /** 실제로 삭제했으면 true 를 돌려줍니다. (상세 정보 확인 패널을 닫을지 판단하는 데 씁니다) */
+  const handleDeleteOrder = async (orderId: string): Promise<boolean> => {
     const isConfirmed = await showConfirm("정말 이 상품을 장바구니에서 삭제하시겠습니까? 🗑️");
     if (isConfirmed) {
       try {
         const res = await fetch(`/api/orders?id=${orderId}`, { method: 'DELETE' });
         if (res.ok) {
           showAlert('상품이 삭제되었습니다.', 'success');
-          fetchOrders(); 
+          fetchOrders();
+          return true;
         } else showAlert('삭제 처리에 실패했습니다.', 'error');
       } catch (error) { showAlert('서버 통신 중 오류가 발생했습니다.', 'error'); }
     }
+    return false;
   };
 
   const handleIndividualPacking = async (item: any) => {
@@ -741,11 +736,16 @@ function usePurchaseStatusLogic() {
       try {
         const storedId = localStorage.getItem('user_id');
         const isPayment = ([ORDER_STATUS.PAID, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.BIDDING] as string[]).includes(newStatus);
+        // 💬 이용 내역에 남길 문구 — 무엇을 몇 건 결제했는지만 짧게 (금액·잔액은 이용 내역 화면에 따로 나옵니다)
+        const payTitle = !isPayment ? undefined
+          : `${newStatus === ORDER_STATUS.BIDDING ? '경매 보증금'
+            : newStatus === ORDER_STATUS.PAYMENT_DONE ? '배송비 결제'
+            : '상품 결제'} · ${selectedItems.length}건`;
         
         const res = await fetch('/api/orders', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ updates, userId: isPayment ? storedId : null, deductAmount: isPayment ? totalPriceWon : 0, paymentTitle: newStatus === ORDER_STATUS.BIDDING ? '경매 보증금 결제' : undefined })
+          body: JSON.stringify({ updates, userId: isPayment ? storedId : null, deductAmount: isPayment ? totalPriceWon : 0, paymentTitle: payTitle })
         });
 
         if (res.ok) {
@@ -764,7 +764,7 @@ function usePurchaseStatusLogic() {
     totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus, setCalcTabOverride,
     progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected, phaseView, setPhaseView,
     // 🛒 장바구니 카드(구매 요청 + 경매 요청 한 표)에서 쓸 결제 기준 상태
-    requestViewStatus, payStatus,
+    payStatus,
     orderTypeFilter, allOrders
   };
 }
@@ -801,8 +801,9 @@ const PhaseModule = ({ phase, activeTab, onTabClick, onPhaseView, phaseView, onC
 }) => {
   // 여러 상태를 모아 보는 카드(입고 완료)는 그 모아 보기가 켜졌을 때만 선택 표시합니다
   const isGroupView = Boolean(onPhaseView && PHASE_VIEW_STATUSES[phase.id]);
+  const activePhaseCard = phaseView ? (PHASE_VIEW_CARD[phaseView] || phaseView) : null;
   const isPhaseActive = isGroupView
-    ? phaseView === phase.id
+    ? activePhaseCard === phase.id
     : (phase.statuses as string[]).includes(activeTab);
   // 🌟 하위 항목이 1개뿐일 때(예: 진행중인 목록만 보기로 나머지가 숨겨진 경우)는
   // 모듈 가로 폭을 넓게 유지할 이유가 없어 컴팩트하게 줄입니다.
@@ -860,7 +861,7 @@ function MyPurchaseStatusContent() {
     totals, totalPriceWon, fetchOrders, handleDeleteOrder, handleIndividualPacking, handleUpdateStatus, setCalcTabOverride,
     progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected, phaseView, setPhaseView,
     // 🛒 장바구니 카드(구매 요청 + 경매 요청 한 표)에서 쓸 결제 기준 상태
-    requestViewStatus, payStatus,
+    payStatus,
     orderTypeFilter, allOrders
   } = usePurchaseStatusLogic();
 
@@ -1299,8 +1300,8 @@ function MyPurchaseStatusContent() {
         </div>
 
         <div className="mp-hero-stats">
-          {/* 🌟 전체 주문 대신 장바구니(구매 요청 상태) 건수를 보여 주고, 누르면 장바구니 탭으로 이동합니다 */}
-          <button type="button" className="mp-hero-stat" onClick={() => handleTabChange(ORDER_STATUS.CART)}>
+          {/* 🌟 장바구니 건수 — 누르면 '신청 내역 보기'처럼 목록만 보여 줍니다. (결제는 상품을 눌러 상세 정보 확인에서) */}
+          <button type="button" className="mp-hero-stat" onClick={() => handleShowPhaseView('cart')}>
             <span>장바구니</span><strong>{orders.filter((o: any) => o.status === ORDER_STATUS.CART).length}<small>건</small></strong>
           </button>
           {/* 🌟 확인 필요 대신 "전체 내역 보기" (장바구니 제외 · 국제 배송 제외 — 아래 전체 카드와 같은 숫자) */}
@@ -1492,14 +1493,6 @@ function MyPurchaseStatusContent() {
         </div>
       )}
 
-      {/* 🛒 장바구니 카드에서 두 상태를 섞어 고르면 함께 결제할 수 없습니다. */}
-      {phaseView === 'request' && requestViewStatus === null && !(arrivedDetailOpen && activeTab === ORDER_STATUS.ALL) && (
-        <NoticePanel tone="amber" className="anim-slide-up delay-3">
-          구매 요청과 경매 요청은 결제 방식이 달라 <strong>함께 결제할 수 없습니다</strong>.
-          한 종류만 선택해 주세요. (경매 요청은 보증금을 먼저 결제합니다)
-        </NoticePanel>
-      )}
-
       {/* 상세 정보 확인 패널이 열려 있으면 결제는 그 패널 안에서 합니다 (같은 결제 카드가 두 번 나오지 않게) */}
       {!(arrivedDetailOpen && activeTab === ORDER_STATUS.ALL) && (([ORDER_STATUS.CART, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS] as string[]).includes(payStatus)) && (
         <div className="anim-slide-up delay-3">
@@ -1539,7 +1532,9 @@ function MyPurchaseStatusContent() {
               items={detailItems} orders={orders} activeTab={detailStatus}
               selectedItems={selectedItems} setSelectedItems={setSelectedItems}
               fetchOrders={fetchOrders} selectedAddress={selectedAddress}
-              onIndividualPacking={handleIndividualPacking} onDelete={handleDeleteOrder}
+              onIndividualPacking={handleIndividualPacking}
+              /* 🗑 상세 정보 확인 안에서 상품을 지우면 패널을 닫습니다. (지워진 상품 목록을 그대로 보고 있지 않도록) */
+              onDelete={async (orderId: string) => { if (await handleDeleteOrder(orderId)) closeArrivedDetail(); }}
               myMoney={userData?.cyberMoney || 0} exchangeRate={exchangeRate}
             />
             )}

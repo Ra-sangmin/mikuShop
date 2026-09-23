@@ -18,6 +18,7 @@ import {
   isAlimtalkConfigured,
   missingSolapiEnv,
   maskPhone,
+  SITE_ORIGIN,
 } from './alimtalk';
 
 /**
@@ -37,13 +38,9 @@ export function shouldSendAlimtalk(status: string): boolean {
   return ALIMTALK_STATUSES.includes(status);
 }
 
-function siteUrl(): string {
-  return (process.env.NEXTAUTH_URL || 'https://mikushop.co.kr').replace(/\/+$/, '');
-}
-
 /** 알림톡 버튼이 열 주소. 주문번호를 넣으면 마이페이지가 그 주문을 골라 보여 줍니다. */
 function orderDetailUrl(orderId: string): string {
-  return `${siteUrl()}/mypage/status?orderId=${encodeURIComponent(orderId)}`;
+  return `${SITE_ORIGIN}/mypage/status?orderId=${encodeURIComponent(orderId)}`;
 }
 
 /**
@@ -52,7 +49,7 @@ function orderDetailUrl(orderId: string): string {
  * (마이페이지가 ?tab= 을 읽어 해당 탭으로 이동합니다 — app/mypage/status/page.tsx)
  */
 function orderListUrl(status: string): string {
-  return `${siteUrl()}/mypage/status?tab=${encodeURIComponent(status)}`;
+  return `${SITE_ORIGIN}/mypage/status?tab=${encodeURIComponent(status)}`;
 }
 
 const won = (value: number | null | undefined) => `${Number(value ?? 0).toLocaleString('ko-KR')}원`;

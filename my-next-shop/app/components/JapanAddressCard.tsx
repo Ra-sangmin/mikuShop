@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { MapPin, Fingerprint, Lightbulb } from 'lucide-react';
-import { JAPAN_WAREHOUSE_ADDRESS, japanRecipientName } from '@/lib/japanAddress';
+import { JAPAN_WAREHOUSE_ADDRESS } from '@/lib/japanAddress';
 
 // 🌟 "나의 일본 배송지 주소" 카드
 // 배송대행 > 일본 배송주소 확인(/delivery/address)과 마이페이지 > 나의 배송지 정보(/mypage/profile)가
@@ -24,9 +24,12 @@ export default function JapanAddressCard({ mailboxNumber, nameEnglish }: JapanAd
   //    임시로라도 다른 번호를 채워 넣으면 그 번호의 주인에게 소포가 갑니다.
   const hasMailbox = !!mailboxNumber?.trim();
   const hasEnglish = !!nameEnglish?.trim();
-  // 받는사람 = 영문 이름 + 사서함 번호. 영문 이름이 없으면 번호만 씁니다.
-  // 한글 이름을 넣으면 일본 쇼핑몰 결제 단계에서 막히는 그 문제를 그대로 겪게 됩니다.
-  const recipient = japanRecipientName(nameEnglish, mailboxNumber);
+  // 🌟 받는사람에는 **영문 이름만** 넣습니다. 사서함 번호는 상세주소 2 의 몫입니다.
+  //    예전에는 "RA SANGMIN MK-5P3F3" 처럼 둘을 붙여 보여줬는데, 일본 쇼핑몰의 이름칸에
+  //    그대로 옮겨 적으면 이름에 번호가 섞여 들어가고, 상세주소 2 에도 같은 번호를 적게 되어
+  //    한 소포에 번호가 두 번 실립니다. 창고가 보는 값은 상세주소 2 하나면 충분합니다.
+  //    한글 이름은 여전히 쓰지 않습니다 — 일본 쇼핑몰 결제 단계에서 막힙니다.
+  const recipient = hasEnglish ? nameEnglish!.trim() : '영문 이름 등록 필요';
 
   return (
     <div className="jp-card">
@@ -48,7 +51,7 @@ export default function JapanAddressCard({ mailboxNumber, nameEnglish }: JapanAd
             고유 식별 정보
           </h4>
           <CopyRow label="상세주소 2" value={hasMailbox ? mailboxNumber! : '발급 준비 중'} isHighlight disabled={!hasMailbox} />
-          <CopyRow label="받는사람" value={recipient} isHighlight disabled={!hasMailbox} />
+          <CopyRow label="받는사람" value={recipient} isHighlight disabled={!hasEnglish} />
           <CopyRow label="전화번호" value={a.phone} />
         </section>
       </div>
@@ -57,11 +60,11 @@ export default function JapanAddressCard({ mailboxNumber, nameEnglish }: JapanAd
         <span className="jp-card-tip-icon"><Lightbulb size={16} strokeWidth={2.2} /></span>
         <div className="jp-card-tip-text">
           {hasMailbox && hasEnglish ? (
-            <>상세주소 2에 사서함 번호(<strong>{mailboxNumber}</strong>)를 반드시 적어 주셔야 빠른 입고 확인과 배송이 가능합니다.</>
+            <>받는사람에는 영문 이름만 적고, 사서함 번호(<strong>{mailboxNumber}</strong>)는 <strong>상세주소 2</strong>에 따로 적어 주세요. 번호가 빠지면 입고 확인이 되지 않습니다.</>
           ) : hasMailbox ? (
             <>
               상세주소 2에 사서함 번호(<strong>{mailboxNumber}</strong>)를 반드시 적어 주세요.{' '}
-              <strong>영문 이름을 등록하시면</strong> 받는사람에 함께 표시되어, 한자·가타카나 입력을 요구하는
+              <strong>영문 이름을 등록하시면</strong> 받는사람 칸에 쓸 이름이 채워져, 한자·가타카나 입력을 요구하는
               일본 쇼핑몰에서 결제가 한결 수월해집니다. (마이페이지 &gt; 내 정보)
             </>
           ) : (

@@ -178,12 +178,16 @@ export default function Footer() {
         .office-title { margin: 0; font-size: 14px; font-weight: 800; color: #ffffff; letter-spacing: -0.2px; }
         .office-sub { display: block; font-size: 10.5px; font-weight: 800; letter-spacing: 0.16em; color: #8b93a5; }
 
-        .info-list { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; }
+        /* 🌟 칸이 좁아지면 2단 → 1단으로 자동으로 접혀, 이메일 같은 긴 값이 억지로 줄바꿈되지 않게 합니다 */
+        .info-list { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px 20px; }
         .info-list.single { grid-template-columns: 1fr; }
         .info-row { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
         .info-row.wide { grid-column: 1 / -1; }
-        .info-row :global(dt) { flex: 0 0 74px; font-size: 12px; font-weight: 700; color: #8b93a5; letter-spacing: -0.2px; }
-        .info-row :global(dd) { margin: 0; flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.55; color: #e3e6ee; letter-spacing: -0.2px; word-break: keep-all; }
+        /* 칸이 아주 좁아지면 항목 이름(dt)도 조금 줄어들 수 있게 해 값이 밀려 나오지 않게 합니다 */
+        .info-row :global(dt) { flex: 0 1 74px; min-width: 0; font-size: 12px; font-weight: 700; color: #8b93a5; letter-spacing: -0.2px; word-break: keep-all; }
+        /* 🌟 이메일·사업자번호처럼 띄어쓰기가 없는 긴 값이 칸 밖으로 삐져나오지 않게 합니다.
+           (keep-all 은 한글 단어가 어색하게 잘리지 않도록 유지하고, 끊을 곳이 없는 영문/숫자만 줄바꿈합니다) */
+        .info-row :global(dd) { margin: 0; flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.55; color: #e3e6ee; letter-spacing: -0.2px; word-break: keep-all; overflow-wrap: anywhere; }
         .info-row :global(dd a) { color: inherit; text-decoration: none; }
         .info-row :global(dd a:hover) { color: #ffffff; text-decoration: underline; text-underline-offset: 3px; }
 
@@ -340,7 +344,7 @@ export default function Footer() {
                 <div className="info-row"><dt>상호</dt><dd>미쿠짱</dd></div>
                 <div className="info-row"><dt>대표</dt><dd>임성민</dd></div>
                 <div className="info-row"><dt>전화번호</dt><dd><a href="tel:070-4845-3023">070-4845-3023</a></dd></div>
-                <div className="info-row"><dt>이메일</dt><dd><a href="mailto:company_ss@naver.com">company_ss@naver.com</a></dd></div>
+                <div className="info-row"><dt>이메일</dt><dd><a href="mailto:company_ss@naver.com">company_ss@<wbr />naver.com</a></dd></div>
                 <div className="info-row wide"><dt>주소</dt><dd>서울특별시 은평구 진흥로 13가길 23-3 102호</dd></div>
                 <div className="info-row"><dt>통신판매업</dt><dd>2026-서울은평-0719</dd></div>
                 <div className="info-row"><dt>사업자번호</dt><dd>599-26-00188</dd></div>

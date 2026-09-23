@@ -3,6 +3,7 @@ import { sendAlimtalk, CHARGE_DONE_TEMPLATE, moneyHistoryUrl, maskPhone } from '
 import { normalizeKoreanMobile } from '@/lib/phone';
 import prisma from '@/lib/prisma'; // 🌟 Prisma 클라이언트 임포트 필수
 import { requireUser } from '@/lib/apiAuth';
+import { moneyLogText } from '@/lib/moneyLogText';
 
 export async function POST(request: Request) {
   try {
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
         data: {
           userId: userId,
           type: 'CHARGE', // 토스페이먼츠 결제는 충전이므로 'CHARGE'
-          content: `[토스페이먼츠 결제] 주문번호: ${orderId}`,
+          content: moneyLogText.cardCharge(),
           amount: amountNum,
           balanceAfter: updatedUser.cyberMoney // 거래 후 잔액 스냅샷 저장
         }

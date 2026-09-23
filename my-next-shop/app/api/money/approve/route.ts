@@ -6,6 +6,7 @@ import {
   formatRefundAccount, maskPhone,
 } from '@/lib/notifications/alimtalk';
 import { normalizeKoreanMobile } from '@/lib/phone';
+import { moneyLogText } from '@/lib/moneyLogText';
 
 export async function PUT(request: Request) {
   // 🔒 관리자 전용
@@ -63,7 +64,10 @@ export async function PUT(request: Request) {
           data: {
             userId: targetRequest.userId,
             type: targetRequest.type as any,
-            content: targetRequest.type === 'CHARGE' ? `[충전] ${targetRequest.content || '관리자 승인'}` : `[환불] 관리자 승인 완료`,
+            // 💬 이용 내역 문구는 lib/moneyLogText.ts 에서 한 곳으로 모아 관리합니다.
+            content: targetRequest.type === 'CHARGE'
+              ? moneyLogText.bankCharge((targetRequest.content || '').replace(/^입금자명\s*:\s*/, ''))
+              : moneyLogText.refund(targetRequest.bankName),
             amount: targetRequest.type === 'CHARGE' ? targetRequest.amount : -targetRequest.amount,
             balanceAfter: updatedUser.cyberMoney
           }
