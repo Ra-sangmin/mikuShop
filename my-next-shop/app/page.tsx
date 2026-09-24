@@ -109,9 +109,9 @@ function HeroProps({ kind }: { kind: HeroPropKind }) {
   );
 }
 
-// 🖼 배너마다 다른 캐릭터 그림을 씁니다. (public/images/hero/ 아래)
-//    아직 파일을 넣지 않은 배너는 예전 그림(/images/hero.png)으로 자동으로 대신 보여 줍니다.
-const HERO_FALLBACK_IMAGE = '/images/hero.png';
+// 🖼 배너마다 다른 캐릭터 그림을 씁니다. (public/images/miku_icon/ 아래)
+//    아직 파일을 넣지 않은 배너는 예전 그림(/images/miku_icon/default.png)으로 자동으로 대신 보여 줍니다.
+const HERO_FALLBACK_IMAGE = '/images/miku_icon/default.png';
 
 // 1. 배너 데이터 구조 정의
 type HeroPropKind = 'delivery' | 'purchase' | 'auction' | 'benefit';
@@ -144,7 +144,7 @@ export default function HomePage() {
     {
       title: <>일본 쇼핑의 시작<br />미쿠짱과 함께하세요</>, subTitle: "최저가 구매대행 서비스",
       desc: "상품 링크만 알려주시면 구매부터 배송까지 대신해 드려요.",
-      bgColor: "#FFF4CC", accent: "#c99612", image: "/images/hero/hero_purchase.png",
+      bgColor: "#FFF4CC", accent: "#c99612", image: "/images/miku_icon/purchase.png",
       props: 'purchase',
       chips: [
         { icon: <Medal weight="fill" />, label: '14년 노하우' },
@@ -158,11 +158,11 @@ export default function HomePage() {
     {
       title: <>안전포장 빠른배송<br />평일 매일 국제발송</>, subTitle: "합리적이고 저렴한 배송비",
       desc: "도착한 상품을 꼼꼼히 포장해 한국까지 보내드려요.",
-      bgColor: "#E2F0D9", accent: "#5c9a6f", image: "/images/hero/hero_delivery.png",
+      bgColor: "#E2F0D9", accent: "#5c9a6f", image: "/images/miku_icon/delivery.png",
       props: 'delivery',
       chips: [
         { icon: <Package weight="fill" />, label: '안전 포장' },
-        { icon: <AirplaneTilt weight="fill" />, label: '항공 · EMS · 해운' },
+        { icon: <AirplaneTilt weight="fill" />, label: '항공 · EMS' },
         { icon: <ShieldCheck weight="fill" />, label: '기본 검수 무료' },
       ],
       primary: { label: '배송대행 신청', href: '/delivery/request' },
@@ -172,11 +172,11 @@ export default function HomePage() {
     {
       title: <>메루카리·야후옥션<br />실시간 입찰 및 구매</>, subTitle: "간편한 일본 직구 솔루션",
       desc: "원하는 상품을 찾아 입찰과 구매를 한 번에 신청하세요.",
-      bgColor: "#E1F5FE", accent: "#2f8fc4", image: "/images/hero/hero_auction.png",
+      bgColor: "#E1F5FE", accent: "#2f8fc4", image: "/images/miku_icon/auction.png",
       props: 'auction',
       chips: [
         { icon: <Gavel weight="fill" />, label: '실시간 입찰' },
-        { icon: <MagnifyingGlass weight="bold" />, label: '메루카리 · 라쿠마' },
+        { icon: <MagnifyingGlass weight="bold" />, label: '메루카리 · 야후 옥션' },
         { icon: <Clock weight="fill" />, label: '마감 시간 관리' },
       ],
       primary: { label: '메루카리 둘러보기', href: '/main_shop/mercari' },
@@ -186,7 +186,7 @@ export default function HomePage() {
     {
       title: <>다양한 혜택과 이벤트<br />회원 등급별 포인트 적립</>, subTitle: "신규 가입 시 적립금 증정",
       desc: "등급이 오를수록 국제 배송비 할인 혜택이 커져요.",
-      bgColor: "#FFEBEE", accent: "#d27377", image: "/images/hero/hero_benefit.png",
+      bgColor: "#FFEBEE", accent: "#d27377", image: "/images/miku_icon/benefit.png",
       props: 'benefit',
       chips: [
         { icon: <Gift weight="fill" />, label: '신규 적립금' },
