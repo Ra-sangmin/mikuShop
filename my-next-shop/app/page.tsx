@@ -2,13 +2,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { BANK_ACCOUNT } from '@/lib/bankAccount';
+import AiSearchBanner from '@/app/components/ai-search/AiSearchBanner';
 import { useRouter } from 'next/navigation';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import {
   ChatCircleDots, ShoppingCartSimple, AirplaneTilt, Receipt, Scales, Headset, ArrowRight,
   ArrowUpRight, CaretLeft, CaretRight,
   Megaphone, Bank, Clock, CalendarCheck, Copy, ShieldCheck, Medal, Sparkle,
-  Package, Gavel, MagnifyingGlass, Gift, Crown, Coins, LinkSimple,
+  Package, Gavel, MagnifyingGlass, Gift, Crown, Coins, LinkSimple, Storefront,
 } from '@phosphor-icons/react';
 
 const HERO_AUTOPLAY_MS = 5000;
@@ -20,6 +21,23 @@ export const dynamic = "force-dynamic";
    캐릭터 주변에 띄웁니다. 색은 배너 포인트색(--hero-accent)을 따라갑니다.
    나중에 배너별 캐릭터 그림을 넣으면 <HeroProps /> 한 줄만 지우면 됩니다. */
 const HERO_PROPS: Record<HeroPropKind, React.ReactNode[]> = {
+  // AI 쇼핑 비서 — 대화 말풍선 · AI 반짝임 · 돋보기(검색)
+  ai: [
+    <svg key="chat" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+      <path d="M5 8a4 4 0 0 1 4-4h14a4 4 0 0 1 4 4v9a4 4 0 0 1-4 4h-9l-6 5v-5H9a4 4 0 0 1-4-4z" />
+      <circle cx="11" cy="12.5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="12.5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="21" cy="12.5" r="1.4" fill="currentColor" stroke="none" />
+    </svg>,
+    <svg key="spark" viewBox="0 0 32 32" fill="currentColor" stroke="none">
+      <path d="M14 3l2.6 7.4L24 13l-7.4 2.6L14 23l-2.6-7.4L4 13l7.4-2.6z" />
+      <path d="M25 19l1.2 3.3 3.3 1.2-3.3 1.2L25 28l-1.2-3.3-3.3-1.2 3.3-1.2z" opacity=".7" />
+    </svg>,
+    <svg key="search" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <circle cx="14" cy="14" r="8" /><path d="M20 20l7 7" />
+      <path d="M14 10l1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z" fill="currentColor" stroke="none" />
+    </svg>,
+  ],
   // 배송대행 — 택배 상자 · 비행기 경로 · 방울 포장재
   delivery: [
     <svg key="box" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
@@ -114,7 +132,7 @@ function HeroProps({ kind }: { kind: HeroPropKind }) {
 const HERO_FALLBACK_IMAGE = '/images/miku_icon/default.png';
 
 // 1. 배너 데이터 구조 정의
-type HeroPropKind = 'delivery' | 'purchase' | 'auction' | 'benefit';
+type HeroPropKind = 'ai' | 'delivery' | 'purchase' | 'auction' | 'benefit';
 
 interface Banner {
   title: React.ReactNode;
@@ -140,6 +158,21 @@ const hexToRgb = (hex: string) => {
 
 export default function HomePage() {
   const banners: Banner[] = [
+    // 0. 🤖 AI 쇼핑 비서 (새 배너 — 가장 먼저 보여 줍니다)
+    {
+      title: <>이제는 <span className="hero-ai-word">AI</span> 시대<br />구매대행도 <span className="hero-ai-word">AI</span>로</>,
+      subTitle: "NEW · 미쿠짱 AI 쇼핑 비서",
+      desc: "한국어로 한 문장만 말하면 메루카리·라쿠텐·야후 쇼핑·야후 옥션에서 딱 맞는 상품을 찾아 드려요.",
+      bgColor: "#EFE7FF", accent: "#8b5cf6", image: "/images/miku_icon/ai.png", // 파일을 넣기 전까지는 기본 그림으로 보입니다
+      props: 'ai',
+      chips: [
+        { icon: <ChatCircleDots weight="fill" />, label: '한 문장으로 검색' },
+        { icon: <Storefront weight="fill" />, label: '4개 쇼핑몰 동시에' },
+        { icon: <Sparkle weight="fill" />, label: 'AI 추천 상품' },
+      ],
+      primary: { label: 'AI 비서에게 물어보기', href: '/ai-search' },
+      secondary: { label: '예시로 검색해 보기', href: '/ai-search?q=' + encodeURIComponent('여름 바닷가에서 입기 좋은 시원한 5만원대 원피스 찾아줘') },
+    },
     // 1. 구매대행 (위로 올림)
     {
       title: <>일본 쇼핑의 시작<br />미쿠짱과 함께하세요</>, subTitle: "최저가 구매대행 서비스",
@@ -491,6 +524,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* 🤖 AI 통합 검색 비서 호출 배너 (검색창은 /ai-search 전용 페이지에 있습니다) */}
+      <AiSearchBanner />
 
       {/* 2. Quick Service Icons */}
       <section className="quick-service-section anim-item delay-1 align-container" style={{ marginTop: '80px', marginBottom: '80px' }}>

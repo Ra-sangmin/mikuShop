@@ -63,6 +63,11 @@ function RakutenContent() {
 
   // 🌟 실시간 인기 상품 (홈 화면 카테고리 아래에 노출)
   const [popularProducts, setPopularProducts] = useState<GlobalProduct[]>([]);
+  // 🌟 인기 상품을 가져오는 동안 true — 카테고리 아래에 "가져오는 중" 안내를 띄웁니다.
+  //    메루카리·야후 옥션과 같은 동작입니다. 예전에는 이 상태 자체가 없어서, 라쿠텐·야후 쇼핑 은
+  //    응답이 올 때까지 카테고리 아래가 그냥 비어 있었습니다. (느린 회선일수록 오래 빈 채로 있음)
+  //    세션 캐시로 바로 채워질 때는 켜지지 않습니다.
+  const [isPopularLoading, setIsPopularLoading] = useState(false);
 
   // page
   const [pageInfo, setPageInfo] = useState({ page: 1, pageCount: 100 });
@@ -96,6 +101,8 @@ function RakutenContent() {
   // 🌟 헤더 통합검색으로 들어온 검색어. 이후 카테고리를 클릭하면 이 검색어는 풀어줍니다.
   //    (사이드바 입력칸에는 보이지 않는 검색어라, 남겨두면 이유 없이 상품이 0개로 나옵니다)
   const headerKeywordRef = useRef<string | null>(null);
+  // 🤖 헤더 AI 검색이 가격·제외어까지 넣었는지. 카테고리를 고르면 검색어와 함께 풀어 줍니다.
+  const headerAiFiltersRef = useRef(false);
 
   // 🚀 [로직 1] 라쿠텐 데이터를 Global 규격으로 변환
   const mapToGlobal = (item: any): GlobalProduct => {
@@ -261,8 +268,14 @@ function RakutenContent() {
 
     (async () => {
       const translatedKeyword = await getTranslatedText(searchRequest.keyword);
-      const updatedFilters = { ...currentFilters, keyword: translatedKeyword, page: 1 };
+      // 🤖 헤더 AI 검색이 문장에서 뽑은 가격·제외어 (일반 검색어만 온 경우엔 기존 값 유지)
+      const extra = searchRequest.extra;
+      const aiFilters = extra
+        ? { minPrice: extra.minPrice ?? '', maxPrice: extra.maxPrice ?? '', excludeKeyword: extra.excludeKeyword ?? '' }
+        : {};
+      const updatedFilters = { ...currentFilters, ...aiFilters, keyword: translatedKeyword, page: 1 };
       headerKeywordRef.current = translatedKeyword;
+      headerAiFiltersRef.current = Boolean(extra);
       setCurrentFilters(updatedFilters);
       setPageInfo(prev => ({ ...prev, page: 1 }));
       loadItems(0, updatedFilters); // genreId=0: 전체 카테고리 대상 검색
@@ -303,7 +316,14 @@ function RakutenContent() {
     // 🌟 헤더 통합검색 검색어는 카테고리를 고르는 순간 풀어줍니다. (사이드바에서 직접 입력한 검색어는 유지)
     if (headerKeywordRef.current && currentFilters.keyword === headerKeywordRef.current) {
       headerKeywordRef.current = null;
-      setCurrentFilters(prev => ({ ...prev, keyword: '', page: 1 }));
+      const clearAi = headerAiFiltersRef.current;
+      headerAiFiltersRef.current = false;
+      setCurrentFilters(prev => ({
+        ...prev,
+        keyword: '',
+        page: 1,
+        ...(clearAi ? { minPrice: '', maxPrice: '', excludeKeyword: '' } : {}),
+      }));
     }
 
     if (!id || id === 0 ||  name === 'HOME') {
@@ -384,7 +404,11 @@ function RakutenContent() {
       return;
     }
 
+    // 🌟 화면을 떠난 뒤 늦게 온 응답이 상태를 건드리지 않도록 막습니다.
+    let cancelled = false;
+
     const fetchPopular = async () => {
+      setIsPopularLoading(true);
       try {
         const res = await fetch('/api/rakuten/popular?limit=100');
         const result = await res.json();
@@ -407,14 +431,19 @@ function RakutenContent() {
             // 🌟 회원 클릭이 아니라 라쿠텐 인기 상품으로 채운 항목 (순위 배지 제외용)
             isPopularFiller: !!row.isFiller,
           }));
-          setPopularProducts(mapped);
+          // 캐시는 떠난 뒤라도 남겨 둡니다. 다음 방문에서 바로 보여줄 수 있습니다.
           writePopularCache('rakuten', mapped);
+          if (!cancelled) setPopularProducts(mapped);
         }
       } catch (e) {
         console.error('인기 상품 로드 실패', e);
+      } finally {
+        if (!cancelled) setIsPopularLoading(false);
       }
     };
     fetchPopular();
+
+    return () => { cancelled = true; };
   }, []);
 
   return (
@@ -424,6 +453,7 @@ function RakutenContent() {
       categories={categories}
       items={items}
       popularProducts={popularProducts}
+      isPopularLoading={isPopularLoading}
       pageInfo={pageInfo}
       selectedProduct={productDetail}
       sortOptions={RakutenSortOptions}

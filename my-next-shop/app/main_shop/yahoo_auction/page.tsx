@@ -529,7 +529,12 @@ function YahooAuctionContent() {
 
     (async () => {
       const translatedKeyword = await getTranslatedText(searchRequest.keyword);
-      const updatedFilters = { ...currentFilters, keyword: translatedKeyword, page: 1 };
+      // 🤖 헤더 AI 검색이 문장에서 뽑은 가격·제외어 (일반 검색어만 온 경우엔 기존 값 유지)
+      const extra = searchRequest.extra;
+      const aiFilters = extra
+        ? { minPrice: extra.minPrice ?? '', maxPrice: extra.maxPrice ?? '', excludeKeyword: extra.excludeKeyword ?? '' }
+        : {};
+      const updatedFilters = { ...currentFilters, ...aiFilters, keyword: translatedKeyword, page: 1 };
       setCurrentFilters(updatedFilters);
       setPageInfo(prev => ({ ...prev, page: 1 }));
       loadItems(0, updatedFilters); // category_id 없이(0): 전체 카테고리 대상 검색

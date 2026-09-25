@@ -1,0 +1,39 @@
+// ▼ prisma/schema.prisma 맨 아래에 붙여 넣은 모델입니다 (참고용 사본).
+
+// 🤖 AI 검색으로 들어온 상품의 "메타데이터"만 저장합니다. 벡터는 Qdrant 에만 있습니다.
+//    (RDS t4g.micro 는 RAM 1GB 라 임베딩 저장·연산을 하지 않습니다)
+model AiSearchProduct {
+  id        Int      @id @default(autoincrement())
+  platform  String   @db.VarChar(20)          // 'rakuten' | 'mercari' | 'yahoo_shopping' | 'yahoo_auction'
+  itemId    String   @map("item_id") @db.VarChar(191)
+  nameJa    String   @map("name_ja") @db.Text
+  nameKo    String   @map("name_ko") @db.Text
+  priceJpy  Int      @map("price_jpy")
+  thumbnail String?  @db.Text
+  url       String   @db.Text
+  shopName  String?  @map("shop_name") @db.VarChar(191)
+  qdrantId  String?  @map("qdrant_id") @db.Char(36) // Qdrant 포인트 UUID (색인 안 됐으면 null)
+  hitCount  Int      @default(1) @map("hit_count")   // 검색 결과로 몇 번 나왔는지
+  fetchedAt DateTime @map("fetched_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([platform, itemId])
+  @@index([fetchedAt])
+  @@map("ai_search_products")
+}
+
+// 🤖 AI 검색 기록 — 추천 검색어 태그와 폴백 비율 점검에 씁니다.
+model AiSearchLog {
+  id          Int      @id @default(autoincrement())
+  query       String   @db.VarChar(300)
+  mallType    String   @map("mall_type") @db.VarChar(20)
+  mode        String   @db.VarChar(10)   // 'ai' | 'keyword' | 'fallback'
+  keywordJa   String   @map("keyword_ja") @db.VarChar(300)
+  resultCount Int      @map("result_count")
+  tookMs      Int      @map("took_ms")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("ai_search_logs")
+}

@@ -10,10 +10,18 @@ import { useEffect, useRef } from "react";
 
 const FORCE_TOP_KEY = 'miku:force-scroll-top';
 
+/** 구글 웹 번역(일→한)을 쓰는 경로 */
+function isTranslatedPath(pathname?: string | null): boolean {
+  return Boolean(pathname?.startsWith('/main_shop') || pathname?.startsWith('/ai-search'));
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAdminPage = pathname?.startsWith('/admin');
   const isShopPage = pathname?.startsWith('/main_shop'); 
+  // 🈯 구글 웹 번역을 켜는 페이지: 쇼핑몰 + AI 검색(상세 패널의 일본어 원문을 번역).
+  //    AI 검색은 화면 글자가 한국어라 lang 은 ko 로 두고, 번역만 허용합니다(한국어 부분은 notranslate).
+  const isTranslatedPage = isTranslatedPath(pathname);
   const prevPathname = useRef(pathname);
 
   // 쇼핑 페이지(구글 번역 적용)에서 빠져나올 때만 새로고침한다.
@@ -22,8 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const isComingFromShop = prevPathname.current?.startsWith('/main_shop');
-    const isGoingToNonShop = !pathname?.startsWith('/main_shop');
+    // 번역이 켜진 페이지(쇼핑몰·AI 검색)에서 번역을 쓰지 않는 페이지로 갈 때만 새로고침합니다.
+    const isComingFromShop = isTranslatedPath(prevPathname.current);
+    const isGoingToNonShop = !isTranslatedPath(pathname);
 
     prevPathname.current = pathname;
 
@@ -93,7 +102,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html 
       lang={isShopPage ? "ja" : "ko"} 
-      translate={!isShopPage ? "no" : "yes"}
+      translate={!isTranslatedPage ? "no" : "yes"}
       suppressHydrationWarning
     >
       <head>

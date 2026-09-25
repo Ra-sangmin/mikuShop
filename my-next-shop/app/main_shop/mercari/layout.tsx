@@ -3,6 +3,7 @@ import GlobalLayout from "@/app/main_shop/components/GlobalLayout"; // 경로 �
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <GlobalLayout 
+      mall="mercari"
       platformName="메루카리" 
       platformDesc="일본 최대 중고거래 사이트" 
       brandColor="#ff0021"

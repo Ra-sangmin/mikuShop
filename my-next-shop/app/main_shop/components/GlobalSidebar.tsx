@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { SlidersHorizontal, ArrowCounterClockwise, CaretDown, Check, MagnifyingGlass } from '@phosphor-icons/react';
 import { getShopTheme, shopThemeVars } from './shopTheme';
+import { useOptionalGlobalSearch } from './GlobalSearchContext';
 
 // --- 모바일 감지 커스텀 훅 ---
 function useIsMobile() {
@@ -80,7 +81,7 @@ const PLATFORM_THEMES: Record<ShoppingPlatform, { color: string; bg: string; lig
   default: { color: '#6366f1', bg: '#f5f3ff', light: '#f9fafb' }
 };
 
-export function GlobalSidebar({ platform = 'mercari', onSearch, isDetailOpen = false, sortOptions }: GlobalSidebarProps) {
+export function GlobalSidebar({ platform = 'mercari', currentPath, onSearch, isDetailOpen = false, sortOptions }: GlobalSidebarProps) {
     
     const isMobile = useIsMobile(); 
   
@@ -124,6 +125,48 @@ export function GlobalSidebar({ platform = 'mercari', onSearch, isDetailOpen = f
       return n;
     }, [filters]);
     const resetFilters = () => setFilters(makeDefaultFilters());
+
+    // 🤖 헤더 AI 검색이 문장에서 뽑은 검색어·제외어·가격을 이 상세검색 칸에도 채워 보여 줍니다.
+    //    (실제 검색은 페이지가 같은 값으로 이미 실행합니다 — 여기선 화면 표시와, 이어서 조건을 고쳐
+    //     "조건으로 검색하기" 를 누를 때 그 값이 그대로 이어지게 하는 역할)
+    const globalSearch = useOptionalGlobalSearch();
+    const searchRequest = globalSearch?.searchRequest ?? null;
+    const aiFilledRef = useRef<{ keyword: string; excludeKeyword: string; minPrice: string; maxPrice: string } | null>(null);
+    const handledAiTokenRef = useRef(0);
+    useEffect(() => {
+      if (!searchRequest?.extra || searchRequest.token === handledAiTokenRef.current) return;
+      handledAiTokenRef.current = searchRequest.token;
+      // 칸에는 한국어로 보여 줍니다. 이 값으로 다시 "조건으로 검색하기" 를 눌러도 페이지가 일본어로 번역해 검색합니다.
+      const filled = {
+        keyword: searchRequest.extra.display?.keyword ?? searchRequest.keyword,
+        excludeKeyword: searchRequest.extra.display?.excludeKeyword ?? searchRequest.extra.excludeKeyword ?? '',
+        minPrice: searchRequest.extra.minPrice ?? '',
+        maxPrice: searchRequest.extra.maxPrice ?? '',
+      };
+      aiFilledRef.current = filled;
+      setFilters(prev => ({ ...prev, ...filled }));
+    }, [searchRequest]);
+
+    // 카테고리를 옮기면 페이지가 AI 검색 조건을 풀어 주므로, 칸에 AI 가 채운 값이 그대로 남아 있으면 같이 비웁니다.
+    // (그 사이 손님이 직접 고친 칸은 건드리지 않습니다)
+    const pathKey = (currentPath ?? []).map(p => p.id).join('>');
+    const prevPathKeyRef = useRef(pathKey);
+    useEffect(() => {
+      if (prevPathKeyRef.current === pathKey) return;
+      prevPathKeyRef.current = pathKey;
+      const filled = aiFilledRef.current;
+      // 카테고리 이동 때 헤더 검색 조건을 풀어 주는 건 지금 라쿠텐 페이지뿐이라, 다른 몰은 칸도 그대로 둡니다
+      // (페이지의 실제 검색 조건과 칸에 보이는 값이 어긋나지 않게)
+      if (!filled || platform !== 'rakuten') return;
+      aiFilledRef.current = null;
+      setFilters(prev => {
+        const next = { ...prev };
+        (Object.keys(filled) as (keyof typeof filled)[]).forEach(k => {
+          if (String(prev[k] ?? '') === filled[k]) (next as any)[k] = '';
+        });
+        return next;
+      });
+    }, [pathKey]);
     
     // 🚀 스와이프 터치 좌표 추적
     const touchStartX = useRef(0);

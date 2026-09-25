@@ -1600,3 +1600,10 @@ body {
 }
 
 @import "tailwindcss";
+
+/* 🤖 메인 배너 — "이제는 AI 시대 · 구매대행도 AI로" 의 AI 글자 강조 */
+.hero-ai-word {
+  background: linear-gradient(135deg, #e3868a 0%, #c9686c 40%, #8b5cf6 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: none !important; padding: 0 2px;
+}
