@@ -8,8 +8,15 @@
 //   한 통으로 보냅니다. 새 경로가 생겨도 자동으로 잡힙니다.
 //
 // 인증은 환율·AI 검색 정리 크론과 같은 CRON_SECRET 을 씁니다.
-// 호출 (서버 crontab, 5분마다)
-//   */5 * * * * curl -fsS -H "x-cron-secret: <CRON_SECRET>" https://mikushop.co.kr/api/cron/admin-order-alert
+//
+// 호출 주기는 **30초**입니다. cron 은 1분이 최소 단위라 두 줄로 나눠 씁니다.
+//   * * * * * ~/bin/admin-order-alert.sh
+//   * * * * * sleep 30; ~/bin/admin-order-alert.sh
+// 스크립트는 .env 에서 비밀값을 읽고 flock 으로 겹쳐 도는 것을 막습니다.
+// (겹치면 두 실행이 같은 구간을 동시에 읽어 같은 주문을 두 번 알릴 수 있습니다)
+//
+// ⚠️ 주기를 바꿔도 코드는 고칠 게 없습니다. "지난번 알린 뒤 ~ 지금"으로 자르기 때문에
+//    주기가 짧아지면 한 통에 담기는 건수가 줄 뿐, 빠지거나 겹치지 않습니다.
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { ADMIN_ATTENTION_STATUSES } from '@/src/types/order';

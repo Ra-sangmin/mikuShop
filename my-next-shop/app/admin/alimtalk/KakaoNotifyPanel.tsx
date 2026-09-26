@@ -4,7 +4,7 @@
 //
 // 주문이 "관리자 처리 필요" 상태로 넘어오면 관리자 본인 카카오톡의
 // "나와의 채팅"으로 알림이 옵니다. 무료이고 템플릿 검수도 없습니다.
-// 발송은 5분마다 도는 크론이 맡습니다. (app/api/cron/admin-order-alert)
+// 발송은 30초마다 도는 크론이 맡습니다. (app/api/cron/admin-order-alert)
 import { useCallback, useEffect, useState } from 'react';
 import { BellRinging, Check, Copy, WarningCircle, LinkSimple, LinkBreak } from '@phosphor-icons/react';
 import { fmtDateTime } from '../components/AdminPremiumKit';
@@ -140,7 +140,7 @@ export default function KakaoNotifyPanel({ onToast }: { onToast: (kind: 'success
           <>
             <p className="knp-desc">
               아직 연결되지 않았습니다. 연결하면 <strong>경매 상황 · 경매/구매 실패 · 상품 결제 완료 · 입고 대기중 ·
-              배송 준비중 · 배송비 결제 완료</strong> 로 넘어온 주문을 <strong>5분마다 모아 한 통</strong>으로 알려 줍니다.
+              배송 준비중 · 배송비 결제 완료</strong> 로 넘어온 주문을 <strong>30초마다 모아 한 통</strong>으로 알려 줍니다.
             </p>
             <div className="knp-actions">
               <a className="ap-btn is-success" href="/api/admin/kakao-notify/connect">
