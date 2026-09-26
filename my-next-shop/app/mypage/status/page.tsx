@@ -51,7 +51,7 @@ const PHASE_VIEW_STATUSES: Record<string, string[]> = {
   // 🛒 장바구니 카드: 구매 요청과 경매 요청을 한 표에 모아 봅니다.
   //    예전엔 카드를 누르면 둘 중 하나(구매 요청)로만 가서 경매 요청 상품을 열 방법이 없었습니다.
   request: [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING],
-  // 🛒 상단 '장바구니' 숫자: 장바구니 상품만 목록으로 보여 줍니다. (결제 카드 없이 — 결제는 상품을 눌러 상세 정보 확인에서)
+  // 🛒 상단 '장바구니' 숫자: 장바구니 상품만 목록으로 보여 줍니다. 목록에서 바로 골라 결제합니다(아래 결제 카드 · 모바일은 하단 결제 바).
   cart: [ORDER_STATUS.CART],
   // ✈️ 국제 배송중 카드 · 상단 '국제 배송 중': 국제 배송 상품을 위쪽 표에 모아 보고, 누르면 상세 정보 확인에서 배송 조회까지 봅니다.
   shipping: [ORDER_STATUS.SHIPPING],
@@ -400,9 +400,15 @@ function usePurchaseStatusLogic() {
     //    (setActiveTab 은 phaseView 를 지우므로, 여기서 탭을 바꾸면 카드 선택이 풀립니다)
     const keepPhase = !!phaseParam && PHASE_VIEW_STATUSES[phaseParam]?.includes(lead.status);
     // ✈️ 국제 배송 상품은 '국제 배송중' 카드 보기(phaseView 'shipping')로 위쪽 표에 보여 줍니다.
+    //    🔽 그 밖의 상태도 '전체 진행 현황'의 단계 카드 보기(펼치기 보기)로 엽니다. 개별 상태 탭으로 가지 않습니다.
+    //       장바구니 담기 · 경매 요청 → '장바구니' 카드 / 경매 · 결제 · 입고 대기 → '신청 내역 보기' / 입고 이후 → '입고 완료' 카드
     if (!keepPhase) {
-      if (lead.status === ORDER_STATUS.SHIPPING) { setActiveTab(ORDER_STATUS.ALL); setPhaseView('shipping'); }
-      else setActiveTab(lead.status);
+      const s = lead.status as string;
+      if (s === ORDER_STATUS.SHIPPING) { setActiveTab(ORDER_STATUS.ALL); setPhaseView('shipping'); }
+      else if (PHASE_VIEW_STATUSES.request.includes(s)) { setActiveTab(ORDER_STATUS.ALL); setPhaseView('request'); }
+      else if (PHASE_VIEW_STATUSES.progress.includes(s)) { setActiveTab(ORDER_STATUS.ALL); setPhaseView('progress'); }
+      else if (REQUEST_VIEW_STATUSES.includes(s)) { setActiveTab(ORDER_STATUS.ALL); }
+      else setActiveTab(s);
     }
 
     // 합포장 묶음은 표에서 한 행으로 합쳐지므로, 묶음 전체를 선택해야 그 행이 선택 상태로 보입니다.
@@ -639,6 +645,8 @@ function usePurchaseStatusLogic() {
         const res = await fetch(`/api/orders?id=${orderId}`, { method: 'DELETE' });
         if (res.ok) {
           showAlert('상품이 삭제되었습니다.', 'success');
+          // 지운 상품이 결제 선택에 남아 '선택 N건'에 계속 잡히지 않게 뺍니다
+          setSelectedItems(prev => prev.filter(id => String(id) !== String(orderId)));
           fetchOrders();
           return true;
         } else showAlert('삭제 처리에 실패했습니다.', 'error');
@@ -793,8 +801,10 @@ const SubStatusChip = ({ item, isActive, onClick }: { item: any, isActive: boole
   );
 };
 
-const PhaseModule = ({ phase, activeTab, onTabClick, onPhaseView, phaseView, onCardClick }: {
+const PhaseModule = ({ phase, activeTab, onTabClick, onPhaseView, phaseView, onCardClick, todoCount = 0 }: {
   phase: any, activeTab: string, onTabClick: (key: string) => void,
+  /** ✋ 이 카드 안에서 손님이 처리할 일(결제 · 포장 요청) 건수 — 아이콘 모서리에 빨간 숫자로 */
+  todoCount?: number,
   onPhaseView?: (phaseId: string) => void, phaseView?: string | null,
   /** 카드 클릭을 직접 처리할 때 (예: 국제 배송중 → 아래 국제 배송 현황 패널로 이동) */
   onCardClick?: () => void,
@@ -827,7 +837,10 @@ const PhaseModule = ({ phase, activeTab, onTabClick, onPhaseView, phaseView, onC
     >
       <div className="phase-header">
         <div className="phase-title-group">
-          <span className="phase-icon"><i className={`fa ${phase.icon}`}></i></span>
+          <span className="phase-icon">
+            <i className={`fa ${phase.icon}`}></i>
+            {todoCount > 0 && <span className="phase-todo-dot" title={`처리할 일 ${todoCount}건`}>{todoCount}</span>}
+          </span>
           <h3 className="phase-title">{phase.title}</h3>
         </div>
         <div className="phase-total-badge">
@@ -1008,10 +1021,29 @@ function MyPurchaseStatusContent() {
   // 같은 "상품 결제 완료(PAID)" 라도 배송대행은 "입고 대기중" 이라 구매대행과 섞어 보여 주지 않습니다.
   // 누른 상품이 배송대행이면 배송대행만, 구매대행이면 구매대행만 보여 줍니다. (입고 완료는 구분 없이 전체)
   const [detailIsDelivery, setDetailIsDelivery] = useState(false);
+  // 🔽 펼치기 보기: 장바구니 · 신청 내역 보기 · 입고 완료 보기(탭 '전체')에서는 상품을 누르면 그 아래에 상세가 펼쳐지고,
+  //    결제 · 포장 요청이 필요한 상품은 목록에서 바로 골라 아래에서 처리합니다. (국제 배송중 보기는 배송 표 그대로)
+  //    예전엔 상품을 누르면 맨 아래 '상세 정보 확인' 패널이 열리고, 거기서 다시 골라 처리했습니다.
+  const isInlineView = activeTab === ORDER_STATUS.ALL && phaseView !== 'shipping';
+  const isCartView = activeTab === ORDER_STATUS.ALL && (phaseView === 'cart' || phaseView === 'request');
+  // 고른 상품의 상태가 결제 · 요청 기준입니다. (아무것도 안 골랐으면: 장바구니 보기는 첫 상품의 상태 — 결제 카드를 늘 보여 줌, 그 밖은 없음)
+  const cartPayStatus = useMemo(() => {
+    if (!isInlineView) return null;
+    const firstSelected = orders.find((o: any) => selectedItems.map(String).includes(String(o.orderId)));
+    if (firstSelected) return firstSelected.status as string;
+    return isCartView ? ((items[0]?.status as string) || ORDER_STATUS.CART) : null;
+  }, [isInlineView, isCartView, orders, selectedItems, items]);
+  const INLINE_PAY_TARGET: Record<string, string> = {
+    [ORDER_STATUS.CART]: ORDER_STATUS.PAID,
+    [ORDER_STATUS.BID_SUCCESS]: ORDER_STATUS.PAID,
+    [ORDER_STATUS.BID_PENDING]: ORDER_STATUS.BIDDING,
+    [ORDER_STATUS.PAYMENT_REQ]: ORDER_STATUS.PAYMENT_DONE,
+  };
+  const inlinePackRef = useRef<HTMLDivElement>(null);
   // 배송비 요청 패널에서 결제할 때 금액 계산이 이 패널 기준이 되도록 알려 줍니다
   useEffect(() => {
-    setCalcTabOverride(activeTab === ORDER_STATUS.ALL ? detailStatus : null);
-  }, [activeTab, detailStatus, setCalcTabOverride]);
+    setCalcTabOverride(activeTab === ORDER_STATUS.ALL ? (detailStatus ?? cartPayStatus) : null);
+  }, [activeTab, detailStatus, cartPayStatus, setCalcTabOverride]);
   // 🕒 상세 정보 확인은 최근에 수정(상태 변경)된 상품이 위로 오게 정렬합니다.
   const detailItems = useMemo(() => orders.filter((o: any) =>
     o.status === detailStatus &&
@@ -1108,6 +1140,15 @@ function MyPurchaseStatusContent() {
 
   // 🌟 "전체" 카드의 합계/전체 내역 보기 숫자도 합포장 묶음을 1건으로 집계합니다.
   // "전체 내역 보기"는 토글 상태와 무관하게 항상 국제 배송을 제외하므로, 실제 테이블 개수와 일치시킵니다.
+  // ✋ 단계 카드의 '할 일' 숫자 (합포장 묶음은 1건)
+  const countBundleAware = (list: any[]) => {
+    const seen = new Set<string>(); let n = 0;
+    list.forEach((o: any) => { if (o.bundleId) { if (seen.has(o.bundleId)) return; seen.add(o.bundleId); } n++; });
+    return n;
+  };
+  const todoRequestView = orders.filter((o: any) => o.status === ORDER_STATUS.BID_SUCCESS).length;
+  const todoProgressView = countBundleAware(orders.filter((o: any) => o.status === ORDER_STATUS.ARRIVED || o.status === ORDER_STATUS.PAYMENT_REQ));
+
   const totalCount = useMemo(
     // 🛒 전체 내역 보기 표와 같이 구매 요청(장바구니)은 세지 않습니다.
     () => countBundleAware(orders.filter((o: any) => REQUEST_VIEW_STATUSES.includes(o.status))),
@@ -1406,7 +1447,10 @@ function MyPurchaseStatusContent() {
             >
               <div className="phase-header">
                 <div className="phase-title-group">
-                  <span className="phase-icon"><i className="fa fa-layer-group"></i></span>
+                  <span className="phase-icon">
+                    <i className="fa fa-layer-group"></i>
+                    {todoRequestView > 0 && <span className="phase-todo-dot" title={`처리할 일 ${todoRequestView}건`}>{todoRequestView}</span>}
+                  </span>
                   <h3 className="phase-title">신청 내역 보기</h3>
                 </div>
                 <div className="phase-total-badge">
@@ -1441,6 +1485,7 @@ function MyPurchaseStatusContent() {
                 onTabClick={handleTabChange}
                 onPhaseView={handleShowPhaseView}
                 phaseView={phaseView}
+                todoCount={phase.id === 'progress' ? todoProgressView : 0}
               />
             ))}
           </div>
@@ -1460,14 +1505,16 @@ function MyPurchaseStatusContent() {
           fetchOrders={fetchOrders} selectedAddress={selectedAddress}
           onIndividualPacking={handleIndividualPacking} onDelete={handleDeleteOrder}
           onStatusClick={handleAllRowClick}
+          /* 🔽 펼치기 보기: 결제 · 포장 요청할 상품은 체크박스로 바로 고르고, 상품을 누르면 그 아래에 상세가 펼쳐집니다 */
+          inlineMode={isInlineView}
           myMoney={userData?.cyberMoney || 0} exchangeRate={exchangeRate}
         />
         )}
        </div>
       
       {/* 🌟 입고 완료 상태 시 노출되는 합포장/개별포장 통합 액션 버튼 영역 */}
-      {activeTab === ORDER_STATUS.ARRIVED && (
-        <div className="anim-slide-up delay-3">
+      {(activeTab === ORDER_STATUS.ARRIVED || (isInlineView && cartPayStatus === ORDER_STATUS.ARRIVED)) && (
+        <div className="anim-slide-up delay-3" ref={inlinePackRef}>
           <div className="package-action-group">
             <button 
               className={`btn-package btn-individual ${selectedItems.length > 0 ? 'active' : 'disabled'}`}
@@ -1490,6 +1537,31 @@ function MyPurchaseStatusContent() {
             결제 전 배송지를 꼭 확인해주세요.
           </NoticePanel>
           <AddressForm userData={userData} selectedItems={selectedItems} fetchOrders={fetchOrders} selectedAddress={selectedAddress} setSelectedAddress={setSelectedAddress} />
+        </div>
+      )}
+
+      {/* 📱 장바구니 보기(모바일): 화면 아래에 [선택 N건 · 합계 · 결제하기] 를 고정해, 목록 어디서든 바로 결제합니다 */}
+      {isInlineView && !arrivedDetailOpen && selectedItems.length > 0 && cartPayStatus && (INLINE_PAY_TARGET[cartPayStatus] || cartPayStatus === ORDER_STATUS.ARRIVED) && (
+        <div className="miku-cart-paybar" role="region" aria-label="선택한 상품 처리">
+          <div className="miku-cart-paybar-info">
+            <span>선택 <b>{selectedItems.length}</b>건</span>
+            {cartPayStatus === ORDER_STATUS.ARRIVED
+              ? <strong>포장 요청</strong>
+              : <strong translate="no">₩ {totalPriceWon.toLocaleString()}</strong>}
+          </div>
+          {cartPayStatus === ORDER_STATUS.ARRIVED ? (
+            // 📦 포장 요청은 배송지를 골라야 해서, 아래 포장 · 배송지 칸으로 내려 줍니다
+            <button type="button" className="miku-cart-paybar-btn"
+              onClick={() => inlinePackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+              포장 · 배송지 선택
+            </button>
+          ) : (
+            <button type="button" className="miku-cart-paybar-btn"
+              onClick={() => handleUpdateStatus(INLINE_PAY_TARGET[cartPayStatus])}>
+              {cartPayStatus === ORDER_STATUS.BID_PENDING ? '보증금 결제하기'
+                : cartPayStatus === ORDER_STATUS.PAYMENT_REQ ? '배송비 결제하기' : '결제하기'}
+            </button>
+          )}
         </div>
       )}
 
@@ -1687,6 +1759,31 @@ function MyPurchaseStatusContent() {
         }
         /* 🔎 상세 정보 확인 패널 */
         .miku-detail-section { scroll-margin-top: 90px; }
+        /* 📱 장바구니 보기 — 모바일 하단 고정 결제 바 (PC 에서는 목록 아래 결제 카드로 충분해 숨김) */
+        .miku-cart-paybar { display: none; }
+        @media (max-width: 768px) {
+          .miku-cart-paybar {
+            position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 80;
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 10px 10px 16px; border-radius: 18px;
+            background: #111827; color: #ffffff;
+            box-shadow: 0 18px 40px -16px rgba(15, 23, 42, 0.7);
+            animation: mikuPaybarIn 0.28s var(--smooth-easing) both;
+          }
+          .miku-cart-paybar-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+          .miku-cart-paybar-info span { font-size: 12px; font-weight: 600; color: #9ca3af; }
+          .miku-cart-paybar-info span b { color: #ffffff; }
+          .miku-cart-paybar-info strong { font-size: 18px; font-weight: 900; letter-spacing: -0.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .miku-cart-paybar-btn {
+            flex-shrink: 0; height: 46px; padding: 0 20px; border: 0; border-radius: 13px; cursor: pointer;
+            font-size: 15px; font-weight: 900; color: #ffffff;
+            background: linear-gradient(135deg, #f87171 0%, #e11d48 100%);
+            box-shadow: 0 10px 20px -10px rgba(225, 29, 72, 0.9);
+          }
+          /* 고정 바에 목록 끝(결제 카드)이 가려지지 않게 */
+          body:has(.miku-cart-paybar) { padding-bottom: 90px; }
+        }
+        @keyframes mikuPaybarIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
         .miku-detail-close {
           margin-left: auto;
           display: inline-flex; align-items: center; gap: 6px;
@@ -2015,6 +2112,17 @@ function MyPurchaseStatusContent() {
         .phase-icon {
           width: 34px; height: 34px; border-radius: 12px; flex-shrink: 0; color: #fff;
           display: flex; align-items: center; justify-content: center; font-size: 13px;
+        }
+        /* ✋ 카드 안에 손님이 처리할 일이 있으면 아이콘 모서리에 빨간 숫자 */
+        .phase-icon { position: relative; }
+        .phase-todo-dot {
+          position: absolute; top: -6px; right: -7px;
+          min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px;
+          display: inline-flex; align-items: center; justify-content: center;
+          font-size: 10.5px; font-weight: 900; font-style: normal; color: #ffffff;
+          background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
+          border: 2px solid #ffffff; box-shadow: 0 4px 10px -4px rgba(225, 29, 72, 0.8);
+          font-family: inherit; line-height: 1;
         }
         .phase-title { font-size: 16px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.3px; }
         .phase-total-badge { font-size: 12px; color: #64748b; font-weight: 600; padding: 4px 10px; background: #f1f5f9; border-radius: 20px; }

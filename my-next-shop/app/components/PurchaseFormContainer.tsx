@@ -287,16 +287,29 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
       const allSuccess = results.every((r: any) => r && r.success);
 
       if (allSuccess) {
-        showAlert(isPurchase ? '🛒 모든 상품이 장바구니에 담겼습니다!' : '🚀 배송 신청이 완료되었습니다!', 'success');
         // 🔗 방금 만든 주문번호를 함께 넘겨, 마이페이지가 그 상품들을 바로 선택된 상태로 보여 줍니다.
         //    (여러 건을 한 번에 담을 수 있어 쉼표로 이어 붙입니다)
         const newOrderIds = results
           .map((r: any) => r?.order?.orderId)
           .filter(Boolean)
           .join(',');
+        // 🛒 구매대행은 '장바구니' 카드(구매 요청 + 경매 요청)를 펼친 채로 엽니다. (몰 상품 상세의 장바구니 담기와 같은 곳)
         const tab = isPurchase ? ORDER_STATUS.CART : ORDER_STATUS.WAITING;
-        const query = newOrderIds ? `?tab=${tab}&orderId=${encodeURIComponent(newOrderIds)}` : `?tab=${tab}`;
-        setTimeout(() => router.push(`/mypage/status${query}`), 1500);
+        const base = isPurchase ? '?phase=request' : `?tab=${tab}`;
+        const query = newOrderIds ? `${base}&orderId=${encodeURIComponent(newOrderIds)}` : base;
+
+        // 🙋 바로 마이페이지로 보내지 않고, 몰 상품 상세(main_shop)처럼 이동할지 손님이 고르게 합니다.
+        //    머무르면 입력칸을 비워 다른 상품을 이어서 신청할 수 있게 합니다. (같은 상품이 두 번 담기지 않도록)
+        const goToMypage = await showConfirm(isPurchase
+          ? '🛒 장바구니에 담겼습니다!\n페이지로 이동하시겠습니까?'
+          : '🚀 배송 신청이 완료되었습니다!\n신청 내역으로 이동하시겠습니까?');
+        if (goToMypage) {
+          router.push(`/mypage/status${query}`);
+        } else {
+          setProducts([{ ...initialProduct, id: Date.now() }]);
+          setIsSubmitting(false);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
       } else {
         showAlert(`일부 상품 저장 중 오류가 발생했습니다.`, 'error');
         setIsSubmitting(false);

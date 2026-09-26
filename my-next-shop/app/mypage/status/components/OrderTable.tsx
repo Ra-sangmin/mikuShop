@@ -175,8 +175,133 @@ const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { item: any,
   );
 };
 
+// 🔽 상품을 누르면 그 아래에 펼쳐지는 상세 (장바구니 · 신청 내역 보기 · 입고 완료 보기)
+//    예전엔 아래 '상세 정보 확인' 패널이 따로 열렸습니다. 이제 누른 자리에서 바로 봅니다.
+//    상태마다 필요한 정보(경매 남은 시간 · 배송비 청구 내역 · 수취인 · 합포장 상품 등)를 함께 보여 줍니다.
+const DELETABLE_STATUSES: string[] = [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING];
+
+// ✋ / ⏳ 펼치기 보기에서 상품명 아래에 붙는 한 줄 안내 — 손님이 할 일인지, 미쿠짱이 진행 중인지 바로 알 수 있게
+function statusHint(status: string, type?: string | null): string {
+  switch (status) {
+    // 손님이 할 일
+    case ORDER_STATUS.CART: return '결제하시면 바로 구매를 시작해요';
+    case ORDER_STATUS.BID_PENDING: return '보증금을 결제하시면 입찰을 시작해요';
+    case ORDER_STATUS.BID_SUCCESS: return '낙찰됐어요! 상품 금액을 결제해 주세요';
+    case ORDER_STATUS.ARRIVED: return '창고에 도착했어요 · 포장 방법과 배송지를 선택해 주세요';
+    case ORDER_STATUS.PAYMENT_REQ: return '배송비를 결제하시면 국제 배송이 시작돼요';
+    // 미쿠짱이 진행 중
+    case ORDER_STATUS.BIDDING: return '입찰 중이에요 · 경매 결과를 기다리고 있어요';
+    case ORDER_STATUS.PAID: return type === 'DELIVERY' ? '일본 창고 도착을 기다리고 있어요' : '판매자에게 구매를 진행하고 있어요';
+    case ORDER_STATUS.WAITING: return '일본 창고 도착을 기다리고 있어요';
+    case ORDER_STATUS.FAILED: return '낙찰 또는 구매가 이루어지지 않았어요';
+    case ORDER_STATUS.PREPARING: return '미쿠짱 창고에서 포장하고 있어요 · 배송비 안내를 곧 드려요';
+    case ORDER_STATUS.PAYMENT_DONE: return '결제 완료 · 곧 국제 배송이 시작돼요';
+    default: return '';
+  }
+}
+
+function ItemDetail({ item, onDelete, onBid, auctionTime }: {
+  item: any;
+  onDelete: () => void;
+  onBid?: () => void;
+  auctionTime?: { text: string; isUrgent: boolean; isEnded: boolean };
+}) {
+  const fmt = (d?: string | Date) => {
+    if (!d) return '-';
+    const t = new Date(d);
+    return Number.isNaN(t.getTime()) ? '-' : t.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  };
+  const has = (v: any) => v !== undefined && v !== null && String(v).trim() !== '' && String(v).trim() !== '-';
+  const won = (v: number) => `₩ ${(v || 0).toLocaleString()}`;
+  const st = item.status;
+  const rows: [string, React.ReactNode][] = [['상태', orderStatusLabel(st, item.type)]];
+
+  rows.push([item.isGroup ? '상품 합계' : st === ORDER_STATUS.BID_SUCCESS ? '낙찰가' : '상품 금액', `¥ ${(item.productPrice || 0).toLocaleString()}`]);
+  if (!item.isGroup) rows.push(['수량', `${Number(item.productCount) || 1}개`]);
+  if (Number(item.domesticShippingFee) > 0 && [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS].includes(st)) {
+    rows.push(['일본 내 배송료', `¥ ${Number(item.domesticShippingFee).toLocaleString()}`]);
+  }
+
+  // 🔨 경매
+  if ([ORDER_STATUS.BID_PENDING, ORDER_STATUS.BIDDING].includes(st)) {
+    if (item.myBidPrice) rows.push(['내 입찰가', `¥ ${Number(item.myBidPrice).toLocaleString()}`]);
+    if (item.auctionEndDate) {
+      rows.push(['남은 시간', auctionTime
+        ? <span className={`time-text ${auctionTime.isEnded ? 'ended' : ''} ${auctionTime.isUrgent ? 'urgent' : ''}`}>{auctionTime.text}</span>
+        : fmt(item.auctionEndDate)]);
+    }
+    if (st === ORDER_STATUS.BIDDING) {
+      rows.push(['입찰 상태', item.bidStatus === 'PENDING' ? '입찰 대기중' : item.bidStatus === 'ADDITIONAL' ? '추가 입찰 완료' : item.bidStatus === 'COMPLETED' ? '입찰 완료' : '상태 확인중']);
+    }
+  }
+
+  // 📦 입고 · 포장 · 배송비
+  if (item.receivedAt && [ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE].includes(st)) {
+    rows.push(['창고 입고', fmt(item.receivedAt)]);
+  }
+  if ([ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE].includes(st)) {
+    rows.push(['수취인', item.address
+      ? `${item.address.recipientName || '-'}${item.address.address ? ` · ${item.address.address} ${item.address.detailAddress || ''}` : ''}`
+      : '배송지 미지정']);
+  }
+  if (st === ORDER_STATUS.PAYMENT_REQ) {
+    const intl = item.intlFeeKrw || 0, dom = item.domesticFeeKrw || 0, extra = item.extraFeeKrw || 0;
+    rows.push(['국제 배송비', won(intl)]);
+    if (dom > 0) rows.push(['현지 배송비', won(dom)]);
+    if (extra > 0) rows.push(['추가 비용', won(extra)]);
+    rows.push(['결제할 금액', <strong key="sum" className="detail-sum">{won(intl + dom + extra)}{item.feeRound > 1 ? ' (추가 결제)' : ''}</strong>]);
+    if (has(item.feeMemo)) rows.push(['청구 사유', item.feeMemo]);
+  }
+
+  if (!item.isGroup) {
+    if (has(item.productOption)) rows.push(['옵션', item.productOption]);
+    if (has(item.serviceRequest)) rows.push(['부가 서비스', item.serviceRequest]);
+    if (has(item.productRequest)) rows.push(['요청사항', item.productRequest]);
+  }
+  rows.push(['신청일', fmt(item.registeredAt)]);
+
+  return (
+    <div className="cart-detail" onClick={(e) => e.stopPropagation()}>
+      {item.productImageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="cart-detail-thumb" src={item.productImageUrl} alt="" referrerPolicy="no-referrer"
+          onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+      )}
+      <div className="cart-detail-body">
+        <dl className="cart-detail-list">
+          {rows.map(([k, v]) => (
+            <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
+          ))}
+        </dl>
+        {/* 📦 합포장: 묶인 상품 목록 */}
+        {item.isGroup && (
+          <ul className="cart-detail-bundle">
+            {item.bundleItems.map((sub: any) => (
+              <li key={sub.orderId}>
+                <span title={sub.productName}>{truncateText(sub.productName, 60)}</span>
+                <b>¥ {(sub.productPrice || 0).toLocaleString()}</b>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="cart-detail-actions">
+        {st === ORDER_STATUS.BIDDING && onBid && (
+          <button type="button" className="cart-detail-btn is-primary" onClick={onBid}>🔨 추가 입찰하기</button>
+        )}
+        {!item.isGroup && item.productUrl && (
+          <a className="cart-detail-btn" href={item.productUrl} target="_blank" rel="noopener noreferrer">원본 상품 보기 ↗</a>
+        )}
+        {DELETABLE_STATUSES.includes(st) && (
+          <button type="button" className="cart-detail-btn is-danger" onClick={onDelete}>삭제</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // 🌟 메인 테이블 컴포넌트
-export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete, onStatusClick, myMoney = 0, exchangeRate = 0 }: any) {
+export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete, onStatusClick, inlineMode = false, myMoney = 0, exchangeRate = 0 }: any) {
   const {
     isMobile, showConfirm, showAlert,
     getAuctionTimeData, getColSpanCount
@@ -189,6 +314,16 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
   const hasCheckbox = [ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab as any);
   // 🌟 전체내역 탭에서는 행을 클릭하면 해당 상품의 상태 탭으로 이동합니다.
   const isAllTab = activeTab === 'ALL';
+  // 🔽 펼치기 보기(inlineMode — 장바구니 · 신청 내역 보기 · 입고 완료 보기):
+  //    탭은 '전체'지만 결제 · 포장 요청이 필요한 상품은 체크박스로 바로 고르고, 상품을 누르면 그 아래에 상세가 펼쳐집니다.
+  //    (예전엔 상품을 눌러야 아래 '상세 정보 확인' 패널이 열리고 거기서 다시 골라 결제했습니다)
+  const cartMode = inlineMode;
+  // 펼치기 보기에서 고를 수 있는 상태: 결제(구매 요청 · 경매 요청 · 낙찰 · 배송비 요청)와 포장 요청(입고 완료)
+  const INLINE_SELECTABLE: string[] = [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ];
+  const canSelect = (item: any) => (cartMode ? INLINE_SELECTABLE.includes(item.status) : hasCheckbox);
+  const selectable = hasCheckbox || cartMode;
+  const showDeleteCol = [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab) || cartMode;
+  const colSpan = getColSpanCount() + (cartMode ? 2 : 0); // 펼치기 보기: 체크박스 · 삭제 칸
 
   // 상태값에 따른 테마 색상 반환 함수
   const getBadgeTheme = (status: string, type?: string) => {
@@ -271,8 +406,24 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
   const toggleCheck = (orderIdOrIds: string | string[]) => {
     const ids = Array.isArray(orderIdOrIds) ? orderIdOrIds : [orderIdOrIds];
     const allSelected = ids.every((id: string) => selectedItems.includes(id));
-    if (allSelected) setSelectedItems(selectedItems.filter((id: string) => !ids.includes(id)));
-    else setSelectedItems([...selectedItems.filter((id: string) => !ids.includes(id)), ...ids]);
+    if (allSelected) { setSelectedItems(selectedItems.filter((id: string) => !ids.includes(id))); return; }
+    // 🔽 펼치기 보기: 상태마다 결제 · 요청 방식이 달라(구매 요청 · 경매 요청 · 낙찰 · 배송비 요청 · 입고 완료) 한 번에 처리할 수 없습니다.
+    //    다른 상태의 상품을 고르면 그 상품부터 새로 고릅니다.
+    if (cartMode && selectedItems.length > 0) {
+      const statusOf = (id: string) => items.find((i: any) => String(i.orderId) === String(id))?.status;
+      if (statusOf(ids[0]) !== statusOf(selectedItems[0])) { setSelectedItems([...ids]); return; }
+    }
+    setSelectedItems([...selectedItems.filter((id: string) => !ids.includes(id)), ...ids]);
+  };
+
+  // 🛒 장바구니 보기: 상품을 누르면 그 바로 아래에 상세(옵션 · 요청사항 · 수량 등)를 펼칩니다
+  const [openDetails, setOpenDetails] = useState<Set<string>>(new Set());
+  const toggleDetail = (orderId: string) => {
+    setOpenDetails(prev => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId); else next.add(orderId);
+      return next;
+    });
   };
 
   // 🌟 배송비 요청/배송비 결제 완료/국제 배송 탭 + 전체내역(ALL, 진행중 목록 포함) 탭에서는
@@ -320,10 +471,27 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     return result;
   }, [items, activeTab]);
 
+  // ✋ / ⏳ 펼치기 보기(신청 내역 보기 · 입고 완료)는 손님이 할 일과 미쿠짱이 진행 중인 상품이 섞여 있어,
+  //    [내가 처리할 일] 을 위에, [미쿠짱이 진행 중] 을 아래에 나눠 보여 줍니다. (관리자 화면의 '관리자 처리 필요 / 회원 처리 대기' 와 같은 방식)
+  //    모두 할 일인 목록(장바구니)은 나누지 않습니다.
+  const rowsWithGroups = React.useMemo(() => {
+    if (!cartMode) return displayItems;
+    const todo = displayItems.filter((it: any) => canSelect(it));
+    const wait = displayItems.filter((it: any) => !canSelect(it));
+    if (wait.length === 0) return displayItems;
+    return [
+      { __groupHead: 'todo', __count: todo.length, orderId: '__todo' },
+      ...todo,
+      { __groupHead: 'wait', __count: wait.length, orderId: '__wait' },
+      ...wait,
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayItems, cartMode]);
+
   return (
-    <div className="miku-ordertable-wrapper">
+    <div className={`miku-ordertable-wrapper ${cartMode ? 'is-cart-mode' : ''}`}>
       
-      {isMobile ? (
+      {isMobile && !cartMode ? (
         <div className="mobile-fallback">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
@@ -338,7 +506,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
           <thead>
             <tr>
               {/* 체크박스 헤더 */}
-              {hasCheckbox && (
+              {selectable && (
                 <th className="th-cell th-check"><div className="header-spacer"></div></th>
               )}
               {activeTab === 'ALL' && <th className="th-cell th-status">상태</th>}
@@ -355,17 +523,37 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
               {activeTab === ORDER_STATUS.SHIPPING && <th className="th-cell th-tracking">운송장 번호</th>}
               
               {/* 삭제 버튼용 빈 헤더를 맨 끝으로 배치 */}
-              {([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) && (
+              {showDeleteCol && (
                 <th className="th-cell th-delete-col"></th>
               )}
             </tr>
           </thead>
 
           <tbody>
-            {displayItems.length === 0 ? (
-              <tr><td colSpan={getColSpanCount()} className="empty-row">해당하는 상품이 없습니다.</td></tr>
+            {rowsWithGroups.length === 0 ? (
+              <tr><td colSpan={colSpan} className="empty-row">해당하는 상품이 없습니다.</td></tr>
             ) : (
-              displayItems.map((item: any) => {
+              rowsWithGroups.map((item: any) => {
+                // ✋ / ⏳ 묶음 머리 줄
+                if (item.__groupHead) {
+                  const isTodo = item.__groupHead === 'todo';
+                  return (
+                    <tr key={`group-${item.__groupHead}`} className={`tr-group-head ${isTodo ? 'is-todo' : 'is-wait'}`}>
+                      <td colSpan={colSpan}>
+                        <div className="group-head">
+                          <span className="group-head-icon">{isTodo ? '✋' : '⏳'}</span>
+                          <strong>{isTodo ? '내가 처리할 일' : '미쿠짱이 진행 중'}</strong>
+                          <span className="group-head-count">{item.__count}</span>
+                          <span className="group-head-desc">
+                            {isTodo
+                              ? (item.__count > 0 ? '체크해서 결제 · 요청을 진행해 주세요' : '지금 하실 일은 없어요')
+                              : '따로 하실 일은 없어요 · 진행되면 알려 드릴게요'}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
                 const ids: string[] = item.orderIds || [item.orderId];
                 const isChecked = ids.every((id: string) => selectedItems.includes(id));
                 const timeData = getAuctionTimeData(item.auctionEndDate);
@@ -377,19 +565,22 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                       /* 🔗 /mypage/status?orderId=... 로 들어왔을 때 이 행을 찾아 스크롤하기 위한 표시.
                          합포장 묶음은 한 행이 여러 주문을 담으므로 공백으로 이어 붙입니다. */
                       data-order-ids={ids.join(' ')}
-                      className={`tr-row ${isChecked ? 'selected' : ''} ${hasCheckbox || isAllTab ? 'clickable' : ''}`}
+                      className={`tr-row ${isChecked ? 'selected' : ''} ${selectable || isAllTab ? 'clickable' : ''} ${cartMode && openDetails.has(item.orderId) ? 'is-detail-open' : ''}`}
                       onClick={() => {
+                        if (cartMode) { toggleDetail(item.orderId); return; } // 🔽 펼치기 보기: 그 자리에서 상세 펼치기
                         if (isAllTab) { onStatusClick?.(item.status, ids); return; } // 🔎 두 번째 값: 누른 행의 주문번호들 (입고 완료는 상세 정보 확인 패널에서 엽니다)
                         if (hasCheckbox) toggleCheck(ids);
                       }}
                     >
                       {/* 체크박스 */}
-                      {hasCheckbox && (
+                      {selectable && (
                         <td className="td-cell td-check">
-                          {/* e.stopPropagation()으로 중복 클릭 방지 */}
+                          {/* e.stopPropagation()으로 중복 클릭 방지 · 펼치기 보기에서 고를 필요가 없는 상태(진행 중 등)는 빈 칸 */}
+                          {canSelect(item) && (
                           <div className={`custom-checkbox ${isChecked ? 'checked' : ''}`} onClick={(e) => { e.stopPropagation(); toggleCheck(ids); }}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                           </div>
+                          )}
                         </td>
                       )}
 
@@ -402,13 +593,18 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                         </td>
                       )}
                       
-                      <td className={`td-cell td-product ${hasCheckbox ? 'with-checkbox' : ''}`}>
+                      <td className={`td-cell td-product ${selectable ? 'with-checkbox' : ''}`}>
                         <div className="prod-name-box" title={item.productName}>
                           {item.isGroup && (
                             <span className="bundle-group-badge">📦 합포장 {item.bundleItems.length}건</span>
                           )}
                           <span className="prod-name-text">{item.productName}</span>
-                          {item.isGroup && (
+                          {cartMode && (
+                            <span className={`detail-caret ${openDetails.has(item.orderId) ? 'open' : ''}`} aria-hidden="true">
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </span>
+                          )}
+                          {item.isGroup && !cartMode && (
                             <button
                               className={`btn-bundle-toggle ${expandedGroups.has(item.orderId) ? 'open' : ''}`}
                               onClick={(e) => { e.stopPropagation(); toggleExpand(item.orderId); }}
@@ -419,6 +615,9 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                             </button>
                           )}
                         </div>
+                        {cartMode && statusHint(item.status, item.type) && (
+                          <div className={`row-hint ${canSelect(item) ? 'is-todo' : ''}`}>{statusHint(item.status, item.type)}</div>
+                        )}
                       </td>
 
                       {isAuctionTab && (
@@ -466,7 +665,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                       {activeTab === ORDER_STATUS.SHIPPING && <td className="td-cell">{item.trackingNo || '준비중'}</td>}
 
                       {/* 🛒 장바구니/보증금 대기 상태일 때만 휴지통(삭제) 아이콘 노출 */}
-                      {([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING].includes(activeTab)) && (
+                      {showDeleteCol && (!cartMode || DELETABLE_STATUSES.includes(item.status)) && (
                         <td className="td-cell td-delete-col">
                           {/* e.stopPropagation()으로 삭제 시 행 선택 방지 */}
                           <button className="btn-del-icon" onClick={(e) => { e.stopPropagation(); onDelete(item.orderId); }} title="삭제">
@@ -479,12 +678,23 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                           </button>
                         </td>
                       )}
+                      {/* 펼치기 보기에서 지울 수 없는 상태는 칸만 비워 줄을 맞춥니다 */}
+                      {showDeleteCol && cartMode && !DELETABLE_STATUSES.includes(item.status) && <td className="td-cell td-delete-col" />}
                     </tr>
 
+                    {/* 🔽 펼치기 보기: 누른 상품 바로 아래에 상세 */}
+                    {cartMode && openDetails.has(item.orderId) && (
+                      <tr className="tr-item-detail">
+                        <td className="td-cell td-item-detail" colSpan={colSpan}>
+                          <ItemDetail item={item} onDelete={() => onDelete(item.orderId)}
+                            onBid={() => handleBidClick(item)} auctionTime={item.auctionEndDate ? timeData : undefined} />
+                        </td>
+                      </tr>
+                    )}
                     {/* 🌟 합포장 묶음 펼치기: 포함된 상품명/상품가격 표시 */}
                     {item.isGroup && expandedGroups.has(item.orderId) && (
                       <tr className="tr-bundle-detail">
-                        <td className="td-cell td-bundle-detail" colSpan={getColSpanCount()}>
+                        <td className="td-cell td-bundle-detail" colSpan={colSpan}>
                           <div className="bundle-detail-list">
                             <div className="bundle-detail-header">
                               <span className="bundle-detail-header-name">상품명</span>
@@ -795,6 +1005,125 @@ export function OrderTableStyles() {
         /* 애니메이션 */
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .anim-slide-up { opacity: 0; animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        /* =====================================================
+           🛒 장바구니 보기(cartMode) — 누른 상품 아래 상세 · 모바일 카드
+           ===================================================== */
+        .detail-caret {
+          flex-shrink: 0; margin-left: 8px;
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 22px; height: 22px; border-radius: 7px;
+          color: #94a3b8; background: #f1f5f9;
+          transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
+        }
+        .detail-caret.open { transform: rotate(180deg); color: #c0606a; background: #fdf2f2; }
+        .tr-row.is-detail-open > td { border-bottom-color: transparent; }
+        .tr-item-detail > td { padding: 0 16px 16px !important; background: #fcfcfd; }
+        .cart-detail {
+          display: flex; gap: 16px; align-items: flex-start;
+          padding: 14px 16px; border-radius: 14px;
+          background: #ffffff; border: 1px solid #eef1f6;
+          box-shadow: 0 8px 20px -18px rgba(15, 23, 42, 0.5);
+          text-align: left; cursor: default;
+          animation: cartDetailIn 0.22s ease both;
+        }
+        @keyframes cartDetailIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+        .cart-detail-thumb { width: 72px; height: 72px; border-radius: 12px; object-fit: cover; flex-shrink: 0; border: 1px solid #eef1f6; }
+        .cart-detail-list { min-width: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 20px; }
+        .cart-detail-list > div { display: flex; gap: 10px; min-width: 0; font-size: 13px; line-height: 1.5; }
+        .cart-detail-list dt { flex-shrink: 0; width: 84px; font-weight: 700; color: #94a3b8; }
+        .cart-detail-list dd { margin: 0; min-width: 0; font-weight: 700; color: #334155; word-break: break-all; white-space: pre-line; }
+        .cart-detail-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+        .cart-detail-btn {
+          display: inline-flex; align-items: center; justify-content: center;
+          height: 34px; padding: 0 14px; border-radius: 10px;
+          border: 1px solid #e2e8f0; background: #ffffff; color: #475569;
+          font-size: 12.5px; font-weight: 800; text-decoration: none; cursor: pointer; white-space: nowrap;
+        }
+        .cart-detail-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+        .cart-detail-list .detail-sum { color: #e11d48; font-weight: 900; }
+        .cart-detail-list .time-text.urgent { color: #e11d48; }
+        .cart-detail-list .time-text.ended { color: #94a3b8; }
+        .cart-detail-bundle { list-style: none; margin: 0; padding: 8px 10px; border-radius: 10px; background: #fff7ed; border: 1px solid #fed7aa; display: flex; flex-direction: column; gap: 4px; }
+        .cart-detail-bundle li { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: #475569; }
+        .cart-detail-bundle li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cart-detail-bundle li b { flex-shrink: 0; color: #0f172a; }
+        .cart-detail-btn.is-primary { color: #ffffff; border-color: transparent; background: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%); }
+        .cart-detail-btn.is-primary:hover { background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%); }
+        /* ✋ / ⏳ 펼치기 보기 — 할 일 / 진행 중 묶음 머리 + 상품명 아래 한 줄 안내 */
+        .tr-group-head > td { padding: 0 !important; border: 0 !important; }
+        .group-head {
+          display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+          padding: 12px 18px; text-align: left;
+          font-size: 13px;
+        }
+        .tr-group-head.is-todo .group-head { background: linear-gradient(90deg, #fff1f2 0%, #ffffff 80%); border-bottom: 1px solid #ffe4e6; }
+        .tr-group-head.is-wait .group-head { background: #f8fafc; border-top: 8px solid #f1f5f9; border-bottom: 1px solid #eef2f7; }
+        .group-head-icon { font-size: 14px; }
+        .group-head strong { font-size: 14px; font-weight: 900; color: #0f172a; }
+        .tr-group-head.is-todo .group-head strong { color: #be123c; }
+        .tr-group-head.is-wait .group-head strong { color: #64748b; }
+        .group-head-count {
+          min-width: 22px; height: 20px; padding: 0 7px; border-radius: 99px;
+          display: inline-flex; align-items: center; justify-content: center;
+          font-size: 11.5px; font-weight: 900;
+        }
+        .tr-group-head.is-todo .group-head-count { color: #ffffff; background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%); }
+        .tr-group-head.is-wait .group-head-count { color: #475569; background: #e2e8f0; }
+        .group-head-desc { font-size: 12px; font-weight: 600; color: #94a3b8; }
+        .row-hint { margin-top: 4px; font-size: 12px; font-weight: 600; color: #94a3b8; text-align: left; }
+        .row-hint.is-todo { color: #e11d48; font-weight: 700; }
+        @media (max-width: 768px) {
+          .is-cart-mode .tr-group-head { display: block; }
+          .is-cart-mode .tr-group-head > td { display: block; }
+          .group-head { padding: 10px 12px; }
+          .group-head-desc { flex-basis: 100%; }
+          .is-cart-mode .row-hint { font-size: 11.5px; }
+        }
+        .cart-detail-actions:empty { display: none; }
+        .cart-detail-btn:hover { background: #f8fafc; }
+        .cart-detail-btn.is-danger { color: #e11d48; border-color: #fecdd3; }
+        .cart-detail-btn.is-danger:hover { background: #fff1f2; }
+
+        @media (max-width: 768px) {
+          /* 장바구니 보기는 모바일에서 가로 스크롤 없이 한 상품 = 두 줄 카드로
+               [☑] 상품명 (2줄까지)                 [🗑]
+               [☑] [구매 요청]            ¥ 12,345  [🗑]   */
+          .is-cart-mode .table-container { overflow: visible; border-radius: 18px; }
+          .is-cart-mode .premium-table { min-width: 0; display: block; }
+          .is-cart-mode .premium-table thead { display: none; }
+          .is-cart-mode .premium-table tbody { display: block; }
+          .is-cart-mode .tr-row {
+            display: grid; align-items: center;
+            grid-template-columns: 40px auto minmax(0, 1fr) 40px;
+            grid-template-areas:
+              "check name   name  del"
+              "check status price del";
+            row-gap: 6px; padding: 12px 4px; border-bottom: 1px solid #f1f5f9;
+          }
+          .is-cart-mode .tr-row > td { display: block; padding: 0 !important; border: 0 !important; width: auto !important; min-width: 0 !important; max-width: none !important; }
+          .is-cart-mode .tr-row > .td-check { grid-area: check; justify-self: center; }
+          .is-cart-mode .tr-row > .td-status { grid-area: status; }
+          .is-cart-mode .tr-row > .td-product { grid-area: name; }
+          .is-cart-mode .tr-row > .td-cell:nth-last-child(2) { grid-area: price; justify-self: end; padding-right: 4px !important; }
+          .is-cart-mode .tr-row > .td-delete-col { grid-area: del; justify-self: center; }
+          .is-cart-mode .badge-status { width: auto; padding: 4px 10px; font-size: 11.5px; }
+          .is-cart-mode .prod-name-box { align-items: flex-start; }
+          .is-cart-mode .prod-name-text {
+            white-space: normal; font-size: 13.5px; line-height: 1.4;
+            display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+          }
+          .is-cart-mode .price-val { font-size: 15px; }
+          .is-cart-mode .tr-item-detail { display: block; }
+          .is-cart-mode .tr-item-detail > td { display: block; padding: 0 8px 12px !important; }
+          .cart-detail { flex-direction: column; gap: 12px; padding: 12px; }
+          .cart-detail-thumb { width: 56px; height: 56px; }
+          .cart-detail-list { grid-template-columns: 1fr; width: 100%; }
+          .cart-detail-body { width: 100%; }
+          .cart-detail-list dt { width: 76px; }
+          .cart-detail-actions { flex-direction: row; width: 100%; }
+          .cart-detail-actions .cart-detail-btn { flex: 1; height: 38px; }
+        }
+
       `}</style>
   );
 }
