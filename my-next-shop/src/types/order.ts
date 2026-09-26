@@ -95,3 +95,20 @@ export const DELIVERY_STATUS_LABEL: Record<DeliveryStatus, string> = {
   [DELIVERY_STATUS.LOCAL_DELIVERY]: "국내배송중",
   [DELIVERY_STATUS.COMPLETED]: "배송완료",
 };
+/**
+ * 🔧 "관리자 처리 필요" 상태 — 관리자가 확인해야 다음 단계로 넘어가는 주문입니다.
+ *
+ * 세 곳이 같은 목록을 봐야 어긋나지 않습니다.
+ *   · 주문 관리 화면의 '관리자 처리 필요' 묶음 (app/admin/orders/page.tsx)
+ *   · 왼쪽 메뉴의 건수 뱃지 (app/api/admin/orders/today-count)
+ *   · 카카오 "나에게 보내기" 알림 (app/api/cron/admin-order-alert)
+ * 예전에는 각자 배열을 들고 있어, 한 곳만 고치면 숫자와 알림이 달라졌습니다.
+ */
+export const ADMIN_ATTENTION_STATUSES: OrderStatus[] = [
+  ORDER_STATUS.BIDDING,      // 경매 상황
+  ORDER_STATUS.FAILED,       // 경매/구매 실패
+  ORDER_STATUS.PAID,         // 상품 결제 완료
+  ORDER_STATUS.WAITING,      // 입고 대기중
+  ORDER_STATUS.PREPARING,    // 배송 준비중
+  ORDER_STATUS.PAYMENT_DONE, // 배송비 결제 완료
+];

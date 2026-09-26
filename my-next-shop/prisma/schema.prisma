@@ -18,29 +18,29 @@ model Admin {
 }
 
 model User {
-  id                  Int      @id @default(autoincrement())
-  
+  id Int @id @default(autoincrement())
+
   // 👤 1. 기본 로그인 정보
-  loginId             String   @unique @map("login_id")
-  password            String
-  name                String
+  loginId      String  @unique @map("login_id")
+  password     String
+  name         String
   // 🔤 영문(로마자) 이름. 일본 쇼핑몰 주소의 "받는사람"에 사서함 번호와 함께 씁니다.
   //    한자·가타카나는 사이트마다 전각/반각 규칙이 달라 결제 단계에서 자주 막힙니다.
   //    ⚠️ addresses.recipientEnglishName 과는 다른 값입니다.
   //       그쪽은 "한국에서 받는 사람"이라 가족·지인일 수 있고, 이쪽은 사서함 주인(회원 본인)입니다.
-  nameEnglish         String?  @map("name_english")
+  nameEnglish  String? @map("name_english")
   // 🌟 카카오·네이버 등 SNS 로그인에서 받아온 프로필 이미지 URL (직접 업로드는 아직 없음)
-  profileImage        String?  @map("profile_image") @db.Text
-  email               String?  @unique
+  profileImage String? @map("profile_image") @db.Text
+  email        String? @unique
   // 📱 회원 연락처. 알림톡이 이 번호로 갑니다.
   //    수취인 연락처(addresses.phone)와는 다른 값입니다 — 대신 받아주는 사람이면 번호가 다릅니다.
-  phone               String?
+  phone        String?
 
   // 📦 일본 창고 사서함 번호 (예: MK-A3F9K)
   //    고객이 일본 쇼핑몰 주소의 "상세주소 2"에 적는 값으로, 창고가 소포 주인을 가리는 유일한 단서입니다.
   //    가입할 때 발급하며 한 번 정해지면 바꾸지 않습니다 — 고객이 쇼핑몰마다 등록해 둔 주소가 어긋납니다.
   //    채번은 lib/japanAddress.ts 가 합니다. 예전 회원은 값이 없을 수 있어 nullable 입니다.
-  japanMailboxNumber  String?  @unique @map("japan_mailbox_number")
+  japanMailboxNumber String? @unique @map("japan_mailbox_number")
 
   // ✈️ 2. 배송 정보는 addresses 테이블이 전담합니다.
   //    예전에는 우편번호·주소·상세주소·통관번호를 여기에도 한 벌 들고 있었는데,
@@ -48,18 +48,18 @@ model User {
   //    기본 배송지는 addresses.isDefault 하나로만 표시합니다. (예전엔 defaultAddressId 와 이중 관리)
 
   // 💰 3. 비즈니스 로직 (결제/등급)
-  cyberMoney          Int      @default(0) @map("cyber_money")
-  membershipGrade     Int      @default(0) @map("membership_grade")           // membership_grades.id 참조 (0 = NEW)
-  grade               MembershipGrade @relation(fields: [membershipGrade], references: [id])
-  
+  cyberMoney      Int             @default(0) @map("cyber_money")
+  membershipGrade Int             @default(0) @map("membership_grade") // membership_grades.id 참조 (0 = NEW)
+  grade           MembershipGrade @relation(fields: [membershipGrade], references: [id])
+
   // 🗓️ 4. 가입 및 수정 일자
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  orders              Order[]
+  orders Order[]
 
-  shippingFees        OrderShippingFee[]
-  addresses           Address[]
+  shippingFees OrderShippingFee[]
+  addresses    Address[]
 
   moneyRequests MoneyRequest[]
 
@@ -70,21 +70,21 @@ model User {
 }
 
 model Address {
-  id                  Int      @id @default(autoincrement())
-  userId              Int      @map("user_id")
-  user                User     @relation(fields: [userId], references: [id])
+  id     Int  @id @default(autoincrement())
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
 
-  recipientName       String   @map("recipient_name")
+  recipientName        String  @map("recipient_name")
   recipientEnglishName String? @map("recipient_english_name")
-  phone               String   @map("phone")
-  zipCode             String   @map("zip_code")
-  address             String   @map("address")
-  detailAddress       String   @map("detail_address")
-  personalCustomsCode String?  @map("personal_customs_code")
-  isDefault           Boolean  @default(false) @map("is_default")
-  
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  phone                String  @map("phone")
+  zipCode              String  @map("zip_code")
+  address              String  @map("address")
+  detailAddress        String  @map("detail_address")
+  personalCustomsCode  String? @map("personal_customs_code")
+  isDefault            Boolean @default(false) @map("is_default")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("addresses")
 }
@@ -96,97 +96,97 @@ enum OrderType {
 
 // 2. 주문 상태 Enum (신규 추가)
 enum OrderStatus {
-  ALL            // 전체 내역
-  BID_PENDING    // 경매 요청
-  BIDDING        // 경매 낙찰 실패
-  BID_SUCCESS    // 경매 낙찰 성공
-  CART           // 장바구니
-  FAILED         // 낙찰/구매실패
-  PAID           // 상품 결제 완료
-  WAITING        // 입고 대기중 (배송대행 신청 후 일본 창고 도착 전까지)
-  ARRIVED        // 입고완료
-  PREPARING      // 배송 준비중
-  PAYMENT_REQ    // 배송비 요청
-  PAYMENT_DONE   // 배송비 결제 완료
-  SHIPPING       // 국제배송
+  ALL // 전체 내역
+  BID_PENDING // 경매 요청
+  BIDDING // 경매 낙찰 실패
+  BID_SUCCESS // 경매 낙찰 성공
+  CART // 장바구니
+  FAILED // 낙찰/구매실패
+  PAID // 상품 결제 완료
+  WAITING // 입고 대기중 (배송대행 신청 후 일본 창고 도착 전까지)
+  ARRIVED // 입고완료
+  PREPARING // 배송 준비중
+  PAYMENT_REQ // 배송비 요청
+  PAYMENT_DONE // 배송비 결제 완료
+  SHIPPING // 국제배송
 }
 
 // 3. 배송 상태 Enum (신규 추가)
 enum DeliveryStatus {
-  PREPARING      // 배송전
-  SHIPPED        // 배송시작 (국제배송 시작)
-  CUSTOMS        // 국내통관중
+  PREPARING // 배송전
+  SHIPPED // 배송시작 (국제배송 시작)
+  CUSTOMS // 국내통관중
   LOCAL_DELIVERY // 국내배송중
-  COMPLETED      // 배송완료
+  COMPLETED // 배송완료
 }
 
 // 🌟 경매 상태값을 관리하는 Enum
 enum BidStatus {
-  PENDING               // 입찰 대기중
-  COMPLETED             // 입찰 완료
-  ADDITIONAL            // 추가 입찰 완료
+  PENDING // 입찰 대기중
+  COMPLETED // 입찰 완료
+  ADDITIONAL // 추가 입찰 완료
 }
 
 model Order {
   // 1. 시스템 및 관계 필드
-  id                  Int            @id @default(autoincrement())
-  userId              Int            @map("user_id")
-  user                User           @relation(fields: [userId], references: [id])
+  id     Int  @id @default(autoincrement())
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
 
   // 2. 서비스 구분
-  type                OrderType      @default(PURCHASE) @map("order_type")
+  type OrderType @default(PURCHASE) @map("order_type")
 
   // 3. 주문 식별 및 배송 정보
-  bundleId            String?        @map("bundle_id")
-  orderId             String         @unique @map("order_id")
-  productId           String?        @map("product_id")
-  trackingNo          String?        @map("tracking_no")
+  bundleId          String?          @map("bundle_id")
+  orderId           String           @unique @map("order_id")
+  productId         String?          @map("product_id")
+  trackingNo        String?          @map("tracking_no")
   // 🚚 국제배송으로 넘길 때 관리자가 고른 배송 업체 (shipping_carriers.id)
   //    업체 이름·주소가 바뀌어도 주문은 id 로만 가리키므로 따라갑니다.
-  shippingCarrierId   Int?           @map("shipping_carrier_id")
-  shippingCarrier     ShippingCarrier? @relation(fields: [shippingCarrierId], references: [id])
+  shippingCarrierId Int?             @map("shipping_carrier_id")
+  shippingCarrier   ShippingCarrier? @relation(fields: [shippingCarrierId], references: [id])
 
   // 4. 상품 상세 정보
-  productImageUrl     String?        @db.Text @map("product_image_url")
+  productImageUrl String? @map("product_image_url") @db.Text
   // ⚠️ **그 주문 줄의 합계**(단가 × 수량)입니다. 단가가 아닙니다.
   //    (경매는 수량이 1이라 현재 최고가·낙찰가와 같은 값이 됩니다)
   //    읽는 쪽에서 productCount 를 다시 곱하면 안 됩니다 — 예전에 마이페이지가 그래서 금액이 10배로 나왔습니다.
-  productPrice        Int            @map("product_price")
-  productCount        Int?           @default(1)
-  productName         String         @map("product_name")
-  productUrl          String?        @db.Text @map("product_url")
-  productOption       String?        @map("product_option")
-  productRequest      String?        @map("productRequest")
+  productPrice    Int     @map("product_price")
+  productCount    Int?    @default(1)
+  productName     String  @map("product_name")
+  productUrl      String? @map("product_url") @db.Text
+  productOption   String? @map("product_option")
+  productRequest  String? @map("productRequest")
 
   // 5. 타임스탬프 (경매 관련 추가)
-  registeredAt        DateTime       @default(now()) @map("registered_at")
-  receivedAt          DateTime?      @map("received_at")
-  shippedAt           DateTime?      @map("shipped_at")
-  statusChangedAt     DateTime?      @map("status_changed_at") // 진행 상태가 마지막으로 바뀐 시각 (주문 관리 '처리 중 전체' 정렬용)
-  auctionEndDate      DateTime?      @map("auction_end_date")       // 🌟 1. 경매 종료 시간
+  registeredAt    DateTime  @default(now()) @map("registered_at")
+  receivedAt      DateTime? @map("received_at")
+  shippedAt       DateTime? @map("shipped_at")
+  statusChangedAt DateTime? @map("status_changed_at") // 진행 상태가 마지막으로 바뀐 시각 (주문 관리 '처리 중 전체' 정렬용)
+  auctionEndDate  DateTime? @map("auction_end_date") // 🌟 1. 경매 종료 시간
 
   // 6. 상태 관리
-  serviceRequest      String?        @map("service_request")
-  status              OrderStatus    @default(CART)
-  deliveryStatus      DeliveryStatus @default(PREPARING) @map("delivery_status")
+  serviceRequest String?        @map("service_request")
+  status         OrderStatus    @default(CART)
+  deliveryStatus DeliveryStatus @default(PREPARING) @map("delivery_status")
 
   // 7. 비용 및 결제 관련 (경매 정보 추가)
   // ⚠️ 구매 요청 단계에서 구매 폼으로 받는 일본내 배송료(¥) 입니다.
   //    배송비 요청 단계의 현지 배송비(청구 원화)는 OrderShippingFee.domesticFeeKrw 입니다.
-  domesticShippingFee Int            @default(0) @map("domestic_shipping_fee")
+  domesticShippingFee Int @default(0) @map("domestic_shipping_fee")
   // 💸 배송비 요청 단계에서 관리자가 국제/현지 배송비와 함께 입력하는 추가 결제 비용 (원)
   //    포장 보강·분리 배송처럼 배송비로 묶기 애매한 실비를 따로 남기려고 둡니다.
 
-  addressId           Int?           @map("address_id")
-  
-  myBidPrice          Int?           @default(0) @map("my_bid_price") // 🌟 2. 내 입찰 금액 (현지 통화)
-  depositAmount       Int?           @default(0) @map("deposit_amount") // 🌟 3. 보증금 (원화 또는 현지 통화)
-  
+  addressId Int? @map("address_id")
+
+  myBidPrice    Int? @default(0) @map("my_bid_price") // 🌟 2. 내 입찰 금액 (현지 통화)
+  depositAmount Int? @default(0) @map("deposit_amount") // 🌟 3. 보증금 (원화 또는 현지 통화)
+
   // 🌟 [수정됨] 타입을 String? 에서 BidStatus? 로 변경하고 기본값을 PENDING으로 설정
-  bidStatus           BidStatus?     @default(PENDING) @map("bid_status") 
+  bidStatus BidStatus? @default(PENDING) @map("bid_status")
 
   // 💴 배송비 청구 내역. 추가 결제가 생길 수 있어 한 주문에 여러 회차가 붙습니다.
-  shippingFees        OrderShippingFee[]
+  shippingFees OrderShippingFee[]
 
   @@map("orders")
 }
@@ -202,37 +202,37 @@ model Order {
 /// 환율은 매일 바뀜니다 — 그때그때 다시 환산하면 이미 청구한 금액이 달라지므로
 /// 관리자가 확인을 누른 시점의 엔화·원화·환율을 모두 그대로 박아 둡니다.
 model OrderShippingFee {
-  id                  Int      @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
   // 주문번호(orders.order_id). 화면·API 가 전부 이 값으로 주문을 찾습니다.
-  orderId             String   @map("order_id")
-  order               Order    @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
-  userId              Int      @map("user_id")
-  user                User     @relation(fields: [userId], references: [id])
+  orderId String @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+  userId  Int    @map("user_id")
+  user    User   @relation(fields: [userId], references: [id])
 
   // 국제 배송비 — 실지출(¥) 와 청구액(₩)
-  intlFeeJpy          Int      @default(0) @map("intl_fee_jpy")
-  intlFeeKrw          Int      @default(0) @map("intl_fee_krw")
+  intlFeeJpy     Int @default(0) @map("intl_fee_jpy")
+  intlFeeKrw     Int @default(0) @map("intl_fee_krw")
   // 현지 배송비 — 실지출(¥) 와 청구액(₩)
-  domesticFeeJpy      Int      @default(0) @map("domestic_fee_jpy")
-  domesticFeeKrw      Int      @default(0) @map("domestic_fee_krw")
+  domesticFeeJpy Int @default(0) @map("domestic_fee_jpy")
+  domesticFeeKrw Int @default(0) @map("domestic_fee_krw")
   // 추가 결제 비용 — 포장 보강·분리 배송처럼 배송비로 묶기 애매한 실비. 원화로만 받습니다.
-  extraFeeKrw         Int      @default(0) @map("extra_fee_krw")
+  extraFeeKrw    Int @default(0) @map("extra_fee_krw")
 
   // 위 원화 금액을 계산할 때 쓴 1엔당 원 (헤더의 "최종 표시 환율")
-  appliedExchangeRate Float    @default(0) @map("applied_exchange_rate")
+  appliedExchangeRate Float @default(0) @map("applied_exchange_rate")
 
   // 몇 번째 청구인지. 1 = 최초 배송비(국제+현지+추가), 2부터 = 추가 결제 요청(추가 비용만).
-  round               Int      @default(1)
+  round Int     @default(1)
   // 관리자가 적는 추가 청구 사유 (예: "포장 보강", "분리 배송"). 고객 화면에도 보입니다.
-  memo                String?  @db.Text
+  memo  String? @db.Text
 
   // 결제된 시각. null 이면 아직 미납입니다.
   //   ⭐ 청구액은 "미납 행들의 합" 입니다. 이미 낸 회차가 다시 청구되지 않는 근거가 이 컴럼입니다.
-  paidAt              DateTime? @map("paid_at")
+  paidAt DateTime? @map("paid_at")
 
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@unique([orderId, round])
   @@index([orderId, paidAt])
@@ -247,8 +247,8 @@ model OrderShippingFee {
 model NotificationLog {
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
-  orderId   String?  @map("order_id")  // orders.order_id (주문번호 문자열)
-  status    String                     // 발송을 유발한 주문 상태 (OrderStatus 값)
+  orderId   String?  @map("order_id") // orders.order_id (주문번호 문자열)
+  status    String // 발송을 유발한 주문 상태 (OrderStatus 값)
   channel   String   @default("EMAIL") // EMAIL | ALIMTALK | SMS …
   success   Boolean  @default(true)
   error     String?  @db.Text
@@ -260,16 +260,16 @@ model NotificationLog {
 }
 
 model MembershipGrade {
-  id            Int      @id @default(autoincrement())                  // 데이터베이스 내부 관리용 고유 ID (자동 증가)
-  name          String   @unique                                        // 등급 이름 (예: "NEW", "SILVER", "GOLD", "DIAMOND")
-  discountRate  Float    @default(0) @map("discount_rate")               // 국제 배송비 할인율 (0~1 사이 소수, 예: 0.1 = 10%)
-  requiredOrders Int     @default(0) @map("required_orders")             // guide/membership에 표시되는 "주문 N건" 등업 기준 주문 건수
-  sortOrder     Int      @default(0) @map("sort_order")                  // 낮은 등급 → 높은 등급 순으로 정렬하기 위한 순서값
-  description   String?  @db.Text                                       // 관리자 메모
-  createdAt     DateTime @default(now()) @map("created_at")             // 생성 시간
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")  // 수정 시간
+  id             Int      @id @default(autoincrement()) // 데이터베이스 내부 관리용 고유 ID (자동 증가)
+  name           String   @unique // 등급 이름 (예: "NEW", "SILVER", "GOLD", "DIAMOND")
+  discountRate   Float    @default(0) @map("discount_rate") // 국제 배송비 할인율 (0~1 사이 소수, 예: 0.1 = 10%)
+  requiredOrders Int      @default(0) @map("required_orders") // guide/membership에 표시되는 "주문 N건" 등업 기준 주문 건수
+  sortOrder      Int      @default(0) @map("sort_order") // 낮은 등급 → 높은 등급 순으로 정렬하기 위한 순서값
+  description    String?  @db.Text // 관리자 메모
+  createdAt      DateTime @default(now()) @map("created_at") // 생성 시간
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") // 수정 시간
 
-  users         User[]                                                 // 이 등급을 가진 회원들 (users.membership_grade FK 역참조)
+  users User[] // 이 등급을 가진 회원들 (users.membership_grade FK 역참조)
 
   @@map("membership_grades")
 }
@@ -281,9 +281,9 @@ model MembershipGrade {
 //   (아래 AirShippingFeeRule · EmsShippingFeeBreakpoint · ShippingFeeExtraRate 는 예전 계산식용이라 더 이상 쓰지 않습니다)
 model ShippingRate {
   id        Int      @id @default(autoincrement())
-  method    String                                                           // "MIKU" | "EMS"
-  weightKg  Float    @map("weight_kg")                                       // 구간 상한 무게 (kg)
-  fee       Int                                                              // 요금 (엔)
+  method    String // "MIKU" | "EMS"
+  weightKg  Float    @map("weight_kg") // 구간 상한 무게 (kg)
+  fee       Int // 요금 (엔)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@unique([method, weightKg])
@@ -298,13 +298,13 @@ model ShippingRate {
 // null입니다 (steps<=9: Low, steps=10: Mid, steps>10: High 할인액 적용).
 model AirShippingFeeRule {
   id                 Int      @id @default(autoincrement())
-  grade              String   @unique                                          // NEW / SILVER / GOLD / DIAMOND
-  firstStepFee       Int?     @map("first_step_fee")                           // steps=1(0.5kg 이하)일 때 고정 요금
-  baseFeeAtStepTwo   Int?     @map("base_fee_at_step_two")                     // steps=2(1.0kg)일 때 기준 요금 (DIAMOND는 null)
-  stepIncrement      Int?     @map("step_increment")                          // steps 3 이상부터 0.5kg(1스텝)마다 추가되는 요금 (DIAMOND는 null)
-  discountVsGoldLow  Int?     @map("discount_vs_gold_low")                    // DIAMOND 전용: steps<=9일 때 GOLD 요금에서 빼는 금액
-  discountVsGoldMid  Int?     @map("discount_vs_gold_mid")                    // DIAMOND 전용: steps===10일 때 GOLD 요금에서 빼는 금액
-  discountVsGoldHigh Int?     @map("discount_vs_gold_high")                   // DIAMOND 전용: steps>10일 때 GOLD 요금에서 빼는 금액
+  grade              String   @unique // NEW / SILVER / GOLD / DIAMOND
+  firstStepFee       Int?     @map("first_step_fee") // steps=1(0.5kg 이하)일 때 고정 요금
+  baseFeeAtStepTwo   Int?     @map("base_fee_at_step_two") // steps=2(1.0kg)일 때 기준 요금 (DIAMOND는 null)
+  stepIncrement      Int?     @map("step_increment") // steps 3 이상부터 0.5kg(1스텝)마다 추가되는 요금 (DIAMOND는 null)
+  discountVsGoldLow  Int?     @map("discount_vs_gold_low") // DIAMOND 전용: steps<=9일 때 GOLD 요금에서 빼는 금액
+  discountVsGoldMid  Int?     @map("discount_vs_gold_mid") // DIAMOND 전용: steps===10일 때 GOLD 요금에서 빼는 금액
+  discountVsGoldHigh Int?     @map("discount_vs_gold_high") // DIAMOND 전용: steps>10일 때 GOLD 요금에서 빼는 금액
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("air_shipping_fee_rules")
@@ -315,8 +315,8 @@ model AirShippingFeeRule {
 // 7kg 초과분은 ShippingFeeExtraRate(method="EMS")를 따릅니다.
 model EmsShippingFeeBreakpoint {
   id        Int      @id @default(autoincrement())
-  weightKg  Float    @unique @map("weight_kg")                                 // 0.5 ~ 7.0kg (0.5kg 단위)
-  fee       Int                                                                // 해당 무게 구간 요금
+  weightKg  Float    @unique @map("weight_kg") // 0.5 ~ 7.0kg (0.5kg 단위)
+  fee       Int // 해당 무게 구간 요금
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("ems_shipping_fee_breakpoints")
@@ -325,12 +325,12 @@ model EmsShippingFeeBreakpoint {
 // 🌟 EMS(7kg 초과)/우체국해운(calculateOceanShippingFee, 1kg 초과) 공통으로 쓰이는
 // "기준 무게까지는 고정 요금, 초과분은 1kg당 정액 추가" 규칙입니다.
 model ShippingFeeExtraRate {
-  id                  Int      @id @default(autoincrement())
-  method              String   @unique                                         // "EMS" | "OCEAN"
-  thresholdWeightKg   Float    @map("threshold_weight_kg")                    // 이 무게까지는 baseFeeAtThreshold 고정 (EMS=7.0, OCEAN=1.0)
-  baseFeeAtThreshold  Int      @map("base_fee_at_threshold")                  // 기준 무게 이하일 때 요금 (EMS=8200, OCEAN=2100)
-  extraPerKg          Int      @map("extra_per_kg")                          // 기준 무게 초과 시 1kg마다 추가되는 요금 (EMS=800, OCEAN=400)
-  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
+  id                 Int      @id @default(autoincrement())
+  method             String   @unique // "EMS" | "OCEAN"
+  thresholdWeightKg  Float    @map("threshold_weight_kg") // 이 무게까지는 baseFeeAtThreshold 고정 (EMS=7.0, OCEAN=1.0)
+  baseFeeAtThreshold Int      @map("base_fee_at_threshold") // 기준 무게 이하일 때 요금 (EMS=8200, OCEAN=2100)
+  extraPerKg         Int      @map("extra_per_kg") // 기준 무게 초과 시 1kg마다 추가되는 요금 (EMS=800, OCEAN=400)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("shipping_fee_extra_rates")
 }
@@ -341,12 +341,12 @@ model ShippingFeeExtraRate {
 // belowThresholdFee(고정 금액), 이상이면 수량 × atOrAboveThresholdAmount(수량당 단가).
 // 어느 쪽으로 해석할지는 feeType에 따라 코드(feeCalculator.ts)에서 결정합니다.
 model OrderFeeRule {
-  id                        Int      @id @default(autoincrement())
-  feeType                   String   @unique @map("fee_type")                       // "PAYMENT" | "AGENCY"
-  thresholdValue            Float    @map("threshold_value")                        // PAYMENT: 상품금액 기준(엔), AGENCY: 수량 기준(개)
-  belowThresholdFee         Int      @map("below_threshold_fee")                    // 기준 미만일 때 금액(엔)
-  atOrAboveThresholdAmount  Int      @map("at_or_above_threshold_amount")           // 기준 이상일 때 금액(엔) — PAYMENT는 고정값, AGENCY는 수량당 단가
-  updatedAt                 DateTime @default(now()) @updatedAt @map("updated_at")
+  id                       Int      @id @default(autoincrement())
+  feeType                  String   @unique @map("fee_type") // "PAYMENT" | "AGENCY"
+  thresholdValue           Float    @map("threshold_value") // PAYMENT: 상품금액 기준(엔), AGENCY: 수량 기준(개)
+  belowThresholdFee        Int      @map("below_threshold_fee") // 기준 미만일 때 금액(엔)
+  atOrAboveThresholdAmount Int      @map("at_or_above_threshold_amount") // 기준 이상일 때 금액(엔) — PAYMENT는 고정값, AGENCY는 수량당 단가
+  updatedAt                DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("order_fee_rules")
 }
@@ -354,8 +354,8 @@ model OrderFeeRule {
 // 📢 공지사항 (관리자 > 고객 센터에서 등록·수정)
 model Notice {
   id        Int      @id @default(autoincrement())
-  title     String                                   // 공지 제목
-  content   String   @db.Text                        // 공지 본문
+  title     String // 공지 제목
+  content   String   @db.Text // 공지 본문
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -366,9 +366,9 @@ model Notice {
 // inquiry/faq 화면이 이 표를 그대로 보여줍니다.
 model Faq {
   id        Int      @id @default(autoincrement())
-  question  String   @db.Text                        // 질문
-  answer    String   @db.Text                        // 답변
-  sortOrder Int      @default(0) @map("sort_order")  // 화면에 보이는 순서 (작을수록 위)
+  question  String   @db.Text // 질문
+  answer    String   @db.Text // 답변
+  sortOrder Int      @default(0) @map("sort_order") // 화면에 보이는 순서 (작을수록 위)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -379,148 +379,147 @@ model Faq {
 // 배송 조회 링크를 안내에 걸기 위한 목록입니다. 업체가 늘거나 주소가 바뀌어도 코드 수정 없이 관리자가 바꿉니다.
 model ShippingCarrier {
   id        Int      @id @default(autoincrement())
-  name      String                                   // 업체 이름 (예: EMS, 우체국 해운)
-  url       String   @db.Text                        // 업체 홈페이지 또는 배송 조회 주소
+  name      String // 업체 이름 (예: EMS, 우체국 해운)
+  url       String   @db.Text // 업체 홈페이지 또는 배송 조회 주소
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
-  orders    Order[]                                  // 이 업체로 발송한 주문들 (Order.shippingCarrierId 역참조)
+  orders Order[] // 이 업체로 발송한 주문들 (Order.shippingCarrierId 역참조)
 
   @@map("shipping_carriers")
 }
 
 model MercariCategory {
-  id          Int      @id @default(autoincrement())  // 메루카리 고유 ID
-  genreId     Int      @unique                        // 메루카리 카테고리 ID
+  id               Int          @id @default(autoincrement()) // 메루카리 고유 ID
+  genreId          Int          @unique // 메루카리 카테고리 ID
   // 🌟 이름은 Translation 한 곳에만 둡니다: 원문(일본어)은 translation.jp, 한국어는 translation.ko.
   //    번역을 못 받은 경우에도 ko=jp 인 행을 만들어 참조를 보장합니다 (lib/mercariCategories.ts).
-  translationId Int?
-  translation   Translation? @relation(fields: [translationId], references: [id])
-  genreLevel  Int?     @default(1)                    // 1:대분류, 2:중분류, 3:소분류...
-  parentId    Int                                     // 부모 카테고리 ID (루트는 0)
-  isLeaf      Boolean  @default(false)                // 💡 최하위 카테고리 여부 저장 (기본값 false)
+  translationId    Int?
+  translation      Translation? @relation(fields: [translationId], references: [id])
+  genreLevel       Int?         @default(1) // 1:대분류, 2:중분류, 3:소분류...
+  parentId         Int // 부모 카테고리 ID (루트는 0)
+  isLeaf           Boolean      @default(false) // 💡 최하위 카테고리 여부 저장 (기본값 false)
   // 🌟 이 카테고리의 "자식 목록"을 메루카리에서 마지막으로 받아온 시각. null 이면 아직 한 번도 안 받아온 것.
   //    사용자 요청은 DB 를 먼저 쓰고, 비어 있으면 그 자리에서 한 번, 오래됐으면 응답 후 백그라운드로 갱신합니다.
   //    (lib/mercariCategories.ts)
   childrenSyncedAt DateTime?
-  updatedAt   DateTime @updatedAt                     // 데이터 갱신일 (자동)
+  updatedAt        DateTime     @updatedAt // 데이터 갱신일 (자동)
 
   @@map("MercariCategory")
 }
 
 model RakutenCategory {
-  id          Int      @id @default(autoincrement())  // 내부 고유 ID
-  genreId     Int      @unique                        // 라쿠텐 장르 ID (라쿠텐 쪽에서 안정적으로 유지됨)
+  id               Int          @id @default(autoincrement()) // 내부 고유 ID
+  genreId          Int          @unique // 라쿠텐 장르 ID (라쿠텐 쪽에서 안정적으로 유지됨)
   // 🌟 이름은 Translation 한 곳에만 둡니다: 원문(일본어)은 translation.jp, 한국어는 translation.ko.
   //    같은 일본어 원문은 플랫폼을 가리지 않고 번역 한 번만 하고 재사용합니다. 번역을 못 받은 경우에도
   //    ko=jp 인 행을 만들어 참조를 보장합니다 (lib/rakutenGenres.ts · lib/categoryTranslation.ts).
   //    FK 가 ON DELETE SET NULL 이라 컬럼은 nullable 이지만, 코드는 항상 값을 넣습니다.
-  translationId Int?
-  translation   Translation? @relation(fields: [translationId], references: [id])
-  genreLevel  Int?     @default(1)                    // 1:대분류, 2:중분류, 3:소분류...
-  parentId    Int                                     // 부모 카테고리 ID (루트는 0)
-  isLeaf      Boolean  @default(false)                // 최하위 카테고리 여부 (자식을 조회해 0개일 때 true)
+  translationId    Int?
+  translation      Translation? @relation(fields: [translationId], references: [id])
+  genreLevel       Int?         @default(1) // 1:대분류, 2:중분류, 3:소분류...
+  parentId         Int // 부모 카테고리 ID (루트는 0)
+  isLeaf           Boolean      @default(false) // 최하위 카테고리 여부 (자식을 조회해 0개일 때 true)
   // 🌟 이 장르의 "자식 목록"을 라쿠텐에서 마지막으로 받아온 시각. null 이면 아직 한 번도 안 받아온 것.
   //    사용자 요청은 DB 를 먼저 쓰고, 이 값이 오래됐으면 응답 후 백그라운드로 갱신합니다. (lib/rakutenGenres.ts)
   childrenSyncedAt DateTime?
   // 🌟 라쿠텐에서 사라진 장르. 주문·인기 집계가 참조할 수 있어 지우지 않고 숨깁니다.
-  isActive    Boolean  @default(true)
-  updatedAt   DateTime @updatedAt                     // 데이터 갱신일 (자동)
+  isActive         Boolean      @default(true)
+  updatedAt        DateTime     @updatedAt // 데이터 갱신일 (자동)
 
   @@index([parentId, isActive])
   @@map("RakutenCategory")
 }
 
 model YahooAuctionCategory {
-  id         Int      @id @default(autoincrement())
-  genreId    Int      @unique
-  listId     Int?     @default(0)
+  id               Int          @id @default(autoincrement())
+  genreId          Int          @unique
+  listId           Int?         @default(0)
   // 🌟 이름은 Translation 한 곳에만 둡니다: 원문(일본어)은 translation.jp, 한국어는 translation.ko.
   //    번역을 못 받은 경우에도 ko=jp 인 행을 만들어 참조를 보장합니다 (lib/yahooAuctionCategories.ts).
-  translationId Int?
-  translation   Translation? @relation(fields: [translationId], references: [id])
-  genreLevel Int?     @default(1)
-  parentId   Int                                      // 부모 카테고리 ID (루트는 0)
-  isLeaf     Boolean  @default(false)
+  translationId    Int?
+  translation      Translation? @relation(fields: [translationId], references: [id])
+  genreLevel       Int?         @default(1)
+  parentId         Int // 부모 카테고리 ID (루트는 0)
+  isLeaf           Boolean      @default(false)
   // 🌟 이 카테고리의 "자식 목록"을 야후옥션에서 마지막으로 받아온 시각. null 이면 아직 한 번도 안 받아온 것.
   //    (lib/yahooAuctionCategories.ts — 라쿠텐 childrenSyncedAt 과 같은 역할)
   childrenSyncedAt DateTime?
-  updatedAt  DateTime @updatedAt
+  updatedAt        DateTime     @updatedAt
 
   @@map("YahooAuctionCategory")
 }
 
 model YahooShoppingCategory {
-  id         Int      @id @default(autoincrement())
-  genreId    Int      @unique
+  id               Int          @id @default(autoincrement())
+  genreId          Int          @unique
   // 🌟 이름은 Translation 한 곳에만 둡니다: 원문(일본어)은 translation.jp, 한국어는 translation.ko.
   //    번역을 못 받은 경우에도 ko=jp 인 행을 만들어 참조를 보장합니다 (lib/yahooShoppingCategories.ts).
-  translationId Int?
-  translation   Translation? @relation(fields: [translationId], references: [id])
-  genreLevel Int?     @default(1)
-  parentId   Int                                      // 부모 카테고리 ID (최상위는 1 = 야후 "Shopping" 루트)
-  isLeaf     Boolean  @default(false)
+  translationId    Int?
+  translation      Translation? @relation(fields: [translationId], references: [id])
+  genreLevel       Int?         @default(1)
+  parentId         Int // 부모 카테고리 ID (최상위는 1 = 야후 "Shopping" 루트)
+  isLeaf           Boolean      @default(false)
   // 🌟 이 카테고리의 "자식 목록"을 야후에서 마지막으로 받아온 시각. null 이면 아직 한 번도 안 받아온 것.
   //    사용자 요청은 DB 를 먼저 쓰고, 비어 있으면 그 자리에서 한 번, 오래됐으면 응답 후 백그라운드로 갱신합니다.
   //    (lib/yahooShoppingCategories.ts — 라쿠텐 childrenSyncedAt 과 같은 역할)
   childrenSyncedAt DateTime?
-  updatedAt  DateTime @updatedAt
+  updatedAt        DateTime     @updatedAt
 
   @@map("YahooShoppingCategory")
 }
 
 model AmazonCategory {
-  id         Int      @id @default(autoincrement())
+  id            Int          @id @default(autoincrement())
   // 🌟 아마존 브라우즈 노드 ID. 다른 플랫폼과 달리 문자열입니다.
   //    실제 값이 21782663051 처럼 11자리까지 나와 MySQL INT(최대 21억)에 들어가지 않습니다.
   //    계산에 쓰는 숫자가 아니라 식별자라 문자열이 맞습니다.
-  genreId    String   @unique @db.VarChar(20)
+  genreId       String       @unique @db.VarChar(20)
   // 🌟 이름은 Translation 한 곳에만 둡니다: 원문(일본어)은 translation.jp, 한국어는 translation.ko.
   //    번역을 못 받은 경우에도 ko=jp 인 행을 만들어 참조를 보장합니다.
   translationId Int?
   translation   Translation? @relation(fields: [translationId], references: [id])
-  genreLevel Int?     @default(1)
-  parentId   String   @default("0") @db.VarChar(20)  // 최상위는 "0"
-  isLeaf     Boolean  @default(false)
+  genreLevel    Int?         @default(1)
+  parentId      String       @default("0") @db.VarChar(20) // 최상위는 "0"
+  isLeaf        Boolean      @default(false)
   // 🌟 손님에게 보일지. 취급하지 않기로 한 부문을 숨길 때 씁니다. (lib/blockedCategories.ts 와 함께)
-  isActive   Boolean  @default(true)
-  updatedAt  DateTime @updatedAt
+  isActive      Boolean      @default(true)
+  updatedAt     DateTime     @updatedAt
 
   @@index([parentId, isActive])
   @@map("AmazonCategory")
 }
 
-
 // 2. 머니 로그 타입 Enum 추가
 enum MoneyLogType {
-  CHARGE  // 충전
-  USE     // 사용
-  REFUND  // 환불
+  CHARGE // 충전
+  USE // 사용
+  REFUND // 환불
 }
 
 // 3. 🆕 머니 로그 모델 추가
 model MoneyLog {
-  id            Int           @id @default(autoincrement())
-  userId        Int           @map("user_id")
-  user          User          @relation(fields: [userId], references: [id])
-  
-  // 구분: 충전, 사용, 환불
-  type          MoneyLogType
-  
-  // 상세 내용: "무통장 입금 충전", "주문 결제(주문번호: ...)" 등
-  content       String        @db.Text
-  
-  // 금액: 발생한 금액 (예: 50000 또는 -35000)
-  amount        Int
-  
-  // 잔액: 거래 직후의 최종 잔액 (이미지의 마지막 컬럼용)
-  balanceAfter  Int           @map("balance_after")
-  
-  // 일시: 거래 발생 시간
-  createdAt     DateTime      @default(now()) @map("created_at")
+  id     Int  @id @default(autoincrement())
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id])
 
-  @@map("money_logs")
+  // 구분: 충전, 사용, 환불
+  type MoneyLogType
+
+  // 상세 내용: "무통장 입금 충전", "주문 결제(주문번호: ...)" 등
+  content String @db.Text
+
+  // 금액: 발생한 금액 (예: 50000 또는 -35000)
+  amount Int
+
+  // 잔액: 거래 직후의 최종 잔액 (이미지의 마지막 컬럼용)
+  balanceAfter Int @map("balance_after")
+
+  // 일시: 거래 발생 시간
+  createdAt DateTime @default(now()) @map("created_at")
+
   @@index([userId]) // 사용자별 내역 조회를 위한 인덱스
+  @@map("money_logs")
 }
 
 enum RequestType {
@@ -529,38 +528,38 @@ enum RequestType {
 }
 
 enum RequestStatus {
-  PENDING   // 대기
-  APPROVED  // 승인됨
-  REJECTED  // 반려됨
+  PENDING // 대기
+  APPROVED // 승인됨
+  REJECTED // 반려됨
 }
 
 model MoneyRequest {
-  id            Int           @id @default(autoincrement())
-  userId        Int
-  type          RequestType   // CHARGE, REFUND
-  status        RequestStatus @default(PENDING)
-  amount        Int
-  
-  // 🏦 환불 관련 상세 정보 (환불일 때만 입력됨)
-  bankName      String?       // 은행명
-  accountNumber String?       // 계좌번호
-  accountHolder String?       // 예금주
-  
-  content       String?       // 추가 메모 (충전 시 입금자명 등)
-  adminNote     String?       // 반려 사유 등
-  createdAt     DateTime      @default(now())
-  processedAt   DateTime?
+  id     Int           @id @default(autoincrement())
+  userId Int
+  type   RequestType // CHARGE, REFUND
+  status RequestStatus @default(PENDING)
+  amount Int
 
-  user          User          @relation(fields: [userId], references: [id])
+  // 🏦 환불 관련 상세 정보 (환불일 때만 입력됨)
+  bankName      String? // 은행명
+  accountNumber String? // 계좌번호
+  accountHolder String? // 예금주
+
+  content     String? // 추가 메모 (충전 시 입금자명 등)
+  adminNote   String? // 반려 사유 등
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
 }
 
 // 🌟 api/estimate의 견적 계산 시 사용하는 환율 관련 설정값 (관리자가 수정하는 단일 설정 레코드)
 model ExchangeRateConfig {
-  id                  Int      @id @default(autoincrement())
-  additionalRate      Float    @default(0)   @map("additional_rate")       // 추가 증가액
-  rateBasisUnit       Int      @default(100) @map("rate_basis_unit")       // 몇 엔 기준으로 다시 계산해서 보여줄지의 기준값
-  currentExchangeRate Float    @default(0)   @map("current_exchange_rate") // 현재 환율
-  updatedAt           DateTime? @map("updated_at")                        // 마지막 업데이트 시간 (null 허용)
+  id                  Int       @id @default(autoincrement())
+  additionalRate      Float     @default(0) @map("additional_rate") // 추가 증가액
+  rateBasisUnit       Int       @default(100) @map("rate_basis_unit") // 몇 엔 기준으로 다시 계산해서 보여줄지의 기준값
+  currentExchangeRate Float     @default(0) @map("current_exchange_rate") // 현재 환율
+  updatedAt           DateTime? @map("updated_at") // 마지막 업데이트 시간 (null 허용)
 
   @@map("exchange_rate_configs")
 }
@@ -576,20 +575,20 @@ model ExchangeRateConfig {
 /// 조회는 언제나 "이 상품의 SKU 전부"라서 행을 쪼개지 않고 한 덩어리로 둡니다.
 /// SKU 단위로 나누면 상품 1만 개에 84만 행이 되는데, 그렇게 얻는 이점이 없습니다.
 model ItemVariantCache {
-  id        Int      @id @default(autoincrement())
+  id       Int    @id @default(autoincrement())
   /// 'rakuten' | 'yahoo_shopping'
-  platform  String   @db.VarChar(32)
+  platform String @db.VarChar(32)
   /// 파싱 대상 상품 페이지 (쿼리스트링을 떼고 정규화해서 넣습니다)
-  itemUrl   String   @db.VarChar(512)
+  itemUrl  String @db.VarChar(512)
 
   /// 옵션 축 이름. 일본어 원문과 한국어를 함께 둡니다. (예: [{ja:"カラー", ko:"색상"}])
   /// 손님 화면은 한국어를, 주문 저장은 일본어를 씁니다 — 직원이 판매처에서 그대로 찾아야 합니다.
-  axes      Json
+  axes       Json
   /// 축마다 고를 수 있는 값 목록. 판매처 페이지에 적힌 순서(M·L·XL…)를 그대로 둡니다.
   /// SKU 에서 추려내면 순서가 뒤섞여 사이즈가 뒤죽박죽 보입니다.
-  axisValues Json    @map("axis_values")
+  axisValues Json @map("axis_values")
   /// SKU 목록 [{ variantId, options: [...], price, soldOut }]
-  variants  Json
+  variants   Json
 
   /// 🔗 같은 상품처럼 보이지만 실제로는 별개인 상품들. (야후의 "기타 변형")
   ///    예: 탑스만 7,700엔 / 바지만 7,700엔 / 상하 세트 15,400엔 — 셋 다 다른 상품입니다.
@@ -597,8 +596,8 @@ model ItemVariantCache {
   relatedItems Json? @map("related_items")
 
   /// 목록·상세에서 "¥2,700~" 를 보여줄 때 JSON 을 풀지 않고 바로 읽습니다.
-  minPrice  Int      @map("min_price")
-  maxPrice  Int      @map("max_price")
+  minPrice Int @map("min_price")
+  maxPrice Int @map("max_price")
 
   /// 캐시 만료 판단 기준이자, 장바구니에 "이 가격은 언제 기준인지" 남길 때 씁니다.
   fetchedAt DateTime @default(now()) @map("fetched_at")
@@ -614,7 +613,7 @@ model ItemVariantCache {
 model Translation {
   id        Int      @id @default(autoincrement())
   jp        String   @unique // 일본어 원문 (중복 저장 방지 및 빠른 검색)
-  ko        String   // 번역된 한국어
+  ko        String // 번역된 한국어
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -632,9 +631,9 @@ model Translation {
 // platform 필드를 넣어둬서 나중에 mercari/yahoo_shopping 등 다른 쇼핑몰로도 확장할 수 있게 했습니다.
 model ProductPopularity {
   id           Int      @id @default(autoincrement())
-  platform     String                        // 'rakuten' | 'mercari' | ...
-  itemId       String                        // 플랫폼별 상품 고유 ID (예: 라쿠텐 itemCode)
-  name         String   @db.Text             // 최근 조회 시점의 상품명 (표시용 캐시)
+  platform     String // 'rakuten' | 'mercari' | ...
+  itemId       String // 플랫폼별 상품 고유 ID (예: 라쿠텐 itemCode)
+  name         String   @db.Text // 최근 조회 시점의 상품명 (표시용 캐시)
   price        Int      @default(0)
   thumbnail    String?  @db.Text
   url          String   @db.Text
@@ -652,9 +651,9 @@ model ProductPopularity {
 // 없는 플랫폼에서 실시간 인기 상품 소스 카테고리를 실제 사용자 행동 기반으로 고를 때 씁니다.
 model CategoryPopularity {
   id            Int      @id @default(autoincrement())
-  platform      String                        // 'yahoo_auction' | ...
-  genreId       Int                           // 플랫폼별 카테고리 고유 ID
-  genreName     String?                       // 최근 클릭 시점의 카테고리 이름 (표시/디버깅용 캐시)
+  platform      String // 'yahoo_auction' | ...
+  genreId       Int // 플랫폼별 카테고리 고유 ID
+  genreName     String? // 최근 클릭 시점의 카테고리 이름 (표시/디버깅용 캐시)
   clickCount    Int      @default(1)
   lastClickedAt DateTime @updatedAt
   createdAt     DateTime @default(now())
@@ -663,11 +662,12 @@ model CategoryPopularity {
   @@index([platform, clickCount])
   @@map("CategoryPopularity")
 }
+
 // 🤖 AI 검색으로 들어온 상품의 "메타데이터"만 저장합니다. 벡터는 Qdrant 에만 있습니다.
 //    (RDS t4g.micro 는 RAM 1GB 라 임베딩 저장·연산을 하지 않습니다)
 model AiSearchProduct {
   id        Int      @id @default(autoincrement())
-  platform  String   @db.VarChar(20)          // 'rakuten' | 'mercari' | 'yahoo_shopping' | 'yahoo_auction'
+  platform  String   @db.VarChar(20) // 'rakuten' | 'mercari' | 'yahoo_shopping' | 'yahoo_auction'
   itemId    String   @map("item_id") @db.VarChar(191)
   nameJa    String   @map("name_ja") @db.Text
   nameKo    String   @map("name_ko") @db.Text
@@ -676,7 +676,7 @@ model AiSearchProduct {
   url       String   @db.Text
   shopName  String?  @map("shop_name") @db.VarChar(191)
   qdrantId  String?  @map("qdrant_id") @db.Char(36) // Qdrant 포인트 UUID (색인 안 됐으면 null)
-  hitCount  Int      @default(1) @map("hit_count")   // 검색 결과로 몇 번 나왔는지
+  hitCount  Int      @default(1) @map("hit_count") // 검색 결과로 몇 번 나왔는지
   fetchedAt DateTime @map("fetched_at")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -691,7 +691,7 @@ model AiSearchLog {
   id          Int      @id @default(autoincrement())
   query       String   @db.VarChar(300)
   mallType    String   @map("mall_type") @db.VarChar(20)
-  mode        String   @db.VarChar(10)   // 'ai' | 'keyword' | 'fallback'
+  mode        String   @db.VarChar(10) // 'ai' | 'keyword' | 'fallback'
   keywordJa   String   @map("keyword_ja") @db.VarChar(300)
   resultCount Int      @map("result_count")
   tookMs      Int      @map("took_ms")
@@ -699,4 +699,22 @@ model AiSearchLog {
 
   @@index([createdAt])
   @@map("ai_search_logs")
+}
+
+// 🔔 관리자에게 카카오톡 "나에게 보내기"로 주문 알림을 보내기 위한 연결 정보.
+//    관리자 한 명이 받는 알림이라 한 줄만 씁니다. (lib/notifications/kakaoMemo.ts)
+model AdminKakaoNotify {
+  id            Int       @id @default(autoincrement())
+  kakaoUserId   String    @map("kakao_user_id") @db.VarChar(64) // 토큰 주인(카카오 회원번호)
+  refreshToken  String    @map("refresh_token") @db.Text // 약 2개월. 발송할 때마다 필요하면 갱신됩니다
+  enabled       Boolean   @default(true) // 잠시 끄고 싶을 때
+  // 🌟 여기까지 알린 시점. 다음 알림은 이 시각 이후로 상태가 바뀐 주문만 봅니다.
+  //    (이 한 줄이 중복 발송과 누락을 동시에 막습니다)
+  notifiedUntil DateTime  @map("notified_until")
+  lastSentAt    DateTime? @map("last_sent_at")
+  lastError     String?   @map("last_error") @db.Text // 연결이 끊기면 화면에 보여 줍니다
+  connectedAt   DateTime  @default(now()) @map("connected_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("admin_kakao_notify")
 }

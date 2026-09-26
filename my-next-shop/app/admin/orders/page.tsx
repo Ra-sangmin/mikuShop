@@ -7,7 +7,7 @@ import { currentUnpaid, nextRound, rowTotal, paidTotal } from '@/lib/shippingFee
 import { AdminHero, HeroButton, KpiCard, SearchField, SegFilter, EmptyRow, SkeletonRows, BundleItemsPanel, BundleBadge, BundleToggle, UserBasicInfo, type BasicInfoUser, UserSummaryStats, type SummaryUser, useToasts, ToastStack, gradeTone, toneVars } from '../components/AdminPremiumKit';
 import { useRouter } from 'next/navigation';
 // 🌟 글로벌 상수 및 라벨 임포트
-import { ORDER_STATUS, ORDER_STATUS_LABEL as BASE_STATUS_LABEL, OrderStatus } from '@/src/types/order';
+import { ORDER_STATUS, ORDER_STATUS_LABEL as BASE_STATUS_LABEL, OrderStatus, ADMIN_ATTENTION_STATUSES } from '@/src/types/order';
 import { ADMIN_ORDERS_CHANGED_EVENT } from '@/app/admin/adminEvents';
 
 // 🏷 관리자 주문 관리에서만 쓰는 상태 이름 — 장바구니(CART)는 회원 화면과 같은 말(장바구니)로 보여 줍니다.
@@ -114,7 +114,8 @@ const QUICK_ICON: Record<string, React.ReactNode> = {
 //    관리자 처리 필요: 관리자가 확인 · 처리해야 다음으로 넘어가는 단계
 //    회원 처리 대기  : 회원의 결제 · 요청을 기다리는 단계
 // 🔔 주문 상태를 바꾼 뒤, 왼쪽 메뉴 '주문 관리' 옆 숫자를 바로 다시 세게 알리는 이벤트 이름
-const ADMIN_TABS: string[] = [ORDER_STATUS.BIDDING, ORDER_STATUS.FAILED, ORDER_STATUS.PAID, ORDER_STATUS.WAITING, ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_DONE];
+// 🔧 목록은 src/types/order.ts 한 곳에 있습니다. (뱃지 건수·카카오 알림과 같은 기준)
+const ADMIN_TABS: string[] = ADMIN_ATTENTION_STATUSES;
 const USER_TABS: string[] = [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ];
 
 export default function OrderManagement() {

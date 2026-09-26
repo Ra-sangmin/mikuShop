@@ -15,6 +15,8 @@ import './alimtalk-premium.css';
 import { TrendChart, ChannelBreakdown } from './AlimtalkCharts';
 // 🌟 회원 · 주문을 누르면 사용자 관리 / 주문 관리와 같은 팝업을 띄웁니다 (공용 컴포넌트)
 import MemberDrawer from '../components/MemberDrawer';
+// 🔔 관리자 카카오 알림("나에게 보내기") 연결 패널
+import KakaoNotifyPanel from './KakaoNotifyPanel';
 import OrderDetailModal, { toOrderDetailView } from '../components/OrderDetailModal';
 import { AdminHero, HeroButton, KpiCard, Badge, SegFilter, fmtDateTime, useToasts, ToastStack } from '../components/AdminPremiumKit';
 import {
@@ -289,6 +291,9 @@ export default function AlimtalkManagement() {
           )}
         </section>
       )}
+
+      {/* ===== 관리자 카카오 알림 ===== */}
+      <KakaoNotifyPanel onToast={pushToast} />
 
       {/* ===== 최근 발송 그룹 ===== */}
       <section className="ap-panel">
