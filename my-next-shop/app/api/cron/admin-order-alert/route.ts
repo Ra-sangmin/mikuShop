@@ -48,16 +48,22 @@ export async function GET(request: Request) {
     const orders = await prisma.order.findMany({
       where: {
         status: { in: ADMIN_ATTENTION_STATUSES as any },
-        statusChangedAt: { gt: conn.notifiedUntil, lte: now },
+        OR: [
+          { statusChangedAt: { gt: conn.notifiedUntil, lte: now } },
+          // 🕒 이 기능이 생기기 전에 만들어진 주문은 statusChangedAt 이 비어 있습니다.
+          //    그런 건은 등록 시각으로 판단합니다. (비어 있다고 영영 빠뜨리면 안 됩니다)
+          { AND: [{ statusChangedAt: null }, { registeredAt: { gt: conn.notifiedUntil, lte: now } }] },
+        ],
       },
       select: {
         orderId: true,
         status: true,
         productName: true,
         statusChangedAt: true,
+        registeredAt: true,
         user: { select: { name: true } },
       },
-      orderBy: { statusChangedAt: 'asc' },
+      orderBy: [{ statusChangedAt: 'asc' }, { registeredAt: 'asc' }],
     });
 
     if (orders.length === 0) {

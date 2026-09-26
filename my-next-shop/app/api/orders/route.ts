@@ -207,6 +207,13 @@ export async function POST(req: Request) {
             : (type === "DELIVERY" && (status === "PAID" || status === "WAITING")) ? "WAITING"
             : (status || "CART"),
           
+          // 🕒 만들어진 순간이 곧 "그 상태가 된 시각"입니다.
+          //    예전에는 여기서 비워 두고 상태를 바꿀 때만 채웠는데, 그러면 배송대행 신청처럼
+          //    처음부터 관리자 처리가 필요한 상태(WAITING)로 생긴 주문이
+          //    statusChangedAt 이 비어 있어 관리자 알림에서 통째로 빠졌습니다.
+          //    (app/api/cron/admin-order-alert 가 이 값으로 새 건을 가려냅니다)
+          statusChangedAt: new Date(),
+
           // 경매가 아니면 null/0이 들어가므로 문제없음
           myBidPrice: Number(myBidPrice) || null,
           depositAmount: Number(depositAmount) || 0,
