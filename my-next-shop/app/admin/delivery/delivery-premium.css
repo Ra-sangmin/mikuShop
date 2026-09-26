@@ -110,3 +110,151 @@
 @keyframes dlvFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes dlvRise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .dlv-addr-overlay, .dlv-addr-modal { animation: none; } }
+
+/* =====================================================
+   📱 모바일(768px 이하) — 표를 촘촘한 배송 카드로 바꿔 보여 줍니다. (주문 관리와 같은 느낌)
+     ┌─────────────────────────────────────┐
+     │ [● 국내 통관 ▾]            09.26 18:15 │  ← 배송 상태(바로 바꿀 수 있는 선택칸) · 주문일시
+     │ [사진] 상품명 2줄까지…                 │
+     │        원본 · 전체 N건 · 아이콘          │
+     │ 주문 상민              수취인 홍길동 (…) │
+     │ ─────────────────────────────────── │
+     │ 1234-5678-90 ⧉ · CJ대한통운    [추적 ↗] │
+     └─────────────────────────────────────┘
+   주문번호는 모바일에서 숨깁니다. (td 에 붙인 dlv-td-* 클래스로 자리를 정합니다. 데스크톱 표는 그대로)
+   ===================================================== */
+@media (max-width: 768px) {
+  .dlv-page .ap-table-wrap {
+    overflow: visible; max-height: none; min-width: 0;
+    border: 0; background: transparent; box-shadow: none; padding: 0;
+  }
+  .dlv-page .ap-table-wrap > table {
+    display: block; width: 100% !important; min-width: 0 !important; table-layout: auto;
+    border: 0; background: transparent;
+  }
+  .dlv-page .ap-table-wrap colgroup,
+  .dlv-page .ap-table-wrap thead { display: none; }
+  .dlv-page .ap-table-wrap tbody { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .dlv-page .ap-table-wrap tbody > tr { display: block; min-width: 0; max-width: 100%; }
+  /* :where() 로 우선순위를 낮춰, 아래 칸별 규칙이 덮어쓸 수 있게 합니다 */
+  .dlv-page :where(.ap-table-wrap tbody > tr > td) {
+    display: block; width: auto !important; max-width: none !important; border: 0 !important;
+  }
+  /* '관리'(추적) 칸의 오른쪽 고정(sticky)을 풀어 카드와 같이 움직이게 */
+  .dlv-page .ap-table-wrap tbody > tr > td { position: static !important; box-shadow: none !important; }
+
+  /* 카드 */
+  .dlv-page .ap-table-wrap tbody > tr.admin-table-body-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "status   status   date"
+      "product  product  product"
+      "user     rcpt     rcpt"
+      "tracking tracking manage";
+    column-gap: 0;
+    padding: 11px 12px 12px;
+    border: 1px solid #e6ebf2; border-left: 4px solid #7dd3fc; border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 8px 18px -16px rgba(15, 23, 42, 0.5);
+  }
+  .dlv-page .ap-table-wrap tbody > tr.admin-table-body-row.abx-row { border-left-color: #fb923c; }
+  .dlv-page .ap-table-wrap tbody > tr.admin-table-body-row.is-changed {
+    background: #f0fdf7; border-color: #86efac; border-left-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+  }
+  .dlv-page :where(.ap-table-wrap tbody > tr.admin-table-body-row > td) {
+    padding: 0 !important; text-align: left !important; background: transparent !important;
+    white-space: normal; overflow: visible;
+  }
+  .dlv-page .ap-table-wrap tbody > tr.admin-table-body-row > td { min-width: 0; }
+
+  /* 머리: 배송 상태(선택칸) · 주문일시 */
+  .dlv-page td.dlv-td-status { grid-area: status; align-self: center; }
+  .dlv-page td.dlv-td-status .ap-pill-select { height: 28px; font-size: 12.5px; font-weight: 900; padding-left: 11px; }
+  .dlv-page td.dlv-td-date { grid-area: date; align-self: center; justify-self: end; padding-left: 8px !important; }
+  .dlv-page td.dlv-td-date .ap-id,
+  .dlv-page td.dlv-td-date .abx-badge { display: none; }
+  .dlv-page td.dlv-td-date .ap-sub { margin: 0; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+
+  /* 상품 — 사진 · 이름 2줄 */
+  .dlv-page td.dlv-td-product { grid-area: product; margin-top: 8px; }
+  .dlv-page td.dlv-td-product .apc { gap: 10px; }
+  .dlv-page td.dlv-td-product .apc-thumb { width: 54px; height: 54px; border-radius: 12px; }
+  .dlv-page td.dlv-td-product .apc-body { gap: 4px; }
+  .dlv-page td.dlv-td-product .apc-name {
+    font-size: 13.5px; line-height: 1.4; white-space: normal;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+    overflow: hidden; text-overflow: ellipsis; word-break: break-all;
+  }
+
+  /* 주문자 · 수취인 한 줄 */
+  .dlv-page td.dlv-td-user { grid-area: user; align-self: center; margin-top: 8px; font-size: 12.5px; min-width: 0; }
+  .dlv-page td.dlv-td-user::before { content: '주문 '; font-size: 11.5px; font-weight: 700; color: #94a3b8; }
+  .dlv-page td.dlv-td-user .ap-strong { font-size: 12.5px; }
+  .dlv-page td.dlv-td-rcpt { grid-area: rcpt; align-self: center; justify-self: end; margin-top: 8px; min-width: 0; padding-left: 8px !important; }
+  .dlv-page td.dlv-td-rcpt .dlv-rcpt {
+    flex-direction: row; align-items: baseline; gap: 4px; max-width: 100%;
+    padding: 3px 8px; border-color: #e8eef7; background: #f8fafc;
+  }
+  .dlv-page td.dlv-td-rcpt .dlv-rcpt::before { content: '수취인'; font-size: 11px; font-weight: 700; color: #94a3b8; flex-shrink: 0; }
+  .dlv-page td.dlv-td-rcpt .dlv-rcpt-name { font-size: 12.5px; }
+  .dlv-page td.dlv-td-rcpt .dlv-rcpt-addr { font-size: 11.5px; min-width: 0; }
+  .dlv-page td.dlv-td-rcpt .ap-empty-mark { font-size: 12px; }
+
+  /* 맨 아래: 송장번호 · 배송 업체 | 추적 버튼 */
+  .dlv-page td.dlv-td-tracking,
+  .dlv-page td.dlv-td-manage { margin-top: 10px; padding-top: 10px !important; border-top: 1px dashed #e8edf4 !important; }
+  .dlv-page td.dlv-td-tracking {
+    grid-area: tracking; align-self: stretch;
+    display: flex !important; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0;
+  }
+  .dlv-page td.dlv-td-tracking .ap-id { font-size: 12.5px; max-width: 100%; }
+  .dlv-page td.dlv-td-tracking .ap-sub { margin: 0; font-size: 11.5px; }
+  .dlv-page td.dlv-td-tracking .ap-empty-mark { font-size: 12px; }
+  .dlv-page td.dlv-td-manage { grid-area: manage; display: flex !important; align-items: center; justify-content: flex-end; padding-left: 8px !important; }
+  .dlv-page td.dlv-td-manage::before { display: none; }
+  .dlv-page td.dlv-td-manage .ap-btn { height: 36px; padding: 0 12px; font-size: 12.5px; }
+
+  /* 툴바 — [검색] / 상태 탭 3열 격자 / [표시 N건] */
+  .dlv-page .ap-toolbar { gap: 8px; }
+  .dlv-page .ap-toolbar-left { gap: 8px; }
+  .dlv-page .ap-toolbar .ap-field > input { height: 40px; font-size: 14px; }
+  .dlv-page .ap-toolbar .ap-seg {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px;
+    width: 100%; padding: 0; background: transparent; border: 0;
+  }
+  .dlv-page .ap-toolbar .ap-seg-btn {
+    min-width: 0; height: 36px; padding: 0 7px 0 9px; gap: 5px;
+    justify-content: flex-start;
+    border-radius: 10px; background: #ffffff; border: 1px solid #edf1f6;
+    font-size: 12px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .dlv-page .ap-toolbar .ap-seg-btn em { margin-left: auto; flex-shrink: 0; }
+  .dlv-page .ap-toolbar .ap-seg-btn.is-active {
+    border-color: #7dd3fc; background: #f0f9ff; color: #0369a1;
+    box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.12);
+  }
+  .dlv-page .ap-toolbar .ap-seg-btn.is-active em { background: rgba(14, 165, 233, 0.12); color: #0369a1; }
+  /* '표시 N건'은 탭 마지막 줄(전체) 오른쪽 빈자리에 겹쳐 올립니다 */
+  .dlv-page .ap-toolbar { position: relative; }
+  .dlv-page .ap-toolbar-right { gap: 8px; width: auto !important; position: absolute; right: 0; bottom: 4px; }
+  .dlv-page .ap-count { height: 28px; padding: 0 10px; font-size: 12px; border-radius: 9px; }
+
+  /* 상태 저장 버튼 — 바뀐 게 없으면 숨기고, 있으면 화면 아래에 떠 있게 */
+  .dlv-page .dlv-save-btn { display: none; }
+  .dlv-page .dlv-save-btn.has-changes {
+    display: inline-flex; justify-content: center;
+    position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 60;
+    height: 50px; border-radius: 16px; font-size: 15px;
+    box-shadow: 0 18px 34px -14px rgba(37, 99, 235, 0.8);
+  }
+  .dlv-page:has(.dlv-save-btn.has-changes) { padding-bottom: 84px; }
+
+  /* 합포장 펼침 · 빈 목록 · 불러오는 중 줄 */
+  .dlv-page .ap-table-wrap tbody > tr > td.abx-cell {
+    margin-top: -4px; padding: 10px !important;
+    border: 1px solid #fed7aa !important; border-radius: 0 0 16px 16px; background: #fff7ed;
+  }
+  .dlv-page .ap-table-wrap tbody > tr:not(.admin-table-body-row) > td:not(.abx-cell) { border-radius: 16px; background: #ffffff; }
+}

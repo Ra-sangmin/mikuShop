@@ -321,7 +321,7 @@ export default function MembershipGradeManagement() {
           <span className="ap-section-title"><Crown size={15} weight="duotone" /> 회원 등급 및 국제 배송비 할인율</span>
           <span className="ap-section-hint">순서가 낮을수록 아래 등급입니다</span>
         </div>
-        <div className="ap-table-wrap" ref={gradeTable.wrapRef}>
+        <div className="ap-table-wrap ap-mcards" ref={gradeTable.wrapRef}>
           <table className={`admin-table-resizable ${gradeTable.tableClassName}`} style={gradeTable.tableStyle}>
             <FitColGroup table={gradeTable} />
             <thead>
@@ -343,22 +343,22 @@ export default function MembershipGradeManagement() {
                 const isEditing = editingId === grade.id;
                 return (
                   <tr key={grade.id} className={`admin-table-body-row aft-row ${isEditing ? 'is-editing' : ''}`}>
-                    <td className="ap-td">
+                    <td className="ap-td" data-label="순서">
                       {isEditing
                         ? <input className="ap-cell-input" type="number" value={editForm.sortOrder} onChange={(e) => setEditForm({ ...editForm, sortOrder: parseInt(e.target.value) || 0 })} />
                         : <span className="ap-strong ap-tabnum">{grade.sortOrder}</span>}
                     </td>
-                    <td className="ap-td">
+                    <td className="ap-td ap-m-title">
                       {isEditing
                         ? <input className="ap-cell-input" type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
                         : <GradeChip name={grade.name} />}
                     </td>
-                    <td className="ap-td">
+                    <td className="ap-td" data-label="필요 주문">
                       {isEditing
                         ? numInput(editForm.requiredOrders, v => setEditForm({ ...editForm, requiredOrders: parseInt(v) || 0 }), '건')
                         : <span className="ap-strong ap-tabnum">{grade.requiredOrders.toLocaleString()}<span className="ap-section-hint"> 건 이상</span></span>}
                     </td>
-                    <td className="ap-td">
+                    <td className="ap-td" data-label="배송비 할인">
                       {isEditing
                         ? numInput(editForm.discountRate, v => setEditForm({ ...editForm, discountRate: parseFloat(v) || 0 }), '%')
                         : (
@@ -367,12 +367,12 @@ export default function MembershipGradeManagement() {
                           </span>
                         )}
                     </td>
-                    <td className="ap-td is-left" title={grade.description || ''}>
+                    <td className="ap-td is-left" data-label="메모" title={grade.description || ''}>
                       {isEditing
                         ? <input className="ap-cell-input" type="text" value={editForm.description} placeholder="관리자 메모" onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
                         : (grade.description || <span className="ap-empty-mark">메모 없음</span>)}
                     </td>
-                    <td className={gradeTable.pinnedCellClass('manage', 'ap-td')}>
+                    <td className={gradeTable.pinnedCellClass('manage', 'ap-td ap-m-actions')}>
                       {renderEditActions(isEditing, isUpdating, () => handleUpdate(grade.id), () => setEditingId(null), () => startEditing(grade))}
                     </td>
                   </tr>
@@ -395,7 +395,7 @@ export default function MembershipGradeManagement() {
             <strong>대행 수수료</strong>: 수량이 기준값 미만이면 ‘기준 미만 금액’이 고정으로, 이상이면 수량 × ‘기준 이상 금액’(수량당 단가)으로 계산됩니다.
           </span>
         </div>
-        <div className="ap-table-wrap" ref={orderFeeTable.wrapRef}>
+        <div className="ap-table-wrap ap-mcards" ref={orderFeeTable.wrapRef}>
           <table className={`admin-table-resizable ${orderFeeTable.tableClassName}`} style={orderFeeTable.tableStyle}>
             <FitColGroup table={orderFeeTable} />
             <thead>
@@ -417,27 +417,27 @@ export default function MembershipGradeManagement() {
                 const unit = rule.feeType === 'AGENCY' ? '개' : '엔';
                 return (
                   <tr key={rule.id} className={`admin-table-body-row aft-row ${isEditing ? 'is-editing' : ''}`}>
-                    <td className="ap-td">
+                    <td className="ap-td ap-m-title">
                       <span className="ap-badge" style={{ ['--b-rgb' as string]: rule.feeType === 'AGENCY' ? '124, 58, 237' : '37, 99, 235' } as CSSProperties}>
                         {ORDER_FEE_TYPE_LABEL[rule.feeType] ?? rule.feeType}
                       </span>
                     </td>
-                    <td className="ap-td">
+                    <td className="ap-td" data-label="기준값">
                       {isEditing
                         ? numInput(orderFeeEditForm.thresholdValue, v => setOrderFeeEditForm({ ...orderFeeEditForm, thresholdValue: v }), unit)
                         : <span className="ap-strong ap-tabnum">{Number(rule.thresholdValue).toLocaleString()}{unit}</span>}
                     </td>
-                    <td className="ap-td">
+                    <td className="ap-td" data-label="기준 미만">
                       {isEditing
                         ? numInput(orderFeeEditForm.belowThresholdFee, v => setOrderFeeEditForm({ ...orderFeeEditForm, belowThresholdFee: v }), '¥')
                         : <span className="ap-money">{yen(rule.belowThresholdFee)}</span>}
                     </td>
-                    <td className="ap-td">
+                    <td className="ap-td" data-label="기준 이상">
                       {isEditing
                         ? numInput(orderFeeEditForm.atOrAboveThresholdAmount, v => setOrderFeeEditForm({ ...orderFeeEditForm, atOrAboveThresholdAmount: v }), rule.feeType === 'AGENCY' ? '¥ × 수량' : '¥')
                         : <span className="ap-money">{yen(rule.atOrAboveThresholdAmount)}{rule.feeType === 'AGENCY' && <span className="ap-section-hint"> × 수량</span>}</span>}
                     </td>
-                    <td className={orderFeeTable.pinnedCellClass('manage', 'ap-td')}>
+                    <td className={orderFeeTable.pinnedCellClass('manage', 'ap-td ap-m-actions')}>
                       {renderEditActions(isEditing, isOrderFeeUpdating, () => handleUpdateOrderFee(rule.id), () => setEditingOrderFeeId(null), () => startEditingOrderFee(rule))}
                     </td>
                   </tr>
@@ -462,7 +462,7 @@ export default function MembershipGradeManagement() {
           <Info size={15} weight="bold" />
           <span>무게는 그 구간의 <strong>상한</strong>입니다. 예) 1.1kg 은 다음 구간인 1.25kg 요금이 적용됩니다. 여기서 고친 값은 <strong>이용가이드 &gt; 국제배송 요금표</strong>에 바로 반영됩니다. {shippingError && <strong style={{ color: '#b45309' }}> · {shippingError}</strong>}</span>
         </div>
-        <div className="ap-table-wrap" ref={mikuTable.wrapRef} style={{ maxHeight: 520 }}>
+        <div className="ap-table-wrap ap-mrows" ref={mikuTable.wrapRef} style={{ maxHeight: 520 }}>
           <table className={`admin-table-resizable ${mikuTable.tableClassName}`} style={mikuTable.tableStyle}>
             <FitColGroup table={mikuTable} />
             <thead>
@@ -530,7 +530,7 @@ export default function MembershipGradeManagement() {
           </button>
         </div>
         
-        <div className="ap-table-wrap" ref={emsTable.wrapRef} style={{ maxHeight: 520 }}>
+        <div className="ap-table-wrap ap-mrows" ref={emsTable.wrapRef} style={{ maxHeight: 520 }}>
           <table className={`admin-table-resizable ${emsTable.tableClassName}`} style={emsTable.tableStyle}>
             <FitColGroup table={emsTable} />
             <thead>

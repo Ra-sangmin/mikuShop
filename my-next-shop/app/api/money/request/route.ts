@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireUser, getAdminSession } from '@/lib/apiAuth';
+// 🔔 신청이 들어오면 관리자에게 바로 알립니다. (웹 푸시 · 카카오)
+import { triggerAdminMoneyAlert } from '@/lib/notifications/adminMoneyAlert';
 
 // 🟢 [GET] 신청 내역 조회 (관리자용 전체 조회 or 유저 본인 조회)
 export async function GET(request: Request) {
@@ -72,6 +74,18 @@ export async function POST(request: Request) {
         // 충전 정보 (content 필드 활용 또는 전용 필드)
         content: type === 'CHARGE' ? `입금자명: ${depositor}` : `환불 신청`,
       }
+    });
+
+    // 🔔 관리자에게 알립니다. 응답을 먼저 보내므로 회원은 기다리지 않고,
+    //    발송이 실패해도 신청은 이미 저장돼 있습니다.
+    triggerAdminMoneyAlert({
+      type,
+      amount: amountNum,
+      userName: (await prisma.user.findUnique({ where: { id: userId }, select: { name: true } }))?.name,
+      depositor,
+      bankName,
+      accountNumber,
+      accountHolder,
     });
 
     return NextResponse.json({ success: true, data: newRequest });

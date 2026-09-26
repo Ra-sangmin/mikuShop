@@ -238,7 +238,7 @@ export default function ShippingCarrierManagement() {
           </div>
         </div>
 
-        <div className="ap-table-wrap" ref={table.wrapRef}>
+        <div className="ap-table-wrap ap-mcards" ref={table.wrapRef}>
           <table className={`admin-table-resizable ${table.tableClassName}`} style={table.tableStyle}>
             <FitColGroup table={table} />
             <thead>
@@ -260,7 +260,7 @@ export default function ShippingCarrierManagement() {
                 const isEditing = editingId === carrier.id;
                 return (
                   <tr key={carrier.id} className={`admin-table-body-row aft-row ${isEditing ? 'is-editing' : ''}`}>
-                    <td className="ap-td">
+                    <td className="ap-td ap-m-title">
                       {isEditing ? (
                         <input className="ap-cell-input" type="text" value={editForm.name} autoFocus
                           onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
@@ -273,7 +273,7 @@ export default function ShippingCarrierManagement() {
                         </span>
                       )}
                     </td>
-                    <td className="ap-td is-left">
+                    <td className="ap-td is-left" data-label="조회 주소">
                       {isEditing ? (
                         <input className="ap-cell-input" type="text" value={editForm.url}
                           onChange={(e) => setEditForm({ ...editForm, url: e.target.value })}
@@ -284,8 +284,8 @@ export default function ShippingCarrierManagement() {
                         </a>
                       )}
                     </td>
-                    <td className="ap-td"><span className="ap-strong ap-tabnum">{safeDate(carrier.updatedAt)}</span></td>
-                    <td className={table.pinnedCellClass('manage', 'ap-td')}>
+                    <td className="ap-td" data-label="최근 수정"><span className="ap-strong ap-tabnum">{safeDate(carrier.updatedAt)}</span></td>
+                    <td className={table.pinnedCellClass('manage', 'ap-td ap-m-actions')}>
                       {isEditing ? (
                         <span className="ap-actions">
                           <button type="button" className="ap-btn is-ghost" onClick={() => setEditingId(null)} aria-label="취소"><X size={12} weight="bold" /></button>

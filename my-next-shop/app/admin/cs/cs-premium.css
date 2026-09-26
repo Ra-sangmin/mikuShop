@@ -169,3 +169,21 @@
   .cs-foot-actions .cs-btn { flex: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .cs-dot { animation: none; } }
+
+/* 📱 모바일(768px 이하) — 머리 · 작성칸을 더 간략하게
+   설명 문구는 숨기고, [아이콘 · 제목 · 건수]를 한 줄로. 목록은 공용 카드(.ap-mcards)로 보입니다. */
+@media (max-width: 768px) {
+  .cs-head { flex-wrap: nowrap; padding: 12px; gap: 10px; }
+  .cs-head-icon { width: 34px; height: 34px; border-radius: 11px; }
+  .cs-head-text strong { font-size: 16px; }
+  .cs-head-text span { display: none; }
+  .cs-head-stats { width: auto; gap: 6px; }
+  .cs-stat { flex: none; min-width: 0; padding: 4px 9px; border-radius: 10px; align-items: flex-end; }
+  .cs-stat b { font-size: 14px; }
+  .cs-stat small { font-size: 10.5px; }
+  .cs-composer { margin: 12px 12px 10px; border-radius: 14px; }
+  .cs-composer-head { padding: 10px 12px; }
+  .cs-composer-title span { display: none; }
+  .cs-foot-hint { display: none; }
+  .cs-composer-foot .cs-btn { height: 42px; justify-content: center; }
+}

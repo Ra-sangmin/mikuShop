@@ -243,3 +243,101 @@
   .adm-product { max-width: 150px; }
   .adm-table tbody td, .adm-table thead th { padding: 12px 6px; }
 }
+
+/* =====================================================
+   📱 모바일(768px 이하) — 통계 카드 4개를 2×2 로 촘촘하게
+   영문 머리표(TODAY 등)와 아래 설명 줄은 숨기고, [아이콘 · 제목] / 숫자 / 막대 세 줄로 줄입니다.
+     ┌──────────────┐ ┌──────────────┐
+     │ 🧾 오늘의 주문 │ │ ⏳ 처리 중     │
+     │ 2건           │ │ 5건           │
+     │ ━━━░░░░░░░░   │ │ ━━━━━━━░░░    │
+     └──────────────┘ └──────────────┘
+   (데스크톱은 그대로)
+   ===================================================== */
+@media (max-width: 768px) {
+  .adm-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; margin-bottom: 14px; }
+  .adm-stat {
+    display: grid; align-items: center;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "icon  title"
+      "value value"
+      "meter meter";
+    column-gap: 7px;
+    padding: 11px 12px 12px; border-radius: 14px;
+  }
+  .adm-stat:hover { transform: none; }
+  .adm-stat::after { width: 110px; height: 110px; top: -50px; right: -45px; }
+  .adm-stat-top { display: contents; }
+  .adm-stat-eyebrow,
+  .adm-stat-foot { display: none; }
+  .adm-stat-icon { grid-area: icon; width: 26px; height: 26px; border-radius: 8px; }
+  .adm-stat-icon svg { width: 15px; height: 15px; }
+  .adm-stat-title {
+    grid-area: title; margin: 0; font-size: 12.5px; font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .adm-stat-value, .adm-stat > .adm-skel { grid-area: value; margin-top: 8px; }
+  .adm-stat-value { font-size: 22px; letter-spacing: -0.6px; white-space: nowrap; overflow: hidden; }
+  .adm-stat-value .adm-unit { font-size: 12px; }
+  .adm-stat-value .adm-won { font-size: 14px; }
+  .adm-stat-meter { grid-area: meter; margin: 8px 0 0; height: 5px; }
+}
+
+/* =====================================================
+   📱 모바일(768px 이하) — 최근 주문 목록 · 배송 상태 패널
+   · 패널 머리: 영문 머리표(RECENT ORDERS 등)는 숨기고 제목 · 건수 · 자세히 보기를 한 줄로 작게
+   · 최근 주문: 5칸 표를 주문 한 건 = 두 줄 목록으로
+       상품명 (…)                    ₩ 12,345
+       (라) 라상민                  [● 입고 대기중]
+     (주문번호는 모바일에서 숨깁니다. 누르면 주문 관리로 이동은 그대로)
+   · 배송 상태: 줄 간격만 촘촘하게
+   (데스크톱은 그대로)
+   ===================================================== */
+@media (max-width: 768px) {
+  .adm-cols { gap: 12px; }
+  .adm-panel { padding: 12px 12px 4px !important; border-radius: 16px !important; }
+  .adm-panel-head { flex-wrap: nowrap !important; gap: 8px; padding-bottom: 10px; }
+  .adm-panel-eyebrow { display: none; }
+  .adm-panel-title { font-size: 15px; white-space: nowrap; }
+  .adm-chip { padding: 3px 8px; font-size: 11px; }
+  .adm-more { padding: 6px 10px; font-size: 12px; border-radius: 9px; }
+
+  /* 최근 주문 — 표를 두 줄짜리 목록으로 */
+  .adm-table, .adm-table tbody { display: block; width: 100%; }
+  .adm-table thead { display: none; }
+  .adm-table tbody tr { display: block; }
+  .adm-table tbody tr.is-clickable {
+    display: grid; align-items: center;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "product amount"
+      "user    status";
+    gap: 6px 10px;
+    padding: 11px 2px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .adm-table tbody tr.is-clickable:last-child { border-bottom: 0; }
+  .adm-table tbody tr.is-clickable > td { display: block; padding: 0 !important; border: 0; min-width: 0; text-align: left; }
+  .adm-table tbody tr.is-clickable > td:nth-child(1) { display: none; }                 /* 주문번호 */
+  .adm-table tbody tr.is-clickable > td:nth-child(2) { grid-area: user; }               /* 사용자 */
+  .adm-table tbody tr.is-clickable > td:nth-child(3) { grid-area: product; }            /* 상품명 */
+  .adm-table tbody tr.is-clickable > td:nth-child(4) { grid-area: status; justify-self: end; } /* 상태 */
+  .adm-table tbody tr.is-clickable > td:nth-child(5) { grid-area: amount; justify-self: end; } /* 금액 */
+  .adm-table .adm-product { max-width: none !important; font-size: 13.5px; font-weight: 700; color: #0f172a; }
+  .adm-table .adm-user { gap: 6px; }
+  .adm-table .adm-avatar { width: 20px; height: 20px; border-radius: 7px; font-size: 10px; }
+  .adm-table .adm-user-name { font-size: 12px; }
+  .adm-table .adm-badge { padding: 3px 9px; font-size: 11px; }
+  .adm-table .adm-amount { font-size: 14px; }
+  /* 불러오는 중 · 빈 목록 줄 */
+  .adm-table tbody tr:not(.is-clickable) > td { display: block; padding: 8px 2px !important; border: 0; }
+
+  /* 배송 상태 — 촘촘하게 */
+  .adm-ship-list { padding-bottom: 8px; }
+  .adm-ship { gap: 9px; padding: 10px 2px; }
+  .adm-ship-icon { width: 30px; height: 30px; border-radius: 9px; }
+  .adm-ship-icon svg { width: 15px; height: 15px; }
+  .adm-ship .adm-badge { padding: 3px 9px; font-size: 11px; }
+  .adm-empty { padding: 24px 12px; }
+}

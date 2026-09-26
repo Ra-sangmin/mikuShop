@@ -1,0 +1,119 @@
+/* =====================================================
+   🧾 정산 관리 — 화면 전용 스타일
+   공통 모양은 admin-premium.css / admin-common.css 가 맡고, 여기에는 모바일 카드만 둡니다.
+   ===================================================== */
+
+/* =====================================================
+   📱 모바일(768px 이하) — 정산 목록을 촘촘한 카드로 (주문·배송·회원 관리와 같은 느낌)
+     ┌─────────────────────────────────────┐
+     │ [사진] 상품명 2줄까지…                 │
+     │ 구매자 라상민              ₩ 153,840   │
+     │ 2026.09.20 완료               ¥ 16,999 │
+     └─────────────────────────────────────┘
+   주문번호 · 수취인 주소는 모바일에서 숨깁니다. 맨 아래 합계 줄은 한 줄로.
+   (td 에 붙인 stl-td-* 클래스로 자리를 정합니다. 데스크톱 표는 그대로)
+   ===================================================== */
+@media (max-width: 768px) {
+  /* 툴바 — [검색] / 기간 탭 4열 / 합계 */
+  .stl-page .ap-toolbar { gap: 8px; }
+  .stl-page .ap-toolbar-left { gap: 8px; }
+  .stl-page .ap-toolbar .ap-field > input { height: 40px; font-size: 14px; }
+  .stl-page .ap-toolbar .ap-seg {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
+    width: 100%; padding: 0; background: transparent; border: 0;
+  }
+  .stl-page .ap-toolbar .ap-seg-btn {
+    min-width: 0; height: 34px; padding: 0 6px; gap: 4px; justify-content: center;
+    border-radius: 10px; background: #ffffff; border: 1px solid #edf1f6;
+    font-size: 12px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .stl-page .ap-toolbar .ap-seg-btn.is-active {
+    border-color: #6ee7b7; background: #ecfdf5; color: #047857;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.12);
+  }
+  .stl-page .ap-toolbar .ap-seg-btn.is-active em { background: rgba(16, 185, 129, 0.12); color: #047857; }
+  /* 위쪽 '합계 ₩…' 는 목록 맨 아래 합계 줄과 같아 모바일에서는 숨깁니다 */
+  .stl-page .ap-toolbar-right { display: none; }
+
+  /* 표 → 카드 */
+  .stl-page .ap-table-wrap {
+    overflow: visible; max-height: none; min-width: 0;
+    border: 0; background: transparent; box-shadow: none; padding: 0;
+  }
+  .stl-page .ap-table-wrap > table {
+    display: block; width: 100% !important; min-width: 0 !important; table-layout: auto;
+    border: 0; background: transparent;
+  }
+  .stl-page .ap-table-wrap colgroup,
+  .stl-page .ap-table-wrap thead { display: none; }
+  .stl-page .ap-table-wrap tbody { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .stl-page .ap-table-wrap tbody > tr { display: block; min-width: 0; max-width: 100%; }
+  /* :where() 로 우선순위를 낮춰, 아래 칸별 규칙이 덮어쓸 수 있게 합니다 */
+  .stl-page :where(.ap-table-wrap tbody > tr > td, .ap-table-wrap tfoot > tr > td) {
+    display: block; width: auto !important; max-width: none !important; border: 0 !important;
+  }
+  .stl-page .ap-table-wrap td { position: static !important; box-shadow: none !important; }
+
+  .stl-page .ap-table-wrap tbody > tr.admin-table-body-row {
+    display: grid; align-items: center;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "product product"
+      "user    krw"
+      "date    jpy";
+    gap: 6px 10px;
+    padding: 11px 12px;
+    border: 1px solid #e6ebf2; border-left: 4px solid #6ee7b7; border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 8px 18px -16px rgba(15, 23, 42, 0.5);
+  }
+  .stl-page :where(.ap-table-wrap tbody > tr.admin-table-body-row > td) {
+    padding: 0 !important; text-align: left !important; background: transparent !important;
+    white-space: normal; overflow: visible;
+  }
+  .stl-page .ap-table-wrap tbody > tr.admin-table-body-row > td { min-width: 0; }
+
+  /* 상품 — 사진 · 이름 2줄 */
+  .stl-page td.stl-td-product { grid-area: product; margin-bottom: 4px; }
+  .stl-page td.stl-td-product .ap-product { gap: 10px; }
+  .stl-page td.stl-td-product .ap-thumb { width: 44px; height: 44px; border-radius: 11px; flex-shrink: 0; }
+  .stl-page td.stl-td-product .ap-product-name {
+    font-size: 13.5px; line-height: 1.4; color: #0f172a; white-space: normal;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+    overflow: hidden; text-overflow: ellipsis; word-break: break-all;
+  }
+
+  /* 구매자 · 정산 금액 */
+  .stl-page td.stl-td-user { grid-area: user; font-size: 12.5px; }
+  .stl-page td.stl-td-user::before { content: '구매자 '; font-size: 11.5px; font-weight: 700; color: #94a3b8; }
+  .stl-page td.stl-td-krw { grid-area: krw; justify-self: end; }
+  .stl-page td.stl-td-krw .ap-money { font-size: 17px; white-space: nowrap; }
+
+  /* 완료일 · 엔화 상품가 */
+  .stl-page td.stl-td-date { grid-area: date; }
+  .stl-page td.stl-td-date .ap-strong { font-size: 11.5px; font-weight: 700; color: #94a3b8; }
+  .stl-page td.stl-td-date .ap-strong::after { content: ' 완료'; }
+  .stl-page td.stl-td-jpy { grid-area: jpy; justify-self: end; }
+  .stl-page td.stl-td-jpy .ap-money { font-size: 12px; color: #94a3b8; white-space: nowrap; }
+
+  /* 주문번호 · 수취인 주소는 모바일에서 숨김 */
+  .stl-page td.stl-td-id,
+  .stl-page td.stl-td-addr { display: none !important; }
+
+  /* 합계 줄 — [합계 N건 ······ ¥ · ₩] 한 줄 */
+  .stl-page .ap-table-wrap tfoot { display: block; margin-top: 10px; }
+  .stl-page .ap-table-wrap tfoot > tr {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 12px 14px; border-radius: 14px;
+    background: #0f172a;
+  }
+  .stl-page .ap-table-wrap tfoot > tr > td { padding: 0 !important; background: transparent !important; white-space: nowrap; }
+  .stl-page .ap-table-wrap tfoot > tr > td:first-child { flex: 1; min-width: 0; }
+  .stl-page .ap-table-wrap tfoot .ap-strong { color: #ffffff; }
+  .stl-page .ap-table-wrap tfoot .ap-section-hint { color: #94a3b8; }
+  .stl-page .ap-table-wrap tfoot .ap-money { color: #ffffff; font-size: 16px; }
+  .stl-page .ap-table-wrap tfoot .ap-money.is-sub { color: #94a3b8; font-size: 12px; }
+
+  /* 불러오는 중 · 빈 목록 */
+  .stl-page .ap-table-wrap tbody > tr:not(.admin-table-body-row) > td { border-radius: 16px; background: #ffffff; }
+}

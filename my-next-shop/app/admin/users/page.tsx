@@ -366,7 +366,7 @@ export default function UserManagement() {
                   <tr key={user.id}
                     className={`admin-table-body-row usr-row aft-row ${drawerUserId === user.id ? 'is-open' : ''}`}
                     onClick={() => setDrawerUserId(user.id)}>
-                    <td className="usr-td is-left">
+                    <td className="usr-td is-left usr-td-member">
                       <span className="usr-member">
                         <Avatar user={user} tone={tone} size={34} />
                         <span className="usr-member-text">
@@ -378,29 +378,29 @@ export default function UserManagement() {
                         </span>
                       </span>
                     </td>
-                    <td className="usr-td"><ProviderBadge provider={provider} /></td>
-                    <td className="usr-td is-left">
+                    <td className="usr-td usr-td-provider"><ProviderBadge provider={provider} /></td>
+                    <td className="usr-td is-left usr-td-contact">
                       <span className="usr-contact">
                         <span className={email ? '' : 'is-empty'}><EnvelopeSimple size={12} weight="bold" /><span className="usr-ellipsis">{email || '이메일 없음'}</span></span>
                         <span className={user.phone ? '' : 'is-empty'}><Phone size={12} weight="bold" /><span className="usr-ellipsis">{user.phone || '휴대폰 없음'}</span></span>
                       </span>
                     </td>
-                    <td className="usr-td"><GradeBadge name={user.grade?.name} /></td>
-                    <td className="usr-td is-right">
+                    <td className="usr-td usr-td-grade"><GradeBadge name={user.grade?.name} /></td>
+                    <td className="usr-td is-right usr-td-orders">
                       <span className={`usr-num ${!user._count?.orders ? 'is-zero' : ''}`} translate="no">
                         {(user._count?.orders || 0).toLocaleString()}<small>건</small>
                       </span>
                     </td>
-                    <td className="usr-td is-right">
+                    <td className="usr-td is-right usr-td-money">
                       <span className={`usr-money ${!user.cyberMoney ? 'is-zero' : ''}`} translate="no">
                         <i>₩</i>{(user.cyberMoney || 0).toLocaleString()}
                       </span>
                     </td>
-                    <td className="usr-td is-left">
+                    <td className="usr-td is-left usr-td-date">
                       <span className="usr-date">{fmtDate(user.createdAt)}</span>
                       <span className="usr-date-sub">{daysSince(user.createdAt).toLocaleString()}일째</span>
                     </td>
-                    <td className={table.pinnedCellClass('manage', 'usr-td is-center')}>
+                    <td className={table.pinnedCellClass('manage', 'usr-td is-center usr-td-manage')}>
                       <button type="button" className="usr-btn is-ghost"
                         onClick={(e) => { e.stopPropagation(); setDrawerUserId(user.id); }}>
                         <PencilSimple size={13} weight="bold" /> 관리

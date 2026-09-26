@@ -440,7 +440,7 @@ function GroupTable({ section, loading, onOpenMember, onOpenOrder, openingOrderI
     return <SectionState loading={loading} section={section} emptyText="최근 30일 동안 발송한 그룹이 없어요" rows={5} />;
   }
   return (
-    <div className="atk-table-wrap">
+    <div className="atk-table-wrap ap-mcards">
       <table className="atk-table">
         <thead>
           <tr>
@@ -461,10 +461,10 @@ function GroupTable({ section, loading, onOpenMember, onOpenOrder, openingOrderI
             const st = GROUP_STATUS[g.status] ?? { label: g.status || '-', rgb: '100, 116, 139' };
             return (
               <tr key={g.groupId} className={g.failed > 0 ? 'has-fail' : undefined}>
-                  <td title={`그룹 ${g.groupId}`}>
+                  <td className="ap-m-title" title={`그룹 ${g.groupId}`}>
                     <RecipientCell group={g} onOpenMember={onOpenMember} />
                   </td>
-                  <td className="atk-order-cell">
+                  <td className="atk-order-cell" data-label="주문번호">
                     {g.orderIds.length === 0
                       ? <span className="atk-muted">-</span>
                       : (
@@ -485,7 +485,7 @@ function GroupTable({ section, loading, onOpenMember, onOpenOrder, openingOrderI
                         </span>
                       )}
                   </td>
-                  <td className="atk-tpl-cell">
+                  <td className="atk-tpl-cell" data-label="템플릿">
                     {g.templates.length === 0
                       ? <span className="atk-muted">-</span>
                       : <>
@@ -493,13 +493,13 @@ function GroupTable({ section, loading, onOpenMember, onOpenOrder, openingOrderI
                           {g.templates.length > 1 && <span className="atk-more" title={g.templates.join(', ')}>외 {g.templates.length - 1}개</span>}
                         </>}
                   </td>
-                  <td className="atk-nowrap">{g.channels.length ? g.channels.join(' · ') : '-'}</td>
-                  <td className="atk-muted">{g.dateCreated ? fmtDateTime(g.dateCreated) : '-'}</td>
-                  <td><Badge rgb={st.rgb} dot>{st.label}</Badge></td>
-                  <td className="is-num">{n(g.total)}</td>
-                  <td className="is-num">{n(g.success)}</td>
-                  <td className={`is-num ${g.failed > 0 ? 'atk-fail' : ''}`}>{n(g.failed)}</td>
-                  <td className={`is-num ${g.pending > 0 ? 'atk-pending' : ''}`}>{n(g.pending)}</td>
+                  <td className="atk-nowrap" data-label="채널">{g.channels.length ? g.channels.join(' · ') : '-'}</td>
+                  <td className="atk-muted" data-label="발송 시각">{g.dateCreated ? fmtDateTime(g.dateCreated) : '-'}</td>
+                  <td data-label="상태"><Badge rgb={st.rgb} dot>{st.label}</Badge></td>
+                  <td className="is-num ap-m-quarter" data-label="전체">{n(g.total)}</td>
+                  <td className="is-num ap-m-quarter" data-label="성공">{n(g.success)}</td>
+                  <td className={`is-num ap-m-quarter ${g.failed > 0 ? 'atk-fail' : ''}`} data-label="실패">{n(g.failed)}</td>
+                  <td className={`is-num ap-m-quarter ${g.pending > 0 ? 'atk-pending' : ''}`} data-label="처리중">{n(g.pending)}</td>
                 </tr>
             );
           })}
@@ -516,7 +516,7 @@ function TemplateTable({ section, loading }: { section?: Section<TemplateRow[]>;
     return <SectionState loading={loading} section={section} emptyText="등록된 알림톡 템플릿이 없어요" rows={4} />;
   }
   return (
-    <div className="atk-table-wrap">
+    <div className="atk-table-wrap ap-mcards">
       <table className="atk-table">
         <thead>
           <tr>
@@ -531,16 +531,16 @@ function TemplateTable({ section, loading }: { section?: Section<TemplateRow[]>;
             const st = TEMPLATE_STATUS[t.status] ?? { label: t.status || '-', rgb: '100, 116, 139' };
             return (
               <tr key={t.templateId} className={t.status === 'REJECTED' ? 'has-fail' : undefined}>
-                <td>
+                <td className="ap-m-title">
                   <div className="atk-tpl-name">
                     <strong>{t.name}</strong>
                     {t.usedBySite && <span className="atk-site-tag">사이트 사용 · {SITE_STATUS_LABEL[t.usedBySite] ?? t.usedBySite}</span>}
                   </div>
                   <code className="atk-id">{t.templateId}</code>
                 </td>
-                <td><Badge rgb={st.rgb} dot>{st.label}</Badge></td>
-                <td className="atk-comment">{t.lastComment ?? <span className="atk-muted">-</span>}</td>
-                <td className="atk-muted">{t.dateUpdated ? fmtDateTime(t.dateUpdated) : '-'}</td>
+                <td data-label="상태"><Badge rgb={st.rgb} dot>{st.label}</Badge></td>
+                <td className="atk-comment ap-m-long" data-label="최근 검수 의견">{t.lastComment ?? <span className="atk-muted">-</span>}</td>
+                <td className="atk-muted" data-label="수정일">{t.dateUpdated ? fmtDateTime(t.dateUpdated) : '-'}</td>
               </tr>
             );
           })}

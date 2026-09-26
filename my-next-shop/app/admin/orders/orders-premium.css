@@ -1135,3 +1135,204 @@
 .ord-eng-title { flex-wrap: wrap; white-space: nowrap; }
 .ord-eng-title em { white-space: nowrap; }
 .ord-eng-head .ord-detail-copy, .ord-eng-fetch { white-space: nowrap; flex-shrink: 0; }
+
+/* 모바일 카드 머리는 표(데스크톱)에서는 숨깁니다 */
+.ord-page .ord-m-head { display: none; }
+
+/* =====================================================
+   📱 모바일(768px 이하) — 표를 촘촘한 상품 카드로 바꿔 보여 줍니다.
+   가로로 긴 표를 옆으로 밀며 보던 것을, 상품 하나 = 카드 하나로 세로로 읽게 하고
+   한 화면에 여러 건이 들어오도록 높이를 줄였습니다.
+     ┌─────────────────────────────────────┐
+     │ ● 입고 대기중            09.26 18:15 │
+     │ [사진] 상품명 2줄까지…               │
+     │        원본 · 옵션/요청 아이콘         │
+     │ 👤 주문자                   ¥ 가격   │
+     │ [상세보기] [  다음 단계 버튼   | ▾ ] │
+     └─────────────────────────────────────┘
+   주문번호 · 알림 이력 · 배송지는 모바일에서 숨깁니다 (상세보기에서 확인).
+   (td 에 붙인 ord-td-* 클래스로 자리를 정합니다. 데스크톱 표는 그대로입니다)
+   ===================================================== */
+@media (max-width: 768px) {
+  .ord-page .ord-table-wrap {
+    overflow: visible; max-height: none; min-width: 0;
+    border: 0; background: transparent; box-shadow: none; padding: 0;
+  }
+  /* 긴 날짜·상품명이 화면 폭을 밀어내 가로 스크롤이 생기지 않게 (카드 안에서 줄이거나 … 처리) */
+  .ord-page .ord-table-wrap > table,
+  .ord-page .ord-table-wrap tbody,
+  .ord-page .ord-table-wrap tbody > tr { min-width: 0; max-width: 100%; }
+  .ord-page .ord-table-wrap > table {
+    display: block; width: 100% !important; min-width: 0 !important; table-layout: auto;
+    border: 0; background: transparent;
+  }
+  .ord-page .ord-table-wrap colgroup,
+  .ord-page .ord-table-wrap thead { display: none; }
+  .ord-page .ord-table-wrap tbody { display: flex; flex-direction: column; gap: 8px; }
+  .ord-page .ord-table-wrap tbody > tr { display: block; }
+  /* :where() 로 감싸 우선순위를 낮춥니다 — 아래 칸별 규칙이 이 초기화를 덮어쓸 수 있게 */
+  .ord-page :where(.ord-table-wrap tbody > tr > td) {
+    display: block; width: auto !important; max-width: none !important;
+    border: 0 !important;
+  }
+  /* '관리' 칸은 표에서 오른쪽에 고정(sticky)돼 있습니다. 카드에서는 같이 움직이게 풉니다. */
+  .ord-page .ord-table-wrap tbody > tr > td.aft-pinned,
+  .ord-page .ord-table-wrap tbody > tr > td { position: static !important; }
+
+  /* 카드 — 3칸 격자: [상세보기 | 다음 단계 버튼(넓게)] 줄과 [주문자 | 가격] 줄을 함께 맞춥니다 */
+  .ord-page .ord-table-wrap tbody > tr.admin-table-body-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "product product product"
+      "user    user    price"
+      "bid     bid     bid"
+      "manage  status  status";
+    column-gap: 8px;
+    padding: 11px 12px 12px;
+    border: 1px solid #e6ebf2; border-radius: 16px;
+    background: #ffffff !important; /* 행에 붙은 인라인 배경(transparent)을 이깁니다 */
+    box-shadow: 0 8px 18px -16px rgba(15, 23, 42, 0.5);
+  }
+  .ord-page .ord-table-wrap tbody > tr.admin-table-body-row.ord-row-changed {
+    background: #f0fdf4 !important;
+    border-color: #86efac; box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+  }
+  .ord-page :where(.ord-table-wrap tbody > tr.admin-table-body-row > td) { padding: 0 !important; text-align: left !important; background: transparent !important; }
+  /* 격자 칸이 내용(긴 날짜·이름) 때문에 카드 밖으로 넓어지지 않게 */
+  .ord-page .ord-table-wrap tbody > tr.admin-table-body-row > td { min-width: 0; }
+
+  /* 표에서 첫 칸 왼쪽에 긋던 색 줄(변경됨·관리자/회원 구분)은 카드에서는 카드 왼쪽 테두리로 */
+  .ord-page .ord-table-wrap tbody > tr > td { box-shadow: none !important; }
+  .ord-page .ord-table-wrap tbody > tr.admin-table-body-row.ord-in-admin { border-left: 4px solid #a5b4fc; }
+  .ord-page .ord-table-wrap tbody > tr.admin-table-body-row.ord-in-user { border-left: 4px solid #cbd5e1; }
+  .ord-page .ord-table-wrap tbody > tr.admin-table-body-row.ord-row-changed { border-left: 4px solid #10b981; }
+
+  /* 카드 머리 — 현재 상태 배지 + 날짜 (한 줄, 얇게) */
+  .ord-page .ord-m-head { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; min-width: 0; }
+  .ord-page .ord-m-status {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    height: 24px; padding: 0 10px; border-radius: 999px;
+    font-size: 12.5px; font-weight: 900; letter-spacing: -0.2px;
+    color: var(--ms-c); background: var(--ms-bg); border: 1.5px solid var(--ms-bd);
+  }
+  .ord-page .ord-m-status i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .ord-page .ord-m-dirty {
+    flex-shrink: 0; height: 20px; padding: 0 7px; border-radius: 999px; display: inline-flex; align-items: center;
+    font-size: 11px; font-weight: 800; color: #047857; background: #d1fae5;
+  }
+  .ord-page .ord-m-date {
+    margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 11.5px; font-weight: 700; color: #94a3b8;
+  }
+  /* 전체 탭의 '현재 ○○' 배지는 머리와 겹치므로 숨깁니다 */
+  .ord-page td.ord-td-status .ord-now { display: none; }
+
+  /* 상품 — 사진 · 이름 2줄 */
+  .ord-page td.ord-product-td { grid-area: product; }
+  .ord-page td.ord-product-td .ord-pcard { gap: 10px; align-items: center; }
+  .ord-page td.ord-product-td .ord-pthumb { width: 54px; height: 54px; border-radius: 12px; }
+  .ord-page td.ord-product-td .ord-pbody { gap: 4px; }
+  /* 상품명은 2줄까지만, 넘치면 … 로 줄입니다 (위쪽 .ord-pname { display: block } 이 줄 제한을 풀어 버려 다시 겁니다) */
+  .ord-page td.ord-product-td .ord-pname {
+    font-size: 13.5px; line-height: 1.4; white-space: normal;
+    display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+    overflow: hidden; text-overflow: ellipsis; word-break: break-all;
+  }
+
+  /* 주문자 · 가격 한 줄 */
+  .ord-page td.ord-td-user { grid-area: user; align-self: center; min-width: 0; margin-top: 8px; }
+  .ord-page td.ord-td-user .ord-user { max-width: 100%; font-size: 12.5px; }
+  .ord-page td.ord-td-user .ord-user-avatar { width: 22px; height: 22px; font-size: 11px; }
+  .ord-page td.ord-price {
+    grid-area: price; align-self: center; justify-self: end; margin-top: 8px;
+    font-size: 16px; font-weight: 900; white-space: nowrap;
+  }
+
+  /* 주문번호 · 알림 발송 이력 줄, 배송지(수취인)는 모바일 카드에서 숨깁니다 (상세보기에서 확인) */
+  .ord-page td.ord-td-date { display: none !important; }
+  .ord-page td.ord-manage-td .ord-manage-addr { display: none; }
+
+  /* 경매 상태 (경매 상황 주문만) */
+  .ord-page td.ord-td-bid { grid-area: bid; margin-top: 8px; }
+  .ord-page td.ord-td-bid.is-none { display: none; }
+  .ord-page td.ord-td-bid .admin-status-select { width: 100%; height: 36px; }
+
+  /* 맨 아래 한 줄: [상세보기] [다음 단계 버튼] */
+  .ord-page td.ord-manage-td { grid-area: manage; display: flex !important; align-items: flex-start; margin-top: 10px; }
+  .ord-page td.ord-manage-td::before { display: none; }
+  .ord-page td.ord-manage-td .admin-btn-detail {
+    height: 40px; padding: 0 12px; font-size: 13px; white-space: nowrap;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .ord-page td.ord-td-status {
+    grid-area: status; min-width: 0;
+    display: flex !important; flex-direction: column; align-items: stretch; gap: 6px;
+    margin-top: 10px;
+  }
+  .ord-page td.ord-td-status .ord-change { justify-content: flex-start; margin: 0; }
+  .ord-page td.ord-td-status .ord-split { display: flex; width: 100%; height: 40px; border-radius: 12px; }
+  .ord-page td.ord-td-status .ord-split-main { flex: 1; min-width: 0; padding: 0 8px; font-size: 13.5px; }
+  .ord-page td.ord-td-status .ord-split-extra { padding: 0 7px; font-size: 11.5px; }
+  .ord-page td.ord-td-status .ord-split-more { width: 40px; }
+  .ord-page td.ord-td-status > .admin-status-select { width: 100%; height: 40px; font-size: 13.5px; border-radius: 12px; }
+  .ord-page td.ord-td-status .ord-fee-chip { margin-top: 0; }
+
+  /* 합포장 펼침 · 빈 목록 · 불러오는 중 줄도 카드 모양으로 */
+  .ord-page .ord-table-wrap tbody > tr > td.abx-cell {
+    margin-top: -4px; padding: 10px !important;
+    border: 1px solid #e6ebf2 !important; border-radius: 0 0 16px 16px; background: #f8fafc;
+  }
+  .ord-page .ord-table-wrap tbody > tr:not(.admin-table-body-row) > td:not(.abx-cell) {
+    border-radius: 16px; background: #ffffff;
+  }
+
+  /* 상단 툴바 — [검색] / [표시 N건 · 최근 변경순 ········ 알림톡 스위치] 두 줄로 */
+  .ord-page .ord-toolbar { gap: 8px; padding-bottom: 12px; margin-bottom: 12px; }
+  .ord-page .ord-toolbar-left { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px 6px; }
+  .ord-page .ord-toolbar-left .ap-field { grid-column: 1 / -1; width: 100%; }
+  .ord-page .ord-toolbar .ap-field > input { width: 100%; height: 40px; font-size: 14px; }
+  .ord-page .ord-count { height: 28px; padding: 0 10px; font-size: 12px; border-radius: 9px; }
+  .ord-page .ord-sort-hint { display: none; } /* '최근 변경순' 문구는 모바일에서 뺍니다 */
+  /* 오른쪽 묶음(스위치 · 저장)은 위 줄 끝에 겹쳐 올립니다 */
+  .ord-page .ord-toolbar { position: relative; }
+  .ord-page .ord-toolbar-right { width: auto !important; position: absolute; right: 0; bottom: 12px; }
+  .ord-page .ord-switch { height: 28px; padding: 0 9px 0 7px; gap: 6px; font-size: 11.5px; border-radius: 9px; }
+
+  /* 저장 버튼 — 바뀐 게 없으면 숨기고, 있으면 화면 아래에 떠 있게 (스크롤해도 바로 저장) */
+  .ord-page .ord-save-btn { display: none; }
+  .ord-page .ord-save-btn.has-changes {
+    display: inline-flex; justify-content: center;
+    position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 60;
+    height: 50px; border-radius: 16px; font-size: 15px;
+    box-shadow: 0 18px 34px -14px rgba(5, 150, 105, 0.85);
+  }
+  /* 떠 있는 버튼에 마지막 카드가 가려지지 않게 */
+  .ord-page:has(.ord-save-btn.has-changes) { padding-bottom: 84px; }
+
+  /* 상단 남색 영역의 디버그 버튼은 모바일에서 숨깁니다 */
+  .ord-page .ord-hero-debug { display: none; }
+
+  /* 상태 탭 — [처리 중 전체] 한 줄 + 묶음마다 2열 격자 ([● 이름 ····· 건수]) */
+  .ord-page .ord-tab-groups { gap: 8px; }
+  .ord-page .ord-tab-all .ap-seg { display: flex; width: 100%; }
+  .ord-page .ord-tab-all .ap-seg-btn { flex: 1; justify-content: center; height: 38px; font-size: 13px; }
+  .ord-page .ord-tab-group { padding: 8px; gap: 6px; border-radius: 14px; }
+  .ord-page .ord-tab-group-label { padding: 0 2px; font-size: 12px; }
+  .ord-page .ord-tab-group .ap-seg {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px;
+    padding: 0; background: transparent; border: 0;
+  }
+  .ord-page .ord-tab-group .ap-seg-btn {
+    min-width: 0; height: 36px; padding: 0 8px 0 10px; gap: 6px;
+    justify-content: flex-start;
+    border-radius: 10px; background: #ffffff; border: 1px solid #edf1f6;
+    font-size: 12.5px; text-align: left;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .ord-page .ord-tab-group .ap-seg-btn em { margin-left: auto; flex-shrink: 0; }
+  .ord-page .ord-tab-group .ap-seg-btn.is-active {
+    border-color: #a5b4fc; background: #eef2ff; color: #3730a3;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12);
+  }
+}

@@ -1,0 +1,119 @@
+/* =====================================================
+   💰 미쿠짱 머니 (충전 · 환불 신청) — 화면 전용 스타일
+   공통 모양은 admin-premium.css / admin-common.css 가 맡고, 여기에는 모바일 카드만 둡니다.
+   ===================================================== */
+
+/* =====================================================
+   📱 모바일(768px 이하) — 신청 목록을 촘촘한 카드로 (주문·배송·회원 관리와 같은 느낌)
+     ┌─────────────────────────────────────┐
+     │ [환불] [● 대기중]        09.26 18:15  │
+     │ (라) 라상민                ₩ 50,000   │
+     │      email@…                          │
+     │ ┌ 🏦 신한은행 110-… · 예금주 라상민 ┐ │
+     │ [      ✓ 승인      ] [ ✕ 반려 ]        │
+     └─────────────────────────────────────┘
+   (td 에 붙인 rfd-td-* 클래스로 자리를 정합니다. 데스크톱 표는 그대로)
+   ===================================================== */
+@media (max-width: 768px) {
+  /* 툴바 — [검색] / 상태 탭 4열 / 구분 탭 3열 / [알림톡 스위치 · 표시 N건] */
+  .rfd-page .ap-toolbar { gap: 8px; }
+  .rfd-page .ap-toolbar-left { gap: 8px; }
+  .rfd-page .ap-toolbar .ap-field > input { height: 40px; font-size: 14px; }
+  .rfd-page .ap-toolbar .ap-seg {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
+    width: 100%; padding: 0; background: transparent; border: 0;
+  }
+  .rfd-page .ap-toolbar .ap-seg + .ap-seg { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rfd-page .ap-toolbar .ap-seg-btn {
+    min-width: 0; height: 34px; padding: 0 6px; gap: 4px; justify-content: center;
+    border-radius: 10px; background: #ffffff; border: 1px solid #edf1f6;
+    font-size: 12px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .rfd-page .ap-toolbar .ap-seg-btn.is-active {
+    border-color: #a5b4fc; background: #eef2ff; color: #3730a3;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12);
+  }
+  .rfd-page .ap-toolbar-right { justify-content: space-between; gap: 8px; }
+  .rfd-page .ap-switch { height: 30px; padding: 0 9px 0 7px; gap: 6px; font-size: 11.5px; border-radius: 9px; }
+  .rfd-page .ap-count { height: 30px; padding: 0 10px; font-size: 12px; border-radius: 9px; }
+
+  /* 표 → 카드 */
+  .rfd-page .ap-table-wrap {
+    overflow: visible; max-height: none; min-width: 0;
+    border: 0; background: transparent; box-shadow: none; padding: 0;
+  }
+  .rfd-page .ap-table-wrap > table {
+    display: block; width: 100% !important; min-width: 0 !important; table-layout: auto;
+    border: 0; background: transparent;
+  }
+  .rfd-page .ap-table-wrap colgroup,
+  .rfd-page .ap-table-wrap thead { display: none; }
+  .rfd-page .ap-table-wrap tbody { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .rfd-page .ap-table-wrap tbody > tr { display: block; min-width: 0; max-width: 100%; }
+  /* :where() 로 우선순위를 낮춰, 아래 칸별 규칙이 덮어쓸 수 있게 합니다 */
+  .rfd-page :where(.ap-table-wrap tbody > tr > td) {
+    display: block; width: auto !important; max-width: none !important; border: 0 !important;
+  }
+  .rfd-page .ap-table-wrap tbody > tr > td { position: static !important; box-shadow: none !important; }
+
+  .rfd-page .ap-table-wrap tbody > tr.admin-table-body-row {
+    display: grid;
+    grid-template-columns: max-content max-content minmax(0, 1fr);
+    grid-template-areas:
+      "type   status date"
+      "user   user   amount"
+      "detail detail detail"
+      "manage manage manage";
+    column-gap: 6px;
+    padding: 11px 12px 12px;
+    border: 1px solid #e6ebf2; border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 8px 18px -16px rgba(15, 23, 42, 0.5);
+  }
+  .rfd-page :where(.ap-table-wrap tbody > tr.admin-table-body-row > td) {
+    padding: 0 !important; text-align: left !important; background: transparent !important;
+    white-space: normal; overflow: visible;
+  }
+  .rfd-page .ap-table-wrap tbody > tr.admin-table-body-row > td { min-width: 0; }
+
+  /* 머리: 구분 · 상태 · 신청일시 */
+  .rfd-page td.rfd-td-type { grid-area: type; align-self: center; }
+  .rfd-page td.rfd-td-status { grid-area: status; align-self: center; }
+  .rfd-page td.rfd-td-date { grid-area: date; align-self: center; justify-self: end; text-align: right !important; }
+  .rfd-page td.rfd-td-date .ap-strong { font-size: 11.5px; font-weight: 700; color: #94a3b8; white-space: nowrap; }
+  .rfd-page td.rfd-td-date .ap-sub { display: none; }
+
+  /* 신청자 · 금액 */
+  .rfd-page td.rfd-td-user {
+    grid-area: user; align-self: center; margin-top: 10px;
+    contain: inline-size; /* 긴 이메일이 칸 폭을 밀어내지 않게 (… 처리) */
+  }
+  .rfd-page td.rfd-td-amount { grid-area: amount; align-self: center; justify-self: end; margin-top: 10px; padding-left: 8px !important; }
+  .rfd-page td.rfd-td-amount .ap-money { font-size: 18px; white-space: nowrap; }
+
+  /* 입금자 / 환불 계좌 — 회색 상자 */
+  .rfd-page td.rfd-td-detail {
+    grid-area: detail; margin-top: 10px; padding: 8px 10px !important;
+    border-radius: 10px; background: #f8fafc !important; font-size: 12.5px;
+  }
+  .rfd-page td.rfd-td-detail .ap-person-text > * { white-space: normal; word-break: break-all; }
+  .rfd-page td.rfd-td-detail .ap-sub { margin-top: 2px; }
+
+  /* 승인 · 반려 — 누르기 쉽게 꽉 차게 */
+  .rfd-page td.rfd-td-manage { grid-area: manage; margin-top: 10px; }
+  .rfd-page td.rfd-td-manage::before { display: none; }
+  .rfd-page td.rfd-td-manage .ap-actions { display: flex; width: 100%; gap: 6px; }
+  .rfd-page td.rfd-td-manage .ap-actions .ap-btn { height: 40px; font-size: 13.5px; justify-content: center; }
+  .rfd-page td.rfd-td-manage .ap-actions .ap-btn.is-success { flex: 2; }
+  .rfd-page td.rfd-td-manage .ap-actions .ap-btn.is-ghost { flex: 1; }
+  .rfd-page td.rfd-td-manage .ap-confirm { display: flex; width: 100%; flex-wrap: nowrap; gap: 6px; }
+  .rfd-page td.rfd-td-manage .ap-confirm .ap-confirm-input { flex: 1; min-width: 0; height: 40px; font-size: 14px; }
+  .rfd-page td.rfd-td-manage .ap-confirm .ap-btn { height: 40px; justify-content: center; }
+  .rfd-page td.rfd-td-manage .ap-confirm .ap-btn.is-success { flex: 2; }
+  .rfd-page td.rfd-td-manage .ap-confirm .ap-btn.is-ghost:first-child { flex: 1; }
+  /* 처리된 건은 '처리됨' 줄을 빼 카드를 더 짧게 (상태 배지로 충분) */
+  .rfd-page tr.is-muted td.rfd-td-manage { display: none !important; }
+
+  /* 불러오는 중 · 빈 목록 */
+  .rfd-page .ap-table-wrap tbody > tr:not(.admin-table-body-row) > td { border-radius: 16px; background: #ffffff; }
+}

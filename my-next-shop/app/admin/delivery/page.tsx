@@ -377,7 +377,7 @@ export default function DeliveryManagement() {
   const carrierName = (id: number | null) => carriers.find(c => c.id === id)?.name;
 
   return (
-    <div className="ap-page">
+    <div className="ap-page dlv-page">
       <AdminHero
         eyebrow="DELIVERY" icon={<Sparkle size={11} weight="fill" />}
         title="배송 관리"
@@ -430,7 +430,8 @@ export default function DeliveryManagement() {
           </div>
           <div className="ap-toolbar-right">
             <span className="ap-count">표시 <b>{displayRows.length.toLocaleString()}</b>건</span>
-            <button type="button" className="ap-btn is-lg is-primary"
+            {/* 📱 모바일에서는 바뀐 게 있을 때만 화면 아래에 떠 있는 저장 버튼으로 보입니다 (has-changes) */}
+            <button type="button" className={`ap-btn is-lg is-primary dlv-save-btn ${changedOrderIds.size > 0 ? 'has-changes' : ''}`}
               onClick={handleSaveChanges} disabled={changedOrderIds.size === 0 || isSaving}>
               <FloppyDisk size={14} weight="bold" />
               {isSaving ? '저장 중…' : '상태 저장'}
@@ -469,7 +470,7 @@ export default function DeliveryManagement() {
                 return (
                   <Fragment key={o.bundleId && o.isBundleGroup ? `bundle-${o.bundleId}` : o.id}>
                   <tr className={`admin-table-body-row aft-row ${isChanged ? 'is-changed' : ''} ${o.isBundleGroup ? `abx-row ${isOpen ? 'abx-open' : ''}` : ''}`}>
-                    <td className="ap-td is-left">
+                    <td className="ap-td is-left dlv-td-date">
                       {/* 🌟 묶음은 개별 주문번호 대신 묶음번호를 보여줍니다. (주문 관리와 같은 방식)
                           대표 한 건의 번호만 띄우면 나머지 주문의 번호로 착각하기 쉽습니다.
                           개별 번호는 "모든 상품 보기"를 펼치면 전부 나옵니다. */}
@@ -479,8 +480,8 @@ export default function DeliveryManagement() {
                         <BundleBadge count={o.bundleItems!.length} bundleId={o.bundleId} />
                       )}
                     </td>
-                    <td className="ap-td"><span className="ap-strong">{o.user}</span></td>
-                    <td className="ap-td is-left">
+                    <td className="ap-td dlv-td-user"><span className="ap-strong">{o.user}</span></td>
+                    <td className="ap-td is-left dlv-td-product">
                       {/* 주문 관리와 같은 모양: 썸네일 · 한 줄 이름 · [원본 | 전체 N건] · 서비스/옵션/요청 아이콘 */}
                       <ProductCell
                         name={o.product}
@@ -492,7 +493,7 @@ export default function DeliveryManagement() {
                         bundle={o.isBundleGroup ? { open: isOpen, count: o.bundleItems!.length, onToggle: () => toggleBundle(o.bundleId) } : undefined}
                       />
                     </td>
-                    <td className="ap-td">
+                    <td className="ap-td dlv-td-rcpt">
                       {/* 회원 화면(마이페이지 · 배송 준비)과 같은 모양: 이름 + (도로명 · 번지). 누르면 연락처 · 통관번호 등 자세히 */}
                       {o.address ? (
                         <button type="button" className="dlv-rcpt" onClick={() => { setAddrCopied(false); setAddrDetail(o); }}
@@ -504,7 +505,7 @@ export default function DeliveryManagement() {
                         <span className="ap-empty-mark">{o.recipient ? `${o.recipient} (주소 정보 없음)` : '배송지 미지정'}</span>
                       )}
                     </td>
-                    <td className="ap-td">
+                    <td className="ap-td dlv-td-tracking">
                       {o.trackingNo ? (
                         <>
                           <button type="button" className="ap-id" style={{ cursor: 'pointer' }} title="송장번호 복사"
@@ -517,7 +518,7 @@ export default function DeliveryManagement() {
                         <span className="ap-empty-mark">송장번호 없음</span>
                       )}
                     </td>
-                    <td className="ap-td">
+                    <td className="ap-td dlv-td-status">
                       <select
                         value={o.status}
                         onChange={(e) => handleStatusChange(groupIds, e.target.value as DeliveryStatus)}
@@ -528,7 +529,7 @@ export default function DeliveryManagement() {
                         {deliveryStatusOptions.map(s => <option key={s} value={s}>{DELIVERY_STATUS_LABEL[s]}</option>)}
                       </select>
                     </td>
-                    <td className={table.pinnedCellClass('manage', 'ap-td')}>
+                    <td className={table.pinnedCellClass('manage', 'ap-td dlv-td-manage')}>
                       <button type="button" className="ap-btn is-ghost"
                         disabled={!o.trackingNo && !carrier}
                         onClick={() => openTracking(o)}>

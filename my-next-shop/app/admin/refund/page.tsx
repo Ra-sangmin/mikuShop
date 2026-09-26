@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import '../admin-common.css';
+import './refund-premium.css';
 import { useFitTable, FitColGroup, FitTh } from '../components/useFitTable';
 import {
   AdminHero, HeroButton, KpiCard, SearchField, SegFilter, Badge, EmptyRow, SkeletonRows,
@@ -186,7 +187,7 @@ export default function MoneyRequestManagement() {
   const waitingHours = stats.oldestPending ? Math.floor((Date.now() - new Date(stats.oldestPending).getTime()) / 3600000) : 0;
 
   return (
-    <div className="ap-page">
+    <div className="ap-page rfd-page">
       <AdminHero
         eyebrow="MONEY REQUESTS" icon={<Sparkle size={11} weight="fill" />}
         title="머니 신청 관리"
@@ -296,12 +297,12 @@ export default function MoneyRequestManagement() {
                 const busy = processingId === req.id;
                 return (
                   <tr key={req.id} className={`admin-table-body-row aft-row ${req.status !== 'PENDING' ? 'is-muted' : ''}`}>
-                    <td className="ap-td">
+                    <td className="ap-td rfd-td-date">
                       <span className="ap-strong ap-tabnum">{fmtDateTime(req.createdAt)}</span>
                       {req.processedAt && <span className="ap-sub">처리 {fmtDateTime(req.processedAt)}</span>}
                     </td>
-                    <td className="ap-td"><Badge rgb={type.rgb}>{type.label}</Badge></td>
-                    <td className="ap-td is-left">
+                    <td className="ap-td rfd-td-type"><Badge rgb={type.rgb}>{type.label}</Badge></td>
+                    <td className="ap-td is-left rfd-td-user">
                       <span className="ap-person">
                         <span className="ap-avatar" aria-hidden="true">{(req.user?.name?.trim()?.[0] || '?').toUpperCase()}</span>
                         <span className="ap-person-text">
@@ -310,12 +311,12 @@ export default function MoneyRequestManagement() {
                         </span>
                       </span>
                     </td>
-                    <td className="ap-td is-right">
+                    <td className="ap-td is-right rfd-td-amount">
                       <span className="ap-money" style={{ color: req.type === 'REFUND' ? 'var(--ap-down)' : undefined }}>
                         <i>₩</i>{req.amount.toLocaleString()}
                       </span>
                     </td>
-                    <td className="ap-td is-left">
+                    <td className="ap-td is-left rfd-td-detail">
                       {req.type === 'CHARGE' ? (
                         <span className="ap-strong" title={req.content || ''}>입금자 · {req.content || <span className="ap-empty-mark">미입력</span>}</span>
                       ) : (
@@ -329,8 +330,8 @@ export default function MoneyRequestManagement() {
                       )}
                       {req.status === 'REJECTED' && req.adminNote && <span className="ap-sub">반려 사유 · {req.adminNote}</span>}
                     </td>
-                    <td className="ap-td"><Badge rgb={status.rgb} dot>{status.label}</Badge></td>
-                    <td className={table.pinnedCellClass('manage', 'ap-td')}>
+                    <td className="ap-td rfd-td-status"><Badge rgb={status.rgb} dot>{status.label}</Badge></td>
+                    <td className={table.pinnedCellClass('manage', 'ap-td rfd-td-manage')}>
                       {req.status !== 'PENDING' ? (
                         <span className="ap-empty-mark">처리됨</span>
                       ) : isConfirming && confirming.action === 'APPROVED' ? (

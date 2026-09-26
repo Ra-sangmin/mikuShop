@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import '../admin-common.css';
+import './settlement-premium.css';
 import { DELIVERY_STATUS } from '@/src/types/order';
 import { useFitTable, FitColGroup, FitTh } from '../components/useFitTable';
 import {
@@ -151,7 +152,7 @@ export default function SettlementManagement() {
   };
 
   return (
-    <div className="ap-page">
+    <div className="ap-page stl-page">
       <AdminHero
         eyebrow="SETTLEMENT" icon={<Sparkle size={11} weight="fill" />}
         title="정산 관리"
@@ -229,10 +230,10 @@ export default function SettlementManagement() {
                   description={searchTerm || period !== 'all' ? '검색어나 기간을 바꿔 보세요.' : '배송 완료된 주문이 이곳에 표시됩니다.'} />
               ) : rendered.map(o => (
                 <tr key={o.id} className="admin-table-body-row aft-row">
-                  <td className="ap-td"><span className="ap-strong ap-tabnum">{fmtDate(o.completedAt)}</span></td>
-                  <td className="ap-td"><span className="ap-id">{o.id}</span></td>
-                  <td className="ap-td"><span className="ap-strong">{o.user}</span></td>
-                  <td className="ap-td is-left">
+                  <td className="ap-td stl-td-date"><span className="ap-strong ap-tabnum">{fmtDate(o.completedAt)}</span></td>
+                  <td className="ap-td stl-td-id"><span className="ap-id">{o.id}</span></td>
+                  <td className="ap-td stl-td-user"><span className="ap-strong">{o.user}</span></td>
+                  <td className="ap-td is-left stl-td-addr">
                     {o.address ? (
                       <div className="ap-address">
                         <span className="ap-address-top">{o.address.recipientName}<span>{o.address.phone}</span></span>
@@ -244,7 +245,7 @@ export default function SettlementManagement() {
                       <span className="ap-empty-mark">{o.recipient ? `${o.recipient} (주소 정보 없음)` : '배송지 미지정'}</span>
                     )}
                   </td>
-                  <td className="ap-td is-left">
+                  <td className="ap-td is-left stl-td-product">
                     <span className="ap-product">
                       <span className="ap-thumb">
                         {o.productImageUrl ? <img src={o.productImageUrl} alt="" referrerPolicy="no-referrer" /> : <Package size={16} weight="duotone" />}
@@ -252,8 +253,8 @@ export default function SettlementManagement() {
                       <span className="ap-product-name" title={o.product}>{o.product}</span>
                     </span>
                   </td>
-                  <td className="ap-td is-right"><span className="ap-money is-sub"><i>¥</i>{o.jpy.toLocaleString()}</span></td>
-                  <td className={table.pinnedCellClass('krw', 'ap-td is-right')}>
+                  <td className="ap-td is-right stl-td-jpy"><span className="ap-money is-sub"><i>¥</i>{o.jpy.toLocaleString()}</span></td>
+                  <td className={table.pinnedCellClass('krw', 'ap-td is-right stl-td-krw')}>
                     <span className="ap-money"><i>₩</i>{o.krw.toLocaleString()}</span>
                   </td>
                 </tr>

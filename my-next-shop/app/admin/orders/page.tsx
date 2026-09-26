@@ -1065,7 +1065,8 @@ export default function OrderManagement() {
         description="구매대행·배송대행 주문의 진행 상태를 확인하고 변경합니다. 상태를 바꾼 뒤 ‘변경사항 저장’을 눌러야 반영됩니다."
         accentRgb="99, 102, 241"
         actions={
-          <HeroButton onClick={() => setShowDebug(!showDebug)}>
+          // 🛠 디버그 버튼은 모바일에서는 숨깁니다 (orders-premium.css .ord-hero-debug)
+          <HeroButton className="ord-hero-debug" onClick={() => setShowDebug(!showDebug)}>
             <Wrench size={15} weight="bold" /> 디버그 {showDebug ? '끄기' : '켜기'}
           </HeroButton>
         }
@@ -1121,7 +1122,8 @@ export default function OrderManagement() {
             type="button"
             onClick={handleSaveChanges}
             disabled={changedOrderIds.size === 0 || isSaving}
-            className="ap-btn is-lg is-success"
+            // 📱 모바일에서는 바뀐 게 있을 때만 화면 아래에 떠 있는 저장 버튼으로 보입니다 (has-changes)
+            className={`ap-btn is-lg is-success ord-save-btn ${changedOrderIds.size > 0 ? 'has-changes' : ''}`}
           >
             <FloppyDisk size={14} weight="bold" />
             {isSaving ? '저장 중...' : '변경사항 저장'}
@@ -1259,7 +1261,7 @@ export default function OrderManagement() {
                   title={statusFilter === '전체' && tabStatusOptions.includes(order.status) ? `누르면 '${ORDER_STATUS_LABEL[order.status as OrderStatus]}' 탭으로 이동` : undefined}
                   onClick={(e) => jumpToStatusTab(e, order)}
                 >
-                  <td className="admin-base-td">
+                  <td className="admin-base-td ord-td-date">
                     <div className="admin-sub-text">{order.date}</div>
                     {!order.isBundleGroup && (
                       <span className="ord-id">
@@ -1280,7 +1282,7 @@ export default function OrderManagement() {
                       <div className="ord-bundle-id"><span>Bundle</span> {order.bundleId}</div>
                     )}
                   </td>
-                  <td className="admin-base-td">
+                  <td className="admin-base-td ord-td-user">
                     <button
                       type="button"
                       className="ord-user is-clickable"
@@ -1297,6 +1299,14 @@ export default function OrderManagement() {
                   
                   
                   <td className="admin-base-td ord-product-td" style={{ maxWidth: '300px' }}>
+                    {/* 📱 모바일 카드 머리 — 지금 상태를 크게 (데스크톱 표에서는 숨김, 진행 상태 칸이 따로 있음) */}
+                    <div className="ord-m-head" aria-hidden="true">
+                      <span className="ord-m-status" style={{ ['--ms-c' as string]: statusStyle.text, ['--ms-bg' as string]: statusStyle.bg, ['--ms-bd' as string]: statusStyle.border } as React.CSSProperties}>
+                        <i />{ORDER_STATUS_LABEL[order.status as OrderStatus] || order.status}
+                      </span>
+                      {isChanged && originalStatus !== order.status && <span className="ord-m-dirty">저장 안 됨</span>}
+                      <span className="ord-m-date">{order.date}</span>
+                    </div>
                     <div className="ord-pwrap">
                     <div className="ord-pcard">
                       <span className="ord-pthumb">
@@ -1363,7 +1373,7 @@ export default function OrderManagement() {
 
                   {/* 🌟 경매 상황 탭, 또는 전체 탭에서 경매 상황 주문일 때: 경매 상태 (셀렉트 박스 + 취소선 인디케이터) */}
                   {showBidStatusColumn && (
-                    <td className="admin-base-td" style={{ textAlign: 'center' }}>
+                    <td className={`admin-base-td ord-td-bid ${order.status === ORDER_STATUS.BIDDING ? '' : 'is-none'}`} style={{ textAlign: 'center' }}>
                       {order.status === ORDER_STATUS.BIDDING ? (
                         <>
                           {/* 🌟 변경 전 경매 상태 (취소선) 표시 */}
@@ -1395,7 +1405,7 @@ export default function OrderManagement() {
                     </td>
                   )}
 
-                  <td className="admin-base-td" style={{ textAlign: 'center' }}>
+                  <td className="admin-base-td ord-td-status" style={{ textAlign: 'center' }}>
                     {(isChanged && originalStatus !== order.status) && (
                       <div className="ord-change">
                         <span className="is-before">{ORDER_STATUS_LABEL[originalStatus]}</span>

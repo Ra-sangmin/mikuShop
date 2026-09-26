@@ -386,7 +386,7 @@ export default function CSManagement() {
           </div>
         </div>
 
-        <div className="ap-table-wrap" ref={noticeTable.wrapRef} style={{ maxHeight: 460 }}>
+        <div className="ap-table-wrap ap-mcards" ref={noticeTable.wrapRef} style={{ maxHeight: 460 }}>
           <table className={`admin-table-resizable ${noticeTable.tableClassName}`} style={noticeTable.tableStyle}>
             <FitColGroup table={noticeTable} />
             <thead>
@@ -406,10 +406,10 @@ export default function CSManagement() {
                   description={noticeSearch ? '다른 단어로 검색해 보세요.' : '위 입력칸에서 첫 공지를 등록해 주세요.'} />
               ) : renderedNotices.map((notice) => (
                 <tr key={notice.id} className={`admin-table-body-row aft-row ${editingNoticeId === notice.id ? 'is-editing' : ''}`}>
-                  <td className="ap-td is-left" title={notice.title}><span className="ap-strong">{notice.title}</span></td>
-                  <td className="ap-td is-left" title={notice.content}>{notice.content}</td>
-                  <td className="ap-td"><span className="ap-strong ap-tabnum">{safeDate(notice.createdAt)}</span></td>
-                  <td className={noticeTable.pinnedCellClass('manage', 'ap-td')}>
+                  <td className="ap-td is-left ap-m-title" title={notice.title}><span className="ap-strong">{notice.title}</span></td>
+                  <td className="ap-td is-left ap-m-long" data-label="내용" title={notice.content}>{notice.content}</td>
+                  <td className="ap-td" data-label="등록일"><span className="ap-strong ap-tabnum">{safeDate(notice.createdAt)}</span></td>
+                  <td className={noticeTable.pinnedCellClass('manage', 'ap-td ap-m-actions')}>
                     {renderRowActions({ kind: 'notice', id: notice.id, busy: deletingNoticeId === notice.id,
                       onEdit: () => startEditingNotice(notice), onDelete: () => handleDeleteNotice(notice) })}
                   </td>
@@ -482,7 +482,7 @@ export default function CSManagement() {
           </div>
         </div>
 
-        <div className="ap-table-wrap" ref={faqTable.wrapRef} style={{ maxHeight: 520 }}>
+        <div className="ap-table-wrap ap-mcards" ref={faqTable.wrapRef} style={{ maxHeight: 520 }}>
           <table className={`admin-table-resizable ${faqTable.tableClassName}`} style={faqTable.tableStyle}>
             <FitColGroup table={faqTable} />
             <thead>
@@ -501,11 +501,11 @@ export default function CSManagement() {
                   description={faqSearch ? '다른 단어로 검색해 보세요.' : '위 입력칸에서 첫 질문을 등록해 주세요.'} />
               ) : renderedFaqs.map((faq, idx) => (
                 <tr key={faq.id} className={`admin-table-body-row aft-row ${editingFaqId === faq.id ? 'is-editing' : ''}`}>
-                  <td className="ap-td is-left" title={faq.question}>
+                  <td className="ap-td is-left ap-m-title" title={faq.question}>
                     <span className="ap-strong cs-q-cell"><span className="cs-q-no">Q{idx + 1}</span>{faq.question}</span>
                   </td>
-                  <td className="ap-td is-left" title={faq.answer}>{faq.answer}</td>
-                  <td className={faqTable.pinnedCellClass('manage', 'ap-td')}>
+                  <td className="ap-td is-left ap-m-long" data-label="답변" title={faq.answer}>{faq.answer}</td>
+                  <td className={faqTable.pinnedCellClass('manage', 'ap-td ap-m-actions')}>
                     {renderRowActions({ kind: 'faq', id: faq.id, busy: deletingFaqId === faq.id,
                       onEdit: () => startEditingFaq(faq), onDelete: () => handleDeleteFaq(faq) })}
                   </td>

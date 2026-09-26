@@ -1011,3 +1011,159 @@
 .usr-page .usr-td.is-left .usr-member-name { justify-content: flex-start; }
 .usr-page .usr-td.is-left .usr-contact { align-items: flex-start; }
 .usr-page .usr-td.is-left .usr-contact > span { justify-content: flex-start; }
+
+/* =====================================================
+   📱 모바일(768px 이하) — 상단 남색 영역을 간략하게 (주문 관리 · 배송 관리와 같은 모양)
+   영문 머리표 · 설명 문구는 숨기고, 제목은 작게, KPI 카드는 [아이콘 · 이름 · 숫자] 한 줄로 줄입니다.
+   (데스크톱은 그대로)
+   ===================================================== */
+@media (max-width: 768px) {
+  .usr-hero { padding: 12px; border-radius: 16px; }
+  .usr-hero .usr-eyebrow,
+  .usr-hero .usr-hero-sub { display: none; }
+  .usr-hero-head { align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .usr-hero-head > div:first-child { min-width: 0; }
+  .usr-hero-title { margin: 0; font-size: 18px; letter-spacing: -0.5px; white-space: nowrap; }
+  .usr-hero-actions { width: auto !important; flex-wrap: nowrap; gap: 6px; margin-left: auto; }
+  .usr-hero-actions .usr-hero-btn { flex: 0 0 auto !important; height: 32px; padding: 0 10px; font-size: 12px; border-radius: 9px; }
+
+  .usr-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  /* 금액(₩1,250,000)처럼 숫자가 길 수 있어 [이름] 위, [숫자] 아래 두 줄로 작게 둡니다 */
+  .usr-kpi { gap: 4px; padding: 8px 10px; border-radius: 12px; }
+  .usr-kpi-top { gap: 6px; min-width: 0; }
+  .usr-kpi-icon { width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0; }
+  .usr-kpi-icon svg { width: 12px; height: 12px; }
+  .usr-kpi-label { font-size: 11.5px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .usr-kpi-value {
+    font-size: 17px !important; line-height: 1.1; min-height: 0; margin: 0;
+    display: inline-flex; align-items: baseline; gap: 2px; white-space: nowrap;
+  }
+  .usr-kpi-value small { font-size: 11px; }
+  .usr-kpi-value .usr-won { font-size: 12px; }
+  .usr-kpi-foot { display: none; }
+}
+
+/* =====================================================
+   📱 모바일(768px 이하) — 등급 분포를 촘촘한 목록으로
+   카드 한 장이 화면 폭을 다 쓰며 세로로 길게 쌓이던 것을, 등급 하나 = 한 줄로 줄입니다.
+     [💎] DIAMOND  ━━━━━━━░░░░░░  1명  20.0%
+   누르면 해당 등급만 보는 기능은 그대로입니다. (데스크톱은 그대로)
+   ===================================================== */
+@media (max-width: 768px) {
+  .usr-grades { padding: 12px !important; }
+  .usr-grades .usr-sec-head { margin-bottom: 8px; }
+  .usr-grades .usr-section-hint { font-size: 11px; }
+  .usr-grade-cards { grid-template-columns: 1fr; gap: 6px; }
+  .usr-grade-card {
+    display: grid; align-items: center;
+    grid-template-columns: 22px 66px minmax(0, 1fr) 40px 44px; /* 칸 폭을 고정해 등급마다 막대 시작점이 맞게 */
+    grid-template-areas: "gem name bar count pct";
+    column-gap: 8px;
+    padding: 8px 10px; border-radius: 12px;
+  }
+  .usr-grade-card:hover { transform: none; }
+  .usr-grade-card::after { display: none; }
+  .usr-grade-card-top { display: contents; }
+  .usr-grade-gem { grid-area: gem; width: 22px; height: 22px; border-radius: 7px; }
+  .usr-grade-gem svg { width: 11px; height: 11px; }
+  .usr-grade-card-name { grid-area: name; font-size: 12px; white-space: nowrap; }
+  .usr-grade-bar { grid-area: bar; height: 6px; }
+  .usr-grade-card-count { grid-area: count; font-size: 16px; line-height: 1; white-space: nowrap; text-align: right; }
+  .usr-grade-card-name { overflow: hidden; text-overflow: ellipsis; }
+  .usr-grade-card-count small { font-size: 11px; }
+  .usr-grade-card-pct { grid-area: pct; margin: 0; text-align: right; }
+}
+
+/* =====================================================
+   📱 모바일(768px 이하) — 회원 목록을 촘촘한 회원 카드로
+   가로로 긴 표(8칸)를 옆으로 밀며 보던 것을, 회원 한 명 = 카드 하나로 세로로 읽게 합니다.
+     ┌─────────────────────────────────────┐
+     │ (사진) 이름 NEW              [등급]   │
+     │        아이디                          │
+     │ ✉ 이메일 · ☏ 휴대폰          [가입경로] │
+     │ 주문 3건 · 머니 ₩12,000 · 2026.09.01    │
+     └─────────────────────────────────────┘
+   카드를 누르면 지금처럼 회원 관리 창이 열립니다. ('관리' 버튼은 모바일에서 숨김)
+   (td 에 붙인 usr-td-* 클래스로 자리를 정합니다. 데스크톱 표는 그대로)
+   ===================================================== */
+@media (max-width: 768px) {
+  .usr-table-wrap {
+    overflow: visible; max-height: none; min-width: 0;
+    border: 0; border-radius: 0; background: transparent;
+  }
+  .usr-table-wrap > table {
+    display: block; width: 100% !important; min-width: 0 !important; table-layout: auto;
+    border: 0; background: transparent;
+  }
+  .usr-table-wrap colgroup,
+  .usr-table-wrap thead { display: none; }
+  .usr-table-wrap tbody { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .usr-table-wrap tbody > tr { display: block; min-width: 0; max-width: 100%; }
+  /* :where() 로 우선순위를 낮춰, 아래 칸별 규칙이 덮어쓸 수 있게 합니다 */
+  .usr-page :where(.usr-table-wrap tbody > tr > td) {
+    display: block; width: auto !important; max-width: none !important; border: 0 !important;
+  }
+  .usr-table-wrap tbody > tr > td { position: static !important; box-shadow: none !important; }
+
+  /* 카드 */
+  .usr-table-wrap tbody > tr.usr-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+      "member  member  grade"
+      "contact contact provider"
+      "orders  money   date";
+    column-gap: 0;
+    padding: 11px 12px;
+    border: 1px solid #e6ebf2; border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 8px 18px -16px rgba(15, 23, 42, 0.5);
+    cursor: pointer;
+  }
+  .usr-table-wrap tbody > tr.usr-row.is-open { border-color: #a5b4fc; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12); }
+  .usr-page :where(.usr-table-wrap tbody > tr.usr-row > td) {
+    padding: 0 !important; text-align: left !important; background: transparent !important;
+    white-space: normal; overflow: visible;
+  }
+  .usr-table-wrap tbody > tr.usr-row > td { min-width: 0; }
+
+  /* 회원 · 등급 */
+  .usr-td-member { grid-area: member; }
+  .usr-td-member .usr-member { gap: 10px; }
+  .usr-td-member .usr-member-name { font-size: 14px; }
+  .usr-td-grade { grid-area: grade; align-self: center; justify-self: end; padding-left: 8px !important; }
+
+  /* 연락처 · 가입경로 */
+  .usr-td-contact {
+    grid-area: contact; align-self: center; margin-top: 8px;
+  }
+  .usr-td-contact .usr-contact { flex-direction: row; flex-wrap: wrap; gap: 2px 10px; }
+  .usr-td-contact .usr-contact > span { font-size: 12px; max-width: 100%; }
+  .usr-td-provider { grid-area: provider; align-self: center; justify-self: end; margin-top: 8px; padding-left: 8px !important; }
+
+  /* 주문 · 머니 · 가입일 — 한 줄 요약 (점선 아래) */
+  .usr-td-orders, .usr-td-money, .usr-td-date {
+    margin-top: 8px; padding-top: 8px !important; border-top: 1px dashed #e8edf4 !important;
+    display: flex !important; align-items: baseline; gap: 4px; white-space: nowrap; overflow: hidden;
+  }
+  .usr-td-orders { grid-area: orders; }
+  .usr-td-orders::before, .usr-td-money::before, .usr-td-date::before {
+    font-size: 11px; font-weight: 700; color: #94a3b8;
+  }
+  .usr-td-orders::before { content: '주문'; }
+  .usr-td-money::before { content: '머니'; }
+  .usr-td-date::before { content: '가입'; }
+  .usr-td-orders .usr-num { font-size: 13px; }
+  /* 세 칸을 한 줄에 나란히: 주문은 왼쪽, 머니는 가운데, 가입일은 오른쪽 */
+  .usr-td-money { grid-area: money; justify-content: center; }
+  .usr-td-date { grid-area: date; justify-content: flex-end; }
+  .usr-td-money .usr-money { font-size: 13px; }
+  .usr-td-date .usr-date { font-size: 12px; }
+  .usr-td-date .usr-date-sub { display: none; }
+
+  /* '관리' 버튼 — 카드를 누르면 열리므로 숨깁니다 */
+  .usr-td-manage { display: none !important; }
+
+  /* 불러오는 중 · 빈 목록 */
+  .usr-table-wrap tbody > tr:not(.usr-row) > td { border-radius: 16px; background: #ffffff; }
+}
