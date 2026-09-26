@@ -17,6 +17,8 @@ import { TrendChart, ChannelBreakdown } from './AlimtalkCharts';
 import MemberDrawer from '../components/MemberDrawer';
 // 🔔 관리자 카카오 알림("나에게 보내기") 연결 패널
 import KakaoNotifyPanel from './KakaoNotifyPanel';
+// 🔔 관리자 웹 푸시(휴대폰·PC 브라우저 알림) 패널
+import WebPushPanel from './WebPushPanel';
 import OrderDetailModal, { toOrderDetailView } from '../components/OrderDetailModal';
 import { AdminHero, HeroButton, KpiCard, Badge, SegFilter, fmtDateTime, useToasts, ToastStack } from '../components/AdminPremiumKit';
 import {
@@ -291,6 +293,9 @@ export default function AlimtalkManagement() {
           )}
         </section>
       )}
+
+      {/* ===== 관리자 웹 푸시 알림 (휴대폰 알림이 울리는 쪽) ===== */}
+      <WebPushPanel onToast={pushToast} />
 
       {/* ===== 관리자 카카오 알림 ===== */}
       <KakaoNotifyPanel onToast={pushToast} />

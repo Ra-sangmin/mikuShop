@@ -718,3 +718,32 @@ model AdminKakaoNotify {
 
   @@map("admin_kakao_notify")
 }
+
+/// 🔔 관리자 웹 푸시를 받는 기기 (휴대폰·PC 브라우저마다 한 줄)
+/// 발송: lib/notifications/webPush.ts · 등록: 관리자 > 알림톡 관리 > "이 기기에서 알림 받기"
+model AdminPushSubscription {
+  id         Int       @id @default(autoincrement())
+  endpoint   String    @unique @db.VarChar(700) // 브라우저 회사 푸시 서버 주소 (기기마다 다름)
+  p256dh     String    @db.VarChar(255) // 브라우저 공개키 (암호화용)
+  auth       String    @db.VarChar(64) // 브라우저 인증 비밀값 (암호화용)
+  label      String?   @db.VarChar(120) // 화면에 보여 줄 기기 이름 (예: iPhone · Safari)
+  adminId    String?   @map("admin_id") @db.VarChar(64) // 등록한 관리자
+  lastSentAt DateTime? @map("last_sent_at")
+  lastError  String?   @map("last_error") @db.Text
+  failCount  Int       @default(0) @map("fail_count")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@map("admin_push_subscriptions")
+}
+
+/// 🔔 관리자 알림(카카오·웹 푸시 공통)을 "여기까지 알렸다" 는 기준 시각. 한 줄만 둡니다.
+/// 예전엔 카카오 연결 줄(admin_kakao_notify.notified_until)에 있었는데, 카카오를 연결하지 않아도
+/// 웹 푸시만으로 알림이 돌아야 해서 따로 뺐습니다.
+model AdminNotifyState {
+  id            Int      @id @default(1)
+  notifiedUntil DateTime @map("notified_until")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("admin_notify_state")
+}

@@ -1,0 +1,16 @@
+{
+  "name": "미쿠짱 관리자",
+  "short_name": "미쿠짱 관리",
+  "description": "미쿠짱 관리자 화면 · 주문 알림",
+  "id": "/admin/",
+  "start_url": "/admin/orders",
+  "scope": "/admin/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#e8707c",
+  "lang": "ko",
+  "icons": [
+    { "src": "/miku-admin-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/miku-admin-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
