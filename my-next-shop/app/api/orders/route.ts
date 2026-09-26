@@ -7,6 +7,7 @@ import { ORDER_STATUS } from '@/src/types/order';
 import { generateOrderId, generateBundleId, isDuplicateOrderId } from '@/lib/orderId';
 import { translateToKorean } from '@/lib/translate';
 import { moneyLogText } from '@/lib/moneyLogText';
+import { triggerAdminOrderAlert } from '@/lib/notifications/adminOrderAlertRunner';
 
 // 🟢 [GET] 1. 주문 목록 및 유저 정보 조회
 export async function GET() {
@@ -256,6 +257,8 @@ export async function POST(req: Request) {
     }
     if (!result) throw new Error('주문번호가 계속 겹쳐 주문을 만들지 못했습니다. 잠시 후 다시 시도해주세요.');
 
+    // 🔔 관리자 처리 필요 알림을 바로 보냅니다 (응답 뒤에 실행 — 기다리지 않음)
+    triggerAdminOrderAlert();
     return NextResponse.json({ success: true, order: result, productName: finalTitle });
 
   } catch (error: any) {
@@ -384,6 +387,8 @@ export async function PUT(request: Request) {
       }
     });
 
+    // 🔔 관리자 처리 필요 알림을 바로 보냅니다 (응답 뒤에 실행 — 기다리지 않음)
+    triggerAdminOrderAlert();
     return NextResponse.json({ success: true, message: '성공적으로 처리되었습니다.' });
   } catch (error: any) {
     console.error("저장/결제 에러:", error);

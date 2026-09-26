@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from '@/lib/prisma';
 import { requireUser } from '@/lib/apiAuth';
+import { triggerAdminOrderAlert } from '@/lib/notifications/adminOrderAlertRunner';
 
 export async function POST(req: Request) {
   try {
@@ -75,6 +76,9 @@ export async function POST(req: Request) {
 
       return updatedOrder;
     });
+
+    // 🔔 경매 상황(BIDDING)으로 넘어오면 관리자에게 바로 알립니다 (응답 뒤에 실행)
+    triggerAdminOrderAlert();
 
     return NextResponse.json({
       success: true,

@@ -5,6 +5,7 @@ import { notifyOrderStatusChanged, shouldNotify } from '@/lib/notifications/orde
 import { notifyOrderStatusByAlimtalk, shouldSendAlimtalk } from '@/lib/notifications/orderStatusAlimtalk';
 import { ORDER_STATUS } from '@/src/types/order';
 import { moneyLogText } from '@/lib/moneyLogText';
+import { triggerAdminOrderAlert } from '@/lib/notifications/adminOrderAlertRunner';
 
 // 🌟 1. GET: DB에서 주문 목록과 유저 정보를 함께 가져옵니다.
 export async function GET() {
@@ -265,6 +266,8 @@ export async function PUT(request: Request) {
       }
     }
 
+    // 🔔 관리자 처리 필요 알림을 바로 보냅니다 (응답 뒤에 실행 — 기다리지 않음)
+    triggerAdminOrderAlert();
     return NextResponse.json({ success: true, message: '성공적으로 처리되었습니다.' });
   } catch (error: any) {
     console.error("저장/결제 에러:", error);
