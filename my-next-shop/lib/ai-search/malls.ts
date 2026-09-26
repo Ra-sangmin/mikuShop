@@ -10,6 +10,40 @@
 import { rakutenBaseAPIOn } from '@/lib/rakuten';
 import type { AiProduct, Mall } from './types';
 
+// ── 외부 응답 모양 (쓰는 필드만) ──────────────────────────────
+interface RakutenItem {
+  itemCode?: string;
+  itemName?: string;
+  itemPrice?: number | string;
+  mediumImageUrls?: (string | { imageUrl?: string })[];
+  itemImageUrl?: string;
+  itemCaption?: string;
+  availability?: number;
+  itemUrl?: string;
+  shopName?: string;
+}
+interface YahooHit {
+  code?: string;
+  name?: string;
+  price?: number | string;
+  image?: { medium?: string };
+  description?: string;
+  url?: string;
+  seller?: { name?: string };
+  brand?: { name?: string };
+}
+/** 메루카리·야후 옥션 크롤러 NDJSON 의 상품 한 건 */
+interface CrawlerItem {
+  id?: string;
+  name?: string;
+  price?: number | string;
+  thumbnail?: string | null;
+  status?: string;
+  url?: string;
+  bidCount?: number | string;
+  timeLeft?: string | null;
+}
+
 export interface MallQuery {
   keywordJa: string;
   minPriceJpy?: number | null;
@@ -18,6 +52,8 @@ export interface MallQuery {
   limit: number;
   /** 크롤러 라우트를 부를 때 쓰는 이 서버 주소 (예: http://127.0.0.1:3000) */
   internalBaseUrl: string;
+  /** 손님이 페이지를 닫으면 켜지는 신호 → 진행 중인 크롤링을 멈춥니다 */
+  signal?: AbortSignal;
 }
 
 const CRAWLER_TIMEOUT_MS = Number(process.env.AI_SEARCH_CRAWLER_TIMEOUT_MS) || 15_000;
@@ -30,20 +66,29 @@ function inPrice(price: number, q: MallQuery): boolean {
 
 // ── 라쿠텐 ──────────────────────────────────────────────────
 async function searchRakuten(q: MallQuery): Promise<AiProduct[]> {
-  const data = await rakutenBaseAPIOn(
-    'ichibams/api/IchibaItem/Search/20260701',
-    '0',
-    '1',
-    'standard',
-    q.keywordJa,
-    q.excludeJa?.length ? q.excludeJa.join(' ') : null,
-    q.minPriceJpy ? String(q.minPriceJpy) : null,
-    q.maxPriceJpy ? String(q.maxPriceJpy) : null,
+  // 라쿠텐은 한 페이지에 30건입니다. 더 필요하면 다음 페이지까지 같이 받습니다(최대 2페이지).
+  const pages = Math.min(2, Math.max(1, Math.ceil(q.limit / 30)));
+  const results = await Promise.all(
+    Array.from({ length: pages }, (_, i) =>
+      rakutenBaseAPIOn(
+        'ichibams/api/IchibaItem/Search/20260701',
+        '0',
+        String(i + 1),
+        'standard',
+        q.keywordJa,
+        q.excludeJa?.length ? q.excludeJa.join(' ') : null,
+        q.minPriceJpy ? String(q.minPriceJpy) : null,
+        q.maxPriceJpy ? String(q.maxPriceJpy) : null,
+      ).catch(e => {
+        if (i === 0) throw e; // 첫 페이지 실패만 오류로 봅니다
+        return null;
+      }),
+    ),
   );
-  const raw: any[] = Array.isArray(data?.Items) ? data.Items : [];
+  const raw: (RakutenItem & { Item?: RakutenItem })[] = results.flatMap(data => (Array.isArray(data?.Items) ? data.Items : []));
   return raw
     .map(e => e?.Item ?? e)
-    .filter(i => i?.itemCode)
+    .filter((i): i is RakutenItem & { itemCode: string } => Boolean(i?.itemCode))
     .slice(0, q.limit)
     .map(i => ({
       mall: 'rakuten' as const,
@@ -52,9 +97,9 @@ async function searchRakuten(q: MallQuery): Promise<AiProduct[]> {
       nameKo: String(i.itemName ?? ''),
       priceJpy: Number(i.itemPrice) || 0,
       // 라쿠텐 기본 썸네일은 128px 라 흐릿합니다. 몰 페이지(rakuten/page.tsx)와 같이 512px 로 키웁니다.
-      thumbnail: rakutenImg(i.mediumImageUrls?.[0]?.imageUrl ?? i.mediumImageUrls?.[0] ?? i.itemImageUrl),
+      thumbnail: rakutenImg(imgUrl(i.mediumImageUrls?.[0]) || i.itemImageUrl),
       images: (Array.isArray(i.mediumImageUrls) && i.mediumImageUrls.length
-        ? i.mediumImageUrls.map((img: any) => rakutenImg(img?.imageUrl ?? img))
+        ? i.mediumImageUrls.map(img => rakutenImg(imgUrl(img)))
         : [rakutenImg(i.itemImageUrl)]).filter(Boolean),
       description: String(i.itemCaption || '').slice(0, 3000),
       status: i.availability === 0 ? ('sold_out' as const) : ('on_sale' as const),
@@ -64,6 +109,7 @@ async function searchRakuten(q: MallQuery): Promise<AiProduct[]> {
     }));
 }
 
+const imgUrl = (img?: string | { imageUrl?: string }) => (typeof img === 'string' ? img : img?.imageUrl ?? '');
 const rakutenImg = (url?: string | null) => (url ? String(url).replace('_ex=128x128', '_ex=512x512') : '');
 
 /** 야후 쇼핑 이미지의 화질 폴더(/i/c/, /i/g/)를 고해상도(/i/n/)로 (yahoo_shopping/page.tsx 와 같은 규칙) */
@@ -89,7 +135,7 @@ async function searchYahooShopping(q: MallQuery): Promise<AiProduct[]> {
     if (res.status === 429 && attempt === 0) { await new Promise(r => setTimeout(r, 1000)); continue; }
     if (!res.ok) throw new Error(`Yahoo Shopping ${res.status}`);
     const data = await res.json();
-    const hits: any[] = data?.hits ?? [];
+    const hits: YahooHit[] = data?.hits ?? [];
     return hits.filter(h => h?.code).map(h => ({
       mall: 'yahoo_shopping' as const,
       itemId: String(h.code),
@@ -111,10 +157,14 @@ async function searchYahooShopping(q: MallQuery): Promise<AiProduct[]> {
 // ── 메루카리 / 야후 옥션 (기존 크롤러 라우트 재사용) ───────────
 
 /** NDJSON 스트림에서 {success, data:[...]} 줄을 읽어 limit 건이 모이면(또는 시간이 다 되면) 끊습니다. */
-async function readCrawlerStream(url: string, limit: number): Promise<any[]> {
+async function readCrawlerStream(url: string, limit: number, outer?: AbortSignal): Promise<CrawlerItem[]> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CRAWLER_TIMEOUT_MS);
-  const items: any[] = [];
+  // 손님이 창을 닫으면 크롤러(Puppeteer)도 바로 멈추게 합니다 — 크롤러 라우트가 req.signal 을 봅니다.
+  const onOuterAbort = () => controller.abort();
+  if (outer?.aborted) controller.abort();
+  else outer?.addEventListener('abort', onOuterAbort, { once: true });
+  const items: CrawlerItem[] = [];
   try {
     const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
     if (!res.ok || !res.body) throw new Error(`crawler ${res.status}`);
@@ -144,6 +194,7 @@ async function readCrawlerStream(url: string, limit: number): Promise<any[]> {
     throw e;
   } finally {
     clearTimeout(timer);
+    outer?.removeEventListener('abort', onOuterAbort);
     controller.abort(); // 다 받았으면 크롤러도 멈추게 합니다 (라우트가 req.signal 을 봅니다)
   }
 }
@@ -153,7 +204,7 @@ async function searchMercari(q: MallQuery): Promise<AiProduct[]> {
   if (q.minPriceJpy) p.set('price_min', String(q.minPriceJpy));
   if (q.maxPriceJpy) p.set('price_max', String(q.maxPriceJpy));
   if (q.excludeJa?.length) p.set('exclude_keyword', q.excludeJa.join(' '));
-  const raw = await readCrawlerStream(`${q.internalBaseUrl}/api/mercari/search?${p}`, q.limit);
+  const raw = await readCrawlerStream(`${q.internalBaseUrl}/api/mercari/search?${p}`, q.limit, q.signal);
   return raw.filter(i => i?.id && i.status !== 'sold_out').map(i => ({
     mall: 'mercari' as const,
     itemId: String(i.id),
@@ -179,7 +230,7 @@ export function mercariThumb(id: string, thumb?: string | null): string {
 
 async function searchYahooAuction(q: MallQuery): Promise<AiProduct[]> {
   const p = new URLSearchParams({ keyword: q.keywordJa, category_id: '0' });
-  const raw = await readCrawlerStream(`${q.internalBaseUrl}/api/yahoo_auction/search?${p}`, q.limit * 2);
+  const raw = await readCrawlerStream(`${q.internalBaseUrl}/api/yahoo_auction/search?${p}`, q.limit * 2, q.signal);
   // 옥션 크롤러는 가격 필터를 받지 않으므로 여기서 거릅니다.
   return raw
     .filter(i => i?.id)

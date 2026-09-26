@@ -14,8 +14,8 @@ export const MALL_BRAND: Record<AiProduct['mall'], { logo: string; color: string
 
 export function MallLogo({ mall, size = 18 }: { mall: AiProduct['mall']; size?: number }) {
   return (
-    // eslint-disable-next-line @next/next/no-img-element
     // 라쿠텐 로고는 가로로 긴 글자형이라 정사각형에 넣으면 너무 작아져서 가로를 넓힙니다.
+    // eslint-disable-next-line @next/next/no-img-element
     <img className="ais-mall-logo" src={MALL_BRAND[mall].logo} alt="" width={mall === 'rakuten' ? Math.round(size * 1.85) : size} height={size} />
   );
 }

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Script from 'next/script';
-import { MagnifyingGlass, X } from '@phosphor-icons/react';
+import { X } from '@phosphor-icons/react';
 import { GlobalSearchProvider, useGlobalSearch } from './GlobalSearchContext';
 import { getShopThemeByColor, shopThemeVars } from './shopTheme';
 import { AiSparkle } from '@/app/components/ai-search/AiBotMark';

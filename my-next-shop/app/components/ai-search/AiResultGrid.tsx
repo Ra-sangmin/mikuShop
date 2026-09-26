@@ -4,9 +4,10 @@
 //    GlobalProductCard + .shop-list-grid 를 그대로 가져와, 관심상품·옥션 남은 시간 표시까지 똑같이 동작합니다.
 
 import { useMemo, useState } from 'react';
-import GlobalProductCard from '@/app/main_shop/components/GlobalProductCard';
+import GlobalProductCard, { type GlobalItem } from '@/app/main_shop/components/GlobalProductCard';
 import type { GlobalProduct } from '@/app/main_shop/components/GlobalProductDetail';
 import { MALLS, MALL_LABEL, type AiProduct } from '@/lib/ai-search/types';
+import { MALL_BRAND, MallLogo } from './mallBrand';
 import '@/app/main_shop/components/global-shop-common.css';
 
 /**
@@ -39,7 +40,12 @@ export function toGlobalProduct(p: AiProduct, nameForCard = false): GlobalProduc
   };
 }
 
-import { MALL_BRAND, MallLogo } from './mallBrand';
+/** 카드용. 카드 타입엔 yahoo_shopping 이 빠져 있지만 카드는 platform 을 몰 이름 표시에만 쓰므로 그대로 넘깁니다. */
+function toCardItem(p: AiProduct): GlobalItem {
+  const g = toGlobalProduct(p, true);
+  return { ...g, platform: g.platform as GlobalItem['platform'] };
+}
+
 export { MALL_BRAND, MallLogo };
 
 function PickStar({ size = 12 }: { size?: number }) {
@@ -121,7 +127,7 @@ export default function AiResultGrid({
       <div className="shop-list-grid ais-shop-grid">
         {visible.map(p => (
           <div key={`${p.mall}:${p.itemId}`} className="ais-card-wrap">
-            <GlobalProductCard item={toGlobalProduct(p, true) as any} onClick={() => onSelect(p)} />
+            <GlobalProductCard item={toCardItem(p)} onClick={() => onSelect(p)} />
             {p.aiPick && (
               // 마우스를 올리거나(데스크톱) 누르면(모바일) 추천 이유가 뜹니다. 카드 클릭(상세 열기)과는 분리합니다.
               <span

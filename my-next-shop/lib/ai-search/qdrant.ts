@@ -27,7 +27,13 @@ export function isQdrantConfigured(): boolean {
   return Boolean(process.env.QDRANT_URL?.trim() && process.env.QDRANT_API_KEY?.trim());
 }
 
-async function qdrant<T = any>(method: 'GET' | 'PUT' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> {
+class QdrantError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+async function qdrant<T = unknown>(method: 'GET' | 'PUT' | 'POST' | 'DELETE', path: string, body?: unknown): Promise<T> {
   const base = process.env.QDRANT_URL!.trim().replace(/\/+$/, '');
   const res = await fetch(`${base}${path}`, {
     method,
@@ -38,9 +44,7 @@ async function qdrant<T = any>(method: 'GET' | 'PUT' | 'POST' | 'DELETE', path: 
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    const err = new Error(`[Qdrant] ${method} ${path} → ${res.status} ${text.slice(0, 200)}`);
-    (err as any).status = res.status;
-    throw err;
+    throw new QdrantError(`[Qdrant] ${method} ${path} → ${res.status} ${text.slice(0, 200)}`, res.status);
   }
   return res.json() as Promise<T>;
 }
@@ -58,7 +62,7 @@ export function ensureCollection(): Promise<void> {
         await qdrant('GET', `/collections/${COLLECTION}`);
         return; // 이미 있음
       } catch (e) {
-        if ((e as any).status !== 404) throw e;
+        if (!(e instanceof QdrantError) || e.status !== 404) throw e;
       }
 
       console.log(`🧲 [Qdrant] 컬렉션 ${COLLECTION} 생성 (dim=${EMBED_DIM})`);
@@ -133,7 +137,7 @@ export interface VectorSearchOptions {
 export async function searchByVector(vector: number[], opts: VectorSearchOptions): Promise<AiProduct[]> {
   await ensureCollection();
 
-  const must: any[] = [
+  const must: Record<string, unknown>[] = [
     { key: 'mall', match: { any: opts.malls } },
     { key: 'fetched_at', range: { gte: Date.now() - FRESH_MS } },
   ];

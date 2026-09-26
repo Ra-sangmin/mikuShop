@@ -10,6 +10,7 @@ import AiResultGrid, { MallLogo } from '@/app/components/ai-search/AiResultGrid'
 import AiProductDetailModal from '@/app/components/ai-search/AiProductDetailModal';
 import JaKoTranslate from '@/app/components/ai-search/JaKoTranslate';
 import AiBotMark, { AiSparkle } from '@/app/components/ai-search/AiBotMark';
+import AiSearchProgress, { type SearchProgress } from '@/app/components/ai-search/AiSearchProgress';
 import { useAiSearch, useSuggestions } from '@/app/components/ai-search/useAiSearch';
 import { MALLS, MALL_LABEL, formatPriceRange, type AiProduct, type AiSearchResponse, type MallType } from '@/lib/ai-search/types';
 import '@/app/components/ai-search/ai-search.css';
@@ -19,7 +20,7 @@ const PLACEHOLDER = "AI 비서에게 물어보세요! '여름 바닷가에서 �
 
 type Turn =
   | { id: number; role: 'user'; text: string }
-  | { id: number; role: 'bot'; text: string; result?: AiSearchResponse; pending?: boolean; error?: boolean };
+  | { id: number; role: 'bot'; text: string; result?: AiSearchResponse; pending?: boolean; error?: boolean; progress?: SearchProgress };
 
 const TABS: { id: MallType; label: string }[] = [
   { id: 'integrated', label: '전체 쇼핑몰' },
@@ -91,7 +92,7 @@ export default function AiSearchChat() {
   // 🔎 누른 상품 → 상세 정보 패널 (몰 페이지와 같은 GlobalProductDetail)
   const [selected, setSelected] = useState<AiProduct | null>(null);
   const closeDetail = useCallback(() => setSelected(null), []);
-  const { search, loading, cancel } = useAiSearch(mallType);
+  const { searchStream, loading, cancel } = useAiSearch(mallType);
   const tags = useSuggestions(mallType);
   const idRef = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -103,9 +104,23 @@ export default function AiSearchChat() {
     setInput('');
     const userId = ++idRef.current;
     const botId = ++idRef.current;
-    setTurns(t => [...t, { id: userId, role: 'user', text: q }, { id: botId, role: 'bot', text: '', pending: true }]);
+    setTurns(t => [
+      ...t,
+      { id: userId, role: 'user', text: q },
+      { id: botId, role: 'bot', text: '', pending: true, progress: { malls: [], byMall: {} } },
+    ]);
 
-    const result = await search(q);
+    // 🌊 도착하는 대로 진행 상태를 갱신 (분석 → 몰별 결과)
+    const patchProgress = (fn: (p: SearchProgress) => SearchProgress) =>
+      setTurns(t => t.map(turn => (turn.id === botId && turn.role === 'bot' && turn.progress ? { ...turn, progress: fn(turn.progress) } : turn)));
+
+    const result = await searchStream(q, ev => {
+      if (ev.type === 'analysis') {
+        patchProgress(p => ({ ...p, mode: ev.mode, analysis: ev.analysis, malls: ev.malls }));
+      } else if (ev.type === 'mall') {
+        patchProgress(p => ({ ...p, byMall: { ...p.byMall, [ev.mall]: { items: ev.items, done: ev.done, error: ev.error } } }));
+      }
+    });
     setTurns(t =>
       t.map(turn =>
         turn.id !== botId
@@ -127,9 +142,14 @@ export default function AiSearchChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
+  // 새 질문을 보냈을 때(대화 칸 수가 늘 때)만 아래로 내려 줍니다.
+  // 🐛 예전엔 turns 가 바뀔 때마다(몰별 상품이 도착할 때마다) 맨 아래로 끌려 내려가
+  //    위쪽 상품을 보던 손님의 화면이 계속 움직였습니다. 이후 스크롤은 손님에게 맡깁니다.
+  const turnCount = turns.length;
   useEffect(() => {
+    if (turnCount === 0) return;
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [turns]);
+  }, [turnCount]);
 
   /**
    * 쇼핑몰 탭 변경 = 새 대화.
@@ -206,13 +226,11 @@ export default function AiSearchChat() {
                 <div className="ais-msg-avatar" aria-hidden><AiBotMark size={36} /></div>
                 <div className="ais-bubble">
                   {turn.pending ? (
-                    <div className="ais-pending notranslate" translate="no" aria-label="찾는 중">
-                      <span className="ais-typing" aria-hidden><i /><i /><i /></span>
-                      <span>{mallType === 'integrated' ? '4개 쇼핑몰을 둘러보고 있어요' : `${MALL_LABEL[mallType as keyof typeof MALL_LABEL]}에서 찾고 있어요`}</span>
-                      <div className="ais-pending-skel" aria-hidden>
-                        {Array.from({ length: 5 }).map((_, i) => <i key={i} />)}
-                      </div>
-                    </div>
+                    <AiSearchProgress
+                      progress={turn.progress ?? { malls: [], byMall: {} }}
+                      expectedMalls={mallType === 'integrated' ? [...MALLS] : [mallType as (typeof MALLS)[number]]}
+                      onSelect={setSelected}
+                    />
                   ) : (
                     <>
                       {turn.result ? (

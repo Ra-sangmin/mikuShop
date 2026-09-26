@@ -47,23 +47,18 @@ async function loadDetail(p: AiProduct, signal: AbortSignal): Promise<GlobalProd
 }
 
 export default function AiProductDetailModal({ product, onClose }: { product: AiProduct | null; onClose: () => void }) {
-  const [detail, setDetail] = useState<GlobalProduct | null>(null);
-  const [loading, setLoading] = useState(false);
+  // 어떤 상품의 상세인지 같이 기억해 두고, 지금 열린 상품과 같을 때만 씁니다.
+  // (상품이 바뀌면 이전 상세는 자동으로 무시되어 "불러오는 중" 이 됩니다 — effect 안에서 상태를 비울 필요 없음)
+  const [loaded, setLoaded] = useState<{ product: AiProduct; detail: GlobalProduct } | null>(null);
+  const detail = product && loaded?.product === product ? loaded.detail : null;
+  const loading = Boolean(product) && !detail;
 
   useEffect(() => {
-    if (!product) {
-      setDetail(null);
-      return;
-    }
+    if (!product) return;
     const controller = new AbortController();
-    setDetail(null);
-    setLoading(true);
     loadDetail(product, controller.signal)
-      .then(d => setDetail(d))
-      .catch(() => {})
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
+      .then(d => setLoaded({ product, detail: d }))
+      .catch(() => {});
     return () => controller.abort();
   }, [product]);
 

@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: any;
+  let body: { query?: unknown; mall_type?: unknown; stream?: unknown } | null;
   try {
     body = await request.json();
   } catch {
@@ -44,6 +44,53 @@ export async function POST(request: Request) {
   if (!query) return NextResponse.json({ error: '검색어를 입력해 주세요.' }, { status: 400 });
   if (query.length > 200) return NextResponse.json({ error: '검색어는 200자 이내로 입력해 주세요.' }, { status: 400 });
   if (!isMallType(mallType)) return NextResponse.json({ error: '지원하지 않는 쇼핑몰입니다.' }, { status: 400 });
+
+  // 🌊 스트리밍 모드: 분석 결과 → 몰별 결과(도착 순) → 최종 결과를 NDJSON 으로 흘려보냅니다.
+  //    화면은 빨리 온 몰부터 카드를 먼저 그리고, 느린 몰은 이어 붙입니다.
+  if (body?.stream === true) {
+    let resolveBg: (fn: (() => Promise<void>) | null) => void = () => {};
+    const bgReady = new Promise<(() => Promise<void>) | null>(r => (resolveBg = r));
+    // 응답(스트림)이 끝난 뒤 Qdrant 색인·RDS 저장
+    after(async () => {
+      const bg = await bgReady;
+      if (bg) await bg();
+    });
+
+    const encoder = new TextEncoder();
+    // 손님이 검색 도중 페이지를 닫거나 새 검색을 하면 → 크롤링 중단
+    const clientGone = new AbortController();
+    request.signal.addEventListener('abort', () => clientGone.abort(), { once: true });
+    const stream = new ReadableStream<Uint8Array>({
+      cancel() {
+        clientGone.abort();
+      },
+      async start(controller) {
+        const send = (e: unknown) => {
+          try { controller.enqueue(encoder.encode(JSON.stringify(e) + '\n')); } catch { /* 손님이 창을 닫음 */ }
+        };
+        try {
+          const { response, background } = await runAiSearch({
+            query, mallType, internalBaseUrl: internalBaseUrl(), onEvent: send, signal: clientGone.signal,
+          });
+          send({ type: 'done', response });
+          resolveBg(background);
+        } catch (error) {
+          console.error('❌ [AI 검색] 스트리밍 처리 실패:', error);
+          send({ type: 'error', message: '검색 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.' });
+          resolveBg(null);
+        } finally {
+          try { controller.close(); } catch { /* 이미 닫힘 */ }
+        }
+      },
+    });
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Accel-Buffering': 'no',
+      },
+    });
+  }
 
   try {
     const { response, background } = await runAiSearch({ query, mallType, internalBaseUrl: internalBaseUrl() });

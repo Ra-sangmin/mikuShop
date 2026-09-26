@@ -8,14 +8,29 @@
 import { useEffect } from 'react';
 import Script from 'next/script';
 
+/** 구글 번역 위젯이 window 에 붙이는 것들 (쓰는 부분만) */
+type TranslateWindow = Window & {
+  googleTranslateElementInit?: () => void;
+  google?: {
+    translate: {
+      TranslateElement: {
+        new (opts: Record<string, unknown>, id: string): unknown;
+        InlineLayout: { SIMPLE: unknown };
+      };
+    };
+  };
+};
+
 export default function JaKoTranslate() {
   useEffect(() => {
     const cookieValue = '/ja/ko';
     document.cookie = `googtrans=${cookieValue}; path=/;`;
     document.cookie = `googtrans=${cookieValue}; path=/; domain=${window.location.hostname};`;
 
-    (window as any).googleTranslateElementInit = () => {
-      const g = (window as any).google;
+    const w = window as TranslateWindow;
+    w.googleTranslateElementInit = () => {
+      const g = w.google;
+      if (!g) return;
       new g.translate.TranslateElement(
         {
           pageLanguage: 'ja',

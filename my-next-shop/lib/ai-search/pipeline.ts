@@ -15,17 +15,17 @@ import { embedDocuments, embedQuery, GeminiRateLimitError } from './gemini';
 import { cacheProducts, embedText, isQdrantConfigured, searchByVector } from './qdrant';
 import { mercariThumb, searchMallsLive } from './malls';
 import { logSearch, upsertProductsToRds } from './store';
-import { MALLS, MALL_LABEL, formatPriceRange, type AiProduct, type AiSearchResponse, type Mall, type MallType } from './types';
+import { MALLS, MALL_LABEL, formatPriceRange, type AiStreamEvent, type AiProduct, type AiSearchResponse, type Mall, type MallType } from './types';
 
 /** 몰별로 캐시에서 이만큼 나오면 그 몰은 실시간 호출을 생략합니다. */
-const ENOUGH_PER_MALL = { integrated: 4, single: 12 };
+const ENOUGH_PER_MALL = { integrated: 25, single: 50 };
 /**
  * "AI 추천" 표시 기준.
  * gemini-embedding-001(768차원) + Cosine 에서 한국어 질문 ↔ 일본어 상품명 점수는 보통 0.65~0.8 이라
  * 고정 점수(예: 0.8 이상)로 자르면 거의 아무것도 안 걸립니다. → 이번 결과 안에서 상대적으로 가장 잘 맞는
  * 상위 몇 개만 고르고, 너무 낮은 점수는 제외합니다.
  */
-const AI_PICK_COUNT = { integrated: 5, single: 4 };
+const AI_PICK_COUNT = { integrated: 8, single: 6 };
 const AI_PICK_MIN_SCORE = Number(process.env.AI_SEARCH_PICK_MIN_SCORE || 0.66);
 
 /**
@@ -68,13 +68,32 @@ function cosine(a: number[], b: number[]): number {
   return na && nb ? dot / Math.sqrt(na * nb) : 0;
 }
 
-/** 실시간 호출 시 몰별로 가져올 개수 */
-const LIVE_LIMIT = { integrated: 8, single: 20 };
+/** 실시간 호출 시 몰별로 가져올 개수 (통합 4몰 × 30 → 중복·사진 없는 상품을 빼고도 100개 가까이) */
+const LIVE_LIMIT = { integrated: 30, single: 60 };
+
+/** 화면에 보여 줄 최대 상품 수 */
+const MAX_RESULTS = 100;
+
+/**
+ * 🐛 사진 주소가 없는 상품은 카드가 "이미지 준비 중" 으로 떴습니다.
+ *    대부분 메루카리 Shops 상품(/shops/product/…)으로, 목록의 사진이 화면에 들어와야 채워지는데
+ *    크롤러는 사진을 불러오지 않아 끝까지 비어 있고, 사진 번호도 상품 번호와 달라 주소를 만들 수 없습니다.
+ *    → 일반 메루카리 상품은 상품 번호로 주소를 만들고, 그래도 사진이 없으면 결과에서 뺍니다.
+ */
+function withThumb(items: AiProduct[]): AiProduct[] {
+  return items
+    .map(p => (p.mall === 'mercari' && !p.thumbnail ? { ...p, thumbnail: mercariThumb(p.itemId) } : p))
+    .filter(p => Boolean(p.thumbnail));
+}
 
 export interface PipelineInput {
   query: string;
   mallType: MallType;
   internalBaseUrl: string;
+  /** 스트리밍: 분석·몰별 결과가 나오는 대로 알려 줍니다 (없으면 끝까지 모아서 한 번에) */
+  onEvent?: (e: AiStreamEvent) => void;
+  /** 손님이 페이지를 닫으면 켜지는 신호 — 메루카리·야후 옥션 크롤링을 멈춥니다 */
+  signal?: AbortSignal;
 }
 
 export interface PipelineOutput {
@@ -134,7 +153,7 @@ function buildMessage(r: Omit<AiSearchResponse, 'message' | 'tookMs'>): string {
   return `${head} 「${kw}」${price}(으)로 ${r.items.length}개를 찾았어요.`;
 }
 
-export async function runAiSearch({ query, mallType, internalBaseUrl }: PipelineInput): Promise<PipelineOutput> {
+export async function runAiSearch({ query, mallType, internalBaseUrl, onEvent, signal }: PipelineInput): Promise<PipelineOutput> {
   const started = Date.now();
   const isIntegrated = mallType === 'integrated';
   const malls: Mall[] = isIntegrated ? [...MALLS] : [mallType as Mall];
@@ -142,6 +161,7 @@ export async function runAiSearch({ query, mallType, internalBaseUrl }: Pipeline
 
   // ① 분석
   const { mode, fallbackReason, analysis } = await analyzeQuery(query);
+  onEvent?.({ type: 'analysis', mode, fallbackReason, analysis, malls });
 
   // ② Qdrant 의미 검색 (폴백 모드면 건너뜀)
   let cached: AiProduct[] = [];
@@ -156,7 +176,7 @@ export async function runAiSearch({ query, mallType, internalBaseUrl }: Pipeline
         malls,
         minPriceJpy: analysis.minPriceJpy,
         maxPriceJpy: analysis.maxPriceJpy,
-        limit: isIntegrated ? 40 : 30,
+        limit: isIntegrated ? MAX_RESULTS : 60,
       });
     } catch (e) {
       if (e instanceof GeminiRateLimitError) embedBlocked = true;
@@ -171,38 +191,60 @@ export async function runAiSearch({ query, mallType, internalBaseUrl }: Pipeline
   );
   const needLive = malls.filter(m => (cachedByMall.get(m)?.length ?? 0) < ENOUGH_PER_MALL[scope]);
 
-  const liveResults = needLive.length
-    ? await searchMallsLive(needLive, {
+  // 저장해 둔(캐시) 상품은 바로 보여 줍니다 — 화면이 비어 있는 시간을 줄입니다.
+  for (const m of malls) {
+    const c = cachedByMall.get(m) ?? [];
+    const waitingLive = needLive.includes(m);
+    if (c.length || !waitingLive) onEvent?.({ type: 'mall', mall: m, items: withThumb(c), done: !waitingLive });
+  }
+
+  // ④ 몰마다 따로 실시간 조회 → 번역 → 유사도 → 끝난 몰부터 바로 알림
+  //    (예전엔 가장 느린 몰(메루카리·야후 옥션 크롤링)이 끝날 때까지 전부 기다렸다가 한 번에 보여 줬습니다)
+  //    유사도 벡터는 뒤의 Qdrant 색인에 그대로 다시 씁니다.
+  const liveVectors = new Map<string, number[]>();
+  const liveResults = await Promise.all(
+    needLive.map(async m => {
+      const [r] = await searchMallsLive([m], {
         keywordJa: analysis.keywordJa,
         minPriceJpy: analysis.minPriceJpy,
         maxPriceJpy: analysis.maxPriceJpy,
         excludeJa: analysis.excludeJa,
         limit: LIVE_LIMIT[scope],
         internalBaseUrl,
-      })
-    : [];
+        signal,
+      });
+
+      // 손님이 이미 떠났으면 번역·유사도 계산(DeepL·Gemini 할당량)을 아낍니다
+      if (signal?.aborted) return r;
+
+      await translateNames(r.items).catch(e => console.warn('⚠️ [AI 검색] 번역 생략:', (e as Error).message));
+
+      if (queryVector && r.items.length && !embedBlocked) {
+        try {
+          const target = r.items.slice(0, 100);
+          const vecs = await embedDocuments(target.map(embedText));
+          target.forEach((p, i) => {
+            liveVectors.set(`${p.mall}:${p.itemId}`, vecs[i]);
+            p.score = cosine(queryVector!, vecs[i]);
+          });
+        } catch (e) {
+          if (e instanceof GeminiRateLimitError) embedBlocked = true;
+          console.warn('⚠️ [AI 검색] 실시간 상품 유사도 생략:', (e as Error).message);
+        }
+      }
+
+      onEvent?.({
+        type: 'mall',
+        mall: m,
+        items: withThumb([...(cachedByMall.get(m) ?? []), ...r.items]),
+        done: true,
+        ...(r.error ? { error: `${MALL_LABEL[m]} ${r.error}` } : {}),
+      });
+      return r;
+    }),
+  );
 
   const liveItems = liveResults.flatMap(r => r.items);
-
-  // ④ 번역 (실패해도 일본어 이름으로 계속)
-  await translateNames(liveItems).catch(e => console.warn('⚠️ [AI 검색] 번역 생략:', (e as Error).message));
-
-  // ④-2 방금 가져온 상품도 질문과의 유사도를 매깁니다 → 처음 검색하는 말이어도 "AI 추천" 이 붙습니다.
-  //      여기서 만든 벡터는 뒤의 Qdrant 색인에 그대로 다시 써서 Gemini 호출이 늘지 않습니다(배치 1회).
-  const liveVectors = new Map<string, number[]>();
-  if (queryVector && liveItems.length && !embedBlocked) {
-    try {
-      const target = liveItems.slice(0, 100);
-      const vecs = await embedDocuments(target.map(embedText));
-      target.forEach((p, i) => {
-        liveVectors.set(`${p.mall}:${p.itemId}`, vecs[i]);
-        p.score = cosine(queryVector!, vecs[i]);
-      });
-    } catch (e) {
-      if (e instanceof GeminiRateLimitError) embedBlocked = true;
-      console.warn('⚠️ [AI 검색] 실시간 상품 유사도 생략:', (e as Error).message);
-    }
-  }
 
   // 병합: 몰마다 [캐시(유사도순) → 실시간] 순서, 중복 제거
   // 🐛 라쿠텐은 같은 상품을 여러 가게가 똑같은 이름·가격·사진으로 올려(itemId 만 다름)
@@ -212,7 +254,7 @@ export async function runAiSearch({ query, mallType, internalBaseUrl }: Pipeline
     const seenId = new Set<string>();
     const seenListing = new Set<string>();
     const live = liveResults.find(r => r.mall === m)?.items ?? [];
-    return [...(cachedByMall.get(m) ?? []), ...live].filter(p => {
+    return withThumb([...(cachedByMall.get(m) ?? []), ...live]).filter(p => {
       const listing = sameListingKey(p);
       if (seenId.has(p.itemId) || seenListing.has(listing)) return false;
       seenId.add(p.itemId);
@@ -220,9 +262,7 @@ export async function runAiSearch({ query, mallType, internalBaseUrl }: Pipeline
       return true;
     });
   });
-  const merged = (isIntegrated ? interleave(perMall) : perMall[0]).map(p =>
-    p.mall === 'mercari' && !p.thumbnail ? { ...p, thumbnail: mercariThumb(p.itemId) } : p,
-  );
+  const merged = isIntegrated ? interleave(perMall) : perMall[0];
 
   // "AI 추천": 점수가 있는 상품 중 상위 N개 (기준 점수 이상). 맨 앞으로 올려 먼저 보이게 합니다.
   const pickKeys = new Set(
@@ -244,7 +284,7 @@ export async function runAiSearch({ query, mallType, internalBaseUrl }: Pipeline
     mode,
     fallbackReason,
     analysis,
-    items: items.slice(0, 40),
+    items: items.slice(0, MAX_RESULTS),
     malls: malls.map(m => {
       const live = liveResults.find(r => r.mall === m);
       return { mall: m, count: perMall[malls.indexOf(m)].length, ...(live?.error ? { error: `${MALL_LABEL[m]} ${live.error}` } : {}) };

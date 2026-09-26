@@ -1,6 +1,6 @@
 // 🏷️ GET /api/ai-search/suggestions?mall_type=integrated — 추천 검색어 태그
 //
-// 최근 7일간 결과가 나왔던 검색어 중 많이 찾은 순. 기록이 적을 땐 기본 태그로 채웁니다.
+// 최근 7일간 결과가 나왔던 검색어 중 여러 번(기본 3번 이상) 찾은 순. 기록이 적을 땐 기본 태그로 채웁니다.
 // 결과는 10분간 메모리에 캐시해 RDS 부담을 줄입니다.
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +20,9 @@ const DEFAULT_TAGS: Record<string, string[]> = {
 
 const cache = createTtlCache<string[]>(10 * 60_000, 10);
 
+/** 추천 태그가 되려면 최근 7일 동안 이 횟수 이상 검색되어야 합니다 (.env 로 조정) */
+const MIN_COUNT = Math.max(1, Number(process.env.AI_SEARCH_SUGGEST_MIN_COUNT) || 3);
+
 export async function GET(request: Request) {
   const mallType = new URL(request.url).searchParams.get('mall_type') || 'integrated';
   if (!isMallType(mallType)) return NextResponse.json({ tags: DEFAULT_TAGS.integrated });
@@ -33,6 +36,8 @@ export async function GET(request: Request) {
       by: ['query'],
       where: { mallType, resultCount: { gt: 0 }, createdAt: { gte: new Date(Date.now() - 7 * 86400_000) } },
       _count: { query: true },
+      // 여러 번 검색된 문장만 추천합니다. 한두 번뿐인 오타·테스트 검색("캐핑 갈 때…" 등)이 태그로 뜨지 않게.
+      having: { query: { _count: { gte: MIN_COUNT } } },
       orderBy: { _count: { query: 'desc' } },
       take: 6,
     });

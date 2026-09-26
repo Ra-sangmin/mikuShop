@@ -59,3 +59,20 @@ export async function logSearch(entry: {
     },
   });
 }
+
+/**
+ * 🧹 오래된 AI 검색 데이터 정리 (크론에서 하루 한 번)
+ *  - ai_search_logs     : 손님이 입력한 문장 원문이 남는 표라 오래 들고 있지 않습니다 (기본 30일)
+ *  - ai_search_products : 가격·재고가 바뀌어 쓸모없어진 상품 메타데이터 (기본 30일)
+ * 개인정보를 필요 이상 보관하지 않고, RDS(t4g.micro) 용량도 아낍니다.
+ */
+export async function cleanupAiSearchData(opts?: { logDays?: number; productDays?: number }) {
+  const logDays = opts?.logDays ?? (Number(process.env.AI_SEARCH_LOG_RETENTION_DAYS) || 30);
+  const productDays = opts?.productDays ?? (Number(process.env.AI_SEARCH_PRODUCT_RETENTION_DAYS) || 30);
+  const now = Date.now();
+  const [logs, products] = await Promise.all([
+    prisma.aiSearchLog.deleteMany({ where: { createdAt: { lt: new Date(now - logDays * 86400_000) } } }),
+    prisma.aiSearchProduct.deleteMany({ where: { fetchedAt: { lt: new Date(now - productDays * 86400_000) } } }),
+  ]);
+  return { logDays, productDays, deletedLogs: logs.count, deletedProducts: products.count };
+}

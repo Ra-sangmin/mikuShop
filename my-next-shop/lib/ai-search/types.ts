@@ -98,3 +98,14 @@ export function formatPriceRange(min?: number | null, max?: number | null): stri
   if (min) return `${yen(min)} 이상`;
   return '';
 }
+
+/**
+ * 스트리밍 검색 이벤트 (NDJSON 한 줄 = 이벤트 하나).
+ * 결과가 빨리 오는 몰(라쿠텐·야후 쇼핑·저장된 상품)부터 먼저 보여 주고, 느린 몰(메루카리·야후 옥션 크롤링)은
+ * 도착하는 대로 이어 붙입니다. 마지막 done 에서 AI 추천·정렬이 끝난 최종 결과로 바꿉니다.
+ */
+export type AiStreamEvent =
+  | { type: 'analysis'; mode: SearchMode; fallbackReason?: AiSearchResponse['fallbackReason']; analysis: QueryAnalysis; malls: Mall[] }
+  | { type: 'mall'; mall: Mall; items: AiProduct[]; done: boolean; error?: string }
+  | { type: 'done'; response: AiSearchResponse }
+  | { type: 'error'; message: string };

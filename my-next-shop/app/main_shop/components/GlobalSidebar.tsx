@@ -162,11 +162,11 @@ export function GlobalSidebar({ platform = 'mercari', currentPath, onSearch, isD
       setFilters(prev => {
         const next = { ...prev };
         (Object.keys(filled) as (keyof typeof filled)[]).forEach(k => {
-          if (String(prev[k] ?? '') === filled[k]) (next as any)[k] = '';
+          if (String(prev[k] ?? '') === filled[k]) next[k] = '';
         });
         return next;
       });
-    }, [pathKey]);
+    }, [pathKey, platform]);
     
     // 🚀 스와이프 터치 좌표 추적
     const touchStartX = useRef(0);

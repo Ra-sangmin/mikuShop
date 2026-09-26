@@ -113,8 +113,8 @@ function takeSlot(lane: Lane) {
 }
 
 /** 429 응답 본문의 RetryInfo.retryDelay("37s") 를 읽습니다. */
-function parseRetryDelay(body: any): number {
-  const details: any[] = body?.error?.details ?? [];
+function parseRetryDelay(body: unknown): number {
+  const details = ((body as { error?: { details?: Record<string, unknown>[] } } | null)?.error?.details) ?? [];
   const info = details.find(d => String(d?.['@type'] ?? '').includes('RetryInfo'));
   const sec = parseInt(String(info?.retryDelay ?? ''), 10);
   return Number.isFinite(sec) && sec > 0 ? sec : 60;
@@ -137,7 +137,14 @@ export function geminiQuotaStatus() {
 // 공통 호출기
 // ─────────────────────────────────────────────────────────────
 
-async function callGemini(lane: Lane, path: string, body: unknown): Promise<any> {
+/** Gemini 응답 중 쓰는 필드만 */
+interface GeminiResponse {
+  candidates?: { content?: { parts?: { text?: string }[] } }[];
+  embedding?: { values?: number[] };
+  embeddings?: { values: number[] }[];
+}
+
+async function callGemini(lane: Lane, path: string, body: unknown): Promise<GeminiResponse> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new GeminiUnavailableError('GEMINI_API_KEY 가 설정되지 않았습니다.');
 
@@ -180,7 +187,7 @@ async function callGemini(lane: Lane, path: string, body: unknown): Promise<any>
  * 모델 이름이 들어가는 호출을 감쌉니다. 404(은퇴)이고 Google 이 대체 모델을 알려 줬으면
  * 그 모델로 바꿔 딱 한 번 다시 시도합니다. 대체 모델이 없거나 또 실패하면 그대로 던집니다(→ 폴백).
  */
-async function callWithModel(lane: Lane, build: (model: string) => { path: string; body: unknown }): Promise<any> {
+async function callWithModel(lane: Lane, build: (model: string) => { path: string; body: unknown }): Promise<GeminiResponse> {
   const first = build(activeModel[lane]);
   try {
     return await callGemini(lane, first.path, first.body);
@@ -297,7 +304,7 @@ export async function analyzeQueryWithGemini(query: string): Promise<RawAnalysis
     },
   }));
 
-  const text: string = data?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text ?? '').join('') ?? '';
+  const text: string = data?.candidates?.[0]?.content?.parts?.map(p => p?.text ?? '').join('') ?? '';
   let parsed: RawAnalysis;
   try {
     parsed = JSON.parse(text);

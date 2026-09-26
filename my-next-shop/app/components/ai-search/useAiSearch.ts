@@ -3,7 +3,7 @@
 // 🤖 AI 검색 호출 훅 — 통합 페이지와 몰별 검색창이 같이 씁니다.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AiSearchResponse, MallType } from '@/lib/ai-search/types';
+import type { AiSearchResponse, AiStreamEvent, MallType } from '@/lib/ai-search/types';
 
 export function useAiSearch(mallType: MallType) {
   const [loading, setLoading] = useState(false);
@@ -47,6 +47,66 @@ export function useAiSearch(mallType: MallType) {
     [mallType],
   );
 
+  /**
+   * 🌊 스트리밍 검색: 분석·몰별 결과가 나오는 대로 onEvent 로 알려 주고, 마지막에 최종 결과를 돌려줍니다.
+   * 스트림을 못 쓰는 환경이면 일반 검색(search)과 같은 결과만 돌려줍니다.
+   */
+  const searchStream = useCallback(
+    async (query: string, onEvent: (e: AiStreamEvent) => void): Promise<AiSearchResponse | null> => {
+      const q = query.trim();
+      if (!q) return null;
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setLoading(true);
+      setError(null);
+
+      try {
+        const res = await fetch('/api/ai-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q, mall_type: mallType, stream: true }),
+          signal: controller.signal,
+        });
+        if (!res.ok || !res.body) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error || '검색에 실패했어요.');
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        let final: AiSearchResponse | null = null;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let nl: number;
+          while ((nl = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (!line) continue;
+            let ev: AiStreamEvent;
+            try { ev = JSON.parse(line); } catch { continue; }
+            if (ev.type === 'error') throw new Error(ev.message);
+            if (ev.type === 'done') final = ev.response;
+            onEvent(ev);
+          }
+        }
+        if (!final) throw new Error('검색 결과를 받지 못했어요.');
+        return final;
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return null;
+        setError((e as Error).message);
+        return null;
+      } finally {
+        if (abortRef.current === controller) setLoading(false);
+      }
+    },
+    [mallType],
+  );
+
   /** 진행 중인 검색을 취소하고 상태를 비웁니다 (쇼핑몰 탭을 바꿔 처음 화면으로 돌아갈 때) */
   const cancel = useCallback(() => {
     abortRef.current?.abort();
@@ -55,7 +115,7 @@ export function useAiSearch(mallType: MallType) {
     setError(null);
   }, []);
 
-  return { search, loading, error, cancel };
+  return { search, searchStream, loading, error, cancel };
 }
 
 export function useSuggestions(mallType: MallType) {
