@@ -4,6 +4,10 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
+// 🔨 보증금 규칙(입찰가의 10% · 최소 ¥2,000)은 한 곳에서 가져다 씁니다.
+import { calcDepositKrw, isDepositAtMinimum, DEPOSIT_RULE_TEXT } from '@/src/utils/auctionDeposit';
+// 🔨 야후 입찰 규칙: 금액대별 최소 인상폭 · '한도' 안내 (src/utils/auctionBid.ts)
+import { minNextBid, bidIncrement, BID_LIMIT_NOTICE, BID_HIDDEN_LIMIT_HINT } from '@/src/utils/auctionBid';
 import GlobalProductDetailBase from "./GlobalProductDetailBase";
 import { GlobalProduct } from "./GlobalProductDetail";
 import { getDetailStyles, getDetailTheme } from "./GlobalProductDetail.styles";
@@ -48,16 +52,12 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
   // 사용자가 입력한 희망 입찰 금액
   const [bidAmount, setBidAmount] = useState<string>("");
 
-  // 🌟 입력값이 변경될 때마다 10% 보증금 자동 계산
-  const depositAmount = useMemo(() => {
-    const numericBid = parseInt(bidAmount, 10);
-    
-    // 정상적인 숫자가 아니거나 0 이하일 경우 0원
-    if (isNaN(numericBid) || numericBid <= 0) return 0;
-    
-    // 2만엔 이하 2000엔, 그 이상 10%
-    return numericBid <= 20000 ? 2000 : Math.floor(numericBid * 0.1);
-  }, [bidAmount]);
+  // 💰 보증금은 원화입니다. (입찰가의 10% · 최소 20,000원 — src/utils/auctionDeposit.ts)
+  const depositAmountKrw = useMemo(
+    () => calcDepositKrw(parseInt(bidAmount, 10), exchangeRate), [bidAmount, exchangeRate]);
+  // 10% 가 최소 금액보다 작아 20,000원이 된 경우 — 화면에 그 이유를 밝혀 줍니다.
+  const depositIsMinimum = useMemo(
+    () => isDepositAtMinimum(parseInt(bidAmount, 10), exchangeRate), [bidAmount, exchangeRate]);
 
   // 🌟 하단 "희망 입찰 기준 예상 결제 금액" 패널은 GlobalProductDetailBase의 currentPrice를 그대로 표시합니다.
   // 사용자가 입력한 희망 입찰 금액을 그대로 반영하고, 아직 입력 전이면 현재가를 기본값으로 보여줍니다.
@@ -67,12 +67,22 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
     return numericBid;
   }, [bidAmount, livePrice]);
 
-  // 🌟 입력한 희망 입찰 금액이 현재 입찰가 이하이면 입력창을 빨간색으로 표시합니다.
+  // 🔨 야후는 금액대별 **최소 인상폭**이 정해져 있습니다. 현재가보다 1엔만 높여도 입찰이 거부됩니다.
+  //    (예: ¥500 이면 10엔 단위라 ¥510 부터) 그래서 '현재가 초과'가 아니라 이 값으로 막습니다.
+  const minBid = useMemo(() => minNextBid(livePrice), [livePrice]);
+
+  // 🌟 최소 입찰가에 못 미치면 입력창을 빨간색으로 표시합니다.
   const isBidTooLow = useMemo(() => {
     const numericBid = parseInt(bidAmount, 10);
     if (isNaN(numericBid) || numericBid <= 0) return false;
-    return numericBid <= livePrice;
-  }, [bidAmount, livePrice]);
+    return numericBid < minBid;
+  }, [bidAmount, minBid]);
+
+  // 🔨 최소 입찰가 이상이어야 담을 수 있습니다. (적기 전·너무 낮을 땐 버튼을 막아 둡니다)
+  const canRequestBid = useMemo(() => {
+    const numericBid = parseInt(bidAmount, 10);
+    return !isNaN(numericBid) && numericBid >= minBid;
+  }, [bidAmount, minBid]);
 
   const theme = useMemo(() => getDetailTheme('yahoo_auction'), []);
 
@@ -160,12 +170,12 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
           auctionEndDate: product.endSchedule, 
           status: "BID_PENDING",
           myBidPrice: numericBid,
-          depositAmount: depositAmount
+          // 💰 보증금은 서버가 입찰가로 계산합니다. (화면 값을 보내면 조작될 수 있습니다)
         }),
       });
       const data = await response.json();
       if (data.success) {
-        const isConfirmed = await showConfirm(`¥${numericBid.toLocaleString()} 경매 요청이 완료되었습니다.\n(보증금: ¥${depositAmount.toLocaleString()})\n경매 요청 페이지로 이동하시겠습니까?`);
+        const isConfirmed = await showConfirm(`¥${numericBid.toLocaleString()} 경매 요청이 완료되었습니다.\n보증금 ${depositAmountKrw.toLocaleString()}원은 마이페이지에서 결제하시면 입찰이 시작됩니다.\n지금 이동하시겠습니까?`);
         // 🛒 경매 요청도 장바구니 카드에 함께 들어갑니다. 같은 카드를 펼친 채로 엽니다.
         if (isConfirmed) {
           const newId = data.order?.orderId;
@@ -359,9 +369,16 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
               cursor: pointer; margin-top: 12px; transition: all 0.2s ease;
               box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
             }
-            .custom-bid-button:hover {
+            .custom-bid-button:hover:not(:disabled) {
               background-color: #dc2626; transform: translateY(-2px);
               box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
+            }
+            .custom-bid-button:disabled {
+              background-color: #fca5a5; box-shadow: none; cursor: not-allowed;
+            }
+            .custom-bid-hint {
+              margin: 10px 0 0; text-align: center; font-size: 12.5px; font-weight: 600;
+              color: #64748b; line-height: 1.5; word-break: keep-all;
             }
 
             @media (max-width: 1100px) {
@@ -371,7 +388,7 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
           `}</style>
           
           <div style={styles.auctionDashboard}>
-            <p style={styles.aucPriceLabel}>현재 입찰가</p>
+            <p style={styles.aucPriceLabel}>지금 경매가</p>
             <p className="notranslate" style={styles.aucLivePrice}>¥{livePrice.toLocaleString()}</p>
             <p className="notranslate" style={styles.aucPriceKrw}>약 {Math.floor(livePrice * exchangeRate).toLocaleString()}원</p>
             
@@ -411,7 +428,7 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
             {/* 희망 입찰 금액 입력창 */}
             <input
               type="number"
-              placeholder={`최소 ${livePrice.toLocaleString()}엔 이상 입력`}
+              placeholder={`최소 ¥${minBid.toLocaleString()} 이상 입력`}
               value={bidAmount}
               onChange={(e) => setBidAmount(e.target.value)} // 🌟 타이핑할 때마다 상태 업데이트
               style={{
@@ -433,17 +450,43 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
 
             {isBidTooLow && (
               <p style={{ margin: '0 0 16px', fontSize: '13px', fontWeight: '700', color: '#ef4444' }}>
-                현재 입찰가(¥{livePrice.toLocaleString()})보다 높은 금액을 입력해주세요.
+                최소 ¥{minBid.toLocaleString()} 이상 입력해 주세요. (현재 ¥{livePrice.toLocaleString()} · 인상폭 ¥{bidIncrement(livePrice).toLocaleString()})
               </p>
             )}
+
+            {/* 🔨 화면의 경매가는 '이기는 금액'이 아닙니다. 입력값이 '한도'라는 것을 알려 줍니다. */}
+            <p style={{ margin: '0 0 16px', fontSize: '12px', lineHeight: 1.6, color: '#94a3b8', wordBreak: 'keep-all' }}>
+              {BID_LIMIT_NOTICE}
+            </p>
 
             <div style={{ height: '1px', background: 'linear-gradient(90deg, transparent, #e2e8f0, transparent)', marginBottom: '16px' }}></div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '15px', color: '#64748b', fontWeight: '700' }}>결제 필요 보증금 (10%)</span>
+              <span>
+                <span style={{ display: 'block', fontSize: '15px', color: '#64748b', fontWeight: '700' }}>결제 필요 보증금</span>
+                {/* 🔨 규칙을 라벨 아래에 그대로 적습니다. "10%" 만 적으면 최소 금액이 적용될 때 설명이 안 됩니다. */}
+                <span style={{ display: 'block', fontSize: '12.5px', color: '#94a3b8', fontWeight: 600, marginTop: '2px' }}>
+                  {DEPOSIT_RULE_TEXT}
+                </span>
+              </span>
               {/* 🌟 계산된 10% 보증금 실시간 출력 */}
-              <span style={{ fontWeight: '900', color: '#f43f5e', fontSize: '20px', letterSpacing: '-0.5px' }}>
-                ¥ {depositAmount.toLocaleString()}
+              {/* 💰 엔과 원을 함께 보여 줍니다. 실제로 빠지는 돈은 원화입니다. */}
+              <span style={{ textAlign: 'right' }}>
+                <span style={{ display: 'block', fontWeight: '900', color: '#f43f5e', fontSize: '20px', letterSpacing: '-0.5px' }}>
+                  {depositAmountKrw > 0 ? `${depositAmountKrw.toLocaleString()}원` : '-'}
+                </span>
+                <span style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#64748b', marginTop: '2px' }}>
+                  {!bidAmount || parseInt(bidAmount, 10) <= 0
+                    ? '입찰 금액을 입력하면 계산돼요'
+                    : depositAmountKrw > 0
+                      ? '미쿠짱머니에서 차감됩니다'
+                      : '환율 확인 중'}
+                </span>
+                {depositIsMinimum && (
+                  <span style={{ display: 'inline-block', marginTop: '6px', padding: '2px 8px', borderRadius: '999px', background: '#fff1f2', color: '#e11d48', fontSize: '11.5px', fontWeight: 800 }}>
+                    최소 금액 적용
+                  </span>
+                )}
               </span>
             </div>
             
@@ -452,9 +495,20 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
             </p>
           </div>
 
-          <button className="custom-bid-button" onClick={handleBidRequest}>
-            YAHOO_AUCTION 입찰 대행 신청하기 🔨
+          {/* 🛒 누르면 장바구니에 '경매 요청'으로 담깁니다. 입찰은 보증금 결제 후 시작 → 장바구니 배지와 같은 말로 씁니다. */}
+          <button
+            className="custom-bid-button"
+            onClick={handleBidRequest}
+            disabled={!canRequestBid}
+            title={canRequestBid ? undefined : '희망 입찰 금액을 먼저 입력해 주세요'}
+          >
+            🔨 경매 요청 담기
           </button>
+          <p className="custom-bid-hint">
+            {canRequestBid
+              ? '마이페이지에서 보증금을 결제하면 입찰이 시작돼요 · 마감 전에 결제해 주세요'
+              : `희망 입찰 금액(현재가 ¥${livePrice.toLocaleString()}보다 높게)을 입력하면 담을 수 있어요`}
+          </p>
         </>
       )}
     </GlobalProductDetailBase>

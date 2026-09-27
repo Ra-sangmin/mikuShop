@@ -139,7 +139,7 @@ export default function KakaoNotifyPanel({ onToast }: { onToast: (kind: 'success
         ) : (
           <>
             <p className="knp-desc">
-              아직 연결되지 않았습니다. 연결하면 <strong>경매 상황 · 경매/구매 실패 · 상품 결제 완료 · 입고 대기중 ·
+              아직 연결되지 않았습니다. 연결하면 <strong>경매 중 · 경매 실패 · 구매 실패 · 상품 결제 완료 · 입고 대기중 ·
               배송 준비중 · 배송비 결제 완료</strong> 로 넘어온 주문을 <strong>30초마다 모아 한 통</strong>으로 알려 줍니다.
             </p>
             <div className="knp-actions">

@@ -381,7 +381,7 @@ export default function GlobalProductDetailBase(props: BaseProps) {
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" />
                   </svg>
-                  신청 후 마이페이지 장바구니에서 확인 · 결제할 수 있어요
+                  담아 두고 마이페이지에서 한 번에 결제할 수 있어요 · 결제 전엔 비용이 들지 않아요
                 </p>
               )}
             </>

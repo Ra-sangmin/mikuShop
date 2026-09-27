@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ORDER_STATUS, DELIVERY_STATUS, ORDER_STATUS_LABEL, DELIVERY_STATUS_LABEL,
+  ORDER_STATUS, DELIVERY_STATUS, ORDER_STATUS_LABEL, DELIVERY_STATUS_LABEL, FAILED_STATUSES,
   type OrderStatus, type DeliveryStatus,
 } from '@/src/types/order';
 import {
@@ -18,6 +18,7 @@ import './dashboard-premium.css';
 //    "처리 중"에서 제외할 상태: 아직 접수 전(장바구니)·종료된 건(실패)·배송 단계로 넘어간 건
 const EXCLUDED_FROM_PROCESSING: string[] = [
   ORDER_STATUS.CART,
+  ORDER_STATUS.BID_FAILED,
   ORDER_STATUS.FAILED,
   ORDER_STATUS.SHIPPING,
 ];
@@ -29,12 +30,14 @@ const ORDER_TONE: Record<string, { text: string; rgb: string }> = {
   [ORDER_STATUS.BIDDING]: { text: '#b45309', rgb: '245, 158, 11' },
   [ORDER_STATUS.BID_SUCCESS]: { text: '#0f766e', rgb: '13, 148, 136' },
   [ORDER_STATUS.PAID]: { text: '#15803d', rgb: '34, 197, 94' },
+  [ORDER_STATUS.BID_PAID]: { text: '#0e7490', rgb: '6, 182, 212' },
   [ORDER_STATUS.WAITING]: { text: '#0e7490', rgb: '6, 182, 212' },
   [ORDER_STATUS.ARRIVED]: { text: '#1d4ed8', rgb: '59, 130, 246' },
   [ORDER_STATUS.PREPARING]: { text: '#6d28d9', rgb: '139, 92, 246' },
   [ORDER_STATUS.PAYMENT_REQ]: { text: '#c2410c', rgb: '234, 88, 12' },
   [ORDER_STATUS.PAYMENT_DONE]: { text: '#15803d', rgb: '34, 197, 94' },
   [ORDER_STATUS.SHIPPING]: { text: '#4338ca', rgb: '79, 70, 229' },
+  [ORDER_STATUS.BID_FAILED]: { text: '#9f1239', rgb: '225, 29, 72' },
   [ORDER_STATUS.FAILED]: { text: '#b91c1c', rgb: '239, 68, 68' },
 };
 const DEFAULT_TONE = { text: '#475569', rgb: '100, 116, 139' };
@@ -111,7 +114,7 @@ export default function AdminDashboard() {
               orderDate.getFullYear() === now.getFullYear() &&
               orderDate.getMonth() === now.getMonth() &&
               orderDate.getDate() === now.getDate() &&
-              ![ORDER_STATUS.CART, ORDER_STATUS.FAILED].includes(order.status)
+              ![ORDER_STATUS.CART, ...FAILED_STATUSES].includes(order.status)
             );
           });
           setTodayOrderCount(todayOrders.length);
@@ -136,7 +139,7 @@ export default function AdminDashboard() {
           // 6. 막대 그래프 분모 (장바구니·실패를 뺀 전체 주문)
           setManagedCount(
             data.orders.filter((order: any) =>
-              ![ORDER_STATUS.CART, ORDER_STATUS.FAILED].includes(order.status)
+              ![ORDER_STATUS.CART, ...FAILED_STATUSES].includes(order.status)
             ).length
           );
         }

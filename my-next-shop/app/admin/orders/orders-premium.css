@@ -464,6 +464,26 @@
   box-shadow: 0 12px 24px -12px rgba(var(--ord-blue-rgb), 0.95);
 }
 .ord-modal-btn.is-confirm:hover { transform: translateY(-2px); box-shadow: 0 16px 28px -13px rgba(var(--ord-blue-rgb), 1); }
+/* 🗑 주문 삭제 — 평소엔 조용하게(빨간 글씨 테두리 버튼), 확인 단계에서만 빨갛게 채웁니다. */
+.ord-modal-btn.is-danger-ghost { flex: 0 0 auto; padding: 0 18px; background: #ffffff; border: 1px solid #fecdd3; color: #e11d48; }
+.ord-modal-btn.is-danger-ghost:hover { background: #fff1f2; border-color: #fda4af; }
+.ord-modal-btn.is-danger {
+  border: 0; color: #ffffff;
+  background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%);
+  box-shadow: 0 12px 24px -12px rgba(225, 29, 72, 0.9);
+}
+.ord-modal-btn.is-danger:hover:not(:disabled) { transform: translateY(-2px); }
+.ord-modal-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.ord-detail-delete-confirm {
+  margin: 4px 0 10px; padding: 12px 14px; border-radius: 12px;
+  background: #fff1f2; border: 1px solid #fecdd3; color: #881337;
+  font-size: 12.5px; line-height: 1.55; text-align: left;
+}
+.ord-detail-delete-confirm strong { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 900; color: #be123c; margin-bottom: 4px; }
+.ord-detail-delete-confirm p { margin: 0; }
+.ord-detail-delete-confirm p + p { margin-top: 6px; }
+.ord-detail-delete-confirm .is-money { padding: 7px 9px; border-radius: 8px; background: #ffffff; border: 1px dashed #fda4af; color: #9f1239; }
+.ord-detail-delete-note { margin: 8px 0 0; font-size: 11.5px; font-weight: 600; color: #94a3b8; text-align: center; }
 
 @keyframes ordFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ordRise { from { opacity: 0; transform: translateY(16px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -624,17 +644,43 @@
 .ord-fee-sum strong { font-size: 12.5px; font-weight: 900; color: #7c2d12; font-variant-numeric: tabular-nums; }
 
 /* 배송비 — 접힌 요약 칩 */
-/* 💴 배송비 결제 완료 탭의 [추가 청구] — 메인 버튼 옆에 조용하게 붙입니다. */
+/* 🔨💴 보조 동작 — [낙찰 실패] (경매 중) · [추가 청구] (배송비 결제 완료)
+   🎨 [메인 | ▼] 알약은 그대로 진하게 두고, 보조 동작은 오른쪽에 **따로 떨어진 연한 알약**으로 둡니다.
+   (한 알약 안에 넣으면 진한색-연한색-진한색이 되어 가운데가 뚫린 것처럼 보였습니다)
+   색은 넘어갈 단계 색(--split)에서 만들어, 같은 계열로 보이되 '보조'라는 게 드러나게 합니다. */
+.ord-split:has(.ord-split-extra) { background: none; box-shadow: none; overflow: visible; }
+.ord-split:has(.ord-split-extra) .ord-split-main,
+.ord-split:has(.ord-split-extra) .ord-split-more {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 60%),
+    var(--split, #10b981);
+  box-shadow: 0 10px 18px -12px rgba(15, 23, 42, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.ord-split:has(.ord-split-extra) .ord-split-main { border-radius: 11px 0 0 11px; }
+.ord-split:has(.ord-split-extra) .ord-split-main:hover:not(:disabled) {
+  background:
+    linear-gradient(0deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.14)),
+    var(--split, #10b981);
+}
+.ord-split:has(.ord-split-extra) .ord-split-more { order: 2; border-radius: 0 11px 11px 0; }
 .ord-split-extra {
+  order: 3; /* 코드 순서는 [메인][보조][▼] 이지만 화면에는 [메인][▼]  [보조] */
   flex-shrink: 0;
-  display: inline-flex; align-items: center; gap: 4px;
-  height: 100%; padding: 0 8px;
-  border: 0; border-left: 1px solid rgba(255, 255, 255, 0.35);
-  background: transparent; color: #fff;
-  font-family: inherit; font-size: 11px; font-weight: 800; white-space: nowrap; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 100%; margin-left: 6px; padding: 0 12px;
+  border: 0; border-radius: 11px;
+  background: #f8fafc;
+  background: color-mix(in srgb, var(--split, #10b981) 9%, #ffffff);
+  color: #0f172a;
+  color: color-mix(in srgb, var(--split, #10b981) 80%, #000000);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--split, #10b981) 35%, #ffffff);
+  /* 글자 크기는 메인 버튼과 같게 둡니다. */
+  font-family: inherit; font-size: 12.5px; font-weight: 800; white-space: nowrap; cursor: pointer;
   transition: background 0.18s ease;
 }
-.ord-split-extra:hover { background: rgba(0, 0, 0, 0.14); }
+.ord-split-extra:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--split, #10b981) 18%, #ffffff);
+}
 .ord-split-extra:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .ord-fee-chip {
@@ -722,8 +768,9 @@
 .ord-detail-copy:hover { background: #eff6ff; }
 .ord-detail-copy.is-done { color: #059669; border-color: #a7f3d0; background: #ecfdf5; }
 .ord-detail-list { margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.ord-detail-list > div { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: baseline; }
-.ord-detail-list dt { font-size: 12px; font-weight: 700; color: #94a3b8; }
+/* 🔨 '입찰 신청 가격' 처럼 긴 이름이 글자 단위로 잘리지 않도록 칸을 넓히고 단어 단위로 접습니다. */
+.ord-detail-list > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.ord-detail-list dt { font-size: 12px; font-weight: 700; color: #94a3b8; word-break: keep-all; }
 .ord-detail-list dd { margin: 0; font-size: 13.5px; font-weight: 600; color: #334155; line-height: 1.55; word-break: break-all; }
 .ord-detail-list dd.is-strong { font-weight: 800; color: #0f172a; }
 .ord-detail-list dd.is-mono { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; }
@@ -866,6 +913,15 @@
   100% { background-color: transparent; }
 }
 @media (prefers-reduced-motion: reduce) { .ord-page tr.ord-row-flash > td { animation: none; background-color: #eef2ff; } }
+
+/* 🛒🔨 종류 나눠 보기 — [전체] [구매·배송 대행] [경매] (상태 탭 위 한 줄) */
+.ord-kind-filter { display: flex; margin-bottom: 10px; }
+.ord-kind-filter .ap-seg { width: auto; }
+.ord-kind-filter .ap-seg-btn { padding-left: 16px; padding-right: 16px; font-weight: 800; }
+@media (max-width: 768px) {
+  .ord-kind-filter .ap-seg { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ord-kind-filter .ap-seg-btn { padding: 0 6px; justify-content: center; font-size: 12.5px; }
+}
 
 /* =====================================================
    상단 탭 — 처리 중 전체 / 관리자 처리 필요 / 회원 처리 대기
@@ -1253,7 +1309,7 @@
   .ord-page td.ord-td-date { display: none !important; }
   .ord-page td.ord-manage-td .ord-manage-addr { display: none; }
 
-  /* 경매 상태 (경매 상황 주문만) */
+  /* 경매 상태 (경매 중 주문만) */
   .ord-page td.ord-td-bid { grid-area: bid; margin-top: 8px; }
   .ord-page td.ord-td-bid.is-none { display: none; }
   .ord-page td.ord-td-bid .admin-status-select { width: 100%; height: 36px; }
@@ -1273,7 +1329,16 @@
   .ord-page td.ord-td-status .ord-change { justify-content: flex-start; margin: 0; }
   .ord-page td.ord-td-status .ord-split { display: flex; width: 100%; height: 40px; border-radius: 12px; }
   .ord-page td.ord-td-status .ord-split-main { flex: 1; min-width: 0; padding: 0 8px; font-size: 13.5px; }
-  .ord-page td.ord-td-status .ord-split-extra { padding: 0 7px; font-size: 11.5px; }
+  .ord-page td.ord-td-status .ord-split-extra { padding: 0 9px; font-size: 13.5px; }
+  /* 🔨💴 보조 동작(낙찰 실패 · 추가 청구)이 있으면 폭이 좁아 메인 버튼 글자가 잘리므로
+     [메인 | ▼] 아래 줄에 보조 알약을 꽉 차게 둡니다. */
+  .ord-page td.ord-td-status .ord-split:has(.ord-split-extra) { flex-wrap: wrap; height: auto; row-gap: 6px; }
+  .ord-page td.ord-td-status .ord-split:has(.ord-split-extra) .ord-split-main,
+  .ord-page td.ord-td-status .ord-split:has(.ord-split-extra) .ord-split-more { height: 40px; }
+  .ord-page td.ord-td-status .ord-split:has(.ord-split-extra) .ord-split-main { flex: 1 1 0; }
+  .ord-page td.ord-td-status .ord-split-extra {
+    flex: 0 0 100%; justify-content: center; height: 36px; margin-left: 0;
+  }
   .ord-page td.ord-td-status .ord-split-more { width: 40px; }
   .ord-page td.ord-td-status > .admin-status-select { width: 100%; height: 40px; font-size: 13.5px; border-radius: 12px; }
   .ord-page td.ord-td-status .ord-fee-chip { margin-top: 0; }

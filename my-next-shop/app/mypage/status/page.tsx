@@ -6,10 +6,15 @@ import GuideLayout from '../../components/GuideLayout';
 import Link from 'next/link';
 import NoticePanel from '../../components/NoticePanel';
 import { useSearchParams, useRouter } from 'next/navigation';
+// 🔨 입찰 요청·잔액 부족 안내는 목록 화면과 같은 것을 씁니다.
+import { requestBid, InsufficientBalanceNotice, MONEY_CHARGE_PATH } from './components/bidRequest';
+import { calcDepositKrw } from '@/src/utils/auctionDeposit';
+// 🔨 입찰 팝업은 목록(OrderTable)과 같은 것을 씁니다.
+import { BidInputContent } from './components/OrderTable';
 import OrderTable, { OrderTableStyles } from './components/OrderTable';
 import AddressForm from './components/AddressForm';
 import PaymentSummary from './components/PaymentSummary';
-import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus, orderStatusLabel } from '@/src/types/order';
+import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus, orderStatusLabel, isAuctionOrder, FAILED_STATUSES } from '@/src/types/order';
 import { useSession } from 'next-auth/react';
 import { loginUrlWithReturn } from '@/lib/authRedirect';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
@@ -63,11 +68,13 @@ const PHASE_VIEW_CARD: Record<string, string> = { cart: 'request' };
 //    구매대행·배송대행의 진행 중 상태에 더해 경매 진행·결과까지 한 표에서 봅니다.
 //    (장바구니 카드가 맡는 구매 요청·경매 요청과, 아래 단계 카드가 맡는 입고 이후는 제외합니다)
 const REQUEST_VIEW_STATUSES: string[] = [
-  ORDER_STATUS.BIDDING,      // 경매 상황
+  ORDER_STATUS.BIDDING,      // 경매 중
   ORDER_STATUS.BID_SUCCESS,  // 경매 낙찰 성공
+  ORDER_STATUS.BID_PAID,     // 경매 결제 완료
   ORDER_STATUS.PAID,         // 상품 결제 완료 (구매대행)
   ORDER_STATUS.WAITING,      // 입고 대기중 (배송대행)
-  ORDER_STATUS.FAILED,       // 경매/구매 실패
+  ORDER_STATUS.BID_FAILED,   // 경매 실패
+  ORDER_STATUS.FAILED,       // 구매 실패
 ];
 
 // 🕒 최근 수정순 정렬 기준: 진행 상태가 마지막으로 바뀐 시각(statusChangedAt) → 없으면 신청 시각(registeredAt)
@@ -79,8 +86,10 @@ const STATUS_PRIORITY: Record<string, number> = {
   [ORDER_STATUS.BID_PENDING]: 2,
   [ORDER_STATUS.BIDDING]: 3,
   [ORDER_STATUS.BID_SUCCESS]: 4,
+  [ORDER_STATUS.BID_PAID]: 4.5,
   [ORDER_STATUS.PAID]: 5,
   [ORDER_STATUS.WAITING]: 5.5,
+  [ORDER_STATUS.BID_FAILED]: 5.8,
   [ORDER_STATUS.FAILED]: 6,
   [ORDER_STATUS.ARRIVED]: 7,
   [ORDER_STATUS.PREPARING]: 8,
@@ -95,6 +104,8 @@ const STATUS_DESCRIPTIONS: Record<string, string> = {
   [ORDER_STATUS.BID_PENDING]: '경매 입찰을 위한 보증금 결제대기',
   [ORDER_STATUS.BIDDING]: '현재 경매 입찰 진행중인 상품',
   [ORDER_STATUS.BID_SUCCESS]: '경매 낙찰 성공, 1차결제 대기',
+  [ORDER_STATUS.BID_PAID]: '경매 결제 완료, 현지 구매 진행',
+  [ORDER_STATUS.BID_FAILED]: '낙찰되지 못한 경매, 보증금 환불',
   [ORDER_STATUS.FAILED]: '상품 결제 완료 전 구매불가 목록',
   [ORDER_STATUS.PAID]: '1차결제완료 목록(구매진행)',
   [ORDER_STATUS.WAITING]: '배송대행 신청, 현지창고 도착 대기',
@@ -138,10 +149,19 @@ function usePurchaseStatusLogic() {
   // 🌟 서비스별 내역 필터: /mypage/status?type=PURCHASE(구매대행) | DELIVERY(배송대행)
   // Header/사이드바의 "구매 내역"·"배송 내역" 메뉴가 이 쿼리로 진입합니다. 없으면 전체.
   const typeParam = (searchParams.get('type') || '').toUpperCase();
-  const orderTypeFilter: 'PURCHASE' | 'DELIVERY' | null =
-    typeParam === 'PURCHASE' || typeParam === 'DELIVERY' ? typeParam : null;
+  // 🔨 경매는 DB 상 구매대행(PURCHASE)이라 종류로는 갈라지지 않습니다. 입찰 정보로 가려냅니다.
+  //    (src/types/order.ts 의 isAuctionOrder)
+  const orderTypeFilter: 'PURCHASE' | 'DELIVERY' | 'AUCTION' | null =
+    typeParam === 'PURCHASE' || typeParam === 'DELIVERY' || typeParam === 'AUCTION' ? typeParam : null;
+  const matchesServiceTab = (o: any, key: string | null) => {
+    if (!key) return true;
+    if (key === 'AUCTION') return isAuctionOrder(o);
+    // 구매대행 탭에서는 경매를 빼 줍니다. 두 탭에 같은 주문이 겹쳐 보이면 건수를 셀 수 없습니다.
+    if (key === 'PURCHASE') return o.type === 'PURCHASE' && !isAuctionOrder(o);
+    return o.type === key;
+  };
   const orders = useMemo(
-    () => (orderTypeFilter ? allOrders.filter((o: any) => o.type === orderTypeFilter) : allOrders),
+    () => (orderTypeFilter ? allOrders.filter((o: any) => matchesServiceTab(o, orderTypeFilter)) : allOrders),
     [allOrders, orderTypeFilter]
   );
   // 필터가 바뀌면 이전 필터에서 선택했던 항목은 해제
@@ -198,57 +218,11 @@ function usePurchaseStatusLogic() {
   }, [authStatus, session, router, showAlert]);
 
   // 🌟 입찰 금액 입력 프리미엄 모달 콘텐츠
-  const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string) => void }) => {
-    const [amount, setAmount] = useState("");
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value;
-      setAmount(val);
-      onChange(val);
-    };
-  
-    const originalBid = item.myBidPrice || 0;
-    const parsedAmount = parseInt(amount) || 0;
-
-    return (
-      <div className="miku-bid-modal notranslate" translate="no">
-        <p className="prod-name-title">{item.productName}</p>
-
-        <div className="info-row">
-          <span className="label">현재 최고가</span>
-          <span className="val highlight">¥ {item.productPrice?.toLocaleString()}</span>
-        </div>
-
-        <div className="info-row my-bid-row">
-          <span className="label">내 입찰 금액</span>
-          <div className="bid-calc">
-            {parsedAmount > 0 ? (
-              <>
-                <span className="old-bid">¥ {originalBid.toLocaleString()}</span>
-                <span className="arrow">→</span>
-                <span className="new-bid">¥ {parsedAmount.toLocaleString()}</span>
-              </>
-            ) : (
-              <span className="new-bid">¥ {originalBid.toLocaleString()}</span>
-            )}
-          </div>
-        </div>
-
-        <div className="input-container">
-          <label>희망 입찰 금액(최종) (¥)</label>
-          <input
-            type="number" placeholder="희망 입찰 금액(최종) 입력"
-            value={amount} onChange={handleInputChange}
-            className="premium-input"
-          />
-        </div>
-      </div>
-    );
-  };
 
  // 입찰 처리 로직
   const handleBidClick = async (item: any) => {
     let finalAmount = "";
-    const isConfirmed = await showConfirm(<BidInputContent item={item} onChange={(val) => { finalAmount = val; }} />);
+    const isConfirmed = await showConfirm(<BidInputContent item={item} myMoney={userData?.cyberMoney || 0} exchangeRate={exchangeRate} onChange={(val) => { finalAmount = val; }} />);
 
     if (isConfirmed) {
       // 🌟 입력값은 이제 "추가할 금액"이 아니라 "희망 입찰 금액(최종)"입니다.
@@ -262,29 +236,19 @@ function usePurchaseStatusLogic() {
       const originalBid = item.myBidPrice || 0;
       const amount = finalBidAmount - originalBid;
 
-      const deposit = finalBidAmount <= 20000 ? 2000 : Math.floor(finalBidAmount * 0.1);
 
-      try {
-        const res = await fetch('/api/orders/bid', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId: item.orderId, amount, deposit })
-        });
 
-        if (res.ok) {
-          // 추가 입찰이 성공하면 상태를 다시 '입찰 대기중(PENDING)'으로 즉시 변경
-          await fetch('/api/orders', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ updates: [{ id: item.orderId, bidStatus: 'PENDING' }] })
-          });
-
-          showAlert(`¥${finalBidAmount.toLocaleString()} 입찰 완료!`, 'success');
-          fetchOrders();
-        } else {
-          const errorData = await res.json();
-          showAlert(errorData.error || "입찰에 실패했습니다.", "error");
-        }
-      } catch (error) { showAlert("통신 에러가 발생했습니다.", "error"); }
+      const outcome = await requestBid(item.orderId, amount);
+      if (outcome.ok) {
+        showAlert(`¥${finalBidAmount.toLocaleString()} 입찰 완료!`, 'success');
+        fetchOrders();
+      } else if (outcome.insufficient) {
+        // 💰 부족하면 오류만 띄우지 않고 충전으로 이어 줍니다.
+        const goCharge = await showConfirm(<InsufficientBalanceNotice {...outcome.insufficient} />);
+        if (goCharge) router.push(MONEY_CHARGE_PATH);
+      } else {
+        showAlert(outcome.message, 'error');
+      }
     }
   };
 
@@ -341,7 +305,7 @@ function usePurchaseStatusLogic() {
         '상품 결제 완료': ORDER_STATUS.PAID,
         '입고 대기중': ORDER_STATUS.WAITING,
         '입고완료': ORDER_STATUS.ARRIVED,
-        '배송비 요청': ORDER_STATUS.PAYMENT_REQ,
+        '배송비 결제 대기': ORDER_STATUS.PAYMENT_REQ,
       };
       setActiveTab(tabMap[tab] || tab);
       setSelectedItems([]);
@@ -440,7 +404,7 @@ function usePurchaseStatusLogic() {
     const getCount = (statusKeys: string[]) =>
       baseOrders.filter(item => statusKeys.includes(item.status)).length;
 
-    // 🌟 배송비 요청/배송비 결제 완료/국제 배송 단계에서는 같은 bundleId(합포장)로 묶인 주문을 1건으로 집계합니다.
+    // 🌟 배송비 결제 대기/배송비 결제 완료/국제 배송 단계에서는 같은 bundleId(합포장)로 묶인 주문을 1건으로 집계합니다.
     const getBundleAwareCount = (statusKeys: string[]) => {
       const matched = baseOrders.filter(item => statusKeys.includes(item.status));
       const seenBundles = new Set<string>();
@@ -480,7 +444,7 @@ function usePurchaseStatusLogic() {
         subItems: createSubItems([ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING])
       },
       {
-        // 🌟 예전 '구매 진행중' 자리. 카드를 누르면 입고 완료 · 배송 준비중 · 배송비 요청 · 배송비 결제 완료를 한 표에 모아 봅니다.
+        // 🌟 예전 '구매 진행중' 자리. 카드를 누르면 입고 완료 · 배송 준비중 · 배송비 결제 대기 · 배송비 결제 완료를 한 표에 모아 봅니다.
         //    (경매 · 상품 결제 완료 · 입고 대기중 · 실패는 '신청 내역 보기' 에서 봅니다)
         id: 'progress', title: '입고 완료', theme: 'theme-green', icon: 'fa-warehouse',
         statuses: PHASE_VIEW_STATUSES.progress,
@@ -546,7 +510,7 @@ function usePurchaseStatusLogic() {
     });
   }, [orders, activeTab, phaseView]);
 
-  // 🔎 "상세 정보 확인" 패널(전체 내역 보기에서 배송비 요청 등을 눌렀을 때)은 탭이 '전체' 인 채로 결제해야 해서,
+  // 🔎 "상세 정보 확인" 패널(전체 내역 보기에서 배송비 결제 대기 등을 눌렀을 때)은 탭이 '전체' 인 채로 결제해야 해서,
   //    결제 금액 계산만 그 패널의 상태 기준으로 합니다. (패널이 닫혀 있으면 평소처럼 현재 탭 기준)
   const [calcTabOverride, setCalcTabOverride] = useState<string | null>(null);
 
@@ -569,28 +533,35 @@ function usePurchaseStatusLogic() {
       //    여기서 수량을 한 번 더 곱해 ¥620 × 10개가 ¥62,000 으로 부풀던 버그가 있었습니다.
       //    (상품 목록·정산·대시보드 등 다른 곳은 전부 합계로 읽고 있어 여기만 어긋나 있었습니다)
       const productP = Number(item.productPrice) || 0;
-      // ⚠️ 구매 요청 단계의 일본내 배송료(¥). 배송비 요청 탭에서는 쓰지 않습니다.
+      // ⚠️ 구매 요청 단계의 일본내 배송료(¥). 배송비 결제 대기 탭에서는 쓰지 않습니다.
       const domesticS = Number(item.domesticShippingFee) || 0; 
-      // 💴 배송비 요청 단계의 청구 금액 (order_shipping_fees, 전부 원화)
+      // 💴 배송비 결제 대기 단계의 청구 금액 (order_shipping_fees, 전부 원화)
       const secondP = Number(item.intlFeeKrw) || 0;
       const domesticKrw = Number(item.domesticFeeKrw) || 0;
       const extraP = Number(item.extraFeeKrw) || 0;
       
       const myBid = Number(item.myBidPrice) || 0;
-      const fallbackDeposit = myBid > 0 ? (myBid <= 20000 ? 2000 : Math.floor(myBid * 0.1)) : 0;
-      const depositAmt = Number(item.depositAmount) || fallbackDeposit; 
+      // 💰 아직 낼 보증금(원) = 필요한 금액 − 이미 낸 금액
+      const depositAmt = Math.max(0, calcDepositKrw(myBid, exchangeRate) - (Number(item.depositKrw) || 0));
 
       if (calcTab === ORDER_STATUS.PAYMENT_REQ) {
-        // 💸 배송비 요청 탭은 세 항목을 각각 모으고, 청구액은 아래 totalPriceVal 에서 셋을 더해 냅니다.
+        // 💸 배송비 결제 대기 탭은 세 항목을 각각 모으고, 청구액은 아래 totalPriceVal 에서 셋을 더해 냅니다.
         acc.product += secondP;
         acc.domestic += domesticKrw;
         acc.extra += extraP;
       } else if (calcTab === ORDER_STATUS.BID_PENDING) {
+        // 💰 보증금은 이미 원화입니다. (src/utils/auctionDeposit.ts)
         acc.deposit += depositAmt;
+        // 🔨 왼쪽 계산 칸에 보여 줄 보증금(원). 결제액 계산에는 쓰지 않습니다.
+        acc.depositWon += depositAmt;
       } else {
         acc.product += productP;
         // 🌟 구매 요청(CART), 경매 낙찰 성공(BID_SUCCESS) 탭은 admin/estimate와 동일한 계산식을 적용합니다.
         if (calcTab === ORDER_STATUS.CART || calcTab === ORDER_STATUS.BID_SUCCESS) {
+          // 💰 낙찰 결제에서는 이미 받은 보증금을 빼 줍니다. (아래 totalPriceWon)
+          // 💰 실제로 빠져나간 원화(depositKrw)를 뺍니다. 엔 금액을 지금 환율로 다시 환산하면
+          //    입찰할 때와 환율이 달라졌을 때 낸 적 없는 돈을 돌려주게 됩니다. (lib/bidSettlement.ts 와 같은 기준)
+          if (calcTab === ORDER_STATUS.BID_SUCCESS) acc.deposit += Number(item.depositKrw) || 0;  // 낸 보증금(원)
           // 🌟 purchase/quote(PurchaseFormContainer)와 공유하는 계산식: 결제 수수료는
           // 상품 총액(30,000엔) 기준, 대행 수수료는 수량(4개) 기준으로 구간별 정액 부과합니다.
           const itemQuantity = Number(item.productCount) || 1;
@@ -607,22 +578,31 @@ function usePurchaseStatusLogic() {
         }
       }
       return acc;
-    }, { product: 0, transfer: 0, delivery: 0, agency: 0, deposit: 0, domestic: 0, extra: 0 });
-  }, [calcItems, selectedItems, calcTab, paymentFeeRule, agencyFeeRule]);
+    }, { product: 0, transfer: 0, delivery: 0, agency: 0, deposit: 0, domestic: 0, extra: 0, depositWon: 0 });
+    // 💰 보증금을 주문별로 원화로 만들 때 환율을 쓰므로 여기에도 넣어야 합니다.
+    //    빠뜨리면 환율이 늦게 도착했을 때 보증금이 0원으로 굳습니다.
+  }, [calcItems, selectedItems, calcTab, paymentFeeRule, agencyFeeRule, exchangeRate]);
 
   const totalPriceVal = calcTab === ORDER_STATUS.BID_PENDING
     ? totals.deposit
-    // 💸 배송비 요청 청구액 = 국제 배송비 + 현지 배송비 + 추가 결제 금액
+    // 💸 배송비 결제 대기 청구액 = 국제 배송비 + 현지 배송비 + 추가 결제 금액
     //    (예전엔 국제 배송비만 받고 나머지는 표시만 했습니다)
     : calcTab === ORDER_STATUS.PAYMENT_REQ
       ? totals.product + totals.domestic + totals.extra
       : totals.product + totals.transfer + totals.delivery + totals.agency;
 
-  // 🌟 배송비 요청 탭의 금액은 관리자가 이미 원화로 넣은 값이라 환산하지 않습니다.
+  // 🌟 배송비 결제 대기 탭의 금액은 관리자가 이미 원화로 넣은 값이라 환산하지 않습니다.
   //    나머지는 견적 화면과 같은 규칙(100원 단위 올림)으로 맞춥니다. — src/utils/feeCalculator.ts
   const totalPriceWon = calcTab === ORDER_STATUS.PAYMENT_REQ
     ? totalPriceVal
-    : toChargeableWon(totalPriceVal, exchangeRate);
+    // 💰 보증금은 위에서 이미 주문별로 원화로 만들었습니다.
+    : calcTab === ORDER_STATUS.BID_PENDING
+      ? totalPriceVal
+    // 💰 낙찰 결제 = (낙찰가 + 수수료들) × 환율 − 이미 낸 보증금(실제 차감된 원화)
+    //    (lib/bidSettlement.ts 의 자동 결제도 같은 기준입니다 — 두 값이 어긋나면 안 됩니다)
+    : calcTab === ORDER_STATUS.BID_SUCCESS
+      ? Math.max(0, toChargeableWon(totalPriceVal, exchangeRate) - totals.deposit)
+      : toChargeableWon(totalPriceVal, exchangeRate);
 
   // 🌟 디버깅용 로그: 최종 결제예상액 계산식을 그대로 콘솔에 남깁니다.
   useEffect(() => {
@@ -773,7 +753,7 @@ function usePurchaseStatusLogic() {
     progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected, phaseView, setPhaseView,
     // 🛒 장바구니 카드(구매 요청 + 경매 요청 한 표)에서 쓸 결제 기준 상태
     payStatus,
-    orderTypeFilter, allOrders
+    orderTypeFilter, allOrders, matchesServiceTab, paymentFeeRule, agencyFeeRule
   };
 }
 
@@ -875,7 +855,7 @@ function MyPurchaseStatusContent() {
     progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected, phaseView, setPhaseView,
     // 🛒 장바구니 카드(구매 요청 + 경매 요청 한 표)에서 쓸 결제 기준 상태
     payStatus,
-    orderTypeFilter, allOrders
+    orderTypeFilter, allOrders, matchesServiceTab, paymentFeeRule, agencyFeeRule
   } = usePurchaseStatusLogic();
 
   const sliderRef = useRef<HTMLDivElement>(null);
@@ -998,7 +978,7 @@ function MyPurchaseStatusContent() {
   //    🌟 신청 내역 보기에 나오는 모든 상태(장바구니 제외)가 같은 방식으로 상세 패널을 엽니다.
   //    🛒 장바구니 카드의 구매 요청도 경매 요청처럼 상세 패널에서 금액 확인 · 결제까지 합니다.
   const DETAIL_STATUSES: string[] = Object.values(ORDER_STATUS).filter((st) => st !== ORDER_STATUS.ALL);
-  // 상세 패널 안에서 바로 결제하는 상태 (구매 요청 · 경매 요청 · 낙찰 · 배송비 요청)
+  // 상세 패널 안에서 바로 결제하는 상태 (구매 요청 · 경매 요청 · 낙찰 · 배송비 결제 대기)
   const DETAIL_PAY_STATUSES: string[] = [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.PAYMENT_REQ];
   // 상세 패널 제목 옆 아이콘 (상태별)
   const DETAIL_ICONS: Record<string, string> = {
@@ -1006,6 +986,7 @@ function MyPurchaseStatusContent() {
     [ORDER_STATUS.BID_PENDING]: 'fa-gavel',
     [ORDER_STATUS.BIDDING]: 'fa-gavel',
     [ORDER_STATUS.BID_SUCCESS]: 'fa-trophy',
+    [ORDER_STATUS.BID_FAILED]: 'fa-circle-exclamation',
     [ORDER_STATUS.FAILED]: 'fa-circle-exclamation',
     [ORDER_STATUS.PAID]: 'fa-credit-card',
     [ORDER_STATUS.WAITING]: 'fa-hourglass-half',
@@ -1040,10 +1021,33 @@ function MyPurchaseStatusContent() {
     [ORDER_STATUS.PAYMENT_REQ]: ORDER_STATUS.PAYMENT_DONE,
   };
   const inlinePackRef = useRef<HTMLDivElement>(null);
-  // 배송비 요청 패널에서 결제할 때 금액 계산이 이 패널 기준이 되도록 알려 줍니다
+  // 배송비 결제 대기 패널에서 결제할 때 금액 계산이 이 패널 기준이 되도록 알려 줍니다
   useEffect(() => {
     setCalcTabOverride(activeTab === ORDER_STATUS.ALL ? (detailStatus ?? cartPayStatus) : null);
   }, [activeTab, detailStatus, cartPayStatus, setCalcTabOverride]);
+
+  // 💳 전체 진행 현황에서 처음 상품을 골라 결제 카드가 나타날 때, 결제 버튼이 화면 아래로 가려져 있으면
+  //    버튼이 보이는 곳까지만 부드럽게 내려 줍니다. (이미 보이면 그대로 · 사라질 때는 움직이지 않음)
+  //    모바일은 화면 아래 고정 결제 바가 있어서 움직이지 않습니다.
+  const inlinePayRef = useRef<HTMLDivElement>(null);
+  const showInlinePay = isInlineView && detailStatus === null && selectedItems.length > 0
+    && ([ORDER_STATUS.CART, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS] as string[]).includes(payStatus);
+  const prevShowInlinePay = useRef(false);
+  useEffect(() => {
+    const appeared = showInlinePay && !prevShowInlinePay.current;
+    prevShowInlinePay.current = showInlinePay;
+    if (!appeared || window.innerWidth <= 768) return;
+    const raf = requestAnimationFrame(() => {
+      const btn = inlinePayRef.current?.querySelector('.btn-payment') as HTMLElement | null;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const margin = 24;
+      if (rect.bottom > window.innerHeight - margin) {
+        window.scrollBy({ top: rect.bottom - window.innerHeight + margin, behavior: 'smooth' });
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [showInlinePay]);
   // 🕒 상세 정보 확인은 최근에 수정(상태 변경)된 상품이 위로 오게 정렬합니다.
   const detailItems = useMemo(() => orders.filter((o: any) =>
     o.status === detailStatus &&
@@ -1103,7 +1107,7 @@ function MyPurchaseStatusContent() {
   };
 
   // 🌟 "현재 진행중인 현황 보기": 전체(ALL) 탭의 공용 테이블 렌더링을 그대로 재사용하면서,
-  // 진행 중 단계(경매 상황/낙찰 성공/상품 결제 완료/실패)에 속한 주문만 골라서 보여줍니다.
+  // 진행 중 단계(경매 중/낙찰 성공/상품 결제 완료/실패)에 속한 주문만 골라서 보여줍니다.
   const handleShowProgressOverview = () => {
     if (isDragging) return;
     handleTabChange(ORDER_STATUS.ALL);
@@ -1119,7 +1123,7 @@ function MyPurchaseStatusContent() {
     setAllViewSelected(true);
   };
 
-  // 🌟 입고 완료 카드: 입고 완료 · 배송 준비중 · 배송비 요청 · 배송비 결제 완료를 한 표에 모아 봅니다
+  // 🌟 입고 완료 카드: 입고 완료 · 배송 준비중 · 배송비 결제 대기 · 배송비 결제 완료를 한 표에 모아 봅니다
   const handleShowPhaseView = (phaseId: string) => {
     if (isDragging) return;
     handleTabChange(ORDER_STATUS.ALL);
@@ -1295,7 +1299,8 @@ function MyPurchaseStatusContent() {
       { key: ORDER_STATUS.BID_SUCCESS, type: 'payment', title: '낙찰 상품 결제 대기', desc: '낙찰된 경매 상품의 1차 결제를 진행해주세요.' },
       { key: ORDER_STATUS.ARRIVED, type: 'action', title: '배송 요청 대기', desc: '입고된 상품의 배송(합포장)을 요청해주세요.' },
       { key: ORDER_STATUS.PAYMENT_REQ, type: 'payment', title: '배송비 결제 대기', desc: '국제 배송비를 결제해주세요.' },
-      { key: ORDER_STATUS.FAILED, type: 'alert', title: '경매/구매 실패 내역', desc: '실패 사유를 확인하고 처리해주세요.' },
+      { key: ORDER_STATUS.BID_FAILED, type: 'alert', title: '경매 실패 내역', desc: '낙찰되지 않은 경매입니다. 보증금 환불을 확인해주세요.' },
+      { key: ORDER_STATUS.FAILED, type: 'alert', title: '구매 실패 내역', desc: '실패 사유를 확인하고 처리해주세요.' },
     ];
 
     return requiredStatuses
@@ -1311,7 +1316,9 @@ function MyPurchaseStatusContent() {
   if (isLoading) return <div style={{ padding: '100px', textAlign: 'center', color: '#64748b' }}>데이터를 불러오는 중입니다...</div>;
 
   const actionTotal = actionRequiredItems.reduce((sum: number, item: any) => sum + (item?.count || 0), 0);
-  const typeLabel = orderTypeFilter === 'PURCHASE' ? '구매대행' : orderTypeFilter === 'DELIVERY' ? '배송대행' : '전체';
+  const typeLabel = orderTypeFilter === 'PURCHASE' ? '구매대행'
+    : orderTypeFilter === 'DELIVERY' ? '배송대행'
+    : orderTypeFilter === 'AUCTION' ? '경매대행' : '전체';
 
   return (
     <div className="miku-status-wrapper mp-skin">
@@ -1349,7 +1356,7 @@ function MyPurchaseStatusContent() {
           <button type="button" className="mp-hero-stat" onClick={() => handleShowAllOverview()}>
             <span>신청 내역 보기</span><strong>{totalCount}<small>건</small></strong>
           </button>
-          {/* 🌟 입고 완료 · 배송 준비중 · 배송비 요청 · 배송비 결제 완료를 더한 건수 (아래 '입고 완료' 카드와 같은 숫자, 합포장은 1건)
+          {/* 🌟 입고 완료 · 배송 준비중 · 배송비 결제 대기 · 배송비 결제 완료를 더한 건수 (아래 '입고 완료' 카드와 같은 숫자, 합포장은 1건)
               누르면 그 카드처럼 네 상태를 한 표에 모아 보여 줍니다 */}
           <button type="button" className="mp-hero-stat" onClick={() => handleShowPhaseView('progress')}>
             <span>입고 완료</span><strong>{shippingPhases.find(p => p.id === 'progress')?.totalCount ?? 0}<small>건</small></strong>
@@ -1360,14 +1367,15 @@ function MyPurchaseStatusContent() {
         </div>
       </section>
 
-      {/* 🌟 서비스별 내역 필터 (전체 / 구매대행 / 배송대행) */}
+      {/* 🌟 서비스별 내역 필터 (전체 / 구매대행 / 경매대행 / 배송대행) */}
       <nav className="miku-order-type-filter anim-slide-up" aria-label="서비스별 내역">
         {([
           { key: null, label: '전체', href: '/mypage/status' },
           { key: 'PURCHASE', label: '구매대행', href: '/mypage/status?type=PURCHASE' },
+          { key: 'AUCTION', label: '경매대행', href: '/mypage/status?type=AUCTION' },
           { key: 'DELIVERY', label: '배송대행', href: '/mypage/status?type=DELIVERY' },
         ] as const).map(opt => {
-          const count = opt.key ? allOrders.filter((o: any) => o.type === opt.key).length : allOrders.length;
+          const count = allOrders.filter((o: any) => matchesServiceTab(o, opt.key)).length;
           const isActive = orderTypeFilter === opt.key;
           return (
             <Link
@@ -1508,6 +1516,8 @@ function MyPurchaseStatusContent() {
           /* 🔽 펼치기 보기: 결제 · 포장 요청할 상품은 체크박스로 바로 고르고, 상품을 누르면 그 아래에 상세가 펼쳐집니다 */
           inlineMode={isInlineView}
           myMoney={userData?.cyberMoney || 0} exchangeRate={exchangeRate}
+          /* 💰 낙찰 결제 내역(수수료 계산)을 상세에서 보여 주는 데 씁니다 */
+          paymentFeeRule={paymentFeeRule} agencyFeeRule={agencyFeeRule}
         />
         )}
        </div>
@@ -1566,9 +1576,14 @@ function MyPurchaseStatusContent() {
       )}
 
       {/* 상세 정보 확인 패널이 열려 있으면 결제는 그 패널 안에서 합니다 (같은 결제 카드가 두 번 나오지 않게) */}
-      {!(arrivedDetailOpen && activeTab === ORDER_STATUS.ALL) && (([ORDER_STATUS.CART, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS] as string[]).includes(payStatus)) && (
-        <div className="anim-slide-up delay-3">
+      {/* 🛒 전체 진행 현황(펼치기 보기)에서는 상품을 하나 이상 골랐을 때만 결제 카드를 보여 줍니다.
+          아무것도 안 골랐을 때 구매 요청 기준 카드가 먼저 떠 있으면, 경매 요청을 고르는 순간 모양이 바뀌어 어색합니다. */}
+      {!(isInlineView && selectedItems.length === 0) && !(arrivedDetailOpen && activeTab === ORDER_STATUS.ALL) && (([ORDER_STATUS.CART, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS] as string[]).includes(payStatus)) && (
+        /* ⚡ 전체 진행 현황에서는 상품을 고르는 순간 나타나므로 등장 애니메이션(0.3초 지연 + 투명→보임)을 끕니다.
+             켜 두면 체크할 때마다 빈 자리 → 깜빡 → 나타남 순서로 보입니다. */
+        <div className={isInlineView ? '' : 'anim-slide-up delay-3'} ref={inlinePayRef}>
           <PaymentSummary
+            noAnimation={isInlineView}
             activeTab={payStatus} totals={totals} totalPriceWon={totalPriceWon}
             exchangeRate={exchangeRate} selectedItems={selectedItems}
             handleUpdateStatus={handleUpdateStatus}
@@ -1674,6 +1689,8 @@ function MyPurchaseStatusContent() {
         /* 🌟 서비스별 내역 필터 */
         .miku-order-type-filter {
           display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 28px;
+          /* 🔨 경매대행이 더해져 네 칸이 됐습니다. 좁은 화면에서 가로로 넘치지 않게 접습니다. */
+          flex-wrap: wrap; max-width: 100%;
           background: #ffffff; border: 1px solid #eee4e3; border-radius: 14px;
           box-shadow: 0 4px 14px -8px rgba(181, 97, 95, 0.25);
         }

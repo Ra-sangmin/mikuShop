@@ -9,6 +9,9 @@
 
 import prisma from '@/lib/prisma';
 import { unpaidTotal } from '@/lib/shippingFees';
+// 💰 낙찰 정산 금액은 관리자 화면이 실제로 차감할 때 쓰는 계산을 그대로 씁니다.
+//    여기서 따로 더하면 안내 금액과 실제 차감액이 어긋납니다.
+import { calcBidCharge } from '@/lib/bidSettlement';
 import { ORDER_STATUS } from '@/src/types/order';
 import {
   ALIMTALK_TEMPLATES,
@@ -52,7 +55,10 @@ function orderListUrl(status: string): string {
   return `${SITE_ORIGIN}/mypage/status?tab=${encodeURIComponent(status)}`;
 }
 
-const won = (value: number | null | undefined) => `${Number(value ?? 0).toLocaleString('ko-KR')}원`;
+/** 💴 낙찰가는 **엔화**입니다. (orders.my_bid_price · product_price 는 현지 통화로 저장됩니다)
+ *  예전에는 이 값에 '원' 을 붙여 보내서, ¥12,345 낙찰이 "12,345원" 으로 안내됐습니다.
+ *  실제로 빠져나가는 돈은 환율과 수수료가 붙어 그보다 훨씬 큽니다. */
+const yen = (value: number | null | undefined) => `¥${Number(value ?? 0).toLocaleString('ko-KR')}`;
 /** 알림톡 본문은 길이 제한이 있어 상품명이 길면 줄입니다. */
 /**
  * 알림톡 본문은 한 줄에 들어가는 글자 수가 적어 상품명이 길면 읽기 어렵습니다.
@@ -97,7 +103,11 @@ export async function notifyOrderStatusByAlimtalk(
         userId: true,
         productName: true,
         productPrice: true,
+        productCount: true,
         myBidPrice: true,
+        // 💰 낙찰 정산(상품가 + 수수료 + 일본내 배송료 − 보증금) 계산에 쓰는 값들
+        domesticShippingFee: true,
+        depositKrw: true,
         trackingNo: true,
         // 💴 배송비 청구 내역. 안내 금액은 이 중 미납 회차만 더합니다.
         shippingFees: { select: { round: true, intlFeeKrw: true, domesticFeeKrw: true, extraFeeKrw: true, paidAt: true } },
@@ -181,7 +191,7 @@ export async function notifyOrderStatusByAlimtalk(
       // 나중에 CS 가 조회한 번호가 어긋나 대조가 안 됩니다.
       group.orders.sort((a, b) => a.orderId.localeCompare(b.orderId));
       const lead = group.orders[0];
-      const variables = buildVariables(group.status, group.orders);
+      const variables = await buildVariables(group.status, group.orders);
 
       if (group.orders.length > 1) {
         console.log(`[알림톡] 묶음 발송 (${group.status}) — ${group.orders.length}건을 한 통으로:`,
@@ -240,8 +250,15 @@ export async function notifyOrderStatusByAlimtalk(
 export type OrderForAlimtalk = {
   orderId: string;
   productName: string;
+  /** 낙찰가 · 상품가 (엔) */
   productPrice: number;
+  productCount: number | null;
+  /** 내 입찰가 (엔) */
   myBidPrice: number | null;
+  /** 구매 폼에서 받은 일본내 배송료 (엔) */
+  domesticShippingFee: number;
+  /** 보증금으로 실제 차감한 원화 */
+  depositKrw: number;
   trackingNo: string | null;
   shippingFees: { round: number; intlFeeKrw: number; domesticFeeKrw: number; extraFeeKrw: number; paidAt: Date | null }[];
   shippingCarrier: { name: string } | null;
@@ -259,7 +276,7 @@ const billedWon = (o: OrderForAlimtalk) => unpaidTotal(o.shippingFees);
  *    하나라도 다르면 솔라피가 발송을 거절하고, 사유가 [알림톡] 솔라피 응답 로그에 찍힙니다.
  *    템플릿을 고쳤다면 이 함수도 같이 고쳐야 합니다.
  */
-export function buildVariables(status: string, group: OrderForAlimtalk[]): Record<string, string> {
+export async function buildVariables(status: string, group: OrderForAlimtalk[]): Promise<Record<string, string>> {
   const lead = group[0];
   const total = group.length;
   const sum = (pick: (o: OrderForAlimtalk) => number | null | undefined) =>
@@ -273,10 +290,49 @@ export function buildVariables(status: string, group: OrderForAlimtalk[]): Recor
     상품명: withExtraCount(shorten(lead.productName || ''), total),
   };
 
+  // 💰 낙찰 정산 금액. 묶인 주문마다 따로 계산해 더합니다.
+  //    (수수료가 금액대별로 달라, 합쳐 놓고 한 번에 계산하면 값이 달라집니다)
+  const bidCharges = async () => {
+    const charges = await Promise.all(group.map(o => calcBidCharge({
+      productPrice: o.productPrice,
+      productCount: o.productCount ?? 1,
+      domesticShippingFee: o.domesticShippingFee,
+      depositKrw: o.depositKrw,
+    })));
+    return {
+      /** 보증금으로 이미 받아 둔 금액 (원) */
+      depositWon: charges.reduce((n, c) => n + c.depositWon, 0),
+      /** 보증금을 빼고 실제로 더 받는(받아야 하는) 금액 (원) */
+      amountWon: charges.reduce((n, c) => n + c.amountWon, 0),
+    };
+  };
+  // 본문에 '원' 이 이미 붙어 있는 자리에 넣을 값 — 숫자만
+  const digits = (won: number) => Math.round(won).toLocaleString('ko-KR');
+
   switch (status) {
-    case ORDER_STATUS.BID_SUCCESS:
+    // 💰 낙찰 + 자동 정산 완료. 회원이 낸 보증금과 추가로 빠져나간 금액을 함께 보여 줍니다.
+    //    ⚠️ 차감 시점의 값을 따로 저장해 두지 않아 여기서 다시 계산합니다.
+    //       알림은 차감 직후(같은 요청)에 나가므로 환율·수수료가 바뀔 틈이 없습니다.
+    case ORDER_STATUS.BID_PAID: {
+      const { depositWon, amountWon } = await bidCharges();
+      return {
+        ...base,
+        낙찰금액: yen(sum(o => o.myBidPrice || o.productPrice)),
+        보증금: digits(depositWon),
+        차감금액: digits(amountWon),
+      };
+    }
+
+    // 💸 낙찰됐지만 잔액이 모자라 승인을 기다리는 건. 회원이 치러야 할 금액을 알려 줍니다.
+    case ORDER_STATUS.BID_SUCCESS: {
       // 금액은 묶인 주문의 합계입니다. 고객이 실제로 치러야 할 총액이라 합계가 맞습니다.
-      return { ...base, 낙찰금액: won(sum(o => o.myBidPrice || o.productPrice)) };
+      const { amountWon } = await bidCharges();
+      return {
+        ...base,
+        낙찰금액: yen(sum(o => o.myBidPrice || o.productPrice)),
+        발생비용: digits(amountWon),
+      };
+    }
 
     case ORDER_STATUS.ARRIVED: // 일본 물류센터 입고 안내
       return base;
@@ -284,7 +340,7 @@ export function buildVariables(status: string, group: OrderForAlimtalk[]): Recor
     case ORDER_STATUS.PAYMENT_REQ: // 국제 배송 진행 안내 (배송비 승인 요청)
       return {
         ...base,
-        // ⚠️ 템플릿 본문이 '#{결제금액}원' 이라 숫자만 넣습니다. won() 을 쓰면 "원" 이 두 번 붙습니다.
+        // ⚠️ 템플릿 본문이 '#{결제금액}원' 이라 숫자만 넣습니다. 단위를 붙이면 "원" 이 두 번 찍힙니다.
         //    안내 금액은 마이페이지가 청구하는 것과 같은 식이어야 합니다
         //    — 국제 + 현지 배송비 + 추가 결제 비용 전부입니다. (예전엔 국제 배송비만 보냈습니다)
         결제금액: sum(o => billedWon(o)).toLocaleString('ko-KR'),

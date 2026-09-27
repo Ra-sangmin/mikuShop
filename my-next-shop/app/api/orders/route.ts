@@ -7,6 +7,9 @@ import { ORDER_STATUS } from '@/src/types/order';
 import { generateOrderId, generateBundleId, isDuplicateOrderId } from '@/lib/orderId';
 import { translateToKorean } from '@/lib/translate';
 import { moneyLogText } from '@/lib/moneyLogText';
+// 💰 보증금(엔)을 실제 차감할 원화로 바꿉니다.
+// 🔒 보증금은 화면이 보낸 값이 아니라 입찰가로 서버가 직접 계산합니다. (원화)
+import { depositForBid } from '@/lib/bidSettlement';
 import { triggerAdminOrderAlert } from '@/lib/notifications/adminOrderAlertRunner';
 
 // 🟢 [GET] 1. 주문 목록 및 유저 정보 조회
@@ -37,7 +40,7 @@ export async function GET() {
         serviceRequest: true,
         status: true,
         deliveryStatus: true,
-        // ⚠️ 구매 요청 단계의 일본내 배송료(¥). 배송비 요청 단계 금액은 shippingFee 쪽입니다.
+        // ⚠️ 구매 요청 단계의 일본내 배송료(¥). 배송비 결제 대기 단계 금액은 shippingFee 쪽입니다.
         domesticShippingFee: true, 
         addressId: true,
         shippingFees: {
@@ -166,18 +169,17 @@ export async function POST(req: Request) {
       }, { status: 401 });
     }
 
-    // 경매 신청일 경우에만 미쿠짱 머니 잔액 검사
-    // if (status === "BID_PENDING" && myBidPrice && myBidPrice > 0) {
-    //   if (user.cyberMoney < myBidPrice) {
-    //     const shortageAmount = myBidPrice - user.cyberMoney;
-    //     return NextResponse.json({ 
-    //       success: false, 
-    //       errorCode: 'INSUFFICIENT_FUNDS', 
-    //       shortage: shortageAmount, 
-    //       error: "보유한 미쿠짱 머니가 부족합니다." 
-    //     }, { status: 400 }); 
-    //   }
-    // }
+    // 💰 경매 신청은 보증금을 미리 받습니다.
+    //    보증금은 화면에 엔(¥)으로 보이지만 미쿠짱머니는 원화라, 그때 환율로 환산해 차감합니다.
+    //    ⚠️ 환산은 서버에서 합니다. 화면이 보낸 원화 금액을 믿으면 조작될 수 있습니다.
+    //    ⚠️ 예전에는 이 검사가 통째로 주석 처리돼 있어, 잔액보다 큰 보증금도 그대로 빠져
+    //       마이너스 잔액이 만들어질 수 있었습니다.
+    // 💰 경매 요청은 **신청만** 받습니다. 보증금은 마이페이지에서 '보증금 결제'를 누를 때 받습니다.
+    //    구매대행이 장바구니에 담을 때 돈을 받지 않는 것과 같습니다.
+    //    ⚠️ 예전에는 여기서도 보증금을 빼고 마이페이지에서 또 받아 **두 번 청구**됐습니다.
+    //       그래서 잔액이 모자라면 신청 자체가 막혔는데, 회원 입장에서는 담아두지도 못하는 셈이었습니다.
+    //    🔒 보증금 금액(엔)은 화면 값이 아니라 입찰가로 서버가 계산해 둡니다. 마이페이지가 이 값으로 청구합니다.
+    const isAuctionRequest = status === "BID_PENDING" && Number(myBidPrice) > 0;
     // ====================================================================
 
     const formattedDate = parseJapaneseDate(auctionEndDate);
@@ -217,27 +219,15 @@ export async function POST(req: Request) {
 
           // 경매가 아니면 null/0이 들어가므로 문제없음
           myBidPrice: Number(myBidPrice) || null,
-          depositAmount: Number(depositAmount) || 0,
+          // 💰 보증금은 원화로 셉니다. 신청 단계에서는 아직 받지 않았으므로 0 입니다.
+          //    필요한 금액은 입찰가(myBidPrice)와 환율로 그때그때 구합니다. (src/utils/auctionDeposit.ts)
+          depositAmount: 0, // (옛 컬럼: 엔 기준 보증금 — 더 이상 쓰지 않습니다)
+          depositKrw: 0,
         }
       });
 
-      // 2. 경매 대행일 경우에만 추가 작업 진행 (사이버머니 차감 및 로그 기록)
-      if (status === "BID_PENDING" && myBidPrice && myBidPrice > 0) {
-        const updatedUser = await tx.user.update({
-          where: { id: userId },
-          data: { cyberMoney: { decrement: Number(depositAmount) } }
-        });
-
-        await tx.moneyLog.create({
-          data: {
-            userId: userId,
-            type: 'USE',
-            content: moneyLogText.bidDeposit(finalTitle),
-            amount: -Math.abs(Number(depositAmount)),
-            balanceAfter: updatedUser.cyberMoney
-          }
-        });
-      }
+      // 2. 💰 경매 요청 단계에서는 돈을 받지 않습니다.
+      //    보증금은 마이페이지 '보증금 결제'(BID_PENDING → BIDDING)에서 받습니다. (app/api/orders PUT)
 
       // 최종적으로 생성된 주문 정보 반환
       return newOrder;
@@ -300,13 +290,14 @@ export async function PUT(request: Request) {
     }
 
     // 입고·발송 시각을 이미 찍어 둔 주문은 건드리지 않기 위해 변경 전 값을 읽어 둡니다.
-    const previousOrders = new Map<string, { receivedAt: Date | null; shippedAt: Date | null; status?: string }>();
+    const previousOrders = new Map<string, { receivedAt: Date | null; shippedAt: Date | null; status?: string; myBidPrice?: number | null; depositKrw?: number | null }>();
     if (type !== 'delivery') {
       const before = await prisma.order.findMany({
         where: { orderId: { in: orderIds } },
-        select: { orderId: true, receivedAt: true, shippedAt: true, status: true },
+        // 💰 보증금 결제(BID_PENDING → BIDDING) 때 얼마를 받았는지 기록하려고 함께 읽습니다.
+        select: { orderId: true, receivedAt: true, shippedAt: true, status: true, myBidPrice: true, depositKrw: true },
       });
-      before.forEach(o => previousOrders.set(o.orderId, { receivedAt: o.receivedAt, shippedAt: o.shippedAt, status: o.status }));
+      before.forEach(o => previousOrders.set(o.orderId, { receivedAt: o.receivedAt, shippedAt: o.shippedAt, status: o.status, myBidPrice: o.myBidPrice, depositKrw: o.depositKrw }));
     }
 
     // ✅ 안전한 인터랙티브 트랜잭션 (모두 성공하거나 자동 롤백)
@@ -374,6 +365,19 @@ export async function PUT(request: Request) {
           where: { orderId: order.id },
           data: updateData
         });
+
+        // 💰 보증금을 결제해 '경매 중(입찰 시작)' 으로 넘어오면, 그때 낸 원화를 기록합니다.
+        //    낙찰 정산에서 이 값을 빼 주므로, 적어 두지 않으면 회원이 낸 보증금이 사라집니다.
+        //    ⚠️ 금액은 화면이 보낸 값이 아니라 입찰가로 서버가 구합니다. (입찰가의 10% · 최소 20,000원)
+        if (type !== 'delivery' && order.status === ORDER_STATUS.BIDDING
+            && previousOrders.get(order.id)?.status === ORDER_STATUS.BID_PENDING) {
+          const prev = previousOrders.get(order.id);
+          const { krw: target } = await depositForBid(Number(prev?.myBidPrice) || 0);
+          const add = Math.max(0, target - (Number(prev?.depositKrw) || 0));
+          if (add > 0) {
+            await tx.order.update({ where: { orderId: order.id }, data: { depositKrw: { increment: add } } });
+          }
+        }
 
         // 💰 배송비를 결제해 '배송비 결제 완료' 로 넘어오면, 그때 청구 중이던 회차를 납부 처리합니다.
         //    이 표시가 있어야 나중에 추가 청구가 붙어도 이미 낸 회차가 다시 청구되지 않습니다.

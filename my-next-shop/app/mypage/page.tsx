@@ -90,7 +90,7 @@ function useMyPageLogic() {
       icon: 'fa-gavel'
     },
     {
-      label: ORDER_STATUS_LABEL[ORDER_STATUS.BIDDING] || "경매 상황",
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.BIDDING] || "경매 중",
       count: userOrders.filter((i: any) => i.status === ORDER_STATUS.BIDDING).length,
       desc: '현재 경매 입찰 진행중인 상품',
       href: `/mypage/status?tab=${ORDER_STATUS.BIDDING}`,
@@ -106,7 +106,15 @@ function useMyPageLogic() {
       icon: 'fa-trophy'
     },
     {
-      label: ORDER_STATUS_LABEL[ORDER_STATUS.FAILED] || "경매/구매 실패",
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.BID_FAILED] || "경매 실패",
+      count: userOrders.filter((i: any) => i.status === ORDER_STATUS.BID_FAILED).length,
+      desc: '낙찰되지 못한 경매, 보증금 환불',
+      href: `/mypage/status?tab=${ORDER_STATUS.BID_FAILED}`,
+      key: ORDER_STATUS.BID_FAILED,
+      icon: 'fa-circle-xmark'
+    },
+    {
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.FAILED] || "구매 실패",
       count: userOrders.filter((i: any) => i.status === ORDER_STATUS.FAILED).length,
       desc: '상품 결제 완료 구매불가 목록',
       href: `/mypage/status?tab=${ORDER_STATUS.FAILED}`,
@@ -146,7 +154,7 @@ function useMyPageLogic() {
       icon: 'fa-box-open'
     },
     {
-      label: ORDER_STATUS_LABEL[ORDER_STATUS.PAYMENT_REQ] || "배송비 요청",
+      label: ORDER_STATUS_LABEL[ORDER_STATUS.PAYMENT_REQ] || "배송비 결제 대기",
       count: userOrders.filter((i: any) => i.status === ORDER_STATUS.PAYMENT_REQ).length,
       desc: '합포장완료 2차결제견적',
       href: `/mypage/status?tab=${ORDER_STATUS.PAYMENT_REQ}`,
@@ -184,7 +192,7 @@ type StatusItem = { label: string; count: number; desc: string; href: string; ic
 // 🌟 진행 흐름별 묶음 (구매·결제 / 경매 / 입고·배송)
 const FLOW_GROUPS = [
   { title: '구매 · 결제', icon: 'fa-cart-shopping', tone: 'mp-tone-rose', keys: [ORDER_STATUS.CART, ORDER_STATUS.PAID, ORDER_STATUS.FAILED] as string[] },
-  { title: '경매', icon: 'fa-gavel', tone: 'mp-tone-violet', keys: [ORDER_STATUS.BID_PENDING, ORDER_STATUS.BIDDING, ORDER_STATUS.BID_SUCCESS] as string[] },
+  { title: '경매', icon: 'fa-gavel', tone: 'mp-tone-violet', keys: [ORDER_STATUS.BID_PENDING, ORDER_STATUS.BIDDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.BID_FAILED] as string[] },
   { title: '입고 · 배송', icon: 'fa-plane', tone: 'mp-tone-sky', keys: [ORDER_STATUS.WAITING, ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING] as string[] },
 ];
 

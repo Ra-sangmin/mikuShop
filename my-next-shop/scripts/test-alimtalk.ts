@@ -81,7 +81,11 @@ async function main() {
     orderId: i === 0 ? 'M260918-a3f9' : `M260918-b${i}k${i}`,
     productName: i === 0 ? '기간한정 나루토 우즈마키 피규어 한정판' : `테스트 상품 ${i + 1}`,
     productPrice: 12345,
+    productCount: 1,
     myBidPrice: 12345,
+    // 💰 낙찰 정산 미리보기용 — 일본내 배송료(엔)와 이미 받아 둔 보증금(원)
+    domesticShippingFee: 500,
+    depositKrw: 20000,
     shippingFees: [{ round: 1, intlFeeKrw: 6000, domesticFeeKrw: 1500, extraFeeKrw: 500, paidAt: null }],
     trackingNo: '1234567890',
     shippingCarrier: { name: '테스트배송' },
@@ -89,7 +93,7 @@ async function main() {
   }));
   // 주문 상태 템플릿만 buildVariables 로 채웁니다. 그 외는 예시 값을 직접 넣습니다.
   const variables = ALIMTALK_TEMPLATES[status]
-    ? buildVariables(status, sampleOrders)
+    ? await buildVariables(status, sampleOrders)
     : status === 'REFUND_DONE'
       ? { '고객명': '홍길동', '환불금액': (50000).toLocaleString('ko-KR'), '환불수단': '국민은행 ****1234 (홍길동)' }
       : status === 'CHARGE_DONE'

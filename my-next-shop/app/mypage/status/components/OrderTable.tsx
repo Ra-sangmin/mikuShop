@@ -2,7 +2,16 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
-import { ORDER_STATUS, orderStatusLabel } from '@/src/types/order';
+import { useRouter } from 'next/navigation';
+// 🔨 입찰 요청·잔액 부족 안내는 전체 진행 현황과 같은 것을 씁니다.
+import { requestBid, InsufficientBalanceNotice, MONEY_CHARGE_PATH } from './bidRequest';
+import { calcDepositKrw, DEPOSIT_RULE_TEXT } from '@/src/utils/auctionDeposit';
+import { minNextBid, bidIncrement, BID_LIMIT_NOTICE, BID_HIDDEN_LIMIT_HINT } from '@/src/utils/auctionBid';
+import {
+  calculateTieredPaymentFee, calculateTieredAgencyFee, toChargeableWon,
+  DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule,
+} from '@/src/utils/feeCalculator';
+import { ORDER_STATUS, orderStatusLabel, isAuctionOrder, FAILED_STATUSES } from '@/src/types/order';
 
 // 🌟 상태 우선순위 정의 (요청 -> 진행중 -> 창고 -> 배송 순)
 const STATUS_PRIORITY: Record<string, number> = {
@@ -10,8 +19,10 @@ const STATUS_PRIORITY: Record<string, number> = {
   [ORDER_STATUS.BID_PENDING]: 2,
   [ORDER_STATUS.BIDDING]: 3,
   [ORDER_STATUS.BID_SUCCESS]: 4,
+  [ORDER_STATUS.BID_PAID]: 4.5,
   [ORDER_STATUS.PAID]: 5,
   [ORDER_STATUS.WAITING]: 5.5,
+  [ORDER_STATUS.BID_FAILED]: 5.8,
   [ORDER_STATUS.FAILED]: 6,
   [ORDER_STATUS.ARRIVED]: 7,
   [ORDER_STATUS.PREPARING]: 8,
@@ -78,7 +89,7 @@ function useOrderTableLogic({ activeTab, fetchOrders }: any) {
 
   // 🚀 동적 테이블 컬럼 수 계산
   const getColSpanCount = useCallback(() => {
-    let count = activeTab === ORDER_STATUS.PAYMENT_REQ ? 1 : 2; // 기본: 상품명(+가격, 배송비 요청 탭은 가격 컬럼 없음)
+    let count = activeTab === ORDER_STATUS.PAYMENT_REQ ? 1 : 2; // 기본: 상품명(+가격, 배송비 결제 대기 탭은 가격 컬럼 없음)
     if (activeTab === 'ALL') count += 1; // 상태 (전체내역 전용)
     if ([ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab)) count += 1; // 체크박스
     if ([ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(activeTab)) count += 1; // 수취인
@@ -101,7 +112,8 @@ function useOrderTableLogic({ activeTab, fetchOrders }: any) {
 // =================================================================
 
 // 🌟 입찰 금액 입력 프리미엄 모달 콘텐츠
-const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { item: any, myMoney: number, exchangeRate: number, onChange: (val: string) => void }) => {
+// 🔨 전체 진행 현황(page.tsx)에서도 같은 팝업을 씁니다. 복사본을 두면 한쪽만 고쳐져 어긋납니다.
+export const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { item: any, myMoney: number, exchangeRate: number, onChange: (val: string) => void }) => {
   const { setConfirmDisabled } = useMikuAlert();
   const [amount, setAmount] = useState("");
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -112,23 +124,55 @@ const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { item: any,
 
   const originalBid = item.myBidPrice || 0;
   const parsedAmount = parseInt(amount) || 0;
-  // 🌟 다른 화면(PaymentSummary)과 동일하게 반올림 후 100원 단위로 올림 처리
-  const bidAmountWon = parsedAmount > 0 ? Math.ceil(Math.round(parsedAmount * exchangeRate) / 100) * 100 : 0;
-  const isInsufficient = parsedAmount > 0 && bidAmountWon > myMoney;
 
-  // 🌟 희망 입찰 금액(원화 환산)이 보유 미쿠짱 머니보다 많으면 "확인" 버튼을 눌러도 진행되지 않게 막습니다.
+  // 💰 지금 경매가를 읽어 옵니다. 주문에 저장된 금액은 '내가 적어 낸 한도'라
+  //    현재가와 다릅니다. 최소 입찰가는 **지금 경매가** 기준으로 정해집니다.
+  const [livePrice, setLivePrice] = useState<{ loading: boolean; price?: number }>({ loading: true });
   useEffect(() => {
-    setConfirmDisabled(isInsufficient);
-  }, [isInsufficient, setConfirmDisabled]);
+    let cancelled = false;
+    fetch(`/api/orders/auction-price?orderId=${encodeURIComponent(item.orderId)}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setLivePrice({ loading: false, price: d?.success ? Number(d.price) : undefined }); })
+      .catch(() => { if (!cancelled) setLivePrice({ loading: false }); });
+    return () => { cancelled = true; };
+  }, [item.orderId]);
+
+  // 🔨 야후는 금액대별 최소 인상폭이 있습니다. 그보다 적게 걸면 입찰 자체가 거부됩니다.
+  //    현재가를 못 읽었으면 막지 않습니다 — 모르는 값으로 회원을 막을 수는 없습니다.
+  const basePrice = livePrice.price ?? 0;
+  const minBid = basePrice > 0 ? minNextBid(basePrice) : 0;
+  const tooLow = minBid > 0 && parsedAmount > 0 && parsedAmount < minBid;
+  // 💰 지금 이 순간 빠져나가는 돈은 **입찰 금액이 아니라 보증금 차액**입니다.
+  //    보증금은 원화이고 '지금 입찰가 기준'이라, 이미 낸 만큼은 빼고 모자란 만큼만 받습니다.
+  //    (서버도 같은 식으로 계산합니다 — app/api/orders/bid, src/utils/auctionDeposit.ts)
+  //    예전에는 여기에 "희망 입찰 금액 (원화 환산)" 을 보여 줬는데, 그 금액은 지금 빠지지 않습니다.
+  const targetDepositWon = calcDepositKrw(parsedAmount, exchangeRate);
+  const paidDepositWon = Number(item.depositKrw) || 0;
+  const addDepositWon = Math.max(0, targetDepositWon - paidDepositWon);
+  const isInsufficient = parsedAmount > 0 && addDepositWon > myMoney;
+
+  // 🌟 지금 낼 보증금이 보유 미쿠짱 머니보다 많으면 "확인" 버튼을 눌러도 진행되지 않게 막습니다.
+  //    (예전에는 입찰 금액 전액을 갖고 있어야 입찰할 수 있었습니다 — 보증금만 내면 되는데도요)
+  useEffect(() => {
+    setConfirmDisabled(isInsufficient || tooLow);
+  }, [isInsufficient, tooLow, setConfirmDisabled]);
 
   return (
     <div className="miku-bid-modal notranslate" translate="no">
       <p className="prod-name-title">{item.productName}</p>
 
       <div className="info-row">
-        <span className="label">현재 최고가</span>
-        <span className="val highlight">¥ {item.productPrice?.toLocaleString()}</span>
+        <span className="label">지금 경매가</span>
+        <span className="val highlight">
+          {livePrice.loading ? '불러오는 중…' : livePrice.price ? `¥ ${livePrice.price.toLocaleString()}` : '확인 불가'}
+        </span>
       </div>
+      {/* 🔨 화면의 경매가는 '이기는 금액'이 아닙니다. 숨은 한도가 더 높을 수 있습니다. */}
+      {livePrice.price ? (
+        <p style={{ margin: '-4px 0 10px', fontSize: 11.5, color: '#94a3b8', textAlign: 'right' }}>
+          {BID_HIDDEN_LIMIT_HINT} · 최소 {minBid.toLocaleString()}엔부터 (인상폭 {bidIncrement(basePrice).toLocaleString()}엔)
+        </p>
+      ) : null}
 
       <div className="info-row my-bid-row">
         <span className="label">내 입찰 금액</span>
@@ -155,11 +199,38 @@ const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { item: any,
         <div className="bid-my-money-info">
           내 미쿠짱 머니 ₩ {myMoney.toLocaleString()}
         </div>
-        {parsedAmount > 0 && (
-          <div className="bid-krw-info">
-            희망 입찰 금액 (원화 환산) ₩ {bidAmountWon.toLocaleString()}
+        {tooLow && (
+          <div className="bid-insufficient-warning">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+              <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            최소 {minBid.toLocaleString()}엔 이상 입력해 주세요
           </div>
         )}
+        {parsedAmount > 0 && (
+          <div className="bid-krw-info">
+            {addDepositWon > 0 ? (
+              <>
+                지금 결제할 보증금 ₩ {addDepositWon.toLocaleString()}
+                <span style={{ display: 'block', fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
+                  보증금 {targetDepositWon.toLocaleString()}원 ({DEPOSIT_RULE_TEXT})
+                  {paidDepositWon > 0 && ` · 이미 낸 ${paidDepositWon.toLocaleString()}원 제외`}
+                </span>
+              </>
+            ) : (
+              <>
+                지금 결제할 보증금 없음
+                <span style={{ display: 'block', fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
+                  이미 낸 보증금 {paidDepositWon.toLocaleString()}원으로 충분합니다
+                </span>
+              </>
+            )}
+          </div>
+        )}
+        <p style={{ marginTop: 10, fontSize: 11.5, lineHeight: 1.6, color: '#94a3b8', wordBreak: 'keep-all' }}>
+          {BID_LIMIT_NOTICE}
+        </p>
         {isInsufficient && (
           <div className="bid-insufficient-warning">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -167,7 +238,7 @@ const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { item: any,
               <line x1="12" y1="9" x2="12" y2="13" />
               <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
-            미쿠짱 머니가 부족합니다
+            보증금을 내기에 미쿠짱 머니가 부족합니다
           </div>
         )}
       </div>
@@ -181,30 +252,64 @@ const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { item: any,
 const DELETABLE_STATUSES: string[] = [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING];
 
 // ✋ / ⏳ 펼치기 보기에서 상품명 아래에 붙는 한 줄 안내 — 손님이 할 일인지, 미쿠짱이 진행 중인지 바로 알 수 있게
+// 🔨 입찰 상태 이름 (손님용). PENDING 은 미쿠짱이 아직 입찰을 넣기 전이라 '준비 중'으로 부릅니다.
+function bidStatusLabel(bidStatus?: string | null): string {
+  if (bidStatus === 'PENDING') return '입찰 준비 중';
+  if (bidStatus === 'ADDITIONAL') return '추가 입찰 반영됨';
+  if (bidStatus === 'COMPLETED') return '입찰 완료';
+  return '상태 확인중';
+}
+
+// ⏰ 마감 24시간 이내면 '마감 임박'
+function isEndingSoon(end?: string | Date | null): boolean {
+  if (!end) return false;
+  const diff = new Date(end).getTime() - Date.now();
+  return diff > 0 && diff <= 24 * 60 * 60 * 1000;
+}
+
+/**
+ * 💴 금액 칸이 무슨 금액인지.
+ *
+ * 경매 주문은 '상품 금액' 자리에 **입찰 희망가**가 들어 있습니다.
+ * (경매 요청을 만들 때 productPrice 에 입찰가를 넣습니다 — app/api/orders POST)
+ * 낙찰 처리 때 관리자가 확인한 실제 낙찰가로 바뀌므로, 그 뒤에는 '낙찰가'가 됩니다.
+ * 라벨 없이 숫자만 두면 구매 요청의 상품 금액과 같은 뜻으로 읽힙니다.
+ */
+function amountLabel(status: string): string | null {
+  if (status === ORDER_STATUS.BID_PENDING || status === ORDER_STATUS.BIDDING) return '입찰 희망가';
+  if (status === ORDER_STATUS.BID_SUCCESS || status === ORDER_STATUS.BID_PAID) return '낙찰가';
+  return null;
+}
+
 function statusHint(status: string, type?: string | null): string {
   switch (status) {
     // 손님이 할 일
     case ORDER_STATUS.CART: return '결제하시면 바로 구매를 시작해요';
     case ORDER_STATUS.BID_PENDING: return '보증금을 결제하시면 입찰을 시작해요';
     case ORDER_STATUS.BID_SUCCESS: return '낙찰됐어요! 상품 금액을 결제해 주세요';
+    case ORDER_STATUS.BID_PAID: return '결제가 끝났어요 · 판매자에게 구매를 진행하고 있어요';
     case ORDER_STATUS.ARRIVED: return '창고에 도착했어요 · 포장 방법과 배송지를 선택해 주세요';
     case ORDER_STATUS.PAYMENT_REQ: return '배송비를 결제하시면 국제 배송이 시작돼요';
     // 미쿠짱이 진행 중
     case ORDER_STATUS.BIDDING: return '입찰 중이에요 · 경매 결과를 기다리고 있어요';
     case ORDER_STATUS.PAID: return type === 'DELIVERY' ? '일본 창고 도착을 기다리고 있어요' : '판매자에게 구매를 진행하고 있어요';
     case ORDER_STATUS.WAITING: return '일본 창고 도착을 기다리고 있어요';
-    case ORDER_STATUS.FAILED: return '낙찰 또는 구매가 이루어지지 않았어요';
+    case ORDER_STATUS.BID_FAILED: return '아쉽게도 낙찰되지 않았어요. 보증금은 돌려드립니다';
+    case ORDER_STATUS.FAILED: return '상품을 구매하지 못했어요';
     case ORDER_STATUS.PREPARING: return '미쿠짱 창고에서 포장하고 있어요 · 배송비 안내를 곧 드려요';
     case ORDER_STATUS.PAYMENT_DONE: return '결제 완료 · 곧 국제 배송이 시작돼요';
     default: return '';
   }
 }
 
-function ItemDetail({ item, onDelete, onBid, auctionTime }: {
+function ItemDetail({ item, onDelete, auctionTime, exchangeRate = 0, paymentFeeRule, agencyFeeRule }: {
   item: any;
   onDelete: () => void;
-  onBid?: () => void;
   auctionTime?: { text: string; isUrgent: boolean; isEnded: boolean };
+  /** 💰 낙찰 결제 내역을 원화로 보여 주는 데 씁니다. */
+  exchangeRate?: number;
+  paymentFeeRule?: OrderFeeRule;
+  agencyFeeRule?: OrderFeeRule;
 }) {
   const fmt = (d?: string | Date) => {
     if (!d) return '-';
@@ -212,26 +317,81 @@ function ItemDetail({ item, onDelete, onBid, auctionTime }: {
     return Number.isNaN(t.getTime()) ? '-' : t.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
   };
   const has = (v: any) => v !== undefined && v !== null && String(v).trim() !== '' && String(v).trim() !== '-';
+
+  // 💰 경매가 진행 중이면 **지금 경매가**를 읽어 옵니다.
+  //    주문에 저장된 금액은 신청하던 때의 입찰 희망가라, 지금 얼마까지 올랐는지는 알 수 없습니다.
+  //    (추가 입찰을 할지 판단하는 데 쓰는 값이라 펼칠 때마다 새로 읽습니다.
+  //     서버가 5분 캐시를 두고 있어 연달아 펼쳐도 무겁지 않습니다)
+  const isLiveAuction = [ORDER_STATUS.BID_PENDING, ORDER_STATUS.BIDDING].includes(item.status);
+  const [live, setLive] = useState<{ loading: boolean; price?: number; bidCount?: number | null; error?: string }>({ loading: false });
+  useEffect(() => {
+    if (!isLiveAuction || !item.orderId) return;
+    let cancelled = false;
+    setLive({ loading: true });
+    fetch(`/api/orders/auction-price?orderId=${encodeURIComponent(item.orderId)}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setLive(d?.success ? { loading: false, price: Number(d.price), bidCount: d.bidCount } : { loading: false, error: d?.error || '불러오지 못했어요' }); })
+      .catch(() => { if (!cancelled) setLive({ loading: false, error: '불러오지 못했어요' }); });
+    return () => { cancelled = true; };
+  }, [isLiveAuction, item.orderId]);
   const won = (v: number) => `₩ ${(v || 0).toLocaleString()}`;
   const st = item.status;
-  const rows: [string, React.ReactNode][] = [['상태', orderStatusLabel(st, item.type)]];
+  // 🏷️ 상태는 상품 줄의 배지로 이미 보여서 상세에는 넣지 않습니다.
+  // 🔨 경매 상품은 수량이 늘 1개라 수량도 뺍니다. (낙찰 뒤 입고 · 배송 단계의 경매 상품도 포함)
+  const isAuction = isAuctionOrder(item);
+  const rows: [string, React.ReactNode][] = [];
 
-  rows.push([item.isGroup ? '상품 합계' : st === ORDER_STATUS.BID_SUCCESS ? '낙찰가' : '상품 금액', `¥ ${(item.productPrice || 0).toLocaleString()}`]);
-  if (!item.isGroup) rows.push(['수량', `${Number(item.productCount) || 1}개`]);
-  if (Number(item.domesticShippingFee) > 0 && [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS].includes(st)) {
+  rows.push([
+    item.isGroup ? '상품 합계' : (amountLabel(st) ?? '상품 금액'),
+    `¥ ${(item.productPrice || 0).toLocaleString()}`,
+  ]);
+  if (!item.isGroup && !isAuction) rows.push(['수량', `${Number(item.productCount) || 1}개`]);
+  if (Number(item.domesticShippingFee) > 0 && [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.BID_PAID].includes(st)) {
     rows.push(['일본 내 배송료', `¥ ${Number(item.domesticShippingFee).toLocaleString()}`]);
+  }
+
+  // 💰 낙찰 뒤에는 "이 금액이 어떻게 나왔는지"를 그 자리에서 보여 줍니다.
+  //    이용 내역에는 돈이 움직인 기록만 남아, 수수료가 얼마였는지 알 방법이 없었습니다.
+  if ([ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.BID_PAID].includes(st) && !item.isGroup) {
+    const productJpy = Number(item.productPrice) || 0;
+    const qty = Number(item.productCount) || 1;
+    const domesticJpy = Number(item.domesticShippingFee) || 0;
+    const payFee = calculateTieredPaymentFee(productJpy, paymentFeeRule ?? DEFAULT_PAYMENT_FEE_RULE);
+    const agencyFee = calculateTieredAgencyFee(qty, agencyFeeRule ?? DEFAULT_AGENCY_FEE_RULE);
+    const totalJpy = productJpy + payFee + domesticJpy + agencyFee;
+    const totalWon = toChargeableWon(totalJpy, exchangeRate);
+    const paidDeposit = Number(item.depositKrw) || 0;
+    const remain = Math.max(0, totalWon - paidDeposit);
+
+    rows.push(['결제 수수료', `¥ ${payFee.toLocaleString()}`]);
+    rows.push(['대행 수수료', `¥ ${agencyFee.toLocaleString()}`]);
+    if (totalWon > 0) rows.push(['합계', <b key="sum">{won(totalWon)}</b>]);
+    if (paidDeposit > 0) rows.push(['낸 보증금', `- ${paidDeposit.toLocaleString()}원`]);
+    rows.push([
+      st === ORDER_STATUS.BID_PAID ? '추가 결제' : '결제하실 금액',
+      <b key="remain" style={{ color: remain > 0 ? '#e11d48' : '#059669' }}>{won(remain)}</b>,
+    ]);
+  }
+
+  // 💰 지금 경매가 (실시간). 못 읽으면 줄을 감추지 않고 이유를 적어 둡니다 —
+  //    금액이 안 보이는 것과 "지금은 못 읽었다"는 것은 다릅니다.
+  if (isLiveAuction) {
+    rows.push(['지금 경매가', live.loading
+      ? <span key="live" style={{ color: '#94a3b8' }}>불러오는 중…</span>
+      : live.price
+        ? <span key="live"><b style={{ color: '#e11d48' }}>¥ {live.price.toLocaleString()}</b>
+            {live.bidCount != null && <span style={{ color: '#94a3b8', fontSize: 12, marginLeft: 6 }}>입찰 {live.bidCount}건</span>}
+          </span>
+        : <span key="live" style={{ color: '#94a3b8', fontSize: 12.5 }}>{live.error || '-'}</span>]);
+    if (live.price) rows.push(['', <span key="hint" style={{ fontSize: 11.5, color: '#94a3b8' }}>{BID_HIDDEN_LIMIT_HINT}</span>]);
   }
 
   // 🔨 경매
   if ([ORDER_STATUS.BID_PENDING, ORDER_STATUS.BIDDING].includes(st)) {
-    if (item.myBidPrice) rows.push(['내 입찰가', `¥ ${Number(item.myBidPrice).toLocaleString()}`]);
     if (item.auctionEndDate) {
       rows.push(['남은 시간', auctionTime
         ? <span className={`time-text ${auctionTime.isEnded ? 'ended' : ''} ${auctionTime.isUrgent ? 'urgent' : ''}`}>{auctionTime.text}</span>
         : fmt(item.auctionEndDate)]);
-    }
-    if (st === ORDER_STATUS.BIDDING) {
-      rows.push(['입찰 상태', item.bidStatus === 'PENDING' ? '입찰 대기중' : item.bidStatus === 'ADDITIONAL' ? '추가 입찰 완료' : item.bidStatus === 'COMPLETED' ? '입찰 완료' : '상태 확인중']);
     }
   }
 
@@ -286,9 +446,7 @@ function ItemDetail({ item, onDelete, onBid, auctionTime }: {
         )}
       </div>
       <div className="cart-detail-actions">
-        {st === ORDER_STATUS.BIDDING && onBid && (
-          <button type="button" className="cart-detail-btn is-primary" onClick={onBid}>🔨 추가 입찰하기</button>
-        )}
+        {/* 🔨 추가 입찰은 상품 줄의 [추가 입찰] 버튼으로 합니다. (상세에 같은 버튼이 겹쳐 있어 뺐습니다) */}
         {!item.isGroup && item.productUrl && (
           <a className="cart-detail-btn" href={item.productUrl} target="_blank" rel="noopener noreferrer">원본 상품 보기 ↗</a>
         )}
@@ -301,15 +459,17 @@ function ItemDetail({ item, onDelete, onBid, auctionTime }: {
 }
 
 // 🌟 메인 테이블 컴포넌트
-export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete, onStatusClick, inlineMode = false, myMoney = 0, exchangeRate = 0 }: any) {
+export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete, onStatusClick, inlineMode = false, myMoney = 0, exchangeRate = 0, paymentFeeRule, agencyFeeRule }: any) {
   const {
     isMobile, showConfirm, showAlert,
     getAuctionTimeData, getColSpanCount
   } = useOrderTableLogic({ activeTab, fetchOrders });
+  // 💰 입찰 보증금이 모자랄 때 충전 화면으로 보내 줍니다.
+  const router = useRouter();
 
   const isAuctionTab = activeTab === 'BID_PENDING' || activeTab === 'BIDDING';
   const showBundleAndRecipientTabs = [ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING];
-  // 🌟 합포장(bundleId) 묶음을 한 행으로 합쳐서 보여주는 탭들 (배송비 요청/배송비 결제 완료/국제 배송)
+  // 🌟 합포장(bundleId) 묶음을 한 행으로 합쳐서 보여주는 탭들 (배송비 결제 대기/배송비 결제 완료/국제 배송)
   const bundleGroupTabs = [ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING];
   const hasCheckbox = [ORDER_STATUS.CART, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, 'BIDDING'].includes(activeTab as any);
   // 🌟 전체내역 탭에서는 행을 클릭하면 해당 상품의 상태 탭으로 이동합니다.
@@ -318,7 +478,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
   //    탭은 '전체'지만 결제 · 포장 요청이 필요한 상품은 체크박스로 바로 고르고, 상품을 누르면 그 아래에 상세가 펼쳐집니다.
   //    (예전엔 상품을 눌러야 아래 '상세 정보 확인' 패널이 열리고 거기서 다시 골라 결제했습니다)
   const cartMode = inlineMode;
-  // 펼치기 보기에서 고를 수 있는 상태: 결제(구매 요청 · 경매 요청 · 낙찰 · 배송비 요청)와 포장 요청(입고 완료)
+  // 펼치기 보기에서 고를 수 있는 상태: 결제(구매 요청 · 경매 요청 · 낙찰 · 배송비 결제 대기)와 포장 요청(입고 완료)
   const INLINE_SELECTABLE: string[] = [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING, ORDER_STATUS.BID_SUCCESS, ORDER_STATUS.ARRIVED, ORDER_STATUS.PAYMENT_REQ];
   const canSelect = (item: any) => (cartMode ? INLINE_SELECTABLE.includes(item.status) : hasCheckbox);
   const selectable = hasCheckbox || cartMode;
@@ -332,12 +492,14 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     if (status === ORDER_STATUS.CART) return 'theme-blue';
     // 🌟 경매 요청은 구매 요청(파랑)과 구분되도록 호박색으로 보여 줍니다
     if (status === ORDER_STATUS.BID_PENDING) return 'theme-amber';
-    if ([ORDER_STATUS.FAILED].includes(status as any)) return 'theme-red';
-    // 🎨 '신청 내역 보기' 카드는 경매 상황·낙찰 성공·상품 결제 완료·입고 대기중·실패를
+    if (FAILED_STATUSES.includes(status as any)) return 'theme-red';
+    // 🎨 '신청 내역 보기' 카드는 경매 중·낙찰 성공·상품 결제 완료·입고 대기중·실패를
     //    한 표에 모아 보여 줍니다. 세이 모두 보라였어서 눈으로 가를 수 없었습니다.
-    //    경매 상황 = 남보라, 낙찰 성공 = 분홍, 상품 결제 완료 = 보라 로 갈라 둡니다.
+    //    경매 중 = 남보라, 낙찰 성공 = 분홍, 상품 결제 완료 = 보라 로 갈라 둡니다.
     if (status === ORDER_STATUS.BIDDING) return 'theme-indigo';
     if (status === ORDER_STATUS.BID_SUCCESS) return 'theme-pink';
+    // 🔨 경매 결제 완료 — 낙찰 성공(분홍)·상품 결제 완료(보라)와 갈리도록 청록으로 둡니다.
+    if (status === ORDER_STATUS.BID_PAID) return 'theme-cyan';
     if (status === ORDER_STATUS.PAID) return 'theme-purple';
     if ([ORDER_STATUS.ARRIVED, ORDER_STATUS.PREPARING].includes(status as any)) return 'theme-green';
     if ([ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING].includes(status as any)) return 'theme-orange';
@@ -367,28 +529,19 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
       const originalBid = item.myBidPrice || 0;
       const amount = finalBidAmount - originalBid;
 
-      const deposit = finalBidAmount <= 20000 ? 2000 : Math.floor(finalBidAmount * 0.1);
 
-      try {
-        const res = await fetch('/api/orders/bid', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId: item.orderId, amount, deposit })
-        });
 
-        if (res.ok) {
-          await fetch('/api/orders', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ updates: [{ id: item.orderId, bidStatus: 'PENDING' }] })
-          });
-
-          showAlert(`¥${finalBidAmount.toLocaleString()} 입찰 완료!`, 'success');
-          fetchOrders();
-        } else {
-          const errorData = await res.json();
-          showAlert(errorData.error || "입찰에 실패했습니다.", "error");
-        }
-      } catch (error) { showAlert("통신 에러가 발생했습니다.", "error"); }
+      const outcome = await requestBid(item.orderId, amount);
+      if (outcome.ok) {
+        showAlert(`¥${finalBidAmount.toLocaleString()} 입찰 완료!`, 'success');
+        fetchOrders();
+      } else if (outcome.insufficient) {
+        // 💰 부족하면 오류만 띄우지 않고 충전으로 이어 줍니다.
+        const goCharge = await showConfirm(<InsufficientBalanceNotice {...outcome.insufficient} />);
+        if (goCharge) router.push(MONEY_CHARGE_PATH);
+      } else {
+        showAlert(outcome.message, 'error');
+      }
     }
   };
 
@@ -407,7 +560,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     const ids = Array.isArray(orderIdOrIds) ? orderIdOrIds : [orderIdOrIds];
     const allSelected = ids.every((id: string) => selectedItems.includes(id));
     if (allSelected) { setSelectedItems(selectedItems.filter((id: string) => !ids.includes(id))); return; }
-    // 🔽 펼치기 보기: 상태마다 결제 · 요청 방식이 달라(구매 요청 · 경매 요청 · 낙찰 · 배송비 요청 · 입고 완료) 한 번에 처리할 수 없습니다.
+    // 🔽 펼치기 보기: 상태마다 결제 · 요청 방식이 달라(구매 요청 · 경매 요청 · 낙찰 · 배송비 결제 대기 · 입고 완료) 한 번에 처리할 수 없습니다.
     //    다른 상태의 상품을 고르면 그 상품부터 새로 고릅니다.
     if (cartMode && selectedItems.length > 0) {
       const statusOf = (id: string) => items.find((i: any) => String(i.orderId) === String(id))?.status;
@@ -426,7 +579,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     });
   };
 
-  // 🌟 배송비 요청/배송비 결제 완료/국제 배송 탭 + 전체내역(ALL, 진행중 목록 포함) 탭에서는
+  // 🌟 배송비 결제 대기/배송비 결제 완료/국제 배송 탭 + 전체내역(ALL, 진행중 목록 포함) 탭에서는
   // 같은 bundleId(합포장)로 묶인 주문들을 한 행으로 합쳐서 보여줍니다.
   const displayItems = React.useMemo(() => {
     const shouldGroup = bundleGroupTabs.includes(activeTab) || activeTab === ORDER_STATUS.ALL;
@@ -482,7 +635,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
     return [
       { __groupHead: 'todo', __count: todo.length, orderId: '__todo' },
       ...todo,
-      { __groupHead: 'wait', __count: wait.length, orderId: '__wait' },
+      { __groupHead: 'wait', __count: wait.length, orderId: '__wait', __hasBidding: wait.some((w: any) => w.status === ORDER_STATUS.BIDDING) },
       ...wait,
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -547,7 +700,9 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                           <span className="group-head-desc">
                             {isTodo
                               ? (item.__count > 0 ? '체크해서 결제 · 요청을 진행해 주세요' : '지금 하실 일은 없어요')
-                              : '따로 하실 일은 없어요 · 진행되면 알려 드릴게요'}
+                              : (item.__hasBidding
+                                ? '따로 하실 일은 없어요 · 경매는 원하시면 추가 입찰할 수 있어요'
+                                : '따로 하실 일은 없어요 · 진행되면 알려 드릴게요')}
                           </span>
                         </div>
                       </td>
@@ -574,10 +729,15 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                     >
                       {/* 체크박스 */}
                       {selectable && (
-                        <td className="td-cell td-check">
-                          {/* e.stopPropagation()으로 중복 클릭 방지 · 펼치기 보기에서 고를 필요가 없는 상태(진행 중 등)는 빈 칸 */}
+                        <td
+                          className={`td-cell td-check ${canSelect(item) ? 'can-check' : ''}`}
+                          /* 👆 체크박스 칸 전체를 누를 수 있게 (작은 네모만 누르기 어려워서).
+                             e.stopPropagation()으로 행 클릭(상세 펼치기)과 겹치지 않게 합니다. */
+                          onClick={canSelect(item) ? (e) => { e.stopPropagation(); toggleCheck(ids); } : undefined}
+                        >
+                          {/* 펼치기 보기에서 고를 필요가 없는 상태(진행 중 등)는 빈 칸 */}
                           {canSelect(item) && (
-                          <div className={`custom-checkbox ${isChecked ? 'checked' : ''}`} onClick={(e) => { e.stopPropagation(); toggleCheck(ids); }}>
+                          <div className={`custom-checkbox ${isChecked ? 'checked' : ''}`} role="checkbox" aria-checked={isChecked}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                           </div>
                           )}
@@ -615,7 +775,24 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                             </button>
                           )}
                         </div>
-                        {cartMode && statusHint(item.status, item.type) && (
+                        {/* 🔨 경매 중: 펼치지 않아도 입찰 상태 · 내 입찰가 · 남은 시간이 보이게 */}
+                        {cartMode && item.status === ORDER_STATUS.BIDDING ? (
+                          <div className="row-hint row-hint-bid">
+                            <span className={`bid-chip ${item.bidStatus === 'PENDING' ? 'pending' : item.bidStatus === 'ADDITIONAL' ? 'additional' : item.bidStatus === 'COMPLETED' ? 'completed' : 'default'}`}>
+                              {bidStatusLabel(item.bidStatus)}
+                            </span>
+                            {Number(item.myBidPrice) > 0 && (
+                              <span className="bid-meta">내 입찰가 ¥{Number(item.myBidPrice).toLocaleString()}</span>
+                            )}
+                            {item.auctionEndDate && (
+                              timeData.isEnded
+                                ? <span className="bid-meta">경매 종료 · 결과 확인 중</span>
+                                : <span className={`bid-meta bid-time ${isEndingSoon(item.auctionEndDate) ? 'is-soon' : ''}`}>
+                                    {isEndingSoon(item.auctionEndDate) && '⏰ 마감 임박 · '}{timeData.text} 남음
+                                  </span>
+                            )}
+                          </div>
+                        ) : cartMode && statusHint(item.status, item.type) && (
                           <div className={`row-hint ${canSelect(item) ? 'is-todo' : ''}`}>{statusHint(item.status, item.type)}</div>
                         )}
                       </td>
@@ -629,7 +806,19 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                       )}
 
                       {activeTab !== ORDER_STATUS.PAYMENT_REQ && (
-                        <td className="td-cell"><div className="price-val">¥ {(item.productPrice || 0).toLocaleString()}</div></td>
+                        <td className="td-cell">
+                          <div className="price-val">¥ {(item.productPrice || 0).toLocaleString()}</div>
+                          {/* 🔨 경매는 이 숫자가 상품 금액이 아닙니다. 무슨 금액인지 밝혀 둡니다. */}
+                          {!item.isGroup && amountLabel(item.status) && (
+                            <div className="price-kind">{amountLabel(item.status)}</div>
+                          )}
+                          {/* 🔨 경매 중: 상세를 펼치지 않고 바로 추가 입찰 (마감 전에만) */}
+                          {cartMode && item.status === ORDER_STATUS.BIDDING && !timeData.isEnded && (
+                            <button type="button" className="btn-row-bid" onClick={(e) => { e.stopPropagation(); handleBidClick(item); }}>
+                              🔨 추가 입찰
+                            </button>
+                          )}
+                        </td>
                       )}
 
                       {isAuctionTab && (
@@ -639,10 +828,9 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                       {/* 경매 상태 렌더링 */}
                       {activeTab === 'BIDDING' && (
                         <td className="td-cell">
-                          {item.bidStatus === 'PENDING' ? <span className="badge-bid pending">입찰 대기중</span>
-                          : item.bidStatus === 'ADDITIONAL' ? <span className="badge-bid additional">추가 입찰 완료</span>
-                          : item.bidStatus === 'COMPLETED' ? <span className="badge-bid completed">입찰 완료</span>
-                          : <span className="badge-bid default">상태 확인중</span>}
+                          <span className={`badge-bid ${item.bidStatus === 'PENDING' ? 'pending' : item.bidStatus === 'ADDITIONAL' ? 'additional' : item.bidStatus === 'COMPLETED' ? 'completed' : 'default'}`}>
+                            {bidStatusLabel(item.bidStatus)}
+                          </span>
                         </td>
                       )}
 
@@ -687,7 +875,9 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
                       <tr className="tr-item-detail">
                         <td className="td-cell td-item-detail" colSpan={colSpan}>
                           <ItemDetail item={item} onDelete={() => onDelete(item.orderId)}
-                            onBid={() => handleBidClick(item)} auctionTime={item.auctionEndDate ? timeData : undefined} />
+                            auctionTime={item.auctionEndDate ? timeData : undefined}
+                            exchangeRate={exchangeRate}
+                            paymentFeeRule={paymentFeeRule} agencyFeeRule={agencyFeeRule} />
                         </td>
                       </tr>
                     )}
@@ -718,7 +908,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
         </table>
       </div>
       
-      {/* 🌟 경매 상황 탭일 때 테이블 하단에 노출되는 추가 입찰 버튼 */}
+      {/* 🌟 경매 중 탭일 때 테이블 하단에 노출되는 추가 입찰 버튼 */}
       {activeTab === 'BIDDING' && (
         <div className="anim-slide-up delay-3" style={{ marginTop: '24px' }}>
           <div className="package-action-group">
@@ -835,6 +1025,8 @@ export function OrderTableStyles() {
 
         .th-check, .td-check { width: 55px; min-width: 55px; padding-left: 18px !important; padding-right: 15px !important; }
         .td-check .custom-checkbox { margin: 0; }
+        .td-check.can-check { cursor: pointer; }
+        .td-check.can-check:hover .custom-checkbox { border-color: #fb7185; }
         .td-product { text-align: left; max-width: 250px; padding-left: 18px; }
         .td-product.with-checkbox { padding-left: 0; }
         .prod-name-box {
@@ -887,6 +1079,8 @@ export function OrderTableStyles() {
         .badge-bid.default { background: #f1f5f9; color: #64748b; }
 
         .price-val { font-weight: 900; color: #0f172a; font-size: 15px; letter-spacing: -0.3px; }
+        /* 🔨 이 금액이 무슨 금액인지 (경매: 입찰 희망가 · 낙찰가) */
+        .price-kind { margin-top: 2px; font-size: 11px; font-weight: 700; color: #94a3b8; letter-spacing: -0.2px; }
         .recipient-address { display: block; margin-top: 2px; font-size: 12px; color: #94a3b8; }
 
         .bundle-group-badge {
@@ -1004,7 +1198,8 @@ export function OrderTableStyles() {
 
         /* 애니메이션 */
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .anim-slide-up { opacity: 0; animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        /* ⚠️ .anim-slide-up 은 페이지(status/page.tsx) 것을 씁니다. (global 이라 두 곳에서 정의하면
+           이 스타일이 붙거나 떨어질 때 화면 전체 애니메이션이 다시 재생됩니다) */
         /* =====================================================
            🛒 장바구니 보기(cartMode) — 누른 상품 아래 상세 · 모바일 카드
            ===================================================== */
@@ -1072,6 +1267,24 @@ export function OrderTableStyles() {
         .group-head-desc { font-size: 12px; font-weight: 600; color: #94a3b8; }
         .row-hint { margin-top: 4px; font-size: 12px; font-weight: 600; color: #94a3b8; text-align: left; }
         .row-hint.is-todo { color: #e11d48; font-weight: 700; }
+        /* 🔨 경매 중 줄: [입찰 상태] 내 입찰가 · 남은 시간 */
+        .row-hint-bid { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+        .bid-chip { padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+        .bid-chip.pending { background: #fef3c7; color: #b45309; }
+        .bid-chip.completed { background: #d1fae5; color: #047857; }
+        .bid-chip.additional { background: #dbeafe; color: #1d4ed8; }
+        .bid-chip.default { background: #f1f5f9; color: #64748b; }
+        .bid-meta { color: #64748b; font-weight: 700; white-space: nowrap; }
+        .bid-meta + .bid-meta::before { content: '·'; margin-right: 8px; color: #cbd5e1; }
+        .bid-time.is-soon { color: #e11d48; font-weight: 800; }
+        .btn-row-bid {
+          display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+          margin-top: 6px; padding: 5px 10px; border-radius: 8px; border: 0; cursor: pointer;
+          background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%); color: #fff;
+          font-size: 11.5px; font-weight: 800; white-space: nowrap;
+          box-shadow: 0 4px 10px -4px rgba(99, 102, 241, 0.6);
+        }
+        .btn-row-bid:hover { filter: brightness(1.05); transform: translateY(-1px); }
         @media (max-width: 768px) {
           .is-cart-mode .tr-group-head { display: block; }
           .is-cart-mode .tr-group-head > td { display: block; }
@@ -1101,7 +1314,12 @@ export function OrderTableStyles() {
             row-gap: 6px; padding: 12px 4px; border-bottom: 1px solid #f1f5f9;
           }
           .is-cart-mode .tr-row > td { display: block; padding: 0 !important; border: 0 !important; width: auto !important; min-width: 0 !important; max-width: none !important; }
-          .is-cart-mode .tr-row > .td-check { grid-area: check; justify-self: center; }
+          /* 👆 모바일: 왼쪽 칸 전체(위아래 여백 포함)를 체크 영역으로 */
+          .is-cart-mode .tr-row > .td-check {
+            grid-area: check; justify-self: stretch; align-self: stretch;
+            display: flex !important; align-items: center; justify-content: center;
+            margin: -12px 0 -12px -4px; padding: 12px 0 12px 4px !important;
+          }
           .is-cart-mode .tr-row > .td-status { grid-area: status; }
           .is-cart-mode .tr-row > .td-product { grid-area: name; }
           .is-cart-mode .tr-row > .td-cell:nth-last-child(2) { grid-area: price; justify-self: end; padding-right: 4px !important; }

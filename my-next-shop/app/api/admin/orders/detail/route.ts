@@ -27,6 +27,11 @@ export async function GET(req: Request) {
         status: true,
         productName: true,
         productPrice: true,
+        // 🔨 경매 주문: 입찰 신청 가격과 보증금도 함께 보여 줍니다.
+        myBidPrice: true,
+        depositAmount: true,
+        depositKrw: true,
+        depositRefundedKrw: true,
         productOption: true,
         productRequest: true,
         serviceRequest: true,

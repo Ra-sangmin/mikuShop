@@ -2,7 +2,7 @@
 //
 // 설계 의도
 //  1) 보낼 상태를 화이트리스트(NOTIFY_STATUSES)로 고정합니다.
-//     특히 BIDDING(경매 상황)은 입찰 경쟁 중 수시로 바뀌기 때문에 알림 대상에서 뺐습니다.
+//     특히 BIDDING(경매 중)은 입찰 경쟁 중 수시로 바뀌기 때문에 알림 대상에서 뺐습니다.
 //     이걸 보내기 시작하면 경매 한 건에 수십 통이 나가고, 정작 중요한 "배송비 결제 요청"이 묻힙니다.
 //  2) 같은 주문의 같은 상태로는 평생 한 번만 보냅니다. (NotificationLog 로 중복 차단)
 //     관리자가 상태를 되돌렸다가 다시 바꾸는 일이 실제로 잦습니다.
@@ -37,7 +37,7 @@ type StatusTemplate = {
 };
 
 // 🌟 알림을 보낼 상태 목록. 여기에 없는 상태는 메일이 나가지 않습니다.
-//    제외: BIDDING(경매 상황 - 수시 변동), PREPARING(배송 준비중 - 내부 진행 상태)
+//    제외: BIDDING(경매 중 - 수시 변동), PREPARING(배송 준비중 - 내부 진행 상태)
 const NOTIFY_STATUSES: Partial<Record<string, StatusTemplate>> = {
   [ORDER_STATUS.CART]: {
     subject: '구매대행 신청이 접수되었습니다',
@@ -49,7 +49,7 @@ const NOTIFY_STATUSES: Partial<Record<string, StatusTemplate>> = {
     subject: '경매 대행 신청이 접수되었습니다',
     heading: '경매 대행 신청이 접수되었습니다',
     message: '입찰을 준비하고 있습니다. 경매 진행 상황은 마이페이지에서 실시간으로 확인하실 수 있습니다.',
-    ctaLabel: '경매 상황 보기',
+    ctaLabel: '경매 진행 상황 보기',
   },
   [ORDER_STATUS.BID_SUCCESS]: {
     subject: '낙찰되었습니다',
@@ -58,10 +58,24 @@ const NOTIFY_STATUSES: Partial<Record<string, StatusTemplate>> = {
     ctaLabel: '결제 진행하기',
     urgent: true,
   },
+  // 🔨 경매와 구매는 실패한 사정이 다릅니다. 경매는 보증금이 걸려 있어 그 이야기를 먼저 합니다.
+  [ORDER_STATUS.BID_FAILED]: {
+    subject: '아쉽게도 낙찰되지 않았습니다',
+    heading: '아쉽게도 낙찰되지 않았습니다',
+    message: '다른 분이 더 높은 금액으로 낙찰받았습니다. 받아 둔 보증금은 미쿠짱머니로 돌려드립니다. 다른 상품으로 다시 도전해 보세요.',
+    ctaLabel: '주문 내역 확인하기',
+  },
   [ORDER_STATUS.FAILED]: {
-    subject: '낙찰·구매가 성사되지 않았습니다',
-    heading: '아쉽게도 성사되지 않았습니다',
-    message: '입찰 또는 구매가 완료되지 못했습니다. 결제하신 금액이 있다면 미쿠짱머니로 환급됩니다. 다른 상품으로 다시 시도해 보세요.',
+    subject: '구매가 성사되지 않았습니다',
+    heading: '아쉽게도 구매하지 못했습니다',
+    message: '품절 등의 이유로 상품을 구매하지 못했습니다. 결제하신 금액이 있다면 미쿠짱머니로 환급됩니다. 다른 상품으로 다시 시도해 보세요.',
+    ctaLabel: '주문 내역 확인하기',
+  },
+  // 🔨 경매는 낙찰 뒤 결제가 끝나면 '경매 결제 완료'로 넘어옵니다. (미쿠짱머니 자동 결제 포함)
+  [ORDER_STATUS.BID_PAID]: {
+    subject: '낙찰 상품 결제가 완료되었습니다',
+    heading: '낙찰 상품 결제가 완료되었습니다',
+    message: '결제가 확인되어 일본 현지에서 상품 구매를 진행합니다. 상품이 일본 창고에 도착하면 다시 안내드리겠습니다.',
     ctaLabel: '주문 내역 확인하기',
   },
   [ORDER_STATUS.PAID]: {

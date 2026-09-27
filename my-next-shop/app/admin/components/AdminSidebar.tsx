@@ -7,6 +7,7 @@ import {
   Headset, ChatCircleDots, Crown, AirplaneTilt, Calculator, Code, Package, CaretRight,
 } from '@phosphor-icons/react';
 import { ADMIN_ORDERS_CHANGED_EVENT } from '@/app/admin/adminEvents';
+import { ORDERS_SCOPES, attentionStatusesOf } from '@/app/admin/orders/ordersScope';
 import '@/app/admin/admin-shell.css';
 
 // 🌟 메뉴 이름 → 아이콘. adminMenu.ts 는 순수 데이터 파일이라 아이콘은 여기서 붙입니다.
@@ -14,7 +15,8 @@ const MENU_ICON: Record<string, React.ElementType> = {
   '대시보드': SquaresFour,
   '사용자 관리': Users,
   '주문 관리': ClipboardText,
-  '배송 현황': Truck,
+  '입고 완료 · 배송 준비': Package,
+  '국제 배송 현황': Truck,
   '정산 관리': ChartLineUp,
   '미쿠짱 머니': ArrowUUpLeft,
   '고객 센터': Headset,
@@ -25,8 +27,14 @@ const MENU_ICON: Record<string, React.ElementType> = {
   '개발자 전용': Code,
 };
 
-// 🔔 '주문 관리' 옆에 관리자가 처리해야 하는 주문 건수(주문 관리의 '관리자 처리 필요' 숫자와 같음)를 보여 줍니다.
-const BADGE_MENU = '주문 관리';
+// 🔔 메뉴 옆에 관리자가 처리해야 하는 주문 건수(그 화면의 '관리자 처리 필요' 숫자와 같음)를 보여 줍니다.
+//
+// 📦 주문 관리와 '입고 완료 · 배송 준비'가 단계를 나눠 맡으므로, 숫자도 각자 몫만 셉니다.
+//    합계를 한쪽에만 붙이면 눌러 들어갔을 때 그만큼이 없어 헷갈립니다.
+//    어느 상태가 어느 메뉴 것인지는 ordersScope.ts 가 정합니다. (화면 탭과 같은 기준)
+const BADGE_BY_PATH: Record<string, string[]> = Object.fromEntries(
+  Object.values(ORDERS_SCOPES).map(scope => [scope.path, attentionStatusesOf(scope) as string[]]),
+);
 const BADGE_REFRESH_MS = 60_000;
 
 export default function AdminSidebar({
@@ -39,14 +47,17 @@ export default function AdminSidebar({
   const router = useRouter();
   const pathname = usePathname();
 
-  const [adminTodoCount, setAdminTodoCount] = useState(0);
+  const [todoByStatus, setTodoByStatus] = useState<Record<string, number>>({});
   const loadAdminTodoCount = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/orders/today-count', { cache: 'no-store' });
       const data = await res.json();
-      if (data?.success) setAdminTodoCount(Number(data.count) || 0);
+      if (data?.success) setTodoByStatus(data.byStatus || {});
     } catch { /* 숫자는 보조 정보라 실패해도 조용히 넘어갑니다 */ }
   }, []);
+  /** 그 메뉴가 맡은 단계의 건수 합계 (맡은 단계가 없는 메뉴는 0) */
+  const badgeCountOf = (path: string) =>
+    (BADGE_BY_PATH[path] || []).reduce((n, st) => n + (todoByStatus[st] || 0), 0);
   useEffect(() => {
     loadAdminTodoCount();
     // 1분마다 · 다른 화면에서 주문을 처리하고 돌아왔을 때도 다시 셉니다.
@@ -98,9 +109,9 @@ export default function AdminSidebar({
                     >
                       <span className="ash-item-icon" aria-hidden="true"><Icon size={15} weight="duotone" /></span>
                       <span className="ash-item-label">{item.name}</span>
-                      {item.name === BADGE_MENU && adminTodoCount > 0 && (
-                        <span className="ash-item-badge" title={`관리자 처리가 필요한 주문 ${adminTodoCount}건`}>
-                          {adminTodoCount > 99 ? '99+' : adminTodoCount}
+                      {badgeCountOf(item.path) > 0 && (
+                        <span className="ash-item-badge" title={`관리자 처리가 필요한 주문 ${badgeCountOf(item.path)}건`}>
+                          {badgeCountOf(item.path) > 99 ? '99+' : badgeCountOf(item.path)}
                         </span>
                       )}
                       <CaretRight className="ash-item-caret" size={11} weight="bold" />

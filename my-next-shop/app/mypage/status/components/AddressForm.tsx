@@ -423,7 +423,8 @@ export default function AddressForm(props: any) {
         @keyframes slideUpModal { from { opacity: 0; transform: translateY(40px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
         
         .anim-fade-in { animation: fadeIn 0.3s ease forwards; }
-        .anim-slide-up { opacity: 0; animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        /* ⚠️ .anim-slide-up 은 페이지(status/page.tsx) 것을 씁니다. global 이라 여기서 다시 정의하면
+           이 폼이 나타날 때 화면 전체 애니메이션이 다시 재생(깜빡임)됩니다. */
         .anim-slide-up-modal { opacity: 0; animation: slideUpModal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
         /* =============================================================

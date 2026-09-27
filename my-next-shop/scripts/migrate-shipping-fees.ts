@@ -1,9 +1,9 @@
-// 📦 orders 에 흩어져 있던 배송비 요청 단계의 금액을 order_shipping_fees 로 옮깁니다.
+// 📦 orders 에 흩어져 있던 배송비 결제 대기 단계의 금액을 order_shipping_fees 로 옮깁니다.
 //
 // 예전에는 이 금액들이 orders 컬럼에 있었는데, domestic_shipping_fee 하나가
 //   · 구매 요청 단계의 "일본내 배송료(¥)"   — 구매 폼에서 받아 주문 생성 때 기록
-//   · 배송비 요청 단계의 "현지 배송비(₩)"   — 관리자가 입력하며 위 값을 덮어씀
-// 두 가지로 쓰이면서 통화도 의미도 섞여 있었습니다. 그래서 배송비 요청 단계의 금액만
+//   · 배송비 결제 대기 단계의 "현지 배송비(₩)"   — 관리자가 입력하며 위 값을 덮어씀
+// 두 가지로 쓰이면서 통화도 의미도 섞여 있었습니다. 그래서 배송비 결제 대기 단계의 금액만
 // 별도 테이블로 떼어냈고, orders.domestic_shipping_fee 는 구매 요청 단계 전용으로 남깁니다.
 //
 // 실행 (운영 서버 배포 순서)
@@ -24,7 +24,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 const isDryRun = process.argv.includes('--dry');
 
-// 배송비 요청을 이미 거친 주문. 이 상태부터는 domestic_shipping_fee 가
+// 배송비 청구를 이미 거친 주문. 이 상태부터는 domestic_shipping_fee 가
 // "관리자가 입력한 현지 배송비 청구액(₩)" 입니다. 그 전 단계면 일본내 배송료(¥)라 옮기면 안 됩니다.
 const AFTER_PAYMENT_REQ = ['PAYMENT_REQ', 'PAYMENT_DONE', 'SHIPPING', 'DELIVERED', 'COMPLETED'];
 

@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import { ORDER_STATUS } from '@/src/types/order';
 import NoticePanel from '@/app/components/NoticePanel';
+import { DEPOSIT_RULE_TEXT } from '@/src/utils/auctionDeposit';
 
 interface PaymentSummaryProps {
   activeTab: string;
@@ -14,6 +15,8 @@ interface PaymentSummaryProps {
     deposit?: number;
     domestic?: number;
     extra?: number;
+    /** 🔨 경매 요청: 보증금 합계(원) — 표시용 */
+    depositWon?: number;
   };
   totalPriceWon: number;
   exchangeRate: number;
@@ -21,6 +24,8 @@ interface PaymentSummaryProps {
   handleUpdateStatus: (status: string) => void;
   myMoney: number;
   orders?: any[];
+  /** ⚡ 선택하자마자 바로 보여야 하는 곳(전체 진행 현황)에서는 등장 애니메이션을 끕니다 */
+  noAnimation?: boolean;
 }
 
 // =================================================================
@@ -33,7 +38,7 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
   const isBidPending = activeTab === ORDER_STATUS.BID_PENDING;
   const isSingleHighlightMode = isPaymentRequest || isBidPending;
 
-  // 🌟 배송비 요청 탭에서는 같은 bundleId(합포장)로 묶인 선택 항목을 1건으로 집계합니다.
+  // 🌟 배송비 결제 대기 탭에서는 같은 bundleId(합포장)로 묶인 선택 항목을 1건으로 집계합니다.
   const selectedCount = useMemo(() => {
     if (!isPaymentRequest) return selectedItems.length;
     const seenBundles = new Set<string>();
@@ -110,7 +115,8 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
 
   const getHighlightTitle = () => {
     if (isPaymentRequest) return '청구된 총 배송비';
-    if (isBidPending) return '청구된 총 보증금';
+    // 🔨 경매 요청도 장바구니(구매 요청)와 같은 말로 맞춥니다. 왼쪽 칸에 보증금이 따로 보입니다.
+    if (isBidPending) return '최종 결제예상액 (원화)';
     return '';
   };
 
@@ -131,6 +137,7 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
   return {
     isSingleHighlightMode,
     isPaymentRequest,
+    isBidPending,
     extraFeeMemos,
     calculatedTotals,
     getHighlightTitle,
@@ -143,9 +150,9 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
 // 2. 화면 컴포넌트 영역 (View Layer)
 // =================================================================
 export default function PaymentSummary(props: PaymentSummaryProps) {
-  const { activeTab, totalPriceWon, exchangeRate, selectedItems, handleUpdateStatus, myMoney } = props;
+  const { activeTab, totalPriceWon, exchangeRate, selectedItems, handleUpdateStatus, myMoney, noAnimation = false } = props;
   const {
-    isSingleHighlightMode, isPaymentRequest, extraFeeMemos, calculatedTotals, getHighlightTitle, getButtonText, getTargetStatus
+    isSingleHighlightMode, isPaymentRequest, isBidPending, extraFeeMemos, calculatedTotals, getHighlightTitle, getButtonText, getTargetStatus
   } = usePaymentSummaryLogic(props);
 
   const hasItems = selectedItems.length > 0;
@@ -159,12 +166,12 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
         현지 배송료 발생시 <strong>국제 배송비</strong>에 합산됩니다.
       </NoticePanel>
     )}
-    <div className="miku-premium-payment-wrapper anim-slide-up">
+    <div className={`miku-premium-payment-wrapper ${noAnimation ? '' : 'anim-slide-up'}`}>
       <div className="miku-payment-content-flex">
         
         {isSingleHighlightMode ? (
           <>
-            {/* 💸 배송비 요청 탭 전용: 현지 배송비 + 국제 배송비 + 추가 결제 금액 = 청구된 총 배송비 공식 */}
+            {/* 💸 배송비 결제 대기 탭 전용: 현지 배송비 + 국제 배송비 + 추가 결제 금액 = 청구된 총 배송비 공식 */}
             {isPaymentRequest && (
               <div className="fee-formula-box">
                 <div className="fee-formula-item">
@@ -182,8 +189,21 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
               </div>
             )}
 
+            {/* 🔨 경매 요청 탭: 왼쪽에 보증금 하나만, 오른쪽에 결제액. 둘 다 원화입니다.
+                희망 입찰가를 나란히 두면 둘을 더해 내는 것처럼 보여서 금액은 보증금만 보여 주고,
+                "왜 이 금액인지"는 규칙 한 줄로 설명합니다. (희망 입찰가는 위 상품 줄 · 상세에 있습니다) */}
+            {isBidPending && (
+              <div className="fee-formula-box one-col">
+                <div className="fee-formula-item">
+                  <span className="item-label">보증금</span>
+                  <span className="item-val">{(calculatedTotals.depositWon || 0).toLocaleString()}원</span>
+                  <span className="item-rule">{DEPOSIT_RULE_TEXT}</span>
+                </div>
+              </div>
+            )}
+
             {/* 🌟 단일 강조 박스 (고급형) */}
-            <div className={`single-highlight-box premium-dark-box ${isPaymentRequest ? 'paired' : ''}`}>
+            <div className={`single-highlight-box premium-dark-box ${isPaymentRequest || isBidPending ? 'paired' : ''}`}>
               <span className="highlight-title">{getHighlightTitle()}</span>
               <span className="highlight-value">₩ {totalPriceWon.toLocaleString()}</span>
               <span className={`my-money-info ${myMoney < totalPriceWon ? 'insufficient' : ''}`}>
@@ -312,7 +332,7 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           margin-top: 28px;
         }
 
-        /* 💸 배송비 요청 탭: 현지 배송비 + 국제 배송비 + 추가 결제 금액 = 청구된 총 배송비 공식 */
+        /* 💸 배송비 결제 대기 탭: 현지 배송비 + 국제 배송비 + 추가 결제 금액 = 청구된 총 배송비 공식 */
         .fee-formula-box {
           flex: 1;
           display: grid;
@@ -324,6 +344,9 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           padding: 24px;
           box-sizing: border-box;
         }
+        /* 🔨 경매 요청 탭: 희망 입찰가 · 보증금 두 칸 */
+        .fee-formula-box.one-col { grid-template-columns: 1fr; }
+        .fee-formula-item .item-rule { font-size: 12px; font-weight: 600; color: #94a3b8; }
         /* 📝 추가 청구 사유 — 금액 패널과 결제 버튼 사이, 전체 폭 띄 */
         .extra-fee-memo {
           margin: 0 0 20px;
@@ -467,7 +490,7 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           gap: 10px;
           box-sizing: border-box;
         }
-        /* 🌟 배송비 요청 탭: 왼쪽에 fee-formula-box가 함께 있을 때는 total-box와 동일한 너비/패딩/폰트 크기로 맞춰
+        /* 🌟 배송비 결제 대기 탭: 왼쪽에 fee-formula-box가 함께 있을 때는 total-box와 동일한 너비/패딩/폰트 크기로 맞춰
            두 박스의 세로 높이가 완전히 일치하도록 합니다. */
         .single-highlight-box.paired {
           width: 340px;
@@ -525,9 +548,9 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
         }
         .btn-payment.full-width { width: 100%; text-align: center; }
 
-        /* 애니메이션 */
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .anim-slide-up { opacity: 0; animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        /* ⚠️ 애니메이션(.anim-slide-up)은 여기서 정의하지 않습니다 — 페이지(status/page.tsx)의 것을 씁니다.
+           이 스타일은 global 이라, 여기서 다시 정의하면 결제 카드가 나타나거나 사라질 때마다
+           화면 전체 .anim-slide-up 의 애니메이션 이름이 바뀌어 페이지 전체가 다시 재생(깜빡임)됐습니다. */
 
         /* =============================================================
            📱 모바일 반응형 처리 (초압축 & 고급화 유지)

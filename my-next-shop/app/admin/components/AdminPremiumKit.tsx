@@ -105,7 +105,11 @@ export function SearchField({ value, onChange, placeholder }: { value: string; o
 }
 
 /* ---------------- 세그먼트 필터 ---------------- */
-export type SegOption<V extends string> = { value: V; label: string; count?: number; dotRgb?: string };
+export type SegOption<V extends string> = {
+  value: V; label: string; count?: number; dotRgb?: string;
+  /** 마우스를 올렸을 때 나오는 설명. 이름만으로 뜻이 분명하지 않은 탭에 씁니다. */
+  hint?: string;
+};
 export function SegFilter<V extends string>({ options, value, onChange, ariaLabel }: {
   options: SegOption<V>[];
   value: V;
@@ -118,6 +122,7 @@ export function SegFilter<V extends string>({ options, value, onChange, ariaLabe
         <button key={o.value} type="button"
           className={`ap-seg-btn ${value === o.value ? 'is-active' : ''}`}
           onClick={() => onChange(o.value)}
+          title={o.hint}
           aria-pressed={value === o.value}>
           {o.dotRgb && <i className="ap-dot" style={{ ['--d-rgb' as string]: o.dotRgb } as CSSProperties} />}
           {o.label}

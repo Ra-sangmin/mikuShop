@@ -7,9 +7,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { DaumPostcodeEmbed } from 'react-daum-postcode';
-import { ORDER_STATUS_LABEL, type OrderStatus } from '@/src/types/order';
+import { ORDER_STATUS, ORDER_STATUS_LABEL, type OrderStatus } from '@/src/types/order';
 import { toEnglishAddress, toEnglishDetailAddress, toEnglishName, toIntlPhone } from './englishAddress';
-import { MapPinLine, Package, ClipboardText, Sparkle, Camera, ShieldCheck, Copy, Globe } from '@phosphor-icons/react';
+import { MapPinLine, Package, ClipboardText, Sparkle, Camera, ShieldCheck, Copy, Globe, Trash, Warning, CircleNotch } from '@phosphor-icons/react';
 import '../orders/orders-premium.css';
 
 type PushToast = (type: 'success' | 'error', message: string) => void;
@@ -35,6 +35,11 @@ export function toOrderDetailView(dbOrder: any) {
     recipient: dbOrder.recipient || '',
     product: dbOrder.productName,
     jpy: Number(dbOrder.productPrice || 0).toLocaleString(),
+    // 🔨 경매 주문은 '입찰 신청 가격'과 '보증금'이 함께 보여야 판단할 수 있습니다.
+    //    💰 보증금은 원화입니다. (입찰가의 10% · 최소 20,000원)
+    myBidPrice: dbOrder.myBidPrice ?? null,
+    depositKrw: Number(dbOrder.depositKrw || 0),
+    depositRefundedKrw: Number(dbOrder.depositRefundedKrw || 0),
     status: dbOrder.status,
     option: dbOrder.productOption || '-',
     productRequest: dbOrder.productRequest || '-',
@@ -45,11 +50,23 @@ export function toOrderDetailView(dbOrder: any) {
   };
 }
 
-export default function OrderDetailModal({ order, onClose, pushToast }: {
+// 🗑 회원이 아직 돈을 내지 않은 상태 — 이 밖의 상태를 지울 때는 환불을 먼저 챙기라고 알립니다.
+//    (장바구니 · 경매 요청은 결제 전, 입고 대기중은 배송대행이라 결제가 없습니다)
+const UNPAID_STATUSES: string[] = [ORDER_STATUS.CART, ORDER_STATUS.BID_PENDING, ORDER_STATUS.WAITING];
+
+export default function OrderDetailModal({ order, onClose, pushToast, onDelete }: {
   order: any;
   onClose: () => void;
   pushToast: PushToast;
+  /**
+   * 🗑 넘겨 주면 '주문 삭제' 버튼이 생깁니다. (주문 관리 화면만 넘깁니다 — 알림톡 화면은 보기 전용)
+   * 성공하면 true 를 돌려주세요. 팝업 닫기는 부르는 쪽이 합니다.
+   */
+  onDelete?: (order: any) => Promise<boolean>;
 }) {
+  // 🗑 삭제는 되돌릴 수 없어서 한 번 더 묻습니다. (브라우저 confirm 창 대신 팝업 안에서)
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [addrCopied, setAddrCopied] = useState(false);
   const [officialEng, setOfficialEngState] = useState<Record<string, { eng: string; zipOk: boolean }>>(() => ({ ...officialEngCache }));
   const setOfficialEng = (fn: (prev: Record<string, { eng: string; zipOk: boolean }>) => Record<string, { eng: string; zipOk: boolean }>) => {
@@ -226,6 +243,25 @@ export default function OrderDetailModal({ order, onClose, pushToast }: {
               <div><dt>주문자</dt><dd>{o.user}</dd></div>
               <div><dt>상품</dt><dd className="is-strong">{o.product}</dd></div>
               <div><dt>상품가격</dt><dd className="is-strong">¥{o.jpy}</dd></div>
+              {o.myBidPrice != null && (
+                <div><dt>입찰 신청 가격</dt><dd className="is-strong">¥{Number(o.myBidPrice).toLocaleString()}</dd></div>
+              )}
+              {/* 💰 보증금은 원화입니다.
+                  · 받아 둔 상태  → 금액
+                  · 실패로 돌려준 → "N원 환불" (안 낸 것과 구분해야 합니다)
+                  · 낸 적 없음    → 미납 */}
+              {o.myBidPrice != null && (
+                <div>
+                  <dt>납부 보증금</dt>
+                  <dd className={Number((o as any).depositKrw) > 0 ? 'is-strong' : ''}>
+                    {Number((o as any).depositKrw) > 0
+                      ? `${Number((o as any).depositKrw).toLocaleString()}원`
+                      : Number((o as any).depositRefundedKrw) > 0
+                        ? `${Number((o as any).depositRefundedKrw).toLocaleString()}원 환불`
+                        : '미납'}
+                  </dd>
+                </div>
+              )}
               <div><dt>진행 상태</dt><dd>{ORDER_STATUS_LABEL[o.status as OrderStatus] || o.status}</dd></div>
               <div><dt>옵션</dt><dd>{o.option || '-'}</dd></div>
               <div><dt>요청</dt><dd>{o.productRequest || '-'}</dd></div>
@@ -243,9 +279,51 @@ export default function OrderDetailModal({ order, onClose, pushToast }: {
             </dl>
           </section>
 
+          {/* 🗑 삭제 확인 — 되돌릴 수 없으니 무엇이 사라지는지와 환불 여부를 알려 줍니다. */}
+          {onDelete && confirmDelete && (
+            <div className="ord-detail-delete-confirm" role="alert">
+              <strong><Warning size={15} weight="fill" /> 이 주문을 삭제할까요?</strong>
+              <p>주문 <b>{o.id}</b> 가 목록에서 사라집니다. 지우기 전 내용(배송비 청구 내역 포함)은 <b>삭제 보관함</b>에 기록으로 남습니다.</p>
+              {!UNPAID_STATUSES.includes(o.status) && (
+                <p className="is-money">
+                  회원이 이미 결제한 단계({ORDER_STATUS_LABEL[o.status as OrderStatus] || o.status})입니다.
+                  삭제해도 <b>미쿠짱 머니는 자동으로 돌려주지 않습니다.</b> 환불이 필요하면 먼저 처리해 주세요.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="ord-modal-actions">
-            <button type="button" onClick={() => onClose()} className="ord-modal-btn is-confirm">닫기</button>
+            {onDelete && !o.isBundleGroup && (
+              confirmDelete ? (
+                <>
+                  <button type="button" className="ord-modal-btn is-cancel" disabled={deleting}
+                    onClick={() => setConfirmDelete(false)}>취소</button>
+                  <button type="button" className="ord-modal-btn is-danger" disabled={deleting}
+                    onClick={async () => {
+                      setDeleting(true);
+                      const ok = await onDelete(o);
+                      // 성공하면 부르는 쪽이 팝업을 닫습니다. 실패하면 다시 누를 수 있게 풉니다.
+                      if (!ok) setDeleting(false);
+                    }}>
+                    {deleting ? <><CircleNotch size={15} weight="bold" className="ord-spin" /> 삭제 중…</> : <><Trash size={15} weight="bold" /> 삭제하기</>}
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="ord-modal-btn is-danger-ghost" onClick={() => setConfirmDelete(true)}
+                  title="이 주문을 목록에서 완전히 지웁니다">
+                  <Trash size={15} weight="bold" /> 주문 삭제
+                </button>
+              )
+            )}
+            {!(onDelete && confirmDelete) && (
+              <button type="button" onClick={() => onClose()} className="ord-modal-btn is-confirm">닫기</button>
+            )}
           </div>
+          {/* 합포장 묶음은 한 줄에 여러 주문이 묶여 있어 여기서 지우지 않습니다. (묶음을 풀고 한 건씩) */}
+          {onDelete && o.isBundleGroup && (
+            <p className="ord-detail-delete-note">합포장 묶음은 여기서 삭제할 수 없어요. 묶음을 푼 뒤 한 건씩 삭제해 주세요.</p>
+          )}
         </div>
       </div>
     );

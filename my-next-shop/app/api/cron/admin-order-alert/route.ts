@@ -22,6 +22,8 @@
 //    주기가 짧아지면 한 통에 담기는 건수가 줄 뿐, 빠지거나 겹치지 않습니다.
 import { NextResponse } from 'next/server';
 import { runAdminOrderAlert } from '@/lib/notifications/adminOrderAlertRunner';
+// ⏰ 경매 마감 임박 · 입찰 한도 도달 감시 (같은 웹 푸시로 보냅니다)
+import { runAuctionWatch } from '@/lib/notifications/auctionWatch';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +41,19 @@ export async function GET(request: Request) {
 
   try {
     const result = await runAdminOrderAlert('cron');
-    return NextResponse.json({ success: true, ...result });
+
+    // ⏰ 경매 감시는 주문 알림과 별개로 돕니다.
+    //    ⚠️ 여기서 실패해도 주문 알림 결과는 그대로 돌려줍니다. 경매 페이지를 못 읽는 것은
+    //       흔한 일이고, 그것 때문에 크론이 통째로 실패로 기록되면 진짜 문제를 못 찾습니다.
+    let auction;
+    try {
+      auction = await runAuctionWatch();
+    } catch (e) {
+      console.error('[경매 감시] 실패:', (e as Error)?.message);
+      auction = { error: (e as Error)?.message };
+    }
+
+    return NextResponse.json({ success: true, ...result, auction });
   } catch (error) {
     console.error('[관리자 알림크론] 실패:', error);
     return NextResponse.json({ success: false, error: (error as Error)?.message || '알 수 없는 오류' }, { status: 500 });

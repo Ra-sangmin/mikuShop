@@ -346,7 +346,7 @@ export default function GlobalProductDetailShop({ product, onClose }: Props) {
       currentPrice={unitPrice} 
       quantity={quantity} 
       onAction={handleAddToCart} 
-      actionText="구매대행 신청하기" 
+      actionText="장바구니 담기" 
       onClose={onClose}
     >
       {({ styles, isMobile, theme }) => (

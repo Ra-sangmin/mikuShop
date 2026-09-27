@@ -27,4 +27,29 @@ export const moneyLogText = {
   /** 경매 보증금 — "경매 보증금 · 상품명…" */
   bidDeposit: (productName?: string | null) =>
     join('경매 보증금', productName ? shortenTitle(productName) : ''),
+  /**
+   * 낙찰가가 보증금보다 싸서 남은 보증금을 돌려줄 때.
+   *   "경매 보증금 반환 · 낙찰 결제 15,200원 차감 후 · 상품명…"
+   *
+   * 💡 왜 금액을 적나: 보증금으로 결제가 충당되면 '낙찰 결제' 자체는 이용 내역에 남지 않습니다.
+   *    (실제로 더 빠져나간 돈이 없으니까요) 그래서 이 줄이 "얼마짜리를 샀는지" 를 말해 주는
+   *    유일한 기록입니다. 계산 근거는 마이페이지 주문 상세에 표로 있습니다.
+   */
+  bidDepositRefund: (productName?: string | null, settledWon?: number | null) =>
+    join(
+      '경매 보증금 반환',
+      [settledWon ? `낙찰 결제 ${settledWon.toLocaleString()}원 차감 후` : '', productName ? shortenTitle(productName) : '']
+        .filter(Boolean).join(' · ')
+    ),
+
+  /**
+   * 낙찰 결제 (보증금을 빼고 남은 금액을 더 받을 때).
+   *   "낙찰 결제 · 총 306,300원 중 보증금 30,000원 제외 · 상품명…"
+   */
+  bidSettlement: (totalWon: number, depositWon: number, productName?: string | null) =>
+    join(
+      '낙찰 결제',
+      [`총 ${totalWon.toLocaleString()}원 중 보증금 ${depositWon.toLocaleString()}원 제외`,
+       productName ? shortenTitle(productName) : ''].filter(Boolean).join(' · ')
+    ),
 };
