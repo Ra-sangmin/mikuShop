@@ -1102,7 +1102,7 @@
 .ord-umodal-state { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 30px 0; font-size: 13.5px; font-weight: 700; color: #94a3b8; }
 .ord-umodal-state.is-error { color: #e11d48; }
 
-/* 요약 카드 (주문 · 머니 · 등급) */
+/* 요약 카드 (주문 · 가입 · 등급) */
 .ord-umodal .aui-stats { margin-top: 0; gap: 8px; }
 .ord-umodal .aui-stats > div {
   padding: 12px 10px; border-radius: 16px; background: #ffffff;
@@ -1401,3 +1401,28 @@
     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12);
   }
 }
+
+/* 💳 주문 상세 > 결제 내역 · 결제 취소 (app/admin/components/OrderPaymentsSection.tsx) */
+.ord-pay { padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; }
+.ord-pay + .ord-pay { margin-top: 10px; }
+.ord-pay-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.ord-pay-kind { font-size: 13px; font-weight: 800; color: var(--ord-ink, #0f172a); }
+.ord-pay-status { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; background: #dcfce7; color: #15803d; }
+.ord-pay-status.is-partial_canceled { background: #fef3c7; color: #b45309; }
+.ord-pay-status.is-canceled { background: #f1f5f9; color: #64748b; }
+.ord-pay-date { margin-left: auto; font-size: 11.5px; color: #94a3b8; }
+.ord-pay-mono { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11.5px; color: #64748b; word-break: break-all; }
+.ord-pay-cancels { list-style: none; margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: #fff7ed; font-size: 12px; color: #9a3412; }
+.ord-pay-cancels li + li { margin-top: 4px; }
+.ord-pay-cancels span { display: block; font-size: 11px; color: #c2410c; opacity: 0.8; }
+.ord-pay-cancel-btn {
+  margin-top: 10px; display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 9px; border: 1px solid #fecdd3; background: #ffffff;
+  color: #e11d48; font-size: 12.5px; font-weight: 800; cursor: pointer;
+}
+.ord-pay-cancel-btn:hover { background: #fff1f2; border-color: #fda4af; }
+.ord-pay-form { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.ord-pay-form .ord-modal-input { margin-bottom: 4px; }
+.ord-pay-note { margin: 2px 0 4px; font-size: 11.5px; color: #be123c; line-height: 1.5; }
+.ord-pay-actions { display: flex; gap: 8px; }
+.ord-pay-actions .ord-modal-btn { flex: 1; }

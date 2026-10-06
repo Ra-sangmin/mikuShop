@@ -1290,66 +1290,10 @@ body {
 }
 .notice-row:hover .notice-date { color: var(--tone-to); }
 
-/* 입금 계좌: 카드 모양 패널 */
-.bank-panel {
-  position: relative;
-  padding: 20px 22px;
-  border-radius: 20px;
-  color: #ffffff;
-  background:
-    radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 45%),
-    linear-gradient(145deg, #1f9d74 0%, #0b7a58 55%, #075c43 100%);
-  box-shadow: 0 18px 32px -18px rgba(7, 92, 67, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  overflow: hidden;
-}
-.bank-panel::after {
-  content: '';
-  position: absolute; right: -40px; bottom: -60px;
-  width: 180px; height: 180px; border-radius: 50%;
-  border: 26px solid rgba(255, 255, 255, 0.06);
-  pointer-events: none;
-}
-.bank-panel-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-.bank-panel-name { display: inline-flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 800; letter-spacing: -0.2px; }
-/* 🏦 은행 로고 파일은 정사각 타일(흰 바탕 · 테두리 포함)이라 덧대지 않고 칸에 꽉 채웁니다 */
-.bank-panel-logo {
-  /* 어두운 초록 카드 위라 작으면 잘 안 보여서, 흰 타일을 조금 키우고 테두리를 둡니다 */
-  width: 26px; height: 26px; border-radius: 8px; overflow: hidden;
-  background: #ffffff;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5), 0 6px 12px -9px rgba(0, 0, 0, 0.55);
-}
-.bank-panel-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.bank-panel-chip {
-  width: 34px; height: 24px; border-radius: 6px;
-  background: linear-gradient(135deg, #f6e3a6 0%, #d8b65c 100%);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
-}
-.bank-panel-account {
-  font-size: 25px; font-weight: 800; letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
-  margin-bottom: 14px;
-  white-space: nowrap;
-}
-.bank-panel-bottom { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.bank-panel-owner { font-size: 14px; font-weight: 700; }
-.bank-panel-owner span { margin-right: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; opacity: 0.7; }
-.bank-copy-btn {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 7px 12px;
-  border-radius: 10px;
-  font-size: 12.5px; font-weight: 800; color: #ffffff;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(6px);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.bank-copy-btn svg { fill: currentColor; }
-.bank-copy-btn:hover { background: #ffffff; color: #0b7a58; border-color: #ffffff; }
-.bank-footer {
+/* 💳 결제 안내 카드 아래 띠 (예전 입금 계좌 카드의 안내 띠를 링크로 바꿨습니다) */
+.pay-footer {
   margin-top: auto;
+  text-decoration: none;
   display: flex; align-items: center; justify-content: center; gap: 6px;
   padding: 12px;
   border-radius: 12px;
@@ -1357,13 +1301,11 @@ body {
   background: #effaf5;
   border: 1px solid #d5f2e5;
 }
-.bank-footer svg { fill: currentColor; font-size: 14px; flex-shrink: 0; }
-.info-card.tone-emerald .bank-panel { margin-bottom: 24px; }
+.pay-footer svg { fill: currentColor; font-size: 14px; flex-shrink: 0; }
+.pay-footer:hover { background: #e3f6ee; border-color: #c2ead8; }
 @media (min-width: 769px) and (max-width: 1100px) {
   .bottom-info-grid { gap: 16px; }
   .info-card { padding: 26px 20px 22px; }
-  .bank-panel { padding: 18px 16px; }
-  .bank-panel-account { font-size: clamp(17px, 2vw, 22px); }
 }
 
 .is-start .arrow-left { display: none; }
@@ -1473,7 +1415,6 @@ body {
   .info-card { padding: 26px 20px 22px; border-radius: 22px; }
   .info-card-head { margin-bottom: 18px; }
   .cs-heading { font-size: 20px; }
-  .bank-panel-account { font-size: 22px; }
 }
 /* 🍮 자주 방문하는 사이트 — 원본 로고 + 젤리 받침
    로고 자체는 건드리지 않고, 받침을 말랑하게 만듭니다.

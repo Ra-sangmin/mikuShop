@@ -6,10 +6,6 @@ import { requireAdmin, requireUser } from '@/lib/apiAuth';
 import { ORDER_STATUS } from '@/src/types/order';
 import { generateOrderId, generateBundleId, isDuplicateOrderId } from '@/lib/orderId';
 import { translateToKorean } from '@/lib/translate';
-import { moneyLogText } from '@/lib/moneyLogText';
-// 💰 보증금(엔)을 실제 차감할 원화로 바꿉니다.
-// 🔒 보증금은 화면이 보낸 값이 아니라 입찰가로 서버가 직접 계산합니다. (원화)
-import { depositForBid } from '@/lib/bidSettlement';
 import { triggerAdminOrderAlert } from '@/lib/notifications/adminOrderAlertRunner';
 
 // 🟢 [GET] 1. 주문 목록 및 유저 정보 조회
@@ -151,13 +147,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: '필수 정보(유저ID, URL, 가격)가 누락되었습니다.' }, { status: 400 });
     }
 
-    // 🔒 음수 금액으로 잔액을 늘리는 요청 차단
+    // 🔒 음수 금액·수량 차단
     if (Number(productPrice) <= 0 || Number(depositAmount || 0) < 0 || Number(myBidPrice || 0) < 0 || Number(productCount || 0) < 0) {
       return NextResponse.json({ error: '금액/수량 값이 올바르지 않습니다.' }, { status: 400 });
     }
 
     // ====================================================================
-    // 🌟 사전 검사: 유저 확인 및 잔액 체크 (Fail-Fast)
+    // 🌟 사전 검사: 유저 확인 (Fail-Fast)
     // ====================================================================
     const user = await prisma.user.findUnique({ where: { id: userId } });
 
@@ -169,15 +165,8 @@ export async function POST(req: Request) {
       }, { status: 401 });
     }
 
-    // 💰 경매 신청은 보증금을 미리 받습니다.
-    //    보증금은 화면에 엔(¥)으로 보이지만 미쿠짱머니는 원화라, 그때 환율로 환산해 차감합니다.
-    //    ⚠️ 환산은 서버에서 합니다. 화면이 보낸 원화 금액을 믿으면 조작될 수 있습니다.
-    //    ⚠️ 예전에는 이 검사가 통째로 주석 처리돼 있어, 잔액보다 큰 보증금도 그대로 빠져
-    //       마이너스 잔액이 만들어질 수 있었습니다.
-    // 💰 경매 요청은 **신청만** 받습니다. 보증금은 마이페이지에서 '보증금 결제'를 누를 때 받습니다.
+    // 💰 경매 요청은 **신청만** 받습니다. 보증금은 마이페이지에서 '보증금 결제'를 누를 때 카드로 받습니다.
     //    구매대행이 장바구니에 담을 때 돈을 받지 않는 것과 같습니다.
-    //    ⚠️ 예전에는 여기서도 보증금을 빼고 마이페이지에서 또 받아 **두 번 청구**됐습니다.
-    //       그래서 잔액이 모자라면 신청 자체가 막혔는데, 회원 입장에서는 담아두지도 못하는 셈이었습니다.
     //    🔒 보증금 금액(엔)은 화면 값이 아니라 입찰가로 서버가 계산해 둡니다. 마이페이지가 이 값으로 청구합니다.
     const isAuctionRequest = status === "BID_PENDING" && Number(myBidPrice) > 0;
     // ====================================================================
@@ -260,11 +249,17 @@ export async function POST(req: Request) {
   }
 }
 
-// 🟡 [PUT] 3. 주문 상태 저장 및 💸 머니 결제/이용내역 기록
+// 🟡 [PUT] 3. 주문 상태 저장 (포장 요청 · 입찰 상태 등)
+//    💳 결제로 넘어가는 상태(상품 결제 완료 · 경매 중 · 배송비 결제 완료 …)는 여기서 바꿀 수 없습니다.
+//       카드 승인(app/api/payment/confirm)만 그 상태로 넘깁니다.
+const PAYMENT_ONLY_STATUSES: string[] = [
+  ORDER_STATUS.PAID, ORDER_STATUS.BID_PAID, ORDER_STATUS.BIDDING, ORDER_STATUS.PAYMENT_DONE,
+];
+
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { updates, type, userId: requestedUserId, deductAmount, paymentTitle } = body; 
+    const { updates, type, userId: requestedUserId } = body; 
 
     // 🔒 로그인 회원 본인의 주문만 변경 가능 (userId는 세션 값을 사용)
     const auth = await requireUser(requestedUserId);
@@ -273,6 +268,11 @@ export async function PUT(request: Request) {
 
     if (!Array.isArray(updates)) {
       return NextResponse.json({ error: '잘못된 요청입니다.' }, { status: 400 });
+    }
+
+    // 🔒 결제 없이 결제 완료 상태로 바꾸는 요청을 막습니다.
+    if (type !== 'delivery' && updates.some((o: any) => PAYMENT_ONLY_STATUSES.includes(String(o?.status)))) {
+      return NextResponse.json({ error: '결제는 카드 결제 화면에서만 진행할 수 있습니다.' }, { status: 400 });
     }
 
     // 🔒 변경 대상 주문이 모두 본인 주문인지 확인
@@ -290,48 +290,18 @@ export async function PUT(request: Request) {
     }
 
     // 입고·발송 시각을 이미 찍어 둔 주문은 건드리지 않기 위해 변경 전 값을 읽어 둡니다.
-    const previousOrders = new Map<string, { receivedAt: Date | null; shippedAt: Date | null; status?: string; myBidPrice?: number | null; depositKrw?: number | null }>();
+    const previousOrders = new Map<string, { receivedAt: Date | null; shippedAt: Date | null; status?: string }>();
     if (type !== 'delivery') {
       const before = await prisma.order.findMany({
         where: { orderId: { in: orderIds } },
-        // 💰 보증금 결제(BID_PENDING → BIDDING) 때 얼마를 받았는지 기록하려고 함께 읽습니다.
-        select: { orderId: true, receivedAt: true, shippedAt: true, status: true, myBidPrice: true, depositKrw: true },
+        select: { orderId: true, receivedAt: true, shippedAt: true, status: true },
       });
-      before.forEach(o => previousOrders.set(o.orderId, { receivedAt: o.receivedAt, shippedAt: o.shippedAt, status: o.status, myBidPrice: o.myBidPrice, depositKrw: o.depositKrw }));
+      before.forEach(o => previousOrders.set(o.orderId, { receivedAt: o.receivedAt, shippedAt: o.shippedAt, status: o.status }));
     }
 
     // ✅ 안전한 인터랙티브 트랜잭션 (모두 성공하거나 자동 롤백)
     await prisma.$transaction(async (tx) => {
       
-      // 💰 [머니 결제 로직] 사이버머니 차감 및 로그 생성
-      if (requestedUserId && deductAmount && Number(deductAmount) > 0) {
-        const uid = sessionUserId;
-        const amount = Number(deductAmount);
-
-        // 잔액 검증
-        const user = await tx.user.findUnique({ where: { id: uid } });
-        if (!user || user.cyberMoney < amount) {
-          throw new Error('보유한 미쿠짱머니가 부족합니다.');
-        }
-
-        // 잔액 차감
-        const updatedUser = await tx.user.update({
-          where: { id: uid },
-          data: { cyberMoney: { decrement: amount } }
-        });
-
-        // ✨ 핵심: 결제 완료 후 이용 내역(MoneyLog) 기록 남기기
-        await tx.moneyLog.create({
-          data: {
-            userId: uid,
-            type: 'USE', // 이용내역 페이지 필터용
-            content: moneyLogText.orderPayment(paymentTitle),
-            amount: -Math.abs(amount), // 마이너스 표시
-            balanceAfter: updatedUser.cyberMoney // 차감 후 잔액
-          }
-        });
-      }
-
       // 📦 [주문 업데이트 로직] 디테일한 상태 및 부가 정보 변경
       for (const order of updates) {
         const updateData: any = {};
@@ -365,29 +335,6 @@ export async function PUT(request: Request) {
           where: { orderId: order.id },
           data: updateData
         });
-
-        // 💰 보증금을 결제해 '경매 중(입찰 시작)' 으로 넘어오면, 그때 낸 원화를 기록합니다.
-        //    낙찰 정산에서 이 값을 빼 주므로, 적어 두지 않으면 회원이 낸 보증금이 사라집니다.
-        //    ⚠️ 금액은 화면이 보낸 값이 아니라 입찰가로 서버가 구합니다. (입찰가의 10% · 최소 20,000원)
-        if (type !== 'delivery' && order.status === ORDER_STATUS.BIDDING
-            && previousOrders.get(order.id)?.status === ORDER_STATUS.BID_PENDING) {
-          const prev = previousOrders.get(order.id);
-          const { krw: target } = await depositForBid(Number(prev?.myBidPrice) || 0);
-          const add = Math.max(0, target - (Number(prev?.depositKrw) || 0));
-          if (add > 0) {
-            await tx.order.update({ where: { orderId: order.id }, data: { depositKrw: { increment: add } } });
-          }
-        }
-
-        // 💰 배송비를 결제해 '배송비 결제 완료' 로 넘어오면, 그때 청구 중이던 회차를 납부 처리합니다.
-        //    이 표시가 있어야 나중에 추가 청구가 붙어도 이미 낸 회차가 다시 청구되지 않습니다.
-        if (type !== 'delivery' && order.status === ORDER_STATUS.PAYMENT_DONE
-            && previousOrders.get(order.id)?.status !== ORDER_STATUS.PAYMENT_DONE) {
-          await tx.orderShippingFee.updateMany({
-            where: { orderId: order.id, paidAt: null },
-            data: { paidAt: new Date() },
-          });
-        }
       }
     });
 
@@ -395,7 +342,7 @@ export async function PUT(request: Request) {
     triggerAdminOrderAlert();
     return NextResponse.json({ success: true, message: '성공적으로 처리되었습니다.' });
   } catch (error: any) {
-    console.error("저장/결제 에러:", error);
+    console.error("주문 저장 에러:", error);
     return NextResponse.json({ error: error.message || '업데이트 실패' }, { status: 500 });
   }
 }
@@ -418,10 +365,22 @@ export async function DELETE(request: Request) {
     if (!target || target.userId !== auth.userId) {
       return NextResponse.json({ error: '주문을 찾을 수 없습니다.' }, { status: 404 });
     }
+    // 🔒 결제 전(장바구니 · 경매 요청)만 지울 수 있습니다.
+    //    결제한 주문을 지우면 카드 결제 기록이 주문을 잃어, 환불(결제 취소)할 근거가 사라집니다.
+    if (target.status !== ORDER_STATUS.CART && target.status !== ORDER_STATUS.BID_PENDING) {
+      return NextResponse.json({ error: '결제가 진행된 주문은 삭제할 수 없습니다. 고객센터로 문의해 주세요.' }, { status: 400 });
+    }
+    const paidItems = await prisma.paymentItem.count({ where: { orderId, payment: { status: { not: 'READY' } } } });
+    if (paidItems > 0) {
+      return NextResponse.json({ error: '결제 기록이 있는 주문은 삭제할 수 없습니다. 고객센터로 문의해 주세요.' }, { status: 400 });
+    }
 
-    await prisma.order.delete({
-      where: { orderId: orderId }
-    });
+    await prisma.$transaction([
+      // 결제창만 열고 끝내지 않은 결제 건(READY)에서 이 주문을 뺍니다.
+      // (그 결제 건은 금액이 맞지 않게 되어 승인 단계에서 거절됩니다)
+      prisma.paymentItem.deleteMany({ where: { orderId } }),
+      prisma.order.delete({ where: { orderId: orderId } }),
+    ]);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

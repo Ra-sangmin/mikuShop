@@ -57,7 +57,7 @@ export async function GET(request: Request) {
  *
  * 예전 PUT 은 users.address_id(쉼표로 이어붙인 배송지 ID)만 건드리던 엔드포인트라 없앴습니다.
  * 배송지는 addresses 테이블이 user_id 로 직접 물고 있어 그 컬럼 자체가 필요 없었습니다.
- * 여기서는 고칠 수 있는 항목을 명시적으로만 받습니다 — 통째로 받으면 등급·머니까지 바뀝니다.
+ * 여기서는 고칠 수 있는 항목을 명시적으로만 받습니다 — 통째로 받으면 등급까지 바뀝니다.
  */
 export async function PATCH(request: Request) {
   try {
@@ -188,7 +188,6 @@ export async function POST(request: Request) {
         phone: normalizedPhone,
         japanMailboxNumber,
         membershipGrade: 0,
-        cyberMoney: 0
       },
       omit: { password: true }, // 🔒 비밀번호 해시는 응답에 포함하지 않음
     });

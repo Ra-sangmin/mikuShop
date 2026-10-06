@@ -175,31 +175,15 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
       });
       const data = await response.json();
       if (data.success) {
-        const isConfirmed = await showConfirm(`¥${numericBid.toLocaleString()} 경매 요청이 완료되었습니다.\n보증금 ${depositAmountKrw.toLocaleString()}원은 마이페이지에서 결제하시면 입찰이 시작됩니다.\n지금 이동하시겠습니까?`);
+        const isConfirmed = await showConfirm(`¥${numericBid.toLocaleString()} 경매 요청이 완료되었습니다.\n보증금 ${depositAmountKrw.toLocaleString()}원을 마이페이지에서 카드로 결제하시면 입찰이 시작됩니다.\n지금 이동하시겠습니까?`);
         // 🛒 경매 요청도 장바구니 카드에 함께 들어갑니다. 같은 카드를 펼친 채로 엽니다.
         if (isConfirmed) {
           const newId = data.order?.orderId;
           router.push(`/mypage/status?phase=request${newId ? `&orderId=${encodeURIComponent(newId)}` : ''}`);
         }
       } else {
-        // 🚨 실패 시 로직 (명확한 errorCode로 구분)
-        if (data.errorCode === 'INSUFFICIENT_FUNDS') {
-          
-          // 백엔드에서 넘어온 정확한 부족 금액(data.shortage)을 바로 사용합니다.
-          const isConfirmed = await showConfirm(
-            `미쿠짱 머니가 부족합니다.\n¥${data.shortage.toLocaleString()} 이(가) 더 필요합니다.\n\n미쿠짱 머니를 충전하시겠습니까?`
-          );
-          
-          // 사용자가 '확인(Yes)'을 눌렀을 경우 새 창에서 충전 페이지 열기
-          if (isConfirmed) {
-            window.open('/mypage/money/charge', '_blank'); 
-          }
-          
-        } else {
-          // 잔액 부족 외의 다른 에러 발생 시 기존처럼 Alert 띄우기
-          showAlert(data.error || "신청 중 오류가 발생했습니다.", "error");
-        }
-
+        // 💳 보증금은 경매 요청을 저장한 뒤 마이페이지에서 카드로 결제하므로, 여기서 잔액 부족을 따질 일은 없습니다.
+        showAlert(data.error || "신청 중 오류가 발생했습니다.", "error");
       }
     } catch (error) { 
       showAlert("서버 통신 오류", "error"); 
@@ -479,7 +463,7 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
                   {!bidAmount || parseInt(bidAmount, 10) <= 0
                     ? '입찰 금액을 입력하면 계산돼요'
                     : depositAmountKrw > 0
-                      ? '미쿠짱머니에서 차감됩니다'
+                      ? '마이페이지에서 카드로 결제해요'
                       : '환율 확인 중'}
                 </span>
                 {depositIsMinimum && (
@@ -491,7 +475,7 @@ export default function GlobalProductDetailAuction({ product, onClose }: Props) 
             </div>
             
             <p style={{ fontSize: '13px', color: '#94a3b8', textAlign: 'center', marginTop: '16px', lineHeight: '1.5' }}>
-              * 보증금은 유찰 시 환불이 가능하며 <br />낙찰 후 구매 취소 시는 환불되지 않습니다.
+              * 보증금은 유찰 시 결제하신 카드로 취소(환불)되며 <br />낙찰 후 구매 취소 시는 환불되지 않습니다.
             </p>
           </div>
 

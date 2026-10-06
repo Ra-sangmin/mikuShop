@@ -1,0 +1,37 @@
+/* 💳 마이페이지 > 결제 내역 (app/mypage/payments/page.tsx)
+   공통 카드·요약 스타일은 mypage-premium.css 의 mp-* 를 쓰고, 목록만 여기서 정의합니다. */
+
+.miku-payments-page .mp-section-sub a { color: var(--mp-accent, #c0606a); font-weight: 700; text-decoration: underline; }
+
+.mpay-empty { margin: 0; padding: 28px 8px; text-align: center; font-size: 14px; color: #94a3b8; word-break: keep-all; }
+.mpay-empty a { color: #c0606a; font-weight: 700; }
+
+.mpay-list { list-style: none; margin: 0; padding: 0; }
+.mpay-item { padding: 16px 4px; border-bottom: 1px solid #f1f5f9; }
+.mpay-item:last-child { border-bottom: 0; }
+
+.mpay-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.mpay-kind { font-size: 12.5px; font-weight: 800; color: #475569; }
+.mpay-status { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; background: #dcfce7; color: #15803d; }
+.mpay-status.is-partial_canceled { background: #fef3c7; color: #b45309; }
+.mpay-status.is-canceled { background: #f1f5f9; color: #64748b; }
+.mpay-date { margin-left: auto; font-size: 12px; color: #94a3b8; font-variant-numeric: tabular-nums; }
+
+.mpay-body { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.mpay-name { min-width: 0; font-size: 14.5px; font-weight: 700; color: #0f172a; line-height: 1.45; word-break: break-all; }
+.mpay-amount { flex-shrink: 0; font-size: 16px; font-weight: 900; color: #0f172a; font-variant-numeric: tabular-nums; }
+.mpay-amount.is-void { color: #94a3b8; text-decoration: line-through; }
+
+.mpay-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: 12px; color: #94a3b8; }
+.mpay-mono { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11.5px; }
+
+.mpay-cancels { list-style: none; margin: 10px 0 0; padding: 8px 12px; border-radius: 10px; background: #fff7ed; }
+.mpay-cancels li { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: #9a3412; }
+.mpay-cancels li + li { margin-top: 4px; }
+.mpay-cancels span { min-width: 0; word-break: keep-all; }
+.mpay-cancels b { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 640px) {
+  .mpay-body { flex-direction: column; gap: 4px; }
+  .mpay-date { margin-left: 0; flex-basis: 100%; }
+}

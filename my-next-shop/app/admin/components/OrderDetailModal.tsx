@@ -1,6 +1,6 @@
 "use client";
 
-// 📋 주문 상세 팝업 (수취인 정보 · 영문 주소 · 주문 정보)
+// 📋 주문 상세 팝업 (수취인 정보 · 영문 주소 · 주문 정보 · 결제 내역)
 //   관리자 > 주문 관리의 "상세보기" 와 관리자 > 카카오톡 알림톡 관리의 주문번호 클릭이 같은 팝업을 씁니다.
 //   order 는 주문 관리 화면이 표에 쓰는 모양입니다 (toOrderDetailView 로 DB 주문을 바꿀 수 있습니다).
 //   스타일: app/admin/orders/orders-premium.css 의 ord-modal / ord-detail
@@ -10,6 +10,7 @@ import { DaumPostcodeEmbed } from 'react-daum-postcode';
 import { ORDER_STATUS, ORDER_STATUS_LABEL, type OrderStatus } from '@/src/types/order';
 import { toEnglishAddress, toEnglishDetailAddress, toEnglishName, toIntlPhone } from './englishAddress';
 import { MapPinLine, Package, ClipboardText, Sparkle, Camera, ShieldCheck, Copy, Globe, Trash, Warning, CircleNotch } from '@phosphor-icons/react';
+import OrderPaymentsSection from './OrderPaymentsSection';
 import '../orders/orders-premium.css';
 
 type PushToast = (type: 'success' | 'error', message: string) => void;
@@ -279,6 +280,9 @@ export default function OrderDetailModal({ order, onClose, pushToast, onDelete }
             </dl>
           </section>
 
+          {/* 💳 카드 결제 내역 · 결제 취소. 합포장 묶음 줄은 주문이 여러 개라 한 건씩 열어서 봅니다. */}
+          {!o.isBundleGroup && <OrderPaymentsSection orderId={o.id} pushToast={pushToast} />}
+
           {/* 🗑 삭제 확인 — 되돌릴 수 없으니 무엇이 사라지는지와 환불 여부를 알려 줍니다. */}
           {onDelete && confirmDelete && (
             <div className="ord-detail-delete-confirm" role="alert">
@@ -287,7 +291,7 @@ export default function OrderDetailModal({ order, onClose, pushToast, onDelete }
               {!UNPAID_STATUSES.includes(o.status) && (
                 <p className="is-money">
                   회원이 이미 결제한 단계({ORDER_STATUS_LABEL[o.status as OrderStatus] || o.status})입니다.
-                  삭제해도 <b>미쿠짱 머니는 자동으로 돌려주지 않습니다.</b> 환불이 필요하면 먼저 처리해 주세요.
+                  취소하지 않은 카드 결제가 남아 있으면 삭제되지 않습니다. 위 <b>결제 내역</b>에서 먼저 결제를 취소해 주세요.
                 </p>
               )}
             </div>

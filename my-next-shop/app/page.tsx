@@ -1,15 +1,14 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { BANK_ACCOUNT } from '@/lib/bankAccount';
 import AiSearchBanner from '@/app/components/ai-search/AiSearchBanner';
 import { useRouter } from 'next/navigation';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import {
   ChatCircleDots, ShoppingCartSimple, AirplaneTilt, Receipt, Scales, Headset, ArrowRight,
   ArrowUpRight, CaretLeft, CaretRight,
-  Megaphone, Bank, Clock, CalendarCheck, Copy, ShieldCheck, Medal, Sparkle,
-  Package, Gavel, MagnifyingGlass, Gift, Crown, Coins, LinkSimple, Storefront,
+  Megaphone, CreditCard, Clock, CalendarCheck, ShieldCheck, Medal, Sparkle,
+  Package, Gavel, MagnifyingGlass, Gift, Crown, LinkSimple, Storefront,
 } from '@phosphor-icons/react';
 
 const HERO_AUTOPLAY_MS = 5000;
@@ -217,14 +216,15 @@ export default function HomePage() {
     },
     // 4. 회원 혜택 (유지)
     {
-      title: <>다양한 혜택과 이벤트<br />회원 등급별 포인트 적립</>, subTitle: "신규 가입 시 적립금 증정",
+      // 💳 포인트·적립금 제도는 없습니다. (토스페이먼츠 심사에서 충전형 혜택으로 오해받지 않게 실제 혜택만 적습니다)
+      title: <>다양한 혜택과 이벤트<br />회원 등급별 배송비 할인</>, subTitle: "이용할수록 커지는 할인 혜택",
       desc: "등급이 오를수록 국제 배송비 할인 혜택이 커져요.",
       bgColor: "#FFEBEE", accent: "#d27377", image: "/images/miku_icon/benefit.png",
       props: 'benefit',
       chips: [
-        { icon: <Gift weight="fill" />, label: '신규 적립금' },
-        { icon: <Crown weight="fill" />, label: '등급별 할인' },
-        { icon: <Coins weight="fill" />, label: '미쿠짱머니 적립' },
+        { icon: <Gift weight="fill" />, label: '국제 배송비 할인' },
+        { icon: <Crown weight="fill" />, label: '등급 자동 상승' },
+        { icon: <Sparkle weight="fill" />, label: '이벤트 혜택' },
       ],
       primary: { label: '등급별 혜택 보기', href: '/guide/membership' },
       secondary: { label: '회원가입', href: '/auth/register' },
@@ -662,41 +662,36 @@ export default function HomePage() {
                 </ul>
             </div>
 
-            {/* 입금 계좌 */}
+            {/* 💳 결제 안내 — 예전 "입금 계좌" 자리입니다.
+                무통장 입금·머니 충전 없이 주문마다 카드로 결제하므로, 계좌 대신 언제 무엇을 결제하는지 보여 줍니다. */}
             <div className="bottom-info-box info-card tone-emerald">
                 <div className="info-card-head">
-                    <span className="info-card-badge"><Bank weight="duotone" /></span>
+                    <span className="info-card-badge"><CreditCard weight="duotone" /></span>
                     <span className="info-card-titles">
-                        <span className="info-card-eyebrow">BANK INFO</span>
-                        <span className="info-card-title">입금 계좌</span>
+                        <span className="info-card-eyebrow">PAYMENT</span>
+                        <span className="info-card-title">결제 안내</span>
                     </span>
                 </div>
 
-                <div className="bank-panel">
-                    <div className="bank-panel-top">
-                        <span className="bank-panel-name">
-                            <span className="bank-panel-logo"><img src={BANK_ACCOUNT.icon} alt="" /></span>
-                            {BANK_ACCOUNT.bank}
-                        </span>
-                        <span className="bank-panel-chip" aria-hidden="true"></span>
-                    </div>
-                    <div className="bank-panel-account" translate="no">{BANK_ACCOUNT.number}</div>
-                    <div className="bank-panel-bottom">
-                        <span className="bank-panel-owner"><span>예금주</span> {BANK_ACCOUNT.owner}</span>
-                        <button
-                          type="button"
-                          className="bank-copy-btn"
-                          onClick={() => { navigator.clipboard.writeText(BANK_ACCOUNT.number); showAlert('계좌번호가 복사되었습니다.', 'success'); }}
-                        >
-                          <Copy weight="bold" /> 복사
-                        </button>
-                    </div>
-                </div>
+                <h3 className="cs-heading">결제는 <span className="cs-heading-accent">카드</span>로 간편하게</h3>
+                <p className="cs-desc">충전 없이 주문할 때마다 바로 결제해요.</p>
 
-                <div className="bank-footer">
+                <dl className="cs-meta">
+                    <div className="cs-meta-row">
+                        <dt><ShoppingCartSimple weight="bold" /> 상품 결제</dt>
+                        <dd>구매 요청 후</dd>
+                    </div>
+                    <div className="cs-meta-row">
+                        <dt><AirplaneTilt weight="bold" /> 배송비 결제</dt>
+                        <dd>창고 입고 · 계측 후</dd>
+                    </div>
+                </dl>
+
+                <Link href="/guide/refund" className="pay-footer">
                     <ShieldCheck weight="fill" />
-                    입금 확인은 실시간으로 처리됩니다.
-                </div>
+                    환불은 결제하신 카드로 취소해 드려요
+                    <CaretRight weight="bold" />
+                </Link>
             </div>
         </div>
       </section>
@@ -883,7 +878,7 @@ const styles: Record<string, React.CSSProperties> = {
   quickLink: { textDecoration: 'none' },
   siteCardLink: { textDecoration: 'none' },
   socialLink: { textDecoration: 'none' },
-  // 🌟 하단 정보 섹션(입금 계좌 등)과 Footer 사이가 빈 띠처럼 벌어져 보여 아래 여백을 없앴습니다
+  // 🌟 하단 정보 섹션(결제 안내 등)과 Footer 사이가 빈 띠처럼 벌어져 보여 아래 여백을 없앴습니다
   //    (Footer 위 여백도 globals.css 에서 홈 페이지에 한해 0 으로 둡니다)
   pageWrapper: { backgroundColor: '#fff', minHeight: '100vh', paddingBottom: 0 },
   heroSection: { position: 'relative', overflow: 'hidden', cursor: 'grab', userSelect: 'none', backgroundColor: '#ffffff' },

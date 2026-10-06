@@ -829,7 +829,7 @@ tr:hover .apc-thumb { transform: scale(1.04); }
   .aui-info dt { margin-top: 8px; }
 }
 
-/* 회원 요약 (주문 · 머니 · 등급) — <UserSummaryStats> */
+/* 회원 요약 (주문 · 가입 · 등급) — <UserSummaryStats> */
 .aui-stats {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px; margin-bottom: 16px;

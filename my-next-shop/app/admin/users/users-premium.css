@@ -276,8 +276,6 @@
 }
 .usr-seg-btn.is-active { background: #ffffff; color: var(--usr-ink); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 4px 10px -6px rgba(15, 23, 42, 0.25); }
 .usr-seg-btn.is-active em { background: rgba(var(--usr-blue-rgb), 0.1); color: #2563eb; }
-.usr-seg-btn.is-active.is-add { color: var(--usr-up); }
-.usr-seg-btn.is-active.is-sub { color: var(--usr-down); }
 
 .usr-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
 .usr-dot.is-kakao { background: #f5c400; }
@@ -436,9 +434,6 @@
 .usr-num { font-size: 13.5px; font-weight: 800; color: #334155; font-variant-numeric: tabular-nums; }
 .usr-num small { font-size: 11px; font-weight: 700; color: var(--usr-muted); margin-left: 1px; }
 .usr-num.is-zero { color: #c2cad6; }
-.usr-money { font-size: 14px; font-weight: 900; color: var(--usr-ink); font-variant-numeric: tabular-nums; }
-.usr-money i { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--usr-muted); margin-right: 1px; }
-.usr-money.is-zero { color: #c2cad6; }
 
 .usr-date { display: block; font-size: 12.5px; font-weight: 700; color: #475569; font-variant-numeric: tabular-nums; }
 .usr-date-sub { display: block; font-size: 11px; font-weight: 600; color: var(--usr-muted); margin-top: 1px; }
@@ -811,61 +806,6 @@
 .usr-grade-option.is-selected svg { color: var(--g-text); }
 
 .usr-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin-top: 12px; }
-.usr-confirm-text { margin-right: auto; font-size: 12.5px; font-weight: 800; color: #334155; }
-
-/* 머니 조정 */
-.usr-money-form { display: flex; flex-direction: column; gap: 9px; }
-.usr-money-input {
-  display: flex; align-items: center; gap: 6px;
-  height: 52px; padding: 0 16px;
-  border-radius: 14px; border: 1px solid #e2e8f0; background: #f8fafc;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-}
-.usr-money-input:focus-within { background: #ffffff; border-color: rgba(var(--usr-blue-rgb), 0.5); box-shadow: 0 0 0 3px rgba(var(--usr-blue-rgb), 0.1); }
-.usr-money-input span { font-size: 17px; font-weight: 800; color: var(--usr-muted); }
-.usr-money-input input {
-  flex: 1; min-width: 0; border: 0; outline: none; background: transparent;
-  font-size: 22px; font-weight: 900; letter-spacing: -0.5px; color: var(--usr-ink);
-  text-align: right; font-variant-numeric: tabular-nums;
-}
-.usr-money-input input::placeholder { color: #cbd5e1; }
-
-.usr-quick { display: flex; gap: 6px; flex-wrap: wrap; }
-.usr-quick button {
-  height: 28px; padding: 0 10px;
-  border-radius: 8px; border: 1px solid #e2e8f0; background: #ffffff;
-  font-size: 11.5px; font-weight: 800; color: #64748b; cursor: pointer;
-  font-variant-numeric: tabular-nums;
-}
-.usr-quick button:hover { border-color: #c7d2fe; color: #4338ca; background: #f5f7ff; }
-.usr-quick button.is-clear { margin-left: auto; color: var(--usr-muted); }
-
-.usr-page .usr-input {
-  width: 100%; height: 38px;
-  padding: 0 12px;
-  border-radius: 11px; border: 1px solid #e2e8f0; background: #ffffff;
-  font-size: 12.5px; font-weight: 600; color: #334155; outline: none;
-  box-sizing: border-box;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
-}
-.usr-page .usr-input::placeholder { color: #a3aec0; }
-.usr-page .usr-input:focus { border-color: rgba(var(--usr-blue-rgb), 0.55); box-shadow: 0 0 0 3px rgba(var(--usr-blue-rgb), 0.12); }
-.usr-form-hint { margin: -3px 0 0; font-size: 11px; font-weight: 500; color: var(--usr-muted); }
-
-.usr-preview {
-  display: flex; align-items: center; gap: 9px;
-  padding: 11px 14px;
-  border-radius: 12px; background: #f8fafc; border: 1px dashed #dbe3ee;
-  font-size: 13px; font-weight: 700; color: var(--usr-muted); font-variant-numeric: tabular-nums;
-}
-.usr-preview svg { color: #cbd5e1; }
-.usr-preview strong { font-size: 15px; font-weight: 900; color: var(--usr-ink); }
-.usr-preview em { margin-left: auto; font-style: normal; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 99px; }
-.usr-preview em.is-up { color: var(--usr-up); background: #ecfdf5; }
-.usr-preview em.is-down { color: var(--usr-down); background: #fff1f2; }
-.usr-preview.is-error { border-color: #fecdd3; background: #fff7f8; }
-.usr-preview.is-error strong { color: var(--usr-down); }
-.usr-form-error { margin: 0; font-size: 11.5px; font-weight: 700; color: var(--usr-down); }
 
 /* 주문 상태 */
 .usr-status-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
@@ -894,7 +834,7 @@
 .usr-order-meta { font-size: 11px; font-weight: 600; color: var(--usr-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .usr-order-meta code { font-family: 'SFMono-Regular', Consolas, monospace; color: #64748b; }
 
-/* 머니 내역 */
+/* 최근 카드 결제 (드로어 목록) */
 .usr-ledger li { display: flex; align-items: center; gap: 11px; padding: 10px 0; }
 .usr-ledger-dot {
   width: 24px; height: 24px; flex-shrink: 0; border-radius: 8px;
@@ -1076,12 +1016,12 @@
 
 /* =====================================================
    📱 모바일(768px 이하) — 회원 목록을 촘촘한 회원 카드로
-   가로로 긴 표(8칸)를 옆으로 밀며 보던 것을, 회원 한 명 = 카드 하나로 세로로 읽게 합니다.
+   가로로 긴 표(7칸)를 옆으로 밀며 보던 것을, 회원 한 명 = 카드 하나로 세로로 읽게 합니다.
      ┌─────────────────────────────────────┐
      │ (사진) 이름 NEW              [등급]   │
      │        아이디                          │
      │ ✉ 이메일 · ☏ 휴대폰          [가입경로] │
-     │ 주문 3건 · 머니 ₩12,000 · 2026.09.01    │
+     │ 주문 3건 · 2026.09.01                   │
      └─────────────────────────────────────┘
    카드를 누르면 지금처럼 회원 관리 창이 열립니다. ('관리' 버튼은 모바일에서 숨김)
    (td 에 붙인 usr-td-* 클래스로 자리를 정합니다. 데스크톱 표는 그대로)
@@ -1112,7 +1052,7 @@
     grid-template-areas:
       "member  member  grade"
       "contact contact provider"
-      "orders  money   date";
+      "orders  orders  date";
     column-gap: 0;
     padding: 11px 12px;
     border: 1px solid #e6ebf2; border-radius: 16px;
@@ -1141,23 +1081,20 @@
   .usr-td-contact .usr-contact > span { font-size: 12px; max-width: 100%; }
   .usr-td-provider { grid-area: provider; align-self: center; justify-self: end; margin-top: 8px; padding-left: 8px !important; }
 
-  /* 주문 · 머니 · 가입일 — 한 줄 요약 (점선 아래) */
-  .usr-td-orders, .usr-td-money, .usr-td-date {
+  /* 주문 · 가입일 — 한 줄 요약 (점선 아래) */
+  .usr-td-orders, .usr-td-date {
     margin-top: 8px; padding-top: 8px !important; border-top: 1px dashed #e8edf4 !important;
     display: flex !important; align-items: baseline; gap: 4px; white-space: nowrap; overflow: hidden;
   }
   .usr-td-orders { grid-area: orders; }
-  .usr-td-orders::before, .usr-td-money::before, .usr-td-date::before {
+  .usr-td-orders::before, .usr-td-date::before {
     font-size: 11px; font-weight: 700; color: #94a3b8;
   }
   .usr-td-orders::before { content: '주문'; }
-  .usr-td-money::before { content: '머니'; }
   .usr-td-date::before { content: '가입'; }
   .usr-td-orders .usr-num { font-size: 13px; }
-  /* 세 칸을 한 줄에 나란히: 주문은 왼쪽, 머니는 가운데, 가입일은 오른쪽 */
-  .usr-td-money { grid-area: money; justify-content: center; }
+  /* 한 줄에 나란히: 주문은 왼쪽, 가입일은 오른쪽 */
   .usr-td-date { grid-area: date; justify-content: flex-end; }
-  .usr-td-money .usr-money { font-size: 13px; }
   .usr-td-date .usr-date { font-size: 12px; }
   .usr-td-date .usr-date-sub { display: none; }
 

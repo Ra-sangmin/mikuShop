@@ -47,8 +47,8 @@ model User {
   //    배송지는 회원당 여러 개라 구조가 맞지 않았고 채우는 경로도 없어 전부 비어 있었습니다.
   //    기본 배송지는 addresses.isDefault 하나로만 표시합니다. (예전엔 defaultAddressId 와 이중 관리)
 
-  // 💰 3. 비즈니스 로직 (결제/등급)
-  cyberMoney      Int             @default(0) @map("cyber_money")
+  // 💰 3. 비즈니스 로직 (등급)
+  //    ⚠️ 예전 미쿠짱머니 잔액(cyber_money) 컬럼은 더 이상 쓰지 않습니다. 결제는 주문마다 카드로 받습니다.
   membershipGrade Int             @default(0) @map("membership_grade") // membership_grades.id 참조 (0 = NEW)
   grade           MembershipGrade @relation(fields: [membershipGrade], references: [id])
 
@@ -61,10 +61,8 @@ model User {
   shippingFees OrderShippingFee[]
   addresses    Address[]
 
-  moneyRequests MoneyRequest[]
-
-  // 🆕 머니 로그와의 1:N 관계 추가
-  moneyLogs MoneyLog[]
+  // 💳 토스 카드 결제 내역
+  payments Payment[]
 
   @@map("users")
 }
@@ -181,15 +179,15 @@ model Order {
 
   addressId Int? @map("address_id")
 
-  myBidPrice    Int? @default(0) @map("my_bid_price") // 🌟 2. 내 입찰 금액 (현지 통화)
-  depositAmount Int? @default(0) @map("deposit_amount") // 🌟 3. 보증금 (엔) — 화면에 ¥ 로 보여 주는 값
+  myBidPrice         Int? @default(0) @map("my_bid_price") // 🌟 2. 내 입찰 금액 (현지 통화)
+  depositAmount      Int? @default(0) @map("deposit_amount") // 🌟 3. 보증금 (엔) — 화면에 ¥ 로 보여 주는 값
   // 💰 보증금으로 **실제 차감한 원화**. 엔 금액에 그때의 환율을 적용한 값이라 나중에 환율이
   //    바뀌어도 낙찰 정산에서 정확히 같은 금액을 돌려줄 수 있습니다.
   //    (예전에는 엔 숫자를 그대로 원화에서 빼서, ¥2,000 보증금이 2,000원만 빠졌습니다)
-  depositKrw    Int  @default(0) @map("deposit_krw")
+  depositKrw         Int  @default(0) @map("deposit_krw")
   // 💸 경매 실패로 **돌려준** 보증금(원). depositKrw 는 0 으로 내려가므로, 이 값이 없으면
   //    "보증금을 낸 적이 없는 주문"과 "내고 돌려받은 주문"을 나중에 구분할 수 없습니다.
-  depositRefundedKrw Int @default(0) @map("deposit_refunded_krw")
+  depositRefundedKrw Int  @default(0) @map("deposit_refunded_krw")
 
   // 🌟 [수정됨] 타입을 String? 에서 BidStatus? 로 변경하고 기본값을 PENDING으로 설정
   bidStatus BidStatus? @default(PENDING) @map("bid_status")
@@ -534,67 +532,93 @@ model AmazonCategory {
   @@map("AmazonCategory")
 }
 
-// 2. 머니 로그 타입 Enum 추가
-enum MoneyLogType {
-  CHARGE // 충전
-  USE // 사용
-  REFUND // 환불
+// 💳 토스 카드 결제
+//
+// 미쿠짱머니(선불 충전)를 없애고 결제마다 카드로 받습니다.
+// 토스는 충전형 선불 금액을 받지 않기 때문입니다. (2026-10 토스페이먼츠 계약팀 안내)
+//
+// 흐름: 결제 준비(READY, 서버가 금액 계산) → 토스 결제창 → 승인(DONE, 주문 상태 변경)
+//       돌려줄 돈은 관리자가 주문 상세에서 그 주문 몫만큼 직접 취소합니다. (PaymentCancel)
+
+/**
+ * 무엇을 결제했는지 — 승인될 때 주문을 어떤 상태로 넘길지가 여기서 정해집니다
+ */
+enum PaymentPurpose {
+  PRODUCT // 구매 요청 상품 결제 (CART → PAID)
+  BID_SETTLE // 낙찰 결제 (BID_SUCCESS → BID_PAID)
+  DEPOSIT // 경매 보증금 (BID_PENDING → BIDDING)
+  SHIPPING // 배송비·추가 결제 (PAYMENT_REQ → PAYMENT_DONE)
 }
 
-// 3. 🆕 머니 로그 모델 추가
-model MoneyLog {
-  id     Int  @id @default(autoincrement())
-  userId Int  @map("user_id")
-  user   User @relation(fields: [userId], references: [id])
-
-  // 구분: 충전, 사용, 환불
-  type MoneyLogType
-
-  // 상세 내용: "무통장 입금 충전", "주문 결제(주문번호: ...)" 등
-  content String @db.Text
-
-  // 금액: 발생한 금액 (예: 50000 또는 -35000)
-  amount Int
-
-  // 잔액: 거래 직후의 최종 잔액 (이미지의 마지막 컬럼용)
-  balanceAfter Int @map("balance_after")
-
-  // 일시: 거래 발생 시간
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([userId]) // 사용자별 내역 조회를 위한 인덱스
-  @@map("money_logs")
+enum PaymentStatus {
+  READY // 결제창을 열었고 아직 승인 전
+  DONE // 승인 완료
+  PARTIAL_CANCELED // 일부 취소
+  CANCELED // 전액 취소
 }
 
-enum RequestType {
-  CHARGE
-  REFUND
+model Payment {
+  id             Int            @id @default(autoincrement())
+  // 토스에 보내는 주문번호. 우리 주문번호(orders.order_id)와는 다릅니다 — 결제 한 건에 주문이 여러 개일 수 있습니다.
+  tossOrderId    String         @unique @map("toss_order_id")
+  paymentKey     String?        @unique @map("payment_key") // 승인 뒤에 채워집니다. 취소할 때 씁니다.
+  userId         Int            @map("user_id")
+  user           User           @relation(fields: [userId], references: [id])
+  purpose        PaymentPurpose
+  orderName      String         @map("order_name")
+  amount         Int // 결제 금액(원) — 서버가 계산한 값입니다
+  canceledAmount Int            @default(0) @map("canceled_amount")
+  status         PaymentStatus  @default(READY)
+  method         String? // 토스가 알려 주는 결제수단 (카드, 간편결제 등)
+  approvedAt     DateTime?      @map("approved_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  items   PaymentItem[]
+  cancels PaymentCancel[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("payments")
 }
 
-enum RequestStatus {
-  PENDING // 대기
-  APPROVED // 승인됨
-  REJECTED // 반려됨
+/**
+ * 결제 한 건 안에서 주문별로 나눈 몫. 취소는 이 몫을 넘지 못합니다.
+ */
+model PaymentItem {
+  id             Int     @id @default(autoincrement())
+  paymentId      Int     @map("payment_id")
+  payment        Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  // 주문번호(orders.order_id). 외래키로 묶지 않습니다 — 주문을 지워도 결제·취소 기록은 남아야 합니다.
+  orderId        String  @map("order_id")
+  amount         Int
+  canceledAmount Int     @default(0) @map("canceled_amount")
+
+  cancels PaymentCancel[]
+
+  @@index([orderId])
+  @@index([paymentId])
+  @@map("payment_items")
 }
 
-model MoneyRequest {
-  id     Int           @id @default(autoincrement())
-  userId Int
-  type   RequestType // CHARGE, REFUND
-  status RequestStatus @default(PENDING)
-  amount Int
+/**
+ * 관리자가 한 결제 취소(부분 취소 포함) 기록
+ */
+model PaymentCancel {
+  id             Int          @id @default(autoincrement())
+  paymentId      Int          @map("payment_id")
+  payment        Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  paymentItemId  Int?         @map("payment_item_id")
+  paymentItem    PaymentItem? @relation(fields: [paymentItemId], references: [id])
+  amount         Int
+  reason         String       @db.Text
+  transactionKey String?      @map("transaction_key") // 토스가 돌려주는 취소 거래 키
+  canceledBy     String?      @map("canceled_by") // 처리한 관리자 아이디
+  createdAt      DateTime     @default(now()) @map("created_at")
 
-  // 🏦 환불 관련 상세 정보 (환불일 때만 입력됨)
-  bankName      String? // 은행명
-  accountNumber String? // 계좌번호
-  accountHolder String? // 예금주
-
-  content     String? // 추가 메모 (충전 시 입금자명 등)
-  adminNote   String? // 반려 사유 등
-  createdAt   DateTime  @default(now())
-  processedAt DateTime?
-
-  user User @relation(fields: [userId], references: [id])
+  @@index([paymentId])
+  @@index([paymentItemId])
+  @@map("payment_cancels")
 }
 
 // 🌟 api/estimate의 견적 계산 시 사용하는 환율 관련 설정값 (관리자가 수정하는 단일 설정 레코드)

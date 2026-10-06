@@ -655,20 +655,20 @@
 .quote-total-label { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; color: #aeb4c2; margin-bottom: 6px; }
 .quote-total-value { font-size: 32px; font-weight: 900; color: #ffffff; letter-spacing: -0.8px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .pf-total-jpy { margin-top: 4px; font-size: 13px; font-weight: 700; color: #aeb4c2; font-variant-numeric: tabular-nums; }
-.quote-my-money-info { margin-top: 12px; font-size: 12px; font-weight: 600; color: #a1a1aa; }
-.quote-my-money-info.pf-money {
+/* 💳 결제수단 안내 알약 — 결제는 마이페이지에서 주문마다 카드로 합니다 */
+.pf-paymethod {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  margin-top: 12px;
   padding: 5px 11px;
   border-radius: 999px;
-  background: rgba(134, 239, 172, 0.1);
-  border: 1px solid rgba(134, 239, 172, 0.25);
-  color: #a7f3c4;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #d6dae3;
 }
-.quote-my-money-info.pf-money b { color: #ffffff; font-weight: 800; }
-.quote-my-money-info.insufficient { color: #fb7185; }
-.quote-my-money-info.pf-money.insufficient { background: rgba(253, 164, 175, 0.1); border-color: rgba(253, 164, 175, 0.3); color: #fecdd3; }
 
 .pf-summary-note {
   display: flex;
@@ -698,7 +698,6 @@
 .pf-action-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .pf-action-title { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; color: #111827; }
 .pf-action-title svg { color: var(--pf-accent); flex-shrink: 0; }
-.pf-action-title.is-warn, .pf-action-title.is-warn svg { color: #b42318; }
 .pf-action-desc { font-size: 12px; font-weight: 600; color: #6b7280; }
 .pf-action-desc a { color: var(--pf-accent); font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
 

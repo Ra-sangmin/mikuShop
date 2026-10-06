@@ -55,8 +55,8 @@ function FailContent() {
           </div>
 
           <div className="pay-actions">
-            <button type="button" className="pay-btn is-primary" onClick={() => router.push('/mypage/money/charge')}>
-              <ArrowCounterClockwise size={16} weight="bold" /> 충전 페이지로 돌아가기
+            <button type="button" className="pay-btn is-primary" onClick={() => router.push('/mypage/status')}>
+              <ArrowCounterClockwise size={16} weight="bold" /> 진행 현황으로 돌아가기
             </button>
             <button type="button" className="pay-btn is-ghost" onClick={() => router.push('/inquiry/kakaotalk')}>
               <Headset size={16} weight="bold" /> 고객센터 문의하기
@@ -75,7 +75,7 @@ function FailContent() {
 
 export default function PaymentFailPage() {
   return (
-    <GuideLayout title="결제 실패" type="money">
+    <GuideLayout title="결제 실패" type="mypage">
       {/* 🌟 useSearchParams를 사용할 때는 Suspense로 감싸는 것이 Next.js 권장 사항입니다 */}
       <Suspense fallback={
         <div className="pay-page">

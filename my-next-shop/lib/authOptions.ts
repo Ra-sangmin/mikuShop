@@ -15,7 +15,7 @@ import { generateMailboxNumber } from "@/lib/japanAddress";
 // 🐛 예전엔 이메일만으로 찾았습니다. 그런데 카카오에서 "카카오계정(이메일)" 동의를 켜는 순간
 //    내려오는 이메일이 `kakao_<회원번호>@mikuchan.local`(임시값) → 실제 이메일로 바뀝니다.
 //    그러면 그 이메일을 쓰는 "전혀 다른 기존 회원"이 검색돼 그 계정으로 로그인돼 버렸습니다.
-//    (실제로 카카오 로그인이 테스트 계정에 붙어 미쿠짱머니가 0원으로 보이는 문제가 있었습니다)
+//    (실제로 카카오 로그인이 테스트 계정에 붙어 주문 내역이 엉뚱하게 보이는 문제가 있었습니다)
 //
 //    → SNS 회원번호(loginId = `kakao_12345`)를 1순위로 봅니다. 이 값은 이메일 동의 여부나
 //      동의항목 변경과 무관하게 항상 같은 사람을 가리킵니다.
@@ -199,7 +199,6 @@ export const authOptions: NextAuthOptions = {
               japanMailboxNumber,
               password: "", // SNS 로그인이므로 비밀번호는 비워둠
               membershipGrade: 0,
-              cyberMoney: 0,
             },
           });
           console.log(`새로운 ${safeProvider} 유저 생성 완료:`, userEmail);

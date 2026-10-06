@@ -7,7 +7,7 @@ import { isValidNameEnglish } from '@/lib/japanAddress';
 import DaumPostcode from 'react-daum-postcode';
 import { useMikuAlert } from '../../context/MikuAlertContext';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import PaymentHeroCard from '../components/PaymentHeroCard';
 import '../mypage-premium.css';
 
 // =================================================================
@@ -25,8 +25,9 @@ function useProfileEditLogic() {
   const [user, setUser] = useState({
     id: '', name: '', email: '', phone: '',
     japanMailboxNumber: '', nameEnglish: '',
-    cyberMoney: 0,
   });
+  // 💳 요약 카드의 결제 대기 건수용 (마이페이지·주문 현황 화면과 같은 카드)
+  const [myOrders, setMyOrders] = useState<any[]>([]);
 
   // 🔤 영문 이름 — 일본 배송지의 "받는사람"에 쓰이는 값이라 이 화면에서 직접 고칩니다.
   //    SNS 로그인은 영문 이름을 주지 않고, 가입할 때 건너뛴 회원도 있어서 여기가 유일한 입력 경로입니다.
@@ -115,8 +116,8 @@ function useProfileEditLogic() {
               name: data.user.name || '', email: data.user.email || '', phone: data.user.phone || '',
               japanMailboxNumber: data.user.japanMailboxNumber || '',
               nameEnglish: data.user.nameEnglish || '',
-              cyberMoney: data.user.cyberMoney || 0,
             });
+            setMyOrders(data.user.orders || []);
             fetchAddresses(data.user.id.toString());
           }
           setLoading(false);
@@ -175,7 +176,7 @@ function useProfileEditLogic() {
   const closeAddressModal = () => setIsAddressModalOpen(false);
 
   return {
-    loading, user, addresses, isAddressModalOpen, editingAddress,
+    loading, user, myOrders, addresses, isAddressModalOpen, editingAddress,
     handleAddressAction, deleteAddress, openNewAddress, openEditAddress, closeAddressModal,
     // 🔤 영문 이름 편집
     editingNameEn, setEditingNameEn, nameEnInput, setNameEnInput, savingNameEn, saveNameEnglish,
@@ -290,7 +291,7 @@ function AddressModal({ address, onClose, onSave, isFirstAddress }: any) {
 
 function ProfileEditContent() {
   const {
-    loading, user, addresses, isAddressModalOpen, editingAddress,
+    loading, user, myOrders, addresses, isAddressModalOpen, editingAddress,
     handleAddressAction, deleteAddress, openNewAddress, openEditAddress, closeAddressModal,
     editingNameEn, setEditingNameEn, nameEnInput, setNameEnInput, savingNameEn, saveNameEnglish,
     editingPhone, setEditingPhone, phoneInput, setPhoneInput, savingPhone, savePhone
@@ -324,15 +325,8 @@ function ProfileEditContent() {
           </div>
         </div>
 
-        {/* 🌟 마이페이지·주문 현황 히어로와 동일한 구성(머니 카드 포함)으로 맞춰 검은색 BG 크기를 통일합니다 */}
-        <div className="mp-hero-money">
-          <span className="mp-hero-money-label"><i className="fa fa-sack-dollar"></i> 미쿠짱머니</span>
-          <strong className="mp-hero-money-value" translate="no">{(user.cyberMoney || 0).toLocaleString()}<small>원</small></strong>
-          <div className="mp-hero-money-actions">
-            <Link href="/mypage/money/charge" className="is-primary"><i className="fa fa-plus"></i> 충전</Link>
-            <Link href="/mypage/money/history"><i className="fa fa-receipt"></i> 이용 내역</Link>
-          </div>
-        </div>
+        {/* 🌟 마이페이지·주문 현황 히어로와 동일한 구성(결제 카드 포함)으로 맞춰 검은색 BG 크기를 통일합니다 */}
+        <PaymentHeroCard orders={myOrders} />
 
         <div className="mp-hero-stats">
           <div className="mp-hero-stat">

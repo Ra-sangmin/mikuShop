@@ -4,9 +4,8 @@ import { requireAdmin } from '@/lib/apiAuth';
 import { notifyOrderStatusChanged, shouldNotify } from '@/lib/notifications/orderStatusMail';
 import { notifyOrderStatusByAlimtalk, shouldSendAlimtalk } from '@/lib/notifications/orderStatusAlimtalk';
 import { ORDER_STATUS, FAILED_STATUSES } from '@/src/types/order';
-// 🔨 낙찰되면 미쿠짱머니에서 바로 결제합니다. (금액 계산은 마이페이지와 같은 식)
+// 🔨 낙찰가가 보증금보다 작으면 결제할 게 없어 바로 결제 완료로 넘깁니다. (금액 계산은 마이페이지와 같은 식)
 import { calcBidCharge } from '@/lib/bidSettlement';
-import { moneyLogText } from '@/lib/moneyLogText';
 import { triggerAdminOrderAlert } from '@/lib/notifications/adminOrderAlertRunner';
 
 // 🌟 1. GET: DB에서 주문 목록과 유저 정보를 함께 가져옵니다.
@@ -80,7 +79,8 @@ export async function GET() {
   }
 }
 
-// 🌟 2. PUT: 변경된 주문 상태 저장 및 💸 머니 결제/이용내역 기록
+// 🌟 2. PUT: 변경된 주문 상태 저장
+//    💳 돈은 여기서 움직이지 않습니다. 결제는 회원 카드 결제, 환불은 결제 내역의 '결제 취소'(app/api/admin/payments)로만 합니다.
 export async function PUT(request: Request) {
   // 🔒 관리자 전용
   const adminAuth = await requireAdmin();
@@ -88,19 +88,18 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    // 프론트에서 보낸 paymentTitle(이용내역 제목)도 함께 받습니다.
     // skipAlimtalk: 관리자가 "이번 저장은 알림톡 보내지 않기"를 체크한 경우.
     //   입고 일괄 처리처럼 한 회원에게 여러 건이 몰릴 때 쓰라고 만든 스위치입니다.
     //   메일은 회원당 한 통으로 묶여 나가므로 이 스위치의 영향을 받지 않습니다.
-    const { updates, type, userId, deductAmount, paymentTitle, skipAlimtalk } = body; 
+    const { updates, type, skipAlimtalk } = body; 
 
     // 🔔 알림 대상 판별용: 변경 '전' 상태를 미리 읽어둡니다.
     //    (이미 같은 상태였다면 실제 변경이 아니므로 알림을 보내지 않습니다)
     const orderIds: string[] = Array.isArray(updates) ? updates.map((o: any) => o.id).filter(Boolean) : [];
     const previousStatuses = new Map<string, string>();
-    // 🔨 낙찰 자동 결제용 — 주문의 금액 정보
+    // 🔨 낙찰 정산용 — 주문의 금액 정보
     const previousOrders = new Map<string, any>();
-    // 🔨 낙찰과 동시에 결제까지 끝난 주문. 안내 문구가 "결제해 주세요"로 나가면 안 되므로
+    // 🔨 낙찰과 동시에 결제까지 끝난 주문(보증금으로 충당). 안내 문구가 "결제해 주세요"로 나가면 안 되므로
     //    아래 알림 단계에서 상태를 '상품 결제 완료'로 바꿔 전달합니다.
     const autoPaidOrderIds = new Set<string>();
     // 💴 order_shipping_fees 행을 새로 만들 때 user_id 가 필요해서 같이 읽어 둡니다.
@@ -108,7 +107,7 @@ export async function PUT(request: Request) {
     if (orderIds.length > 0) {
       const before = await prisma.order.findMany({
         where: { orderId: { in: orderIds } },
-        // 🔨 낙찰 자동 결제에 필요한 값(낙찰가·수량·일본내 배송료·보증금)도 함께 읽습니다.
+        // 🔨 낙찰 정산에 필요한 값(낙찰가·수량·일본내 배송료·보증금)도 함께 읽습니다.
         select: {
           orderId: true, status: true, userId: true,
           productName: true, productPrice: true, productCount: true,
@@ -125,40 +124,6 @@ export async function PUT(request: Request) {
     // ✅ 인터랙티브 트랜잭션 시작 (순차적 실행 및 롤백 보장)
     await prisma.$transaction(async (tx) => {
       
-      // 💰 [머니 결제 로직] 사이버머니 차감 및 로그 생성
-      if (userId && deductAmount && deductAmount > 0) {
-        const uid = parseInt(userId);
-        const amount = Number(deductAmount);
-
-        // 1. 유저 정보 조회 및 잔액 검증
-        const user = await tx.user.findUnique({ where: { id: uid } });
-        if (!user || user.cyberMoney < amount) {
-          throw new Error('보유한 미쿠짱머니가 부족합니다.');
-        }
-
-        // 2. 머니 차감 실행
-        const updatedUser = await tx.user.update({
-          where: { id: uid },
-          data: {
-            cyberMoney: {
-              decrement: amount
-            }
-          }
-        });
-
-        // 3. ✨ [핵심] 이용 내역(MoneyLog) 생성
-        // 차감 후의 잔액(updatedUser.cyberMoney)을 기록합니다.
-        await tx.moneyLog.create({
-          data: {
-            userId: uid,
-            type: 'USE', // 이용내역 페이지 필터용
-            content: moneyLogText.orderPayment(paymentTitle),
-            amount: -Math.abs(amount), // 차감액은 마이너스 표시
-            balanceAfter: updatedUser.cyberMoney // 차감 후 잔액
-          }
-        });
-      }
-
       // 📦 [주문 업데이트 로직] 상태 및 부가 정보 변경
       for (const order of updates) {
         const updateData: any = {};
@@ -177,7 +142,7 @@ export async function PUT(request: Request) {
           //    같은 상태로 다시 저장할 때 시각이 덮어써지지 않도록, 상태가 실제로 바뀐 경우에만 찍습니다.
           // 🔨 낙찰 처리에서 관리자가 확인한 **실제 낙찰가**를 함께 저장합니다.
           //    경매 요청 때 긁어온 현재가는 실제 낙찰가와 다릅니다. 이 값으로 정산합니다.
-          //    (아래 자동 결제가 바로 이 값을 씁니다 — 저장 전에 먼저 반영해 둡니다)
+          //    (아래 낙찰 정산이 바로 이 값을 씁니다 — 저장 전에 먼저 반영해 둡니다)
           if (order.productPrice !== undefined) {
             const won = Number(order.productPrice);
             if (Number.isFinite(won) && won > 0) {
@@ -189,108 +154,25 @@ export async function PUT(request: Request) {
 
           const statusChanged = previousStatuses.get(order.id) !== order.status;
 
-          // 💸 [낙찰 실패] 경매가 성사되지 않으면 받아 둔 보증금을 돌려줍니다.
-          //    관리자가 팝업에서 '환불하고 처리'를 고른 경우에만 refundDeposit 이 실려 옵니다.
-          //    ⚠️ 한 번만 돌려주도록 depositKrw 를 0 으로 내립니다. 같은 주문을 다시 실패 처리해도
-          //       또 빠져나가지 않습니다. (돌려준 뒤에는 낙찰 정산에서 뺄 보증금도 없습니다)
-          if (statusChanged && FAILED_STATUSES.includes(order.status) && order.refundDeposit === true) {
-            const prev = previousOrders.get(order.id);
-            const uid = orderUserIds.get(order.id);
-            const deposit = Number(prev?.depositKrw) || 0;
-            if (uid && deposit > 0) {
-              const refunded = await tx.user.update({
-                where: { id: uid },
-                data: { cyberMoney: { increment: deposit } },
-              });
-              await tx.moneyLog.create({
-                data: {
-                  userId: uid,
-                  type: 'REFUND',
-                  content: moneyLogText.bidDepositRefund(prev?.productName ?? ''),
-                  amount: deposit,
-                  balanceAfter: refunded.cyberMoney,
-                },
-              });
-              updateData.depositKrw = 0;
-              updateData.depositRefundedKrw = deposit; // 💸 얼마를 돌려줬는지 남깁니다 (상세 화면 표시용)
-              console.log('[낙찰 실패] 보증금 환불', { 주문: order.id, 금액: deposit, 잔액: refunded.cyberMoney });
-            }
-          }
+          // 💸 [낙찰 실패 · 구매 실패] 돌려줄 돈은 여기서 자동으로 돌려주지 않습니다.
+          //    관리자가 주문 상세 → 결제 내역에서 금액을 확인하고 '결제 취소'를 누릅니다. (app/api/admin/payments)
           // 🕒 상태가 실제로 바뀐 경우에만 변경 시각을 남깁니다. ('처리 중 전체' 탭을 최근 변경순으로 정렬)
           if (statusChanged) updateData.statusChangedAt = new Date();
 
-          // 🔨 [낙찰 자동 결제] 낙찰로 바뀌는 순간 미쿠짱머니에서 바로 결제합니다.
-          //
-          //   왜 기다리지 않나: 낙찰 뒤 결제를 기다리는 동안 일본 경매 사이트에서
-          //   낙찰이 취소될 수 있습니다. 회원이 이미 넣어 둔 돈으로 바로 결제해 그 위험을 없앱니다.
-          //
-          //   ⚠️ 잔액이 모자라면 **건드리지 않고** 지금까지처럼 '낙찰 성공'에 두어 결제를 요청합니다.
-          //      억지로 빼면 마이너스 잔액이 생기고, 그건 회원에게서 회수할 방법이 없습니다.
-          //   ⚠️ 같은 저장을 두 번 눌러도 한 번만 빠집니다. (이미 낙찰 상태였으면 statusChanged 가 false)
+          // 🔨 [낙찰 정산] 낙찰로 바뀌면 회원이 카드로 낙찰 결제를 합니다. (낙찰가 + 수수료 − 낸 보증금)
+          //    다만 낸 보증금이 총액을 덮으면(낙찰가가 아주 작을 때) 더 받을 게 없으므로 바로 '경매 결제 완료'로 넘깁니다.
+          //    ⚠️ 그냥 두면 결제할 금액이 0원인데 '낙찰 성공'에 머물러, 회원은 결제할 수 없고 관리자는 왜 안 넘어가는지 모릅니다.
+          //    남는 보증금은 관리자가 결제 내역에서 그 금액만큼 '결제 취소'로 돌려줍니다.
           if (statusChanged && order.status === ORDER_STATUS.BID_SUCCESS) {
             const prev = previousOrders.get(order.id);
-            const uid = orderUserIds.get(order.id);
-            if (prev && uid) {
+            if (prev) {
               const charge = await calcBidCharge(prev);
-              const buyer = await tx.user.findUnique({ where: { id: uid }, select: { cyberMoney: true } });
-              const balance = buyer?.cyberMoney ?? 0;
-
-              // 💰 이미 낸 보증금이 총액을 덮는 경우(낙찰가가 아주 작을 때) 더 받을 게 없습니다.
-              //    ⚠️ 이때 그냥 넘어가면 결제가 끝났는데도 '낙찰 성공'에 머물러,
-              //       회원에게는 결제하라고 하고 관리자는 왜 안 넘어가는지 알 수 없었습니다.
               if (charge.amountWon <= 0) {
                 updateData.status = ORDER_STATUS.BID_PAID;
                 autoPaidOrderIds.add(order.id);
-
-                // 💰 남은 보증금은 바로 미쿠짱머니로 돌려줍니다.
-                //    최소 보증금이 ¥2,000 이라, 그보다 싸게 낙찰되면 낸 돈이 남습니다.
-                //    돌려주지 않으면 회원 돈이 이유 없이 묶입니다.
-                const excess = charge.depositWon - charge.totalWon;
-                if (excess > 0) {
-                  const refunded = await tx.user.update({
-                    where: { id: uid },
-                    data: { cyberMoney: { increment: excess } },
-                  });
-                  await tx.moneyLog.create({
-                    data: {
-                      userId: uid,
-                      type: 'REFUND',
-                      content: moneyLogText.bidDepositRefund(prev.productName ?? '', charge.totalWon),
-                      amount: excess,
-                      balanceAfter: refunded.cyberMoney,
-                    },
-                  });
-                  // 보증금 기록도 실제로 쓴 만큼만 남깁니다. (돌려준 돈까지 낸 것으로 두면 장부가 어긋납니다)
-                  updateData.depositKrw = charge.totalWon;
-                }
-
-                console.log('[낙찰 자동 결제] 보증금으로 충당 · 남은 보증금 반환',
-                  { 주문: order.id, 총액: charge.totalWon, 보증금: charge.depositWon, 반환: Math.max(0, excess) });
-              } else if (balance >= charge.amountWon) {
-                const paid = await tx.user.update({
-                  where: { id: uid },
-                  data: { cyberMoney: { decrement: charge.amountWon } },
-                });
-                await tx.moneyLog.create({
-                  data: {
-                    userId: uid,
-                    type: 'USE',
-                    content: moneyLogText.bidSettlement(charge.totalWon, charge.depositWon, prev.productName ?? ''),
-                    amount: -charge.amountWon,
-                    balanceAfter: paid.cyberMoney,
-                  },
-                });
-                // 결제까지 끝났으므로 '낙찰 성공'에 머무르지 않고 '경매 결제 완료'로 보냅니다.
-                //    (구매대행의 '상품 결제 완료'와 같은 단계지만, 경매는 따로 보이게 둡니다)
-                updateData.status = ORDER_STATUS.BID_PAID;
-                autoPaidOrderIds.add(order.id);
-                console.log('[낙찰 자동 결제]', {
-                  주문: order.id, 청구: charge.amountWon, 보증금차감: charge.depositWon, 잔액: paid.cyberMoney,
-                });
-              } else {
-                // 잔액 부족 → 지금까지의 흐름(회원이 직접 결제)으로 둡니다.
-                console.log('[낙찰 자동 결제] 잔액이 모자라 결제를 요청합니다.', {
-                  주문: order.id, 필요: charge.amountWon, 잔액: balance,
+                console.log('[낙찰 정산] 보증금으로 충당', {
+                  주문: order.id, 총액: charge.totalWon, 보증금: charge.depositWon,
+                  돌려줄_보증금: Math.max(0, charge.depositWon - charge.totalWon),
                 });
               }
             }
@@ -433,6 +315,19 @@ export async function DELETE(request: Request) {
 
     if (!orderId) {
       return NextResponse.json({ error: '주문 ID(id)가 필요합니다.' }, { status: 400 });
+    }
+
+    // 💳 아직 취소하지 않은 카드 결제가 남아 있으면 지우지 않습니다.
+    //    주문을 지운 뒤에는 화면에서 그 결제를 찾아 취소할 길이 없어집니다.
+    const paidItems = await prisma.paymentItem.findMany({
+      where: { orderId, payment: { status: { in: ['DONE', 'PARTIAL_CANCELED'] } } },
+      select: { amount: true, canceledAmount: true },
+    });
+    const outstanding = paidItems.reduce((sum, i) => sum + (i.amount - i.canceledAmount), 0);
+    if (outstanding > 0) {
+      return NextResponse.json({
+        error: `취소하지 않은 카드 결제 ${outstanding.toLocaleString()}원이 있습니다. 주문 상세의 결제 내역에서 먼저 취소해 주세요.`,
+      }, { status: 400 });
     }
 
     const result = await prisma.$transaction(async (tx) => {

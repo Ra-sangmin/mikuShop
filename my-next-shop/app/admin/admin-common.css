@@ -4,7 +4,7 @@
    똑같이 반복해서 정의하고 있던 스타일을 정독 후 하나로 추출했습니다.
    모든 파일의 colors 값(#0f172a, #64748b, #334155, #f1f5f9, #e2e8f0, #cbd5e1,
    #3b82f6, #94a3b8, #f8fafc 등)이 동일한 것을 확인했기 때문에 안전하게 통일했습니다.
-   각 파일에만 있는 고유 뱃지 색상(예: refund의 chargeBg/refundBg)은 그대로
+   각 파일에만 있는 고유 뱃지 색상은 그대로
    해당 파일의 로컬 style 객체에 남아 있습니다.
    값이 미묘하게 다른 경우(예: refund/users의 td에는 border-right가 없음,
    refund의 emptyTd padding이 40px, dashboard의 tableHeadRow에 배경색이 없음)는

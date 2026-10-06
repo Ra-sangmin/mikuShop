@@ -9,8 +9,8 @@
 
 import prisma from '@/lib/prisma';
 import { unpaidTotal } from '@/lib/shippingFees';
-// 💰 낙찰 정산 금액은 관리자 화면이 실제로 차감할 때 쓰는 계산을 그대로 씁니다.
-//    여기서 따로 더하면 안내 금액과 실제 차감액이 어긋납니다.
+// 💰 낙찰 정산 금액은 카드 결제 금액(lib/payments/quote.ts)과 같은 기준인 calcBidCharge 를 씁니다.
+//    여기서 따로 더하면 안내 금액과 실제 결제 금액이 어긋납니다.
 import { calcBidCharge } from '@/lib/bidSettlement';
 import { ORDER_STATUS } from '@/src/types/order';
 import {
@@ -28,7 +28,10 @@ import {
  * 알림톡을 보내는 상태. 검수를 통과해 ALIMTALK_TEMPLATES 에 등록한 템플릿이 곧 화이트리스트입니다.
  * (예전엔 목록을 따로 들고 있어서, 템플릿을 추가하고도 여기에 안 적어 발송이 안 되는 일이 생겼습니다)
  */
-const ALIMTALK_STATUSES: string[] = Object.keys(ALIMTALK_TEMPLATES);
+// ⚠️ 템플릿 코드가 비어 있는 상태(검수 대기 중인 새 문안)는 빼고 보냅니다.
+const ALIMTALK_STATUSES: string[] = Object.entries(ALIMTALK_TEMPLATES)
+  .filter(([, t]) => Boolean(t.templateId))
+  .map(([status]) => status);
 
 export interface AlimtalkNotifyResult {
   sent: number;
@@ -159,7 +162,7 @@ export async function notifyOrderStatusByAlimtalk(
         console.log(`[알림톡] 건너뜀 (${target.orderId}) — 같은 상태로 이미 보낸 기록이 있습니다. (중복 발송 방지)`);
         result.skipped++; continue;
       }
-      if (!ALIMTALK_TEMPLATES[target.status]) {
+      if (!ALIMTALK_TEMPLATES[target.status]?.templateId) {
         console.warn(`[알림톡] 건너뜀 (${target.orderId}) — ${target.status} 상태에 등록된 템플릿이 없습니다.`);
         result.skipped++; continue;
       }
@@ -304,26 +307,27 @@ export async function buildVariables(status: string, group: OrderForAlimtalk[]):
       depositWon: charges.reduce((n, c) => n + c.depositWon, 0),
       /** 보증금을 빼고 실제로 더 받는(받아야 하는) 금액 (원) */
       amountWon: charges.reduce((n, c) => n + c.amountWon, 0),
+      /** 보증금을 빼기 전 정산 총액 (원) */
+      totalWon: charges.reduce((n, c) => n + c.totalWon, 0),
     };
   };
   // 본문에 '원' 이 이미 붙어 있는 자리에 넣을 값 — 숫자만
   const digits = (won: number) => Math.round(won).toLocaleString('ko-KR');
 
   switch (status) {
-    // 💰 낙찰 + 자동 정산 완료. 회원이 낸 보증금과 추가로 빠져나간 금액을 함께 보여 줍니다.
-    //    ⚠️ 차감 시점의 값을 따로 저장해 두지 않아 여기서 다시 계산합니다.
-    //       알림은 차감 직후(같은 요청)에 나가므로 환율·수수료가 바뀔 틈이 없습니다.
+    // 💰 낙찰 + 보증금으로 정산 완료. 낸 보증금과 정산 총액을 함께 보여 줍니다. (남는 만큼은 카드 취소로 환불)
+    //    알림은 낙찰 처리 직후(같은 요청)에 나가므로 환율·수수료가 바뀔 틈이 없습니다.
     case ORDER_STATUS.BID_PAID: {
-      const { depositWon, amountWon } = await bidCharges();
+      const { depositWon, totalWon } = await bidCharges();
       return {
         ...base,
         낙찰금액: yen(sum(o => o.myBidPrice || o.productPrice)),
         보증금: digits(depositWon),
-        차감금액: digits(amountWon),
+        정산금액: digits(totalWon),
       };
     }
 
-    // 💸 낙찰됐지만 잔액이 모자라 승인을 기다리는 건. 회원이 치러야 할 금액을 알려 줍니다.
+    // 💳 낙찰돼 카드 결제를 기다리는 건. 회원이 결제할 금액(보증금 차감 후)을 알려 줍니다.
     case ORDER_STATUS.BID_SUCCESS: {
       // 금액은 묶인 주문의 합계입니다. 고객이 실제로 치러야 할 총액이라 합계가 맞습니다.
       const { amountWon } = await bidCharges();

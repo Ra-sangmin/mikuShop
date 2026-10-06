@@ -514,20 +514,21 @@ export const toneVars = (tone: GradeToneValue) => ({
   ['--g-from' as string]: tone.from, ['--g-to' as string]: tone.to,
 } as CSSProperties);
 
-/* ---------------- 회원 요약 (주문 · 머니 · 등급) ---------------- */
+/* ---------------- 회원 요약 (주문 · 가입 · 등급) ---------------- */
 
 export type SummaryUser = {
-  cyberMoney?: number | null;
+  createdAt?: string | Date | null;
   grade?: { name?: string } | null;
   _count?: { orders?: number } | null;
 };
 
 /**
- * 회원 한 줄 요약. 주문 건수 · 미쿠짱머니 잔액 · 회원 등급을 보여줍니다.
- * 주문을 보다가 "이 사람 등급이 뭐고 잔액이 얼마인지"를 바로 확인하려고 만들었습니다.
+ * 회원 한 줄 요약. 주문 건수 · 가입 기간 · 회원 등급을 보여줍니다.
+ * 주문을 보다가 "이 사람 등급이 뭐고 얼마나 오래된 회원인지"를 바로 확인하려고 만들었습니다.
  */
 export function UserSummaryStats({ user }: { user: SummaryUser }) {
   const tone = gradeTone(user.grade?.name);
+  const days = user.createdAt ? Math.max(0, Math.floor((Date.now() - new Date(user.createdAt).getTime()) / 86400000)) : null;
   return (
     <div className="aui-stats">
       <div>
@@ -535,8 +536,8 @@ export function UserSummaryStats({ user }: { user: SummaryUser }) {
         <strong>{(user._count?.orders || 0).toLocaleString()}<small>건</small></strong>
       </div>
       <div>
-        <span>미쿠짱머니</span>
-        <strong translate="no">₩{(user.cyberMoney || 0).toLocaleString()}</strong>
+        <span>가입</span>
+        <strong>{days === null ? '-' : <>{days.toLocaleString()}<small>일째</small></>}</strong>
       </div>
       <div>
         <span>회원 등급</span>

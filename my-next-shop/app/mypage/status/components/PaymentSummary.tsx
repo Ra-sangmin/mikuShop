@@ -22,7 +22,6 @@ interface PaymentSummaryProps {
   exchangeRate: number;
   selectedItems: any[];
   handleUpdateStatus: (status: string) => void;
-  myMoney: number;
   orders?: any[];
   /** ⚡ 선택하자마자 바로 보여야 하는 곳(전체 진행 현황)에서는 등장 애니메이션을 끕니다 */
   noAnimation?: boolean;
@@ -120,12 +119,13 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
     return '';
   };
 
+  // 💳 결제는 주문마다 카드로 합니다. 누르면 토스 결제창(/payment/checkout)으로 넘어갑니다.
   const getButtonText = () => {
-    if (isPaymentRequest) return `선택한 ${selectedCount}건 배송비 결제하기`;
-    if (isBidPending) return `선택한 ${selectedItems.length}건 보증금 결제하기`;
+    if (isPaymentRequest) return `선택한 ${selectedCount}건 배송비 카드로 결제하기`;
+    if (isBidPending) return `선택한 ${selectedItems.length}건 보증금 카드로 결제하기`;
 
     // 일반 구매 장바구니일 경우
-    return `선택한 ${selectedItems.length}건 결제하기`;
+    return `선택한 ${selectedItems.length}건 카드로 결제하기`;
   };
 
   const getTargetStatus = () => {
@@ -150,7 +150,7 @@ function usePaymentSummaryLogic(props: PaymentSummaryProps) {
 // 2. 화면 컴포넌트 영역 (View Layer)
 // =================================================================
 export default function PaymentSummary(props: PaymentSummaryProps) {
-  const { activeTab, totalPriceWon, exchangeRate, selectedItems, handleUpdateStatus, myMoney, noAnimation = false } = props;
+  const { activeTab, totalPriceWon, exchangeRate, selectedItems, handleUpdateStatus, noAnimation = false } = props;
   const {
     isSingleHighlightMode, isPaymentRequest, isBidPending, extraFeeMemos, calculatedTotals, getHighlightTitle, getButtonText, getTargetStatus
   } = usePaymentSummaryLogic(props);
@@ -206,9 +206,7 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
             <div className={`single-highlight-box premium-dark-box ${isPaymentRequest || isBidPending ? 'paired' : ''}`}>
               <span className="highlight-title">{getHighlightTitle()}</span>
               <span className="highlight-value">₩ {totalPriceWon.toLocaleString()}</span>
-              <span className={`my-money-info ${myMoney < totalPriceWon ? 'insufficient' : ''}`}>
-                내 미쿠짱 머니 ₩ {myMoney.toLocaleString()}
-              </span>
+              <span className="pay-method-info"><i className="fa fa-credit-card"></i> 카드 결제</span>
             </div>
           </>
         ) : (
@@ -240,9 +238,7 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
                 <span className="total-label">최종 결제예상액 (원화)</span>
               </div>
               <span className="total-value">₩ {totalPriceWon.toLocaleString()}</span>
-              <span className={`my-money-info ${myMoney < totalPriceWon ? 'insufficient' : ''}`}>
-                내 미쿠짱 머니 ₩ {myMoney.toLocaleString()}
-              </span>
+              <span className="pay-method-info"><i className="fa fa-credit-card"></i> 카드 결제</span>
             </div>
           </>
         )}
@@ -468,16 +464,14 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
         }
         .total-value { font-size: 34px; font-weight: 900; color: #ffffff; letter-spacing: -1px; line-height: 1.1; }
 
-        /* 🌟 내 미쿠짱 머니 (잔액이 결제예상액보다 부족하면 붉게 강조) */
-        .my-money-info {
+        /* 💳 결제수단 안내 — 금액 아래 한 줄. 결제는 주문마다 카드로 합니다. */
+        .pay-method-info {
           margin-top: 8px;
           font-size: 12px;
           font-weight: 600;
           color: #a1a1aa;
         }
-        .my-money-info.insufficient {
-          color: #fb7185;
-        }
+        .pay-method-info i { margin-right: 4px; }
 
         .single-highlight-box {
           width: 100%;
@@ -496,7 +490,7 @@ export default function PaymentSummary(props: PaymentSummaryProps) {
           width: 340px;
           flex-shrink: 0;
           padding: 24px 28px;
-          gap: 0; /* my-money-info의 margin-top:8px와 중복 적용되어 total-box보다 커지는 문제 방지 */
+          gap: 0; /* pay-method-info의 margin-top:8px와 중복 적용되어 total-box보다 커지는 문제 방지 */
         }
         .single-highlight-box.paired .highlight-title {
           margin-bottom: 8px; /* total-text-group의 margin-bottom과 동일한 간격 */

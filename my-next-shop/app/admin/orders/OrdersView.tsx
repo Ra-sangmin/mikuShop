@@ -142,10 +142,10 @@ const STATUS_HINT: Record<string, string> = {
   [ORDER_STATUS.CART]: '회원이 담아 둔 구매 요청입니다. 회원이 결제하면 상품 결제 완료로 넘어갑니다.',
   [ORDER_STATUS.BID_PENDING]: '경매 대행 신청이 들어왔습니다. 회원이 보증금을 내면 경매 중이 됩니다.',
   [ORDER_STATUS.BIDDING]: '입찰을 넣고 결과를 기다리는 중입니다. 마감되면 낙찰 성공 또는 낙찰 실패로 처리하세요.',
-  [ORDER_STATUS.BID_SUCCESS]: '낙찰됐지만 미쿠짱머니가 모자라 자동 결제가 되지 않은 건입니다. 회원이 직접 결제해야 합니다.',
+  [ORDER_STATUS.BID_SUCCESS]: '낙찰돼 회원의 카드 결제(보증금을 뺀 금액)를 기다리는 건입니다. 결제하면 경매 결제 완료로 넘어갑니다.',
   [ORDER_STATUS.BID_PAID]: '낙찰가 결제까지 끝났습니다. 일본에서 상품을 사서 창고로 보낼 차례입니다.',
-  [ORDER_STATUS.BID_FAILED]: '낙찰되지 못하고 끝난 경매입니다. 보증금을 돌려줬는지 확인하세요.',
-  [ORDER_STATUS.FAILED]: '품절 등으로 상품을 살 수 없게 된 건입니다. 받은 금액이 있으면 환급합니다.',
+  [ORDER_STATUS.BID_FAILED]: '낙찰되지 못하고 끝난 경매입니다. 상세보기 > 결제 내역에서 보증금을 결제 취소했는지 확인하세요.',
+  [ORDER_STATUS.FAILED]: '품절 등으로 상품을 살 수 없게 된 건입니다. 받은 금액은 상세보기 > 결제 내역에서 결제 취소로 돌려줍니다.',
   [ORDER_STATUS.PAID]: '회원 결제가 끝났습니다. 일본에서 상품을 사서 창고로 보낼 차례입니다.',
   [ORDER_STATUS.WAITING]: '배송대행 신청 후 일본 창고 도착을 기다리는 중입니다. 도착하면 입고 처리를 누르세요.',
   [ORDER_STATUS.ARRIVED]: '창고에 도착했습니다. 회원이 합포장·배송을 요청할 때까지 기다립니다.',
@@ -894,16 +894,20 @@ export default function OrderManagement({ scope = ORDERS_SCOPES.all }: { scope?:
   // 🔨 낙찰 처리 — 실제 낙찰가를 확인하고 넘깁니다.
   //    주문에 저장된 금액은 '경매를 신청하던 때의 현재가'라 실제 낙찰가와 다릅니다.
   const [winModal, setWinModal] = useState<{ order: any } | null>(null);
-  // 💸 낙찰 실패 — 받아 둔 보증금을 돌려줄지 물어본 뒤 처리합니다.
+  // 💸 낙찰 실패 — 받아 둔 보증금이 있으면 결제 취소로 돌려줘야 한다고 알린 뒤 처리합니다.
   const [failModal, setFailModal] = useState<{ order: any } | null>(null);
   const [winPrice, setWinPrice] = useState('');
   const [winFetch, setWinFetch] = useState<{ loading: boolean; price?: number; at?: string; error?: string }>({ loading: false });
 
-  /** 낙찰 실패로 넘깁니다. refund 가 true 면 보증금을 회원에게 돌려줍니다. */
-  const finishFail = (order: any, refund: boolean) => {
+  /**
+   * 낙찰 실패로 넘깁니다. 돈은 여기서 움직이지 않습니다.
+   * openPayments 가 true 면 처리 뒤 상세보기를 열어 결제 내역에서 바로 보증금을 취소할 수 있게 합니다.
+   */
+  const finishFail = (order: any, openPayments: boolean) => {
     setFailModal(null);
     setQuickViaModal(false);
-    handleQuickAdvance(order, ORDER_STATUS.BID_FAILED, () => ({ refundDeposit: refund }));
+    handleQuickAdvance(order, ORDER_STATUS.BID_FAILED);
+    if (openPayments) setDetailOrder(order);
   };
 
   /** 경매 페이지에서 지금 금액을 읽어 입력란에 채웁니다. (실패해도 직접 입력하면 됩니다) */
@@ -938,7 +942,7 @@ export default function OrderManagement({ scope = ORDERS_SCOPES.all }: { scope?:
       setQuickViaModal(true);
       return;
     }
-    // 🔨 낙찰 처리는 금액을 확인하고 넘깁니다. (그 금액으로 자동 결제가 이뤄집니다)
+    // 🔨 낙찰 처리는 금액을 확인하고 넘깁니다. (그 금액으로 회원 결제 금액이 정해집니다)
     if (flow.next === ORDER_STATUS.BID_SUCCESS) {
       setWinModal({ order });
       // 기본값은 회원이 적어 낸 희망 입찰가. 실제 낙찰가를 읽어 오면 그 값으로 바뀝니다.
@@ -2007,7 +2011,8 @@ export default function OrderManagement({ scope = ORDERS_SCOPES.all }: { scope?:
             <span className="ord-modal-mark" aria-hidden="true"><Gavel size={22} weight="duotone" /></span>
             <h3 className="ord-modal-title">낙찰 성공 — 실제 낙찰가 확인</h3>
             <p className="ord-modal-desc">
-              이 금액으로 정산합니다. 회원 미쿠짱머니에서 <b>보증금을 뺀 나머지</b>가 자동으로 결제됩니다.
+              이 금액으로 정산합니다. 회원은 <b>보증금을 뺀 나머지</b>를 카드로 결제합니다.
+              보증금이 정산 금액보다 크면 바로 경매 결제 완료로 넘어가고, 남는 보증금은 결제 내역에서 취소해 돌려줍니다.
             </p>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#64748b', margin: '2px 0 10px' }}>
@@ -2074,8 +2079,8 @@ export default function OrderManagement({ scope = ORDERS_SCOPES.all }: { scope?:
                   <b style={{ fontSize: 17, color: '#e11d48' }}>{deposit.toLocaleString()}원</b>
                 </div>
                 <p style={{ fontSize: 12.5, color: '#64748b', lineHeight: 1.6, margin: '0 0 4px' }}>
-                  환불하면 회원 미쿠짱머니로 바로 돌아가고 이용 내역에 남습니다.
-                  돌려주지 않으려면 <b>환불 없이 처리</b>를 눌러 주세요.
+                  보증금은 자동으로 돌려주지 않습니다. 처리한 뒤 <b>상세보기 &gt; 결제 내역</b>에서
+                  결제 취소를 눌러 회원 카드로 돌려주세요.
                 </p>
               </>
             ) : (
@@ -2085,12 +2090,12 @@ export default function OrderManagement({ scope = ORDERS_SCOPES.all }: { scope?:
             )}
 
             <div className="ord-modal-actions">
-              <button onClick={() => finishFail(order, false)} className="ord-modal-btn is-cancel">
-                {deposit > 0 ? '환불 없이 처리' : '실패 처리'}
+              <button onClick={() => finishFail(order, false)} className={`ord-modal-btn ${deposit > 0 ? 'is-cancel' : 'is-confirm'}`}>
+                실패 처리
               </button>
               {deposit > 0 && (
                 <button onClick={() => finishFail(order, true)} className="ord-modal-btn is-confirm">
-                  {deposit.toLocaleString()}원 환불하고 처리
+                  처리하고 결제 내역 열기
                 </button>
               )}
             </div>
@@ -2175,7 +2180,7 @@ export default function OrderManagement({ scope = ORDERS_SCOPES.all }: { scope?:
             )}
             {!userLoading && userDetail && (
               <>
-                {/* 주문·머니·등급을 먼저 보여 줍니다. 주문 화면에서 가장 자주 확인하는 값입니다. */}
+                {/* 주문·등급을 먼저 보여 줍니다. 주문 화면에서 가장 자주 확인하는 값입니다. */}
                 <UserSummaryStats user={userDetail} />
                 <div className="ord-umodal-info">
                   <UserBasicInfo

@@ -12,7 +12,7 @@ import MemberDrawer, {
   fmtDate, fmtDateTime, won, daysSince, type Provider, type Grade, type PushToast,
 } from '../components/MemberDrawer';
 import {
-  MagnifyingGlass, X, Users, UserPlus, Receipt, Wallet, UserCircle, PencilSimple,
+  MagnifyingGlass, X, Users, UserPlus, Receipt, UserCircle, PencilSimple,
   ArrowClockwise, DownloadSimple, CaretLeft, CaretRight, EnvelopeSimple, Phone,
   IdentificationCard, MapPin, Package, ClockCounterClockwise, Plus, Minus, Crown,
   CheckCircle, WarningCircle, Copy, ArrowRight, Sparkle,
@@ -25,7 +25,7 @@ import {
 /* ============================================================
    📋 표 설정
    ============================================================ */
-const USER_COLUMNS = ['member', 'provider', 'contact', 'grade', 'orderCount', 'cyberMoney', 'createdAt', 'manage'] as const;
+const USER_COLUMNS = ['member', 'provider', 'contact', 'grade', 'orderCount', 'createdAt', 'manage'] as const;
 // 🌟 표 동작(가로 꽉 채움 · 연쇄 열 조절 · 관리 열 오른쪽 고정)은 공통 훅 useFitTable 이 담당합니다.
 const MANAGE_MIN = 100; // 관리 버튼이 잘리지 않는 최소 폭
 const USER_DEFAULT_WIDTHS = {
@@ -34,17 +34,15 @@ const USER_DEFAULT_WIDTHS = {
   contact: 316,
   grade: 150,
   orderCount: 110,
-  cyberMoney: 170,
   createdAt: 160,
   manage: 150,
 };
 
-type SortKey = 'recent' | 'oldest' | 'orders' | 'money' | 'name';
+type SortKey = 'recent' | 'oldest' | 'orders' | 'name';
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'recent', label: '최근 가입순' },
   { key: 'oldest', label: '오래된 가입순' },
   { key: 'orders', label: '주문 많은순' },
-  { key: 'money', label: '머니 많은순' },
   { key: 'name', label: '이름순' },
 ];
 const PAGE_SIZE = 20;
@@ -121,8 +119,8 @@ export default function UserManagement() {
     const newPrev30 = users.filter(u => ageOf(u) > 30 * DAY && ageOf(u) <= 60 * DAY).length;
     const totalOrders = users.reduce((sum, u) => sum + (u._count?.orders || 0), 0);
     const activeUsers = users.filter(u => (u._count?.orders || 0) > 0).length;
-    const totalMoney = users.reduce((sum, u) => sum + (u.cyberMoney || 0), 0);
-    const moneyHolders = users.filter(u => (u.cyberMoney || 0) > 0).length;
+    // 📱 휴대폰이 있어야 알림톡(결제 요청·배송 안내)을 받을 수 있습니다.
+    const withPhone = users.filter(u => String(u.phone || '').replace(/\D/g, '').length >= 10).length;
 
     const byGrade = new Map<number, number>();
     const byProvider: Record<Provider, number> = { kakao: 0, naver: 0, local: 0 };
@@ -130,7 +128,7 @@ export default function UserManagement() {
       byGrade.set(u.membershipGrade, (byGrade.get(u.membershipGrade) || 0) + 1);
       byProvider[providerOf(u.loginId)]++;
     });
-    return { newIn30, newPrev30, totalOrders, activeUsers, totalMoney, moneyHolders, byGrade, byProvider };
+    return { newIn30, newPrev30, totalOrders, activeUsers, withPhone, byGrade, byProvider };
   }, [users]);
 
   /* ---------- 필터 · 정렬 · 페이지 ---------- */
@@ -152,7 +150,6 @@ export default function UserManagement() {
     switch (sortKey) {
       case 'oldest': sorted.sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt)); break;
       case 'orders': sorted.sort((a, b) => (b._count?.orders || 0) - (a._count?.orders || 0)); break;
-      case 'money': sorted.sort((a, b) => (b.cyberMoney || 0) - (a.cyberMoney || 0)); break;
       case 'name': sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko')); break;
       default: sorted.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
     }
@@ -168,11 +165,11 @@ export default function UserManagement() {
 
   /* ---------- CSV 내보내기 (현재 필터 결과) ---------- */
   const exportCsv = () => {
-    const header = ['가입일', '아이디', '이름', '가입경로', '이메일', '휴대폰', '등급', '주문수', '미쿠짱머니'];
+    const header = ['가입일', '아이디', '이름', '가입경로', '이메일', '휴대폰', '등급', '주문수'];
     const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const rows = filteredUsers.map(u => [
       fmtDate(u.createdAt), u.loginId, u.name, PROVIDER_LABEL[providerOf(u.loginId)],
-      realEmail(u.email) || '', u.phone || '', u.grade?.name || '', u._count?.orders || 0, u.cyberMoney || 0,
+      realEmail(u.email) || '', u.phone || '', u.grade?.name || '', u._count?.orders || 0,
     ].map(esc).join(','));
     const blob = new Blob(['﻿' + [header.map(esc).join(','), ...rows].join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -202,7 +199,7 @@ export default function UserManagement() {
           <div>
             <span className="usr-eyebrow"><Sparkle size={11} weight="fill" /> MEMBERS</span>
             <h1 className="usr-hero-title">회원 관리</h1>
-            <p className="usr-hero-sub">미쿠짱 회원의 등급과 미쿠짱머니, 주문 현황을 한곳에서 관리합니다.</p>
+            <p className="usr-hero-sub">미쿠짱 회원의 등급과 주문 현황을 한곳에서 관리합니다.</p>
           </div>
           <div className="usr-hero-actions">
             <button type="button" className="usr-hero-btn" onClick={fetchUsers} disabled={isLoading}>
@@ -228,9 +225,10 @@ export default function UserManagement() {
             value={<>{stats.totalOrders.toLocaleString()}<small>건</small></>}
             foot={<>주문 회원 {stats.activeUsers.toLocaleString()}명
               {users.length > 0 && <> · {Math.round((stats.activeUsers / users.length) * 100)}%</>}</>} />
-          <Kpi icon={<Wallet size={18} weight="duotone" />} label="보유 머니 합계" loading={isLoading}
-            value={<><span className="usr-won">₩</span>{stats.totalMoney.toLocaleString()}</>}
-            foot={<>잔액 보유 {stats.moneyHolders.toLocaleString()}명</>} />
+          <Kpi icon={<Phone size={18} weight="duotone" />} label="휴대폰 등록" loading={isLoading}
+            value={<>{stats.withPhone.toLocaleString()}<small>명</small></>}
+            foot={<>알림톡 받을 수 있는 회원
+              {users.length > 0 && <> · {Math.round((stats.withPhone / users.length) * 100)}%</>}</>} />
         </div>
       </section>
 
@@ -339,7 +337,6 @@ export default function UserManagement() {
                 <FitTh table={table} columnKey="contact">연락처</FitTh>
                 <FitTh table={table} columnKey="grade">등급</FitTh>
                 <FitTh table={table} columnKey="orderCount">주문수</FitTh>
-                <FitTh table={table} columnKey="cyberMoney">미쿠짱머니</FitTh>
                 <FitTh table={table} columnKey="createdAt">가입일</FitTh>
                 <FitTh table={table} columnKey="manage">관리</FitTh>
               </tr>
@@ -389,11 +386,6 @@ export default function UserManagement() {
                     <td className="usr-td is-right usr-td-orders">
                       <span className={`usr-num ${!user._count?.orders ? 'is-zero' : ''}`} translate="no">
                         {(user._count?.orders || 0).toLocaleString()}<small>건</small>
-                      </span>
-                    </td>
-                    <td className="usr-td is-right usr-td-money">
-                      <span className={`usr-money ${!user.cyberMoney ? 'is-zero' : ''}`} translate="no">
-                        <i>₩</i>{(user.cyberMoney || 0).toLocaleString()}
                       </span>
                     </td>
                     <td className="usr-td is-left usr-td-date">

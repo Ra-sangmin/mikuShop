@@ -6,14 +6,15 @@ import GuideLayout from '../../components/GuideLayout';
 import Link from 'next/link';
 import NoticePanel from '../../components/NoticePanel';
 import { useSearchParams, useRouter } from 'next/navigation';
-// 🔨 입찰 요청·잔액 부족 안내는 목록 화면과 같은 것을 씁니다.
-import { requestBid, InsufficientBalanceNotice, MONEY_CHARGE_PATH } from './components/bidRequest';
+// 🔨 입찰 요청·결과 안내는 목록 화면과 같은 것을 씁니다.
+import { requestBid } from './components/bidRequest';
 import { calcDepositKrw } from '@/src/utils/auctionDeposit';
 // 🔨 입찰 팝업은 목록(OrderTable)과 같은 것을 씁니다.
 import { BidInputContent } from './components/OrderTable';
 import OrderTable, { OrderTableStyles } from './components/OrderTable';
 import AddressForm from './components/AddressForm';
 import PaymentSummary from './components/PaymentSummary';
+import PaymentHeroCard from '../components/PaymentHeroCard';
 import { ORDER_STATUS, ORDER_STATUS_LABEL, OrderStatus, orderStatusLabel, isAuctionOrder, FAILED_STATUSES } from '@/src/types/order';
 import { useSession } from 'next-auth/react';
 import { loginUrlWithReturn } from '@/lib/authRedirect';
@@ -22,6 +23,7 @@ import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 import '../mypage-premium.css';
 import { calculateTieredPaymentFee, calculateTieredAgencyFee, toChargeableWon, DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule } from '@/src/utils/feeCalculator';
 import { buildTrackingUrl } from '@/lib/shippingCarriers';
+import PaymentCheckoutModal from '@/app/payment/components/PaymentCheckoutModal';
 
 // 🌟 "현재 진행중인 현황" = 국제 배송(도착 완료 전 단계)을 제외한 나머지 모든 주문
 const isProgressStatus = (status: string) => status !== ORDER_STATUS.SHIPPING;
@@ -222,7 +224,7 @@ function usePurchaseStatusLogic() {
  // 입찰 처리 로직
   const handleBidClick = async (item: any) => {
     let finalAmount = "";
-    const isConfirmed = await showConfirm(<BidInputContent item={item} myMoney={userData?.cyberMoney || 0} exchangeRate={exchangeRate} onChange={(val) => { finalAmount = val; }} />);
+    const isConfirmed = await showConfirm(<BidInputContent item={item} onChange={(val) => { finalAmount = val; }} />);
 
     if (isConfirmed) {
       // 🌟 입력값은 이제 "추가할 금액"이 아니라 "희망 입찰 금액(최종)"입니다.
@@ -242,10 +244,6 @@ function usePurchaseStatusLogic() {
       if (outcome.ok) {
         showAlert(`¥${finalBidAmount.toLocaleString()} 입찰 완료!`, 'success');
         fetchOrders();
-      } else if (outcome.insufficient) {
-        // 💰 부족하면 오류만 띄우지 않고 충전으로 이어 줍니다.
-        const goCharge = await showConfirm(<InsufficientBalanceNotice {...outcome.insufficient} />);
-        if (goCharge) router.push(MONEY_CHARGE_PATH);
       } else {
         showAlert(outcome.message, 'error');
       }
@@ -652,6 +650,15 @@ function usePurchaseStatusLogic() {
     }
   };
 
+  // 💳 지금 떠 있는 결제 팝업의 결제 건 번호 (없으면 닫힘)
+  const [checkoutId, setCheckoutId] = useState<string | null>(null);
+  /** 팝업 안에서 결제가 끝났을 때 — 고른 상품을 비우고 목록을 새로 읽습니다. (주문 상태는 승인 API 가 이미 바꿨습니다) */
+  const handleCheckoutPaid = () => {
+    setCheckoutId(null);
+    setSelectedItems([]);
+    fetchOrders();
+  };
+
   // 🌟 합포장/개별포장 분기 처리가 추가된 통합 업데이트 함수
   const handleUpdateStatus = async (newStatus: string, isBundle: boolean = true) => {
     if (selectedItems.length === 0) return showAlert('상품을 선택해주세요.', 'warning');
@@ -689,21 +696,21 @@ function usePurchaseStatusLogic() {
     const isConfirmed = await showConfirm(confirmMsgs[newStatus] || '상태를 변경하시겠습니까?');
 
     if (isConfirmed) {
+      // 💳 결제는 카드로 받습니다. 서버가 금액을 계산해 결제 건을 만들고, 이 화면 위에 결제 팝업을 띄웁니다.
+      //    주문 상태는 카드 승인이 끝나야 바뀝니다. (app/api/payment/confirm)
       if (([ORDER_STATUS.PAID, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.BIDDING] as string[]).includes(newStatus)) {
         try {
-          const storedId = localStorage.getItem('user_id');
-          const userRes = await fetch(`/api/users?id=${storedId}`);
-          const uData = await userRes.json();
-          if (uData.success) {
-            const currentMoney = uData.user.cyberMoney || 0;
-            if (currentMoney < totalPriceWon) {
-              const chargeConfirmed = await showConfirm(`미쿠짱 금액이 부족합니다.\n부족한 금액: ₩${(totalPriceWon - currentMoney).toLocaleString()}\n충전하시겠습니까?`);
-              // 🌟 충전 화면의 충전 금액에 부족한 금액이 자동으로 들어가도록 넘깁니다 (money/charge 가 ?amount= 를 읽음)
-              if (chargeConfirmed) window.location.href = `/mypage/money/charge?amount=${Math.ceil(totalPriceWon - currentMoney)}`;
-              return;
-            }
-          }
-        } catch (error) { return showAlert('잔액 확인 중 오류가 발생했습니다.', 'error'); }
+          const res = await fetch('/api/payments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // 지금 보고 있는 단계(구매 요청 · 경매 요청 · 낙찰 성공 · 배송비 결제 대기)로 결제 종류가 정해집니다.
+            body: JSON.stringify({ fromStatus: payStatus, orderIds: selectedItems }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data?.success) return showAlert(data?.message || '결제를 준비하지 못했습니다.', 'error');
+          setCheckoutId(data.id);
+        } catch { showAlert('서버와 통신하지 못했습니다.', 'error'); }
+        return;
       }
 
       const addressUpdateData = newStatus === ORDER_STATUS.PREPARING && selectedAddress ? { address_id: selectedAddress.id } : {};
@@ -719,21 +726,13 @@ function usePurchaseStatusLogic() {
             ...(isBundle ? { bundleId } : {}),
             ...addressUpdateData
           }))
-        : selectedItems.map(id => ({ id, status: newStatus, ...(newStatus === ORDER_STATUS.BIDDING ? { bidStatus: 'PENDING' } : {}) }));
+        : selectedItems.map(id => ({ id, status: newStatus }));
       
       try {
-        const storedId = localStorage.getItem('user_id');
-        const isPayment = ([ORDER_STATUS.PAID, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.BIDDING] as string[]).includes(newStatus);
-        // 💬 이용 내역에 남길 문구 — 무엇을 몇 건 결제했는지만 짧게 (금액·잔액은 이용 내역 화면에 따로 나옵니다)
-        const payTitle = !isPayment ? undefined
-          : `${newStatus === ORDER_STATUS.BIDDING ? '경매 보증금'
-            : newStatus === ORDER_STATUS.PAYMENT_DONE ? '배송비 결제'
-            : '상품 결제'} · ${selectedItems.length}건`;
-        
         const res = await fetch('/api/orders', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ updates, userId: isPayment ? storedId : null, deductAmount: isPayment ? totalPriceWon : 0, paymentTitle: payTitle })
+          body: JSON.stringify({ updates })
         });
 
         if (res.ok) {
@@ -753,7 +752,8 @@ function usePurchaseStatusLogic() {
     progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected, phaseView, setPhaseView,
     // 🛒 장바구니 카드(구매 요청 + 경매 요청 한 표)에서 쓸 결제 기준 상태
     payStatus,
-    orderTypeFilter, allOrders, matchesServiceTab, paymentFeeRule, agencyFeeRule
+    orderTypeFilter, allOrders, matchesServiceTab, paymentFeeRule, agencyFeeRule,
+    checkoutId, setCheckoutId, handleCheckoutPaid
   };
 }
 
@@ -855,7 +855,8 @@ function MyPurchaseStatusContent() {
     progressFilterActive, setProgressFilterActive, allViewSelected, setAllViewSelected, phaseView, setPhaseView,
     // 🛒 장바구니 카드(구매 요청 + 경매 요청 한 표)에서 쓸 결제 기준 상태
     payStatus,
-    orderTypeFilter, allOrders, matchesServiceTab, paymentFeeRule, agencyFeeRule
+    orderTypeFilter, allOrders, matchesServiceTab, paymentFeeRule, agencyFeeRule,
+    checkoutId, setCheckoutId, handleCheckoutPaid
   } = usePurchaseStatusLogic();
 
   const sliderRef = useRef<HTMLDivElement>(null);
@@ -1338,14 +1339,7 @@ function MyPurchaseStatusContent() {
           </div>
         </div>
 
-        <div className="mp-hero-money">
-          <span className="mp-hero-money-label"><i className="fa fa-sack-dollar"></i> 미쿠짱머니</span>
-          <strong className="mp-hero-money-value" translate="no">{(userData?.cyberMoney || 0).toLocaleString()}<small>원</small></strong>
-          <div className="mp-hero-money-actions">
-            <Link href="/mypage/money/charge" className="is-primary"><i className="fa fa-plus"></i> 충전</Link>
-            <Link href="/mypage/money/history"><i className="fa fa-receipt"></i> 이용 내역</Link>
-          </div>
-        </div>
+        <PaymentHeroCard orders={orders} />
 
         <div className="mp-hero-stats">
           {/* 🌟 장바구니 건수 — 누르면 '신청 내역 보기'처럼 목록만 보여 줍니다. (결제는 상품을 눌러 상세 정보 확인에서) */}
@@ -1515,7 +1509,7 @@ function MyPurchaseStatusContent() {
           onStatusClick={handleAllRowClick}
           /* 🔽 펼치기 보기: 결제 · 포장 요청할 상품은 체크박스로 바로 고르고, 상품을 누르면 그 아래에 상세가 펼쳐집니다 */
           inlineMode={isInlineView}
-          myMoney={userData?.cyberMoney || 0} exchangeRate={exchangeRate}
+          exchangeRate={exchangeRate}
           /* 💰 낙찰 결제 내역(수수료 계산)을 상세에서 보여 주는 데 씁니다 */
           paymentFeeRule={paymentFeeRule} agencyFeeRule={agencyFeeRule}
         />
@@ -1587,7 +1581,6 @@ function MyPurchaseStatusContent() {
             activeTab={payStatus} totals={totals} totalPriceWon={totalPriceWon}
             exchangeRate={exchangeRate} selectedItems={selectedItems}
             handleUpdateStatus={handleUpdateStatus}
-            myMoney={userData?.cyberMoney || 0}
             orders={orders}
           />
         </div>
@@ -1622,7 +1615,7 @@ function MyPurchaseStatusContent() {
               onIndividualPacking={handleIndividualPacking}
               /* 🗑 상세 정보 확인 안에서 상품을 지우면 패널을 닫습니다. (지워진 상품 목록을 그대로 보고 있지 않도록) */
               onDelete={async (orderId: string) => { if (await handleDeleteOrder(orderId)) closeArrivedDetail(); }}
-              myMoney={userData?.cyberMoney || 0} exchangeRate={exchangeRate}
+              exchangeRate={exchangeRate}
             />
             )}
             {detailStatus === ORDER_STATUS.ARRIVED && (<>
@@ -1655,7 +1648,6 @@ function MyPurchaseStatusContent() {
                   activeTab={detailStatus} totals={totals} totalPriceWon={totalPriceWon}
                   exchangeRate={exchangeRate} selectedItems={selectedItems}
                   handleUpdateStatus={handleUpdateStatus}
-                  myMoney={userData?.cyberMoney || 0}
                   orders={orders}
                 />
               </div>
@@ -1666,6 +1658,11 @@ function MyPurchaseStatusContent() {
 
       {/* 🚫 맨 아래 '국제 배송 현황' 패널은 없앴습니다. 국제 배송 상품은 '국제 배송중' 카드(또는 상단 '국제 배송 중')를 눌러
           위쪽 표에서 보고, 상품을 누르면 상세 정보 확인에서 주소 · 배송업체 · 운송장을 봅니다. */}
+
+      {/* 💳 결제 팝업 — 장바구니를 떠나지 않고 결제합니다. (PC 는 승인까지 이 안에서, 모바일은 카드사 인증 뒤 완료 화면으로) */}
+      {checkoutId && (
+        <PaymentCheckoutModal id={checkoutId} onClose={() => setCheckoutId(null)} onPaid={handleCheckoutPaid} />
+      )}
 
       {/* ================================================================= */}
       {/* 3. 디자인 영역 (CSS Layer) */}

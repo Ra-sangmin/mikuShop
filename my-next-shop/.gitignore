@@ -12,3 +12,6 @@ portfolio/
 
 # 참고용으로 복사해 둔 옛 파일 모음 (배포 대상 아님)
 _to_delete/
+
+# 🔒 내 PC 전용 인수인계 메모 (Claude 작업 이어하기용, 커밋하지 않음)
+docs/handoff-*.md

@@ -3,6 +3,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import GuideLayout from '../components/GuideLayout';
+import PaymentHeroCard from './components/PaymentHeroCard';
 import ChangePasswordForm from '../components/ChangePasswordForm';
 import { Crown, Diamond, Medal, Sparkle } from '@phosphor-icons/react';
 import { ORDER_STATUS, ORDER_STATUS_LABEL } from '@/src/types/order';
@@ -23,7 +24,6 @@ const GRADE_META: Record<string, { icon: React.ReactNode, gradient: string, colo
 function useMyPageLogic() {
   const [userName, setUserName] = useState('고객');
   const [userLevel, setUserLevel] = useState('NEW');
-  const [userMoney, setUserMoney] = useState(0);
   const [userOrders, setUserOrders] = useState<any[]>([]);
   const [isSnsUser, setIsSnsUser] = useState(false);
   // 🌟 SNS 로그인에서 받아온 프로필 사진 (동의 안 했거나 일반 회원이면 null → 이니셜 표시)
@@ -41,7 +41,6 @@ function useMyPageLogic() {
           if (data.success) {
             setUserName(data.user.name);
             setUserLevel(data.user.grade?.name || 'NEW');
-            setUserMoney(data.user.cyberMoney);
             setUserOrders(data.user.orders || []);
             setIsSnsUser(!!data.user.isSnsUser);
             setProfileImage(data.user.profileImage || null);
@@ -57,7 +56,6 @@ function useMyPageLogic() {
   const userInfo = {
     name: userName,
     level: userLevel,
-    money: userMoney,
     isSnsUser,
     profileImage,
     email: userEmail
@@ -179,7 +177,7 @@ function useMyPageLogic() {
     },
   ], [userOrders]);
 
-  return { userInfo, purchaseStatus };
+  return { userInfo, purchaseStatus, userOrders };
 }
 
 // =================================================================
@@ -199,7 +197,7 @@ const FLOW_GROUPS = [
 const QUICK_LINKS = [
   { href: '/purchase/request', title: '구매대행 신청', desc: '일본 상품 구매 요청', icon: 'fa-cart-shopping', tone: 'mp-tone-rose' },
   { href: '/delivery/request', title: '배송대행 신청', desc: '직접 구매한 상품 배송', icon: 'fa-truck-fast', tone: 'mp-tone-indigo' },
-  { href: '/mypage/money/charge', title: '머니 충전', desc: '미쿠짱 머니 충전', icon: 'fa-wallet', tone: 'mp-tone-amber' },
+  { href: '/mypage/payments', title: '결제 내역', desc: '카드 결제 · 취소 내역', icon: 'fa-receipt', tone: 'mp-tone-amber' },
   { href: '/mypage/profile', title: '배송지 관리', desc: '한국 · 일본 배송지', icon: 'fa-location-dot', tone: 'mp-tone-green' },
   { href: '/mypage/wishlist', title: '관심 상품', desc: '찜한 상품 모아보기', icon: 'fa-heart', tone: 'mp-tone-slate' },
 ];
@@ -217,7 +215,7 @@ const StatusCard = ({ label, count, desc, href, icon, index }: StatusItem & { in
 
 // 🌟 메인 페이지 조립
 export default function MyPage() {
-  const { userInfo, purchaseStatus } = useMyPageLogic();
+  const { userInfo, purchaseStatus, userOrders } = useMyPageLogic();
   const gradeMeta = GRADE_META[userInfo.level] || GRADE_META.NEW;
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false); // 프로필 사진 로드 실패 시 이니셜로 대체
@@ -275,14 +273,7 @@ export default function MyPage() {
             </div>
           </div>
 
-          <div className="mp-hero-money">
-            <span className="mp-hero-money-label"><i className="fa fa-sack-dollar"></i> 미쿠짱머니</span>
-            <strong className="mp-hero-money-value" translate="no">{userInfo.money.toLocaleString()}<small>원</small></strong>
-            <div className="mp-hero-money-actions">
-              <Link href="/mypage/money/charge" className="is-primary"><i className="fa fa-plus"></i> 충전</Link>
-              <Link href="/mypage/money/history"><i className="fa fa-receipt"></i> 이용 내역</Link>
-            </div>
-          </div>
+          <PaymentHeroCard orders={userOrders} />
 
           <div className="mp-hero-stats">
             <Link href={`/mypage/status?tab=${ORDER_STATUS.ALL}`} className="mp-hero-stat">

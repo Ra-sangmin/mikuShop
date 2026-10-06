@@ -8,7 +8,7 @@
 //   npx tsx scripts/test-alimtalk.ts 01012345678 --send     실제로 한 통 보냅니다 (건당 비용 발생)
 //   npx tsx scripts/test-alimtalk.ts 01012345678 --status=ARRIVED       다른 템플릿으로
 //     주문 상태: BID_SUCCESS(낙찰) ARRIVED(입고) PAYMENT_REQ(배송승인) SHIPPING(배송시작)
-//     그 외  : CONSULT(고객센터 안내) REFUND_DONE(환불 완료) CHARGE_DONE(충전 완료)
+//     그 외  : CONSULT(고객센터 안내)
 //   npx tsx scripts/test-alimtalk.ts 01012345678 --count=3   묶음 발송("외 2건") 미리보기
 //
 // ⚠️ --send 는 실제 카카오톡이 나가고 잔액이 차감됩니다. 받는 번호를 꼭 확인하세요.
@@ -18,9 +18,6 @@ import 'dotenv/config';
 import {
   ALIMTALK_TEMPLATES,
   CONSULT_TEMPLATE,
-  REFUND_DONE_TEMPLATE,
-  CHARGE_DONE_TEMPLATE,
-  moneyHistoryUrl,
   buildAlimtalkPayload,
   fillTemplate,
   isAlimtalkConfigured,
@@ -58,12 +55,11 @@ async function main() {
 
   console.log('\n===== 2. 템플릿 =====');
   // 📋 주문 상태 템플릿(ALIMTALK_TEMPLATES) 외에, 상태와 무관한 템플릿도 골라 볼 수 있습니다.
-  //    이 둘은 ALIMTALK_TEMPLATES 에 넣으면 orderStatusAlimtalk 가 주문 상태로 오인하므로
+  //    ALIMTALK_TEMPLATES 에 넣으면 orderStatusAlimtalk 가 주문 상태로 오인하므로
   //    따로 export 돼 있습니다. (lib/notifications/alimtalk.ts 참고)
+  //    💳 충전·환불 완료 템플릿은 미쿠짱머니와 함께 없앴습니다. 환불은 카드 결제 취소로 합니다.
   const EXTRA_TEMPLATES: Record<string, AlimtalkTemplate> = {
     CONSULT: CONSULT_TEMPLATE,          // 고객센터 안내 (관리자가 회원에게 직접)
-    REFUND_DONE: REFUND_DONE_TEMPLATE,  // 미쿠짱머니 환불 완료
-    CHARGE_DONE: CHARGE_DONE_TEMPLATE,  // 미쿠짱머니 충전 완료
   };
   const template = ALIMTALK_TEMPLATES[status] ?? EXTRA_TEMPLATES[status];
   if (!template) {
@@ -94,11 +90,7 @@ async function main() {
   // 주문 상태 템플릿만 buildVariables 로 채웁니다. 그 외는 예시 값을 직접 넣습니다.
   const variables = ALIMTALK_TEMPLATES[status]
     ? await buildVariables(status, sampleOrders)
-    : status === 'REFUND_DONE'
-      ? { '고객명': '홍길동', '환불금액': (50000).toLocaleString('ko-KR'), '환불수단': '국민은행 ****1234 (홍길동)' }
-      : status === 'CHARGE_DONE'
-        ? { '고객명': '홍길동', '충전금액': (50000).toLocaleString('ko-KR'), '현재잔액': (97294).toLocaleString('ko-KR') }
-        : { '고객명': '홍길동' };
+    : { '고객명': '홍길동' };
 
   console.log('\n  --- 이 템플릿에 채워 보낼 변수 (콘솔 등록값과 이름이 같아야 합니다) ---');
   Object.entries(variables).forEach(([k, v]) => console.log(`  | #{${k}} = ${v}`));
@@ -122,18 +114,13 @@ async function main() {
   if (!phone) process.exit(1);
 
   // 🔗 버튼 주소는 템플릿마다 다릅니다. 실제 발송 경로와 같은 값을 써야 미리보기를 믿을 수 있습니다.
-  //    (예전엔 주문 상세 주소를 종류와 상관없이 박아 둬서, 머니 템플릿 미리보기가
-  //     실제로 나가는 주소와 다르게 보였습니다)
-  //    · 충전·환불 완료 → 이용 내역 화면 (moneyHistoryUrl — api/money/approve 등과 같은 함수)
   //    · 고객센터 안내  → 버튼이 '메시지 전달(MD)' 이라 주소를 싣지 않습니다
   //    · 주문 상태     → 묶음이면 목록 탭, 단건이면 그 주문 (orderStatusAlimtalk.ts 와 같은 규칙)
-  const buttonUrl = (status === 'CHARGE_DONE' || status === 'REFUND_DONE')
-    ? moneyHistoryUrl()
-    : status === 'CONSULT'
-      ? undefined
-      : count > 1
-        ? `${buttonBase}/mypage/status?tab=${encodeURIComponent(status)}`
-        : `${buttonBase}/mypage/status?orderId=M260918-a3f9`;
+  const buttonUrl = status === 'CONSULT'
+    ? undefined
+    : count > 1
+      ? `${buttonBase}/mypage/status?tab=${encodeURIComponent(status)}`
+      : `${buttonBase}/mypage/status?orderId=M260918-a3f9`;
 
   console.log('\n===== 4. 솔라피에 보낼 내용 =====');
   const payload = buildAlimtalkPayload({

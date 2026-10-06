@@ -132,28 +132,6 @@
   margin-bottom: 0;
 }
 
-/* 🌟 타이틀 행 오른쪽에 현재 보유 머니 등 요약 값을 함께 보여주는 알약 배지.
-   (mypage/money의 charge·history·refund가 각자 복제해 쓰던 것을 공용으로 옮겼습니다) */
-.guide-title-balance {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 9px 18px;
-  background: linear-gradient(135deg, #fff7ed 0%, #ffece0 100%);
-  border: 1px solid #fed7aa;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #9a3412;
-  white-space: nowrap;
-}
-.guide-title-balance strong {
-  font-size: 19px;
-  font-weight: 900;
-  color: #ea580c;
-}
-
 /* 약관/개인정보처리방침 등 문서형 페이지의 본문 카드 */
 /* 🌟 배경/테두리/그림자/모서리는 .guide-panel과 동일한 결로 맞춥니다.
    (padding만 문서를 읽기 좋은 넓은 값으로 따로 둡니다) */
@@ -285,8 +263,6 @@
   .guide-title-icon { width: 30px; height: 30px; border-radius: 10px; font-size: 13px; }
   .guide-desc { font-size: 14px; margin-bottom: 30px; }
   .guide-desc.guide-desc--tight { margin-bottom: 16px; }
-  .guide-title-balance { padding: 7px 14px; font-size: 11px; gap: 6px; }
-  .guide-title-balance strong { font-size: 15px; }
 
   .guide-panel { padding: 16px; border-radius: 16px; }
   .guide-doc-card { padding: 40px 24px; border-radius: 16px; }
@@ -1119,7 +1095,7 @@
 }
 
 /* 🌟 얇은 요약 카드 (purchase/request · quote · delivery/request 등 입력 폼 페이지용)
-   — 머니 카드·하단 4칸 없이 아이콘 + 눈썹 + 제목 + 설명만 두어 폼이 아래로 밀리지 않게 합니다 */
+   — 결제 카드·하단 4칸 없이 아이콘 + 눈썹 + 제목 + 설명만 두어 폼이 아래로 밀리지 않게 합니다 */
 .mp-hero.gp-premium-hero.is-slim { padding: 22px 28px; border-radius: 22px; margin-bottom: 22px; }
 .mp-hero.gp-premium-hero.is-slim .mp-hero-title { margin: 3px 0 5px; font-size: 22px; }
 .mp-hero.gp-premium-hero.is-slim .mp-hero-desc { font-size: 13.5px; line-height: 1.55; }

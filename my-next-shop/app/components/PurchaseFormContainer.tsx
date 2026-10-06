@@ -9,8 +9,8 @@ import { ORDER_TYPE, OrderType, ORDER_STATUS } from '@/src/types/order';
 import { calculateTieredPaymentFee, calculateTieredAgencyFee, toChargeableWon, DEFAULT_PAYMENT_FEE_RULE, DEFAULT_AGENCY_FEE_RULE, OrderFeeRule } from '@/src/utils/feeCalculator';
 import {
   Camera, PackageCheck, ImagePlus, Link2, Trash2, RotateCcw, Plus, Minus, PenLine, Loader2,
-  ShoppingCart, Truck, Lightbulb, Wallet, ChevronRight, ClipboardList, CreditCard, RefreshCw,
-  CircleCheck, CircleAlert, Info,
+  ShoppingCart, Truck, Lightbulb, ChevronRight, ClipboardList, CreditCard, RefreshCw,
+  CircleAlert, Info,
 } from 'lucide-react';
 import './purchase-form-container.css';
 
@@ -66,20 +66,6 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
 
   const isPurchase = type === ORDER_TYPE.PURCHASE;
 
-  // 🌟 mypage/status의 "내 미쿠짱 머니" 잔액 표시와 동일하게, 이 견적 화면에서도
-  // 결제 예상액과 나란히 현재 잔액을 보여주기 위해 동일한 방식(/api/users?id=)으로 조회합니다.
-  const [myMoney, setMyMoney] = useState(0);
-  useEffect(() => {
-    const storedId = localStorage.getItem('user_id');
-    if (!storedId) return;
-    fetch(`/api/users?id=${storedId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) setMyMoney(data.user?.cyberMoney || 0);
-      })
-      .catch(() => {});
-  }, []);
-
   // 🌟 결제/대행 수수료 구간 변수를 DB(order_fee_rules)에서 받아옵니다. 응답 전에는
   // feeCalculator.ts의 기본값(DB 시드값과 동일)을 그대로 써서 화면이 비어 보이지 않습니다.
   const [paymentFeeRule, setPaymentFeeRule] = useState<OrderFeeRule>(DEFAULT_PAYMENT_FEE_RULE);
@@ -128,7 +114,6 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
   }, [itemSummaries, exchangeRate]);
 
   const filledCount = products.filter(p => p.url && parseFloat(p.price) > 0).length;
-  const isMoneyShort = totalKRW > 0 && myMoney < totalKRW;
 
   const updateProduct = (index: number, field: keyof ProductForm, value: any) => {
     setProducts(prev => {
@@ -326,7 +311,7 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
     ? [
         { icon: ClipboardList, title: '상품 정보 입력', desc: 'URL · 가격 · 수량' },
         { icon: ShoppingCart, title: '장바구니 담기', desc: '여러 상품 한 번에' },
-        { icon: CreditCard, title: '머니로 결제', desc: '마이페이지에서 진행' },
+        { icon: CreditCard, title: '카드로 결제', desc: '마이페이지에서 진행' },
       ]
     : [
         { icon: ClipboardList, title: '상품 정보 입력', desc: 'URL · 가격 · 배송비' },
@@ -363,7 +348,7 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
           <ul>
             {isPurchase ? (
               <>
-                <li><b>미쿠짱 머니 충전</b> 이후 결제할 수 있어요. 담은 상품은 마이페이지 장바구니에서 결제합니다.</li>
+                <li>담은 상품은 마이페이지 장바구니에서 <b>카드로 결제</b>하면 구매가 시작돼요.</li>
                 <li>여러 상품을 한 번에 추가해 장바구니에 담을 수 있어요.</li>
               </>
             ) : (
@@ -375,8 +360,8 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
           </ul>
         </div>
         {isPurchase && (
-          <Link href="/mypage/money/charge" className="pf-notice-link">
-            <Wallet size={14} strokeWidth={2.2} />머니 충전
+          <Link href="/guide/refund" className="pf-notice-link">
+            <RotateCcw size={14} strokeWidth={2.2} />취소·환불 안내
           </Link>
         )}
       </div>
@@ -596,9 +581,9 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
               <span className="quote-total-label">최종 결제예상액</span>
               <span className="quote-total-value"><span translate="no">₩{totalKRW.toLocaleString()}</span></span>
               <span className="pf-total-jpy" translate="no">¥{totalJPY.toLocaleString()}</span>
-              <span className={`quote-my-money-info pf-money ${isMoneyShort ? 'insufficient' : ''}`}>
-                {isMoneyShort ? <CircleAlert size={13} strokeWidth={2.4} /> : <CircleCheck size={13} strokeWidth={2.4} />}
-                내 미쿠짱 머니 <b translate="no">₩{myMoney.toLocaleString()}</b>
+              <span className="pf-paymethod">
+                <CreditCard size={13} strokeWidth={2.4} />
+                마이페이지에서 카드로 결제
               </span>
             </div>
           </div>
@@ -612,17 +597,10 @@ export default function PurchaseFormContainer({ type, hideDomesticShippingFee }:
       <div className="bottom-btn-wrap pf-action-bar">
         <div className="pf-action-info">
           {isPurchase ? (
-            isMoneyShort ? (
-              <>
-                <span className="pf-action-title is-warn"><CircleAlert size={15} strokeWidth={2.3} />머니가 부족해요</span>
-                <span className="pf-action-desc">장바구니에는 담을 수 있고, 결제 전에 <Link href="/mypage/money/charge">머니를 충전</Link>하면 됩니다.</span>
-              </>
-            ) : (
-              <>
-                <span className="pf-action-title"><ShoppingCart size={15} strokeWidth={2.3} />상품 {products.length}건을 장바구니에 담아요</span>
-                <span className="pf-action-desc">결제는 마이페이지 › 장바구니에서 진행됩니다.</span>
-              </>
-            )
+            <>
+              <span className="pf-action-title"><ShoppingCart size={15} strokeWidth={2.3} />상품 {products.length}건을 장바구니에 담아요</span>
+              <span className="pf-action-desc">결제는 마이페이지 › 장바구니에서 카드로 진행됩니다.</span>
+            </>
           ) : (
             <>
               <span className="pf-action-title"><Truck size={15} strokeWidth={2.3} />상품 {products.length}건을 배송대행 신청해요</span>

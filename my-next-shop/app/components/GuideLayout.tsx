@@ -7,7 +7,7 @@ import { signOut, useSession } from 'next-auth/react';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
 import {
   User, ClipboardText, House, Heart, ShoppingCartSimple, PaperPlaneTilt, Question,
-  Notepad, ShieldCheck, Crown, Info, Scales, Calculator, Wallet, Coins, Money,
+  Notepad, ShieldCheck, Crown, Info, Scales, Calculator, Receipt, ArrowCounterClockwise,
   BookOpen, UserCircle, CaretRight, SignOut,
   ChatCircleDots, MapPin, AirplaneTilt, ArrowUpRight, Headset, Megaphone,
 } from '@phosphor-icons/react';
@@ -38,9 +38,8 @@ const MENU_ICONS: Record<string, React.ElementType> = {
   '수수료 안내': Info,
   '국제 배송 요금표': Scales,
   '예상 관부과세 안내': Calculator,
-  '충전 신청': Wallet,
-  '이용 내역': Coins,
-  '환불 신청': Money,
+  '결제 내역': Receipt,
+  '취소·환불 정책': ArrowCounterClockwise,
 };
 
 // 🌟 PC 사이드바 제목 영역 (섹션별 아이콘 + 영문 보조 라벨)
@@ -48,7 +47,6 @@ const SECTION_META: Record<string, { icon: React.ElementType; eyebrow: string }>
   mypage: { icon: UserCircle, eyebrow: 'MY PAGE' },
   guide: { icon: BookOpen, eyebrow: 'USER GUIDE' },
   fee: { icon: Scales, eyebrow: 'FEES & SHIPPING' },
-  money: { icon: Wallet, eyebrow: 'MIKU MONEY' },
   contact: { icon: Headset, eyebrow: 'CUSTOMER SUPPORT' },
   purchase: { icon: ShoppingCartSimple, eyebrow: 'BUYING SERVICE' },
   delivery: { icon: AirplaneTilt, eyebrow: 'SHIPPING SERVICE' },
@@ -82,6 +80,7 @@ function useGuideLayoutLogic(rawType?: string) {
   const mypageMenu = [
     { label: '내 정보', href: '/mypage' },
     { label: '전체 구매 내역', href: '/mypage/status' },
+    { label: '결제 내역', href: '/mypage/payments' },
     { label: '나의 배송지 정보', href: '/mypage/profile' },
     { label: '관심 상품 목록', href: '/mypage/wishlist' },
   ];
@@ -95,6 +94,7 @@ function useGuideLayoutLogic(rawType?: string) {
     { label: '배송대행 신청방법', href: '/guide/delivery-method' },
     { label: '공지사항', href: '/guide/notice' },
     { label: '이용약관', href: '/guide/terms' },
+    { label: '취소·환불 정책', href: '/guide/refund' },
     { label: '개인정보처리방침', href: '/guide/privacy' },
   ];
 
@@ -111,17 +111,10 @@ function useGuideLayoutLogic(rawType?: string) {
     { label: '예상 관부과세 안내', href: '/guide/customs' },
   ];
 
-  const moneyMenu = [
-    { label: '충전 신청', href: '/mypage/money/charge' },
-    { label: '이용 내역', href: '/mypage/money/history' },
-    { label: '환불 신청', href: '/mypage/money/refund' },
-  ];
-
   const currentMenu: { label: string; href: string; via?: MenuVia }[] =
     type === 'mypage' ? mypageMenu : 
     type === 'guide' ? guideMenu : 
     type === 'fee' ? feeMenu : 
-    type === 'money' ? moneyMenu :
     type === 'purchase' ? purchaseMenu :
     type === 'delivery' ? deliveryMenu :
     type === 'contact' ? contactMenu : [];
@@ -129,7 +122,6 @@ function useGuideLayoutLogic(rawType?: string) {
   const headerTitle =
     type === 'mypage' ? '마이페이지' :
     type === 'fee' ? '수수료/배송비' :
-    type === 'money' ? '미쿠짱머니' :
     type === 'purchase' ? '구매대행' :
     type === 'delivery' ? '배송대행' :
     type === 'contact' ? '고객문의' : '이용가이드';

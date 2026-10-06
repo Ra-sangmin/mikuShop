@@ -2,10 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useMikuAlert } from '@/app/context/MikuAlertContext';
-import { useRouter } from 'next/navigation';
-// 🔨 입찰 요청·잔액 부족 안내는 전체 진행 현황과 같은 것을 씁니다.
-import { requestBid, InsufficientBalanceNotice, MONEY_CHARGE_PATH } from './bidRequest';
-import { calcDepositKrw, DEPOSIT_RULE_TEXT } from '@/src/utils/auctionDeposit';
+// 🔨 입찰 요청·결과 안내는 전체 진행 현황과 같은 것을 씁니다.
+import { requestBid } from './bidRequest';
 import { minNextBid, bidIncrement, BID_LIMIT_NOTICE, BID_HIDDEN_LIMIT_HINT } from '@/src/utils/auctionBid';
 import {
   calculateTieredPaymentFee, calculateTieredAgencyFee, toChargeableWon,
@@ -113,7 +111,7 @@ function useOrderTableLogic({ activeTab, fetchOrders }: any) {
 
 // 🌟 입찰 금액 입력 프리미엄 모달 콘텐츠
 // 🔨 전체 진행 현황(page.tsx)에서도 같은 팝업을 씁니다. 복사본을 두면 한쪽만 고쳐져 어긋납니다.
-export const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { item: any, myMoney: number, exchangeRate: number, onChange: (val: string) => void }) => {
+export const BidInputContent = ({ item, onChange }: { item: any, onChange: (val: string) => void }) => {
   const { setConfirmDisabled } = useMikuAlert();
   const [amount, setAmount] = useState("");
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,20 +140,13 @@ export const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { ite
   const basePrice = livePrice.price ?? 0;
   const minBid = basePrice > 0 ? minNextBid(basePrice) : 0;
   const tooLow = minBid > 0 && parsedAmount > 0 && parsedAmount < minBid;
-  // 💰 지금 이 순간 빠져나가는 돈은 **입찰 금액이 아니라 보증금 차액**입니다.
-  //    보증금은 원화이고 '지금 입찰가 기준'이라, 이미 낸 만큼은 빼고 모자란 만큼만 받습니다.
-  //    (서버도 같은 식으로 계산합니다 — app/api/orders/bid, src/utils/auctionDeposit.ts)
-  //    예전에는 여기에 "희망 입찰 금액 (원화 환산)" 을 보여 줬는데, 그 금액은 지금 빠지지 않습니다.
-  const targetDepositWon = calcDepositKrw(parsedAmount, exchangeRate);
+  // 💰 추가 입찰은 **보증금을 더 받지 않습니다.** 처음 낸 보증금 그대로 진행합니다.
+  //    (서버도 같습니다 — app/api/orders/bid) 그래서 추가 결제도 없고, 최소 입찰가만 지키면 됩니다.
   const paidDepositWon = Number(item.depositKrw) || 0;
-  const addDepositWon = Math.max(0, targetDepositWon - paidDepositWon);
-  const isInsufficient = parsedAmount > 0 && addDepositWon > myMoney;
 
-  // 🌟 지금 낼 보증금이 보유 미쿠짱 머니보다 많으면 "확인" 버튼을 눌러도 진행되지 않게 막습니다.
-  //    (예전에는 입찰 금액 전액을 갖고 있어야 입찰할 수 있었습니다 — 보증금만 내면 되는데도요)
   useEffect(() => {
-    setConfirmDisabled(isInsufficient || tooLow);
-  }, [isInsufficient, tooLow, setConfirmDisabled]);
+    setConfirmDisabled(tooLow);
+  }, [tooLow, setConfirmDisabled]);
 
   return (
     <div className="miku-bid-modal notranslate" translate="no">
@@ -194,11 +185,8 @@ export const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { ite
         <input
           type="number" placeholder="희망 입찰 금액(최종) 입력"
           value={amount} onChange={handleInputChange}
-          className={`premium-input ${isInsufficient ? 'insufficient' : ''}`}
+          className="premium-input"
         />
-        <div className="bid-my-money-info">
-          내 미쿠짱 머니 ₩ {myMoney.toLocaleString()}
-        </div>
         {tooLow && (
           <div className="bid-insufficient-warning">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -210,37 +198,17 @@ export const BidInputContent = ({ item, myMoney, exchangeRate, onChange }: { ite
         )}
         {parsedAmount > 0 && (
           <div className="bid-krw-info">
-            {addDepositWon > 0 ? (
-              <>
-                지금 결제할 보증금 ₩ {addDepositWon.toLocaleString()}
-                <span style={{ display: 'block', fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
-                  보증금 {targetDepositWon.toLocaleString()}원 ({DEPOSIT_RULE_TEXT})
-                  {paidDepositWon > 0 && ` · 이미 낸 ${paidDepositWon.toLocaleString()}원 제외`}
-                </span>
-              </>
-            ) : (
-              <>
-                지금 결제할 보증금 없음
-                <span style={{ display: 'block', fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
-                  이미 낸 보증금 {paidDepositWon.toLocaleString()}원으로 충분합니다
-                </span>
-              </>
-            )}
+            추가 결제 없음
+            <span style={{ display: 'block', fontSize: '11.5px', color: '#94a3b8', marginTop: '2px' }}>
+              {paidDepositWon > 0
+                ? `처음 낸 보증금 ${paidDepositWon.toLocaleString()}원 그대로 입찰합니다`
+                : '처음 낸 보증금 그대로 입찰합니다'}
+            </span>
           </div>
         )}
         <p style={{ marginTop: 10, fontSize: 11.5, lineHeight: 1.6, color: '#94a3b8', wordBreak: 'keep-all' }}>
           {BID_LIMIT_NOTICE}
         </p>
-        {isInsufficient && (
-          <div className="bid-insufficient-warning">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-            보증금을 내기에 미쿠짱 머니가 부족합니다
-          </div>
-        )}
       </div>
     </div>
   );
@@ -459,13 +427,11 @@ function ItemDetail({ item, onDelete, auctionTime, exchangeRate = 0, paymentFeeR
 }
 
 // 🌟 메인 테이블 컴포넌트
-export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete, onStatusClick, inlineMode = false, myMoney = 0, exchangeRate = 0, paymentFeeRule, agencyFeeRule }: any) {
+export default function OrderTable({ items, activeTab, selectedItems, setSelectedItems, fetchOrders, selectedAddress, onIndividualPacking, onDelete, onStatusClick, inlineMode = false, exchangeRate = 0, paymentFeeRule, agencyFeeRule }: any) {
   const {
     isMobile, showConfirm, showAlert,
     getAuctionTimeData, getColSpanCount
   } = useOrderTableLogic({ activeTab, fetchOrders });
-  // 💰 입찰 보증금이 모자랄 때 충전 화면으로 보내 줍니다.
-  const router = useRouter();
 
   const isAuctionTab = activeTab === 'BID_PENDING' || activeTab === 'BIDDING';
   const showBundleAndRecipientTabs = [ORDER_STATUS.PREPARING, ORDER_STATUS.PAYMENT_REQ, ORDER_STATUS.PAYMENT_DONE, ORDER_STATUS.SHIPPING];
@@ -509,7 +475,7 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
   // 입찰 처리 로직
   const handleBidClick = async (item: any) => {
     let finalAmount = "";
-    const isConfirmed = await showConfirm(<BidInputContent item={item} myMoney={myMoney} exchangeRate={exchangeRate} onChange={(val) => { finalAmount = val; }} />);
+    const isConfirmed = await showConfirm(<BidInputContent item={item} onChange={(val) => { finalAmount = val; }} />);
 
     if (isConfirmed) {
       // 🌟 입력값은 이제 "추가할 금액"이 아니라 "희망 입찰 금액(최종)"입니다.
@@ -517,12 +483,6 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
       const currentHighest = item.productPrice || 0;
       if (!finalBidAmount || finalBidAmount <= currentHighest) {
         return showAlert("현재 최고가보다 높은 금액을 입력해주세요.", "error");
-      }
-
-      // 🌟 확인 버튼은 비활성화로 막혀있지만, 만약을 대비해 제출 시점에도 한 번 더 검증합니다.
-      const finalBidAmountWon = Math.ceil(Math.round(finalBidAmount * exchangeRate) / 100) * 100;
-      if (finalBidAmountWon > myMoney) {
-        return showAlert("미쿠짱 머니가 부족합니다.", "error");
       }
 
       // 서버는 myBidPrice에 더해지는(increment) 값을 받으므로, 기존 입찰가와의 차액을 계산해서 보냅니다.
@@ -535,10 +495,6 @@ export default function OrderTable({ items, activeTab, selectedItems, setSelecte
       if (outcome.ok) {
         showAlert(`¥${finalBidAmount.toLocaleString()} 입찰 완료!`, 'success');
         fetchOrders();
-      } else if (outcome.insufficient) {
-        // 💰 부족하면 오류만 띄우지 않고 충전으로 이어 줍니다.
-        const goCharge = await showConfirm(<InsufficientBalanceNotice {...outcome.insufficient} />);
-        if (goCharge) router.push(MONEY_CHARGE_PATH);
       } else {
         showAlert(outcome.message, 'error');
       }

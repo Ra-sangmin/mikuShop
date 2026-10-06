@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import GlobalProductDetail from '@/app/main_shop/components/GlobalProductDetail';
 import { useExchangeRate } from '@/app/context/ExchangeRateContext';
 import GuideLayout from '@/app/components/GuideLayout';
+import PaymentHeroCard from '../components/PaymentHeroCard';
 import '@/app/guide/guide-common.css';
 import '../mypage-premium.css';
 
@@ -25,14 +26,14 @@ function useWishlistLogic() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const ITEMS_PER_PAGE = 5;
 
-  // 🌟 요약 카드의 미쿠짱머니 표시용 (마이페이지·주문 현황·배송지 화면과 동일한 구성)
-  const [cyberMoney, setCyberMoney] = useState<number>(0);
+  // 💳 요약 카드의 결제 대기 표시용 (마이페이지·주문 현황·배송지 화면과 동일한 구성)
+  const [myOrders, setMyOrders] = useState<any[]>([]);
   useEffect(() => {
     const storedId = localStorage.getItem('user_id');
     if (!storedId) return;
     fetch(`/api/users?id=${storedId}`)
       .then(res => res.json())
-      .then(data => { if (data?.success) setCyberMoney(Number(data.user?.cyberMoney) || 0); })
+      .then(data => { if (data?.success) setMyOrders(data.user?.orders || []); })
       .catch(() => {});
   }, []);
 
@@ -118,7 +119,7 @@ function useWishlistLogic() {
   const currentItems = wishlist.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   return {
-    cyberMoney,
+    myOrders,
     wishlist, selectedItems, selectedItem, setSelectedItem, exchangeRate, detailRef,
     currentPage, setCurrentPage, totalPages, currentItems,
     handleRemove, handleRemoveSelected, toggleItemSelection, toggleAllSelection, handleItemClick
@@ -178,7 +179,7 @@ const WishlistItem = ({ item, isSelected, exchangeRate, onToggle, onClickDetail,
 // 🌟 메인 페이지
 export default function WishlistPage() {
   const {
-    cyberMoney,
+    myOrders,
     wishlist, selectedItems, selectedItem, setSelectedItem, exchangeRate, detailRef,
     currentPage, setCurrentPage, totalPages, currentItems,
     handleRemove, handleRemoveSelected, toggleItemSelection, toggleAllSelection, handleItemClick
@@ -203,14 +204,7 @@ export default function WishlistPage() {
               <p className="mp-hero-desc">상품을 눌러 상세 정보를 확인하고, 바로 구매대행을 신청할 수 있어요.</p>
             </div>
           </div>
-          <div className="mp-hero-money">
-            <span className="mp-hero-money-label"><i className="fa fa-sack-dollar"></i> 미쿠짱머니</span>
-            <strong className="mp-hero-money-value" translate="no">{cyberMoney.toLocaleString()}<small>원</small></strong>
-            <div className="mp-hero-money-actions">
-              <Link href="/mypage/money/charge" className="is-primary"><i className="fa fa-plus"></i> 충전</Link>
-              <Link href="/mypage/money/history"><i className="fa fa-receipt"></i> 이용 내역</Link>
-            </div>
-          </div>
+          <PaymentHeroCard orders={myOrders} />
           <div className="mp-hero-stats">
             <div className="mp-hero-stat"><span>관심 상품</span><strong>{wishlist.length}<small>개</small></strong></div>
             <div className="mp-hero-stat"><span>선택한 상품</span><strong>{selectedItems.length}<small>개</small></strong></div>

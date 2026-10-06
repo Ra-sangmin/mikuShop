@@ -12,10 +12,10 @@ import {
 // 🌟 구매대행 이용 절차 (스타일: ../guide-common.css의 .gp-steps)
 const STEPS = [
   { icon: <MagnifyingGlass weight="bold" />, title: '상품 검색 및 견적 문의', desc: '일본 쇼핑몰에서 원하는 상품을 찾고, 필요하면 상품 URL로 견적을 문의하세요.' },
-  { icon: <CreditCard weight="bold" />, title: '구매 신청 및 1차 결제', desc: '구매대행 신청서를 작성하고 상품 금액과 수수료를 미쿠짱 머니로 결제합니다.', tag: '1차 결제' },
+  { icon: <CreditCard weight="bold" />, title: '구매 신청 및 1차 결제', desc: '구매대행 신청서를 작성하고 마이페이지에서 상품 금액과 수수료를 카드로 결제합니다.', tag: '1차 결제' },
   { icon: <Storefront weight="bold" />, title: '현지 구매 및 현지 배송', desc: '미쿠짱이 일본 현지에서 상품을 구매하고, 일본 내 배송으로 센터까지 받습니다.' },
   { icon: <Warehouse weight="bold" />, title: '현지 센터 도착 및 검수', desc: '센터에 도착한 상품의 무게를 재고 주문 내용과 대조합니다.' },
-  { icon: <Coins weight="bold" />, title: '국제 배송비 2차 결제', desc: '측정된 무게를 기준으로 국제 배송비가 청구됩니다.', tag: '2차 결제' },
+  { icon: <Coins weight="bold" />, title: '국제 배송비 2차 결제', desc: '측정된 무게를 기준으로 국제 배송비가 청구되며, 카드로 결제합니다.', tag: '2차 결제' },
   { icon: <AirplaneTilt weight="bold" />, title: '국제 배송 및 수령', desc: '통관을 거쳐 입력하신 한국 주소로 배송됩니다.' },
 ];
 

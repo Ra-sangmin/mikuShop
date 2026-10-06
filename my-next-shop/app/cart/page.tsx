@@ -138,12 +138,6 @@ export default function CartPage() {
                   일반회원 <button style={{ fontSize: '13px', padding: '3px 8px', border: '1px solid #ccc', backgroundColor: '#fff', marginLeft: '10px', cursor: 'pointer' }}>등급안내▶</button>
               </td>
             </tr>
-            <tr>
-              <td style={{ width: '50%', padding: '15px', backgroundColor: '#f9f9f9', border: '1px solid #ddd', textAlign: 'center', fontWeight: 'bold' }}>사이버머니</td>
-              <td style={{ width: '50%', padding: '15px', border: '1px solid #ddd', textAlign: 'center' }}>
-                  <span style={{ fontWeight: 'bold', fontSize: '18px' }}>10,000 원</span>
-              </td>
-            </tr>
           </tbody>
         </table>
 
@@ -192,7 +186,8 @@ export default function CartPage() {
           <i className="fa fa-list-alt" style={{ fontSize: '22px' }}></i> 낙찰 및 구매승인리스트
         </div>
         <div style={{ fontSize: '14px', color: '#d9534f', marginBottom: '20px' }}>
-          [주의] 현금으로 결제시, 사이버머니 충전후, <span style={{ fontWeight: 'bold' }}>반드시 한번더 결제처리를 하셔야 합니다.</span> 결제 할 물품의 <span style={{ fontWeight: 'bold' }}>결제체크란에 체크후 결제버튼을 클릭하여 결제바랍니다.</span>
+          {/* 💳 예치금(사이버머니) 충전 결제는 없어졌습니다. 결제는 주문마다 카드로 합니다. */}
+          [주의] 결제 할 물품의 <span style={{ fontWeight: 'bold' }}>결제체크란에 체크후 결제버튼을 클릭하면 카드 결제창이 열립니다.</span>
         </div>
         <textarea 
           placeholder="운영사에게 전달 말을 적으세요."

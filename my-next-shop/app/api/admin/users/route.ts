@@ -2,11 +2,11 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAdmin } from '@/lib/apiAuth';
-import { moneyLogText } from '@/lib/moneyLogText';
+import { PURPOSE_LABEL, type PaymentPurpose } from '@/lib/payments/quote';
 
 /**
  * GET /api/admin/users          → 회원 목록
- * GET /api/admin/users?id=123   → 회원 상세 (배송지, 최근 주문, 최근 머니 내역, 주문 상태별 건수)
+ * GET /api/admin/users?id=123   → 회원 상세 (배송지, 최근 주문, 최근 카드 결제, 주문 상태별 건수)
  */
 export async function GET(req: Request) {
   // 🔒 관리자 전용
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ success: false, error: '잘못된 회원 ID입니다.' }, { status: 400 });
       }
 
-      const [user, recentOrders, recentMoneyLogs, statusGroups] = await Promise.all([
+      const [user, recentOrders, payments, paidSum, statusGroups] = await Promise.all([
         prisma.user.findUnique({
           where: { id },
           omit: { password: true }, // 🔒 비밀번호 해시는 내려보내지 않음
@@ -42,10 +42,20 @@ export async function GET(req: Request) {
             productName: true, productImageUrl: true, productPrice: true, registeredAt: true,
           },
         }),
-        prisma.moneyLog.findMany({
-          where: { userId: id },
+        // 💳 결제창만 열고 그만둔 건(READY)은 돈이 오가지 않았으므로 빼고 봅니다.
+        prisma.payment.findMany({
+          where: { userId: id, status: { not: 'READY' } },
           orderBy: { createdAt: 'desc' },
           take: 8,
+          select: {
+            id: true, purpose: true, orderName: true, amount: true, canceledAmount: true,
+            status: true, method: true, approvedAt: true, createdAt: true,
+          },
+        }),
+        // 💳 드로어 상단의 "결제" 숫자 — 취소된 금액은 빼고 실제로 남은 결제액입니다.
+        prisma.payment.aggregate({
+          where: { userId: id, status: { not: 'READY' } },
+          _sum: { amount: true, canceledAmount: true },
         }),
         prisma.order.groupBy({
           by: ['status'],
@@ -59,7 +69,9 @@ export async function GET(req: Request) {
       }
 
       const statusCounts = Object.fromEntries(statusGroups.map(g => [g.status, g._count._all]));
-      return NextResponse.json({ success: true, user, recentOrders, recentMoneyLogs, statusCounts });
+      const recentPayments = payments.map(p => ({ ...p, purposeLabel: PURPOSE_LABEL[p.purpose as PaymentPurpose] ?? p.purpose }));
+      const paidTotal = (paidSum._sum.amount ?? 0) - (paidSum._sum.canceledAmount ?? 0);
+      return NextResponse.json({ success: true, user, recentOrders, recentPayments, paidTotal, statusCounts });
     }
 
     // ── 목록 ──────────────────────────────────────────
@@ -85,10 +97,9 @@ export async function GET(req: Request) {
 
 /**
  * PATCH /api/admin/users
- * body: { userId, membershipGrade?, cyberMoneyDelta?, cyberMoney?, reason? }
- *  - cyberMoneyDelta : 현재 잔액에 더하거나 뺄 금액 (권장 — 화면이 들고 있던 잔액과 무관하게 안전)
- *  - cyberMoney      : 잔액을 이 값으로 덮어쓰기 (하위 호환용)
- *  - reason          : 머니 조정 사유 (money_logs 내용에 함께 남깁니다)
+ * body: { userId, membershipGrade }
+ *  - 💳 미쿠짱머니(잔액)가 없어져 관리자가 고칠 수 있는 항목은 등급뿐입니다.
+ *    돈을 돌려줄 일은 결제 취소(/api/admin/payments)로 처리합니다.
  */
 export async function PATCH(req: Request) {
   // 🔒 관리자 전용
@@ -96,79 +107,29 @@ export async function PATCH(req: Request) {
   if (!adminAuth.ok) return adminAuth.response;
 
   try {
-    const { userId, membershipGrade, cyberMoney, cyberMoneyDelta, reason } = await req.json();
+    const { userId, membershipGrade } = await req.json();
 
     if (!userId) {
       return NextResponse.json({ error: '사용자 ID가 필요합니다.' }, { status: 400 });
     }
-
-    // 🐛 예전에는 등급만 바꿔도 화면이 들고 있던 낡은 cyberMoney를 항상 함께 덮어써서,
-    //    그 사이 회원이 쓴 금액이 되살아나는 갱신 손실(lost update)이 있었습니다.
-    //    → 요청에 실제로 담겨 온 항목만 수정합니다.
-    const wantsGradeChange = membershipGrade !== undefined && membershipGrade !== null;
-    const wantsDelta = cyberMoneyDelta !== undefined && cyberMoneyDelta !== null && Number(cyberMoneyDelta) !== 0;
-    const wantsMoneySet = !wantsDelta && cyberMoney !== undefined && cyberMoney !== null;
-
-    if (!wantsGradeChange && !wantsDelta && !wantsMoneySet) {
+    if (membershipGrade === undefined || membershipGrade === null) {
       return NextResponse.json({ error: '변경할 항목이 없습니다.' }, { status: 400 });
     }
 
-    const delta = wantsDelta ? Math.trunc(Number(cyberMoneyDelta)) : 0;
-    if (wantsDelta && !Number.isFinite(delta)) {
-      return NextResponse.json({ error: '조정 금액이 올바르지 않습니다.' }, { status: 400 });
+    const exists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!exists) {
+      return NextResponse.json({ error: '회원을 찾을 수 없습니다.' }, { status: 404 });
     }
-    const reasonText = typeof reason === 'string' ? reason.trim().slice(0, 100) : '';
 
-    const updatedUser = await prisma.$transaction(async (tx) => {
-      const before = await tx.user.findUnique({ where: { id: userId } });
-      if (!before) throw new Error('USER_NOT_FOUND');
-
-      const data: { membershipGrade?: number; cyberMoney?: number | { increment: number } } = {};
-      if (wantsGradeChange) data.membershipGrade = parseInt(membershipGrade) || 0;
-
-      if (wantsDelta) {
-        if (before.cyberMoney + delta < 0) throw new Error('NEGATIVE_BALANCE');
-        // 🔒 increment 로 원자적으로 반영 → 조회 시점 이후의 사용 내역을 덮어쓰지 않습니다.
-        data.cyberMoney = { increment: delta };
-      } else if (wantsMoneySet) {
-        const next = parseInt(cyberMoney) || 0;
-        if (next < 0) throw new Error('NEGATIVE_BALANCE');
-        data.cyberMoney = next;
-      }
-
-      const user = await tx.user.update({
-        where: { id: userId },
-        data,
-        include: { grade: true },
-        omit: { password: true },
-      });
-
-      // 🌟 관리자가 잔액을 직접 조정한 경우 근거를 남깁니다.
-      const actual = user.cyberMoney - before.cyberMoney;
-      if ((wantsDelta || wantsMoneySet) && actual !== 0) {
-        await tx.moneyLog.create({
-          data: {
-            userId,
-            type: actual > 0 ? 'CHARGE' : 'USE',
-            // 🙈 금액·잔액은 화면에 따로 나오고, 처리한 관리자 이름은 회원에게 보일 필요가 없어 남기지 않습니다.
-            content: moneyLogText.adminAdjust(reasonText),
-            amount: actual,
-            balanceAfter: user.cyberMoney,
-          },
-        });
-      }
-
-      return user;
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { membershipGrade: parseInt(membershipGrade) || 0 },
+      include: { grade: true },
+      omit: { password: true },
     });
 
     return NextResponse.json({ success: true, user: updatedUser });
-  } catch (error: any) {
-    if (error?.message === 'USER_NOT_FOUND') {
-      return NextResponse.json({ error: '회원을 찾을 수 없습니다.' }, { status: 404 });
-    }
-    if (error?.message === 'NEGATIVE_BALANCE') {
-      return NextResponse.json({ error: '잔액이 0원보다 적어질 수 없습니다.' }, { status: 400 });
-    }
+  } catch (error) {
     console.error("Admin User PATCH Error:", error);
     return NextResponse.json({ error: '사용자 정보 수정 실패' }, { status: 500 });
   }

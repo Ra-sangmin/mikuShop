@@ -1,6 +1,6 @@
 "use client";
 
-// 🗂️ 회원 상세 드로어 (기본 정보 · 등급 변경 · 머니 조정 · 최근 주문 · 머니 내역 · 배송지)
+// 🗂️ 회원 상세 드로어 (기본 정보 · 등급 변경 · 최근 주문 · 최근 카드 결제 · 배송지)
 //   관리자 > 사용자 관리의 "관리" 버튼과 관리자 > 카카오톡 알림톡 관리의 회원 클릭이 같은 드로어를 씁니다.
 //   스타일: app/admin/users/users-premium.css 의 usr-drawer* (드로어가 쓰는 색 변수는 .usr-drawer-root 에도 있습니다)
 
@@ -8,7 +8,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserBasicInfo, gradeTone, toneVars, type GradeToneValue } from './AdminPremiumKit';
 import { ORDER_STATUS_LABEL } from '@/src/types/order';
 import {
-  CaretDown, X, Wallet, IdentificationCard, MapPin, Package, ClockCounterClockwise, Plus, Minus, Crown, Copy, ArrowRight,
+  CaretDown, X, IdentificationCard, MapPin, Package, CreditCard, Crown, Copy,
   ChatCircleDots, PaperPlaneTilt, Warning,
 } from '@phosphor-icons/react';
 import '../users/users-premium.css';
@@ -105,13 +105,6 @@ export default function MemberDrawer({ userId, grades: gradesProp, onClose, onSa
   const [confirmTalk, setConfirmTalk] = useState(false);
   const [sendingTalk, setSendingTalk] = useState(false);
 
-  // 머니 조정
-  const [moneyMode, setMoneyMode] = useState<'add' | 'sub'>('add');
-  const [moneyAmount, setMoneyAmount] = useState(0);
-  const [moneyReason, setMoneyReason] = useState('');
-  const [confirmMoney, setConfirmMoney] = useState(false);
-  const [savingMoney, setSavingMoney] = useState(false);
-
   const panelRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -171,11 +164,6 @@ export default function MemberDrawer({ userId, grades: gradesProp, onClose, onSa
 
   const user = detail?.user;
   const tone = gradeTone(user?.grade?.name);
-  const delta = moneyMode === 'add' ? moneyAmount : -moneyAmount;
-  const nextBalance = (user?.cyberMoney || 0) + delta;
-  const moneyInvalid = moneyAmount === 0 || nextBalance < 0;
-
-  const resetMoneyConfirm = () => setConfirmMoney(false);
 
   const patch = async (body: Record<string, any>) => {
     const res = await fetch('/api/admin/users', {
@@ -200,23 +188,6 @@ export default function MemberDrawer({ userId, grades: gradesProp, onClose, onSa
       pushToast('error', e.message);
     } finally {
       setSavingGrade(false);
-    }
-  };
-
-  const saveMoney = async () => {
-    if (moneyInvalid) return;
-    setSavingMoney(true);
-    try {
-      // 🔒 잔액을 통째로 덮어쓰지 않고 증감분(delta)만 보냅니다 → 그사이 회원의 사용 내역을 되돌리지 않습니다.
-      const updated = await patch({ cyberMoneyDelta: delta, reason: moneyReason });
-      onSaved?.(updated);
-      pushToast('success', `${Math.abs(delta).toLocaleString()}원을 ${delta > 0 ? '지급' : '차감'}했습니다. (잔액 ${won(updated.cyberMoney)})`);
-      setMoneyAmount(0); setMoneyReason(''); setConfirmMoney(false);
-      await load();
-    } catch (e: any) {
-      pushToast('error', e.message);
-    } finally {
-      setSavingMoney(false);
     }
   };
 
@@ -261,7 +232,7 @@ export default function MemberDrawer({ userId, grades: gradesProp, onClose, onSa
 
             <div className="usr-drawer-stats">
               <div><span>주문</span><strong>{(user._count?.orders || 0).toLocaleString()}<small>건</small></strong></div>
-              <div><span>미쿠짱머니</span><strong>{won(user.cyberMoney)}</strong></div>
+              <div><span>결제</span><strong>{won(detail.paidTotal)}</strong></div>
               <div><span>가입</span><strong>{daysSince(user.createdAt).toLocaleString()}<small>일째</small></strong></div>
             </div>
 
@@ -388,69 +359,6 @@ export default function MemberDrawer({ userId, grades: gradesProp, onClose, onSa
                 </div>
               </DrawerSection>
 
-              {/* 머니 조정 */}
-              <DrawerSection icon={<Wallet size={15} weight="duotone" />} title="미쿠짱머니 조정" collapseKey="money">
-                <div className="usr-money-form">
-                  <div className="usr-seg is-block" role="group" aria-label="조정 방식">
-                    <button type="button" className={`usr-seg-btn ${moneyMode === 'add' ? 'is-active is-add' : ''}`}
-                      onClick={() => { setMoneyMode('add'); resetMoneyConfirm(); }}>
-                      <Plus size={12} weight="bold" /> 지급
-                    </button>
-                    <button type="button" className={`usr-seg-btn ${moneyMode === 'sub' ? 'is-active is-sub' : ''}`}
-                      onClick={() => { setMoneyMode('sub'); resetMoneyConfirm(); }}>
-                      <Minus size={12} weight="bold" /> 차감
-                    </button>
-                  </div>
-                  <label className="usr-money-input">
-                    <span>₩</span>
-                    <input inputMode="numeric" placeholder="0" aria-label="조정 금액"
-                      value={moneyAmount ? moneyAmount.toLocaleString() : ''}
-                      onChange={(e) => {
-                        const n = parseInt(e.target.value.replace(/\D/g, ''), 10) || 0;
-                        setMoneyAmount(Math.min(n, 100_000_000));
-                        resetMoneyConfirm();
-                      }} />
-                  </label>
-                  <div className="usr-quick">
-                    {[1000, 5000, 10000, 50000].map(v => (
-                      <button key={v} type="button" onClick={() => { setMoneyAmount(a => a + v); resetMoneyConfirm(); }}>
-                        +{v.toLocaleString()}
-                      </button>
-                    ))}
-                    {moneyAmount > 0 && (
-                      <button type="button" className="is-clear" onClick={() => { setMoneyAmount(0); resetMoneyConfirm(); }}>초기화</button>
-                    )}
-                  </div>
-                  <input className="usr-input" placeholder="조정 사유 (예: 배송비 환급, 이벤트 지급)"
-                    maxLength={100} value={moneyReason} onChange={(e) => setMoneyReason(e.target.value)} />
-                  <p className="usr-form-hint">사유와 처리한 관리자는 회원의 머니 내역에 함께 기록됩니다.</p>
-
-                  <div className={`usr-preview ${nextBalance < 0 ? 'is-error' : ''}`}>
-                    <span>{won(user.cyberMoney)}</span>
-                    <ArrowRight size={13} weight="bold" />
-                    <strong>{nextBalance < 0 ? `-₩${Math.abs(nextBalance).toLocaleString()}` : won(nextBalance)}</strong>
-                    {moneyAmount > 0 && <em className={delta > 0 ? 'is-up' : 'is-down'}>{delta > 0 ? '+' : '−'}{moneyAmount.toLocaleString()}</em>}
-                  </div>
-                  {nextBalance < 0 && <p className="usr-form-error">현재 잔액보다 많이 차감할 수 없습니다.</p>}
-
-                  <div className="usr-form-actions">
-                    {confirmMoney ? (
-                      <>
-                        <span className="usr-confirm-text">{moneyAmount.toLocaleString()}원을 {delta > 0 ? '지급' : '차감'}할까요?</span>
-                        <button type="button" className="usr-btn is-ghost" onClick={resetMoneyConfirm}>취소</button>
-                        <button type="button" className={`usr-btn ${delta > 0 ? 'is-save' : 'is-danger'}`} disabled={savingMoney} onClick={saveMoney}>
-                          {savingMoney ? '처리 중…' : '확인'}
-                        </button>
-                      </>
-                    ) : (
-                      <button type="button" className={`usr-btn ${moneyMode === 'add' ? 'is-save' : 'is-danger'}`} disabled={moneyInvalid} onClick={() => setConfirmMoney(true)}>
-                        {moneyMode === 'add' ? '지급하기' : '차감하기'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </DrawerSection>
-
               {/* 최근 주문 */}
               <DrawerSection icon={<Package size={15} weight="duotone" />} title="최근 주문" collapseKey="orders"
                 aside={<span className="usr-section-hint">전체 {(user._count?.orders || 0).toLocaleString()}건</span>}>
@@ -485,27 +393,30 @@ export default function MemberDrawer({ userId, grades: gradesProp, onClose, onSa
                 ) : <p className="usr-muted-box">아직 주문이 없습니다.</p>}
               </DrawerSection>
 
-              {/* 머니 내역 */}
-              <DrawerSection icon={<ClockCounterClockwise size={15} weight="duotone" />} title="최근 머니 내역" collapseKey="moneyLogs">
-                {detail.recentMoneyLogs.length ? (
+              {/* 💳 최근 카드 결제 — 취소(환불)는 관리자 결제 화면에서 합니다 */}
+              <DrawerSection icon={<CreditCard size={15} weight="duotone" />} title="최근 카드 결제" collapseKey="payments">
+                {detail.recentPayments.length ? (
                   <ul className="usr-ledger">
-                    {detail.recentMoneyLogs.map((l: any) => (
-                      <li key={l.id}>
-                        <span className={`usr-ledger-dot ${l.amount >= 0 ? 'is-up' : 'is-down'}`}>
-                          {l.amount >= 0 ? <Plus size={10} weight="bold" /> : <Minus size={10} weight="bold" />}
-                        </span>
-                        <span className="usr-ledger-main">
-                          <span className="usr-ledger-content" title={l.content}>{l.content}</span>
-                          <span className="usr-ledger-date">{fmtDateTime(l.createdAt)}</span>
-                        </span>
-                        <span className="usr-ledger-amt">
-                          <strong className={l.amount >= 0 ? 'is-up' : 'is-down'}>{l.amount >= 0 ? '+' : '−'}{Math.abs(l.amount).toLocaleString()}</strong>
-                          <small>잔액 {l.balanceAfter.toLocaleString()}</small>
-                        </span>
-                      </li>
-                    ))}
+                    {detail.recentPayments.map((p: any) => {
+                      const canceled = p.canceledAmount > 0;
+                      return (
+                        <li key={p.id}>
+                          <span className={`usr-ledger-dot ${p.status === 'CANCELED' ? 'is-down' : 'is-up'}`}>
+                            <CreditCard size={10} weight="bold" />
+                          </span>
+                          <span className="usr-ledger-main">
+                            <span className="usr-ledger-content" title={p.orderName}>{p.purposeLabel} · {p.orderName}</span>
+                            <span className="usr-ledger-date">{fmtDateTime(p.approvedAt || p.createdAt)}{p.method ? ` · ${p.method}` : ''}</span>
+                          </span>
+                          <span className="usr-ledger-amt">
+                            <strong className={p.status === 'CANCELED' ? 'is-down' : 'is-up'}>{p.amount.toLocaleString()}</strong>
+                            {canceled && <small>취소 {p.canceledAmount.toLocaleString()}</small>}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
-                ) : <p className="usr-muted-box">머니 사용 내역이 없습니다.</p>}
+                ) : <p className="usr-muted-box">카드 결제 내역이 없습니다.</p>}
               </DrawerSection>
 
               {/* 배송지 */}
@@ -547,7 +458,7 @@ function writeSectionState(key: string, open: boolean) {
 /**
  * 드로어 패널.
  * collapseKey 를 주면 제목을 눌러 펼치고 접을 수 있습니다. (평소엔 기본 정보만 펼쳐 둠)
- * 접어도 내용은 그대로 두고 숨기기만 해서, 입력 중이던 값(머니 금액 등)이 사라지지 않습니다.
+ * 접어도 내용은 그대로 두고 숨기기만 해서, 입력 중이던 값(고르던 등급 등)이 사라지지 않습니다.
  */
 function DrawerSection({ icon, title, aside, children, collapseKey, defaultOpen = false, remember = true }: {
   icon: React.ReactNode; title: string; aside?: React.ReactNode; children: React.ReactNode;

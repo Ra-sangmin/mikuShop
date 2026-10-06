@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { ADMIN_MENU } from '@/app/admin/adminMenu';
 import {
-  SquaresFour, Users, ClipboardText, Truck, ChartLineUp, ArrowUUpLeft,
+  SquaresFour, Users, ClipboardText, Truck, ChartLineUp,
   Headset, ChatCircleDots, Crown, AirplaneTilt, Calculator, Code, Package, CaretRight,
 } from '@phosphor-icons/react';
 import { ADMIN_ORDERS_CHANGED_EVENT } from '@/app/admin/adminEvents';
@@ -18,7 +18,6 @@ const MENU_ICON: Record<string, React.ElementType> = {
   '입고 완료 · 배송 준비': Package,
   '국제 배송 현황': Truck,
   '정산 관리': ChartLineUp,
-  '미쿠짱 머니': ArrowUUpLeft,
   '고객 센터': Headset,
   '카카오톡 알림톡 관리': ChatCircleDots,
   '회원 등급 및 수수료 관리': Crown,

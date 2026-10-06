@@ -61,19 +61,22 @@ export interface AlimtalkTemplate {
  *    content 는 위 주석대로 전송되지 않으니 대조용으로만 관리하세요.
  */
 export const ALIMTALK_TEMPLATES: Record<string, AlimtalkTemplate> = {
-  // 🔨 낙찰 알림은 두 갈래입니다. 자동 정산까지 끝난 건과, 잔액이 모자라 승인을 기다리는 건은
+  // 🔨 낙찰 알림은 두 갈래입니다. 보증금으로 정산이 끝난 건과, 카드 결제를 기다리는 건은
   //    회원이 할 일이 정반대라 한 문안으로는 어느 쪽도 제대로 안내하지 못합니다.
   //
-  // 💰 낙찰 + 미쿠짱머니 자동 정산 완료. 회원이 할 일은 없고 결과만 알립니다.
-  //    ⚠️ 2026-09-27 검수 요청 중. 아래는 솔라피 콘솔의 템플릿 코드이고, 승인 뒤 발급되는
-  //       코드가 다르면 .env 의 SOLAPI_TEMPLATE_BID_PAID 로 덮어씁니다.
+  // ⚠️ 2026-10 미쿠짱머니를 없애고 카드 결제로 바꾸면서 두 문안을 새로 썼습니다.
+  //    예전 템플릿(SDhTk8Ipdo · L4cebz3RFd)은 "미쿠짱머니 차감액" · "잔액이 부족하여" 라는 문구가 있어
+  //    더 이상 맞지 않습니다. 아래 문안으로 카카오 검수를 받은 뒤 발급된 코드를 .env 에 넣어야 발송됩니다.
+  //    **코드가 비어 있으면 그 상태의 알림톡은 보내지 않습니다.** (틀린 안내가 나가는 것보다 낫습니다)
+
+  // 💰 낙찰 + 보증금으로 정산 완료 (낙찰가가 작아 보증금이 총액을 덮은 경우). 회원이 할 일은 없습니다.
   //    카테고리: 구매 > 구매완료(002001)
   BID_PAID: {
-    templateId: process.env.SOLAPI_TEMPLATE_BID_PAID || 'SDhTk8Ipdo',
+    templateId: process.env.SOLAPI_TEMPLATE_BID_PAID_CARD || '',
     content: [
       '[미쿠짱] 상품 낙찰 및 정산 완료 안내',
       '',
-      '#{고객명}님, 입찰하신 상품이 낙찰되어 정산까지 완료되었습니다.',
+      '#{고객명}님, 입찰하신 상품이 낙찰되어 예치하신 보증금으로 정산이 완료되었습니다.',
       '',
       '▪ 주문번호 : #{주문번호}',
       '▪ 상품명 : #{상품명}',
@@ -81,36 +84,33 @@ export const ALIMTALK_TEMPLATES: Record<string, AlimtalkTemplate> = {
       '▪ 낙찰금액 : #{낙찰금액}',
       // ⚠️ 본문에 '원' 이 이미 붙어 있습니다. 변수 값에는 숫자만 넣습니다.
       '▪ 예치하신 보증금 : #{보증금}원',
-      '▪ 미쿠짱머니 차감액 : #{차감금액}원',
+      '▪ 정산 금액 : #{정산금액}원',
       '',
+      '남은 보증금은 결제하신 카드로 취소(환불)해 드립니다.',
       '일본 현지에서 상품 인수를 진행하며, 물류센터 입고가 완료되면 다시 안내해 드리겠습니다.',
     ].join('\n'),
     buttonName: '주문 상세 확인',
   },
 
+  // 💳 낙찰 + 카드 결제 요청. 보증금을 뺀 금액을 결제해야 일본 현지 인수가 진행됩니다.
+  //    카테고리: 구매 > 진행상태(002003)
   BID_SUCCESS: {
-    // 카카오 비즈메시지에 등록된 템플릿 코드. 검수 후 코드가 바뀌면 .env 로 덮어씁니다.
-    // ⚠️ 2026-09-27 문안·버튼을 함께 바꿔 다시 검수 요청 중입니다. 아래는 솔라피 콘솔의 템플릿 코드이고,
-    //    승인 뒤 발급되는 코드가 다르면 .env 의 SOLAPI_TEMPLATE_BID_SUCCESS 로 덮어씁니다.
-    //    카테고리: 구매 > 진행상태(002003)
-    templateId: process.env.SOLAPI_TEMPLATE_BID_SUCCESS || 'L4cebz3RFd',
+    templateId: process.env.SOLAPI_TEMPLATE_BID_SUCCESS_CARD || '',
     content: [
-      '[미쿠짱] 낙찰 상품 승인 요청 안내',
+      '[미쿠짱] 상품 낙찰 및 결제 요청 안내',
       '',
-      '#{고객명}님, 입찰하신 상품이 낙찰되어 다음 단계 진행을 안내해 드립니다.',
+      '#{고객명}님, 입찰하신 상품이 낙찰되었습니다.',
       '',
       '▪ 주문번호 : #{주문번호}',
       '▪ 상품명 : #{상품명}',
-      // 💴 낙찰금액은 엔화입니다. 아래 두 줄과 단위가 다르니 변수 값에 ¥ 를 붙여 보냅니다.
+      // 💴 낙찰금액은 엔화입니다. 아래 줄과 단위가 다르니 변수 값에 ¥ 를 붙여 보냅니다.
       '▪ 낙찰금액 : #{낙찰금액}',
       // ⚠️ 본문에 '원' 이 이미 붙어 있습니다. 변수 값에는 숫자만 넣습니다.
-      '▪ 발생비용 : #{발생비용}원',
+      '▪ 결제하실 금액 : #{발생비용}원 (보증금 차감)',
       '',
-      '미쿠짱머니 잔액이 부족하여 자동 정산이 이루어지지 않았습니다.',
-      '',
-      '승인이 지연될 경우 현지에서 낙찰이 취소될 수 있으니, 하단 버튼을 통해 상세 내역을 확인하시고 승인을 완료해 주시기 바랍니다.',
+      '결제가 지연될 경우 현지에서 낙찰이 취소될 수 있으니, 하단 버튼을 눌러 결제를 완료해 주시기 바랍니다.',
     ].join('\n'),
-    buttonName: '주문 승인하기',
+    buttonName: '결제하기',
   },
 
   // 🏬 일본 물류센터 입고 안내
@@ -223,68 +223,8 @@ export const CONSULT_TEMPLATE: AlimtalkTemplate = {
 };
 
 /**
- * 💸 미쿠짱머니 환불 승인이 끝났을 때 보내는 안내.
- *
- * 주문 상태와 무관해서 CONSULT_TEMPLATE 과 같은 이유로 ALIMTALK_TEMPLATES 에 넣지 않습니다.
- * (그 객체의 키는 orderStatusAlimtalk 가 "알림톡을 보내는 주문 상태" 목록으로 그대로 씁니다)
- *
- * 카카오 검수 승인 완료 (2026-09-22). 콘솔의 템플릿 이름은 "미쿠짱머니 환불 완료" 입니다.
- * ⚠️ 변수는 #{고객명} · #{환불금액} · #{환불수단} 셋뿐입니다. 이름이 다르면 발송이 거절됩니다.
- * ⚠️ 본문에 '원' 이 이미 붙어 있습니다. #{환불금액} 에는 숫자와 쉼표만 넣어야
- *    "50,000원원" 이 되지 않습니다. (PAYMENT_REQ 의 #{결제금액} 과 같은 규칙)
- */
-export const REFUND_DONE_TEMPLATE: AlimtalkTemplate = {
-  templateId: process.env.SOLAPI_TEMPLATE_REFUND_DONE || 'KA01TP260922032817854XskY4fiVzX8',
-  content: [
-    '[미쿠짱] 미쿠짱머니 환불 처리 완료 안내',
-    '',
-    '#{고객명}님, 요청하신 미쿠짱머니 환불 처리가 정상적으로 완료되었습니다.',
-    '',
-    '▪ 환불 금액 : #{환불금액}원',
-    '▪ 처리 내역 : #{환불수단}',
-    '',
-    '결제 수단 및 금융사 사정에 따라 실제 환불 반영까지 영업일 기준 1~3일 정도 소요될 수 있습니다.',
-  ].join('\n'),
-  buttonName: '환불 내역 확인하기',
-  // 버튼은 웹링크(WL)라 주소가 필요합니다. 보내는 쪽에서 buttonUrl 로 넘깁니다.
-};
-
-/**
- * 💰 미쿠짱머니 충전이 끝났을 때 보내는 안내.
- *
- * 두 곳에서 씁니다.
- *   · 관리자가 /admin/refund 에서 무통장 충전 신청을 승인할 때 (api/money/approve)
- *   · 회원이 카드로 결제해 바로 충전될 때 (api/payment/confirm)
- *
- * REFUND_DONE_TEMPLATE 과 같은 이유로 ALIMTALK_TEMPLATES 에 넣지 않습니다. (주문 상태가 아님)
- * 카카오 검수 승인 완료 (2026-09-22). 콘솔 이름은 "미쿠짱머니 충전 완료" 입니다.
- *
- * ⚠️ 변수는 #{고객명} · #{충전금액} · #{현재잔액} 셋뿐입니다. 이름이 다르면 발송이 거절됩니다.
- * ⚠️ 본문에 '원' 이 이미 붙어 있어 값에는 숫자와 쉼표만 넣습니다.
- */
-export const CHARGE_DONE_TEMPLATE: AlimtalkTemplate = {
-  templateId: process.env.SOLAPI_TEMPLATE_CHARGE_DONE || 'KA01TP260922032556819iUTs66Fgy64',
-  content: [
-    '[미쿠짱] 미쿠짱머니 충전 완료 안내',
-    '',
-    '#{고객명}님, 결제하신 미쿠짱머니 충전이 정상적으로 완료되었습니다.',
-    '상세 내역은 마이페이지에서 확인하실 수 있습니다.',
-    '',
-    '▪ 충전 금액 : #{충전금액}원',
-    '▪ 현재 잔액 : #{현재잔액}원',
-    '',
-    '이용해 주셔서 감사합니다.',
-  ].join('\n'),
-  buttonName: '충전 내역 확인하기',
-  // 버튼은 웹링크(WL). 주소는 환불 안내와 같은 이용 내역 화면입니다.
-};
-
-/** 💸 환불 안내 버튼이 열 주소. 템플릿에 등록된 주소와 같아야 합니다. */
-export const REFUND_HISTORY_PATH = '/mypage/money/history';
-
-/**
  * 🔗 알림톡 버튼이 여는 주소의 기준 도메인. **모든 알림톡이 이 값을 씁니다.**
- * (머니 안내는 moneyHistoryUrl(), 주문 상태 안내는 orderStatusAlimtalk.ts)
+ * (주문 상태 안내는 orderStatusAlimtalk.ts)
  *
  * ⚠️ NEXTAUTH_URL 을 쓰지 않고 운영 도메인을 고정으로 둡니다. 이유가 둘입니다.
  *   1) 카카오 템플릿에 등록된 버튼 주소와 다르면 발송이 거절됩니다.
@@ -295,32 +235,6 @@ export const REFUND_HISTORY_PATH = '/mypage/money/history';
  * 미리보기가 실제와 다른 주소를 보여주면 검수 대조가 거짓말을 하게 됩니다.
  */
 export const SITE_ORIGIN = 'https://mikushop.co.kr';
-
-export function moneyHistoryUrl(): string {
-  return `${SITE_ORIGIN}${REFUND_HISTORY_PATH}`;
-}
-
-/**
- * 🏦 환불 계좌를 안내 문구로 만듭니다. "국민은행 ****1234 (홍길동)" 처럼요.
- *
- * 계좌번호는 뒤 4자리만 남깁니다. 카카오톡 대화방에 전체 계좌번호가 평문으로
- * 남지 않도록 하기 위해서입니다. (maskPhone 과 같은 취지)
- * 신청할 때 계좌를 적지 않았을 수도 있어(모두 String?) 비어 있으면 대체 문구를 씁니다.
- */
-export function formatRefundAccount(account: {
-  bankName?: string | null;
-  accountNumber?: string | null;
-  accountHolder?: string | null;
-}): string {
-  const bank = account.bankName?.trim();
-  const holder = account.accountHolder?.trim();
-  const digits = String(account.accountNumber ?? '').replace(/[^0-9]/g, '');
-  const masked = digits.length >= 4 ? `****${digits.slice(-4)}` : '';
-
-  const parts = [bank, masked].filter(Boolean);
-  if (parts.length === 0) return '등록하신 환불 계좌';
-  return holder ? `${parts.join(' ')} (${holder})` : parts.join(' ');
-}
 
 // ---------------------------------------------------------------- 발송
 

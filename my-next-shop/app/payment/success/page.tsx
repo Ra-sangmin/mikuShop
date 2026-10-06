@@ -6,13 +6,14 @@ import GuideLayout from '@/app/components/GuideLayout';
 import '../payment-premium.css';
 import {
   CheckCircle, WarningOctagon, ShieldCheck, Receipt, Package, Hash,
-  Clock, CreditCard, Wallet, LockKey, ArrowRight, ArrowCounterClockwise, Headset,
+  Clock, CreditCard, LockKey, ArrowRight, ArrowCounterClockwise, Headset,
 } from '@phosphor-icons/react';
 
 interface ConfirmResult {
   approvedAt?: string;
   method?: string;
-  balance?: number;
+  orderName?: string;
+  purposeLabel?: string;
 }
 
 /** 토스에서 내려주는 승인 일시(ISO)를 "2026. 09. 18. 14:32" 형태로 */
@@ -34,7 +35,7 @@ function SuccessContent() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [result, setResult] = useState<ConfirmResult>({});
-  // 🌟 로딩 화면의 진행 단계 (0: 결제 요청 완료 → 1: 승인 확인 중 → 2: 충전 반영)
+  // 🌟 로딩 화면의 진행 단계 (0: 결제 요청 완료 → 1: 승인 확인 중 → 2: 주문 반영)
   const [step, setStep] = useState(1);
 
   useEffect(() => {
@@ -45,18 +46,11 @@ function SuccessContent() {
         return;
       }
 
-      const userId = localStorage.getItem('user_id');
-      if (!userId) {
-        setStatus('error');
-        setErrorMessage('로그인 정보가 없습니다. 관리자에게 문의해주세요.');
-        return;
-      }
-
       try {
         const res = await fetch('/api/payment/confirm', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paymentKey, orderId, amount, userId }),
+          body: JSON.stringify({ paymentKey, orderId, amount }),
         });
 
         const data = await res.json();
@@ -66,7 +60,8 @@ function SuccessContent() {
           setResult({
             approvedAt: data?.data?.approvedAt,
             method: data?.data?.method,
-            balance: data?.dbResult?.balance,
+            orderName: data?.data?.orderName,
+            purposeLabel: data?.data?.purposeLabel,
           });
           // 마지막 단계가 채워지는 것을 잠깐 보여준 뒤 결과로 넘어갑니다.
           setTimeout(() => setStatus('success'), 450);
@@ -104,7 +99,7 @@ function SuccessContent() {
               <p className="pay-desc">창을 닫거나 새로고침하지 마시고<br />잠시만 기다려 주세요.</p>
 
               <div className="pay-steps" role="list">
-                {['결제 요청', '승인 확인', '충전 반영'].map((label, i) => (
+                {['결제 요청', '승인 확인', '주문 반영'].map((label, i) => (
                   <div
                     key={label}
                     role="listitem"
@@ -132,7 +127,7 @@ function SuccessContent() {
               </div>
               <span className="pay-eyebrow is-success">PAYMENT COMPLETE</span>
               <h2 className="pay-title">결제가 정상적으로<br />완료되었습니다</h2>
-              <p className="pay-desc">미쿠짱머니 충전이 계정에 즉시 반영되었습니다.</p>
+              <p className="pay-desc">{result.purposeLabel || '결제'}가 주문에 바로 반영되었습니다.</p>
 
               {/* 영수증 */}
               <div className="pay-receipt">
@@ -144,7 +139,7 @@ function SuccessContent() {
 
                 <div className="pay-row">
                   <span className="pay-row-label"><Package size={15} weight="duotone" /> 주문 항목</span>
-                  <span className="pay-row-value">미쿠짱머니 충전</span>
+                  <span className="pay-row-value">{result.orderName || '-'}</span>
                 </div>
                 <div className="pay-row">
                   <span className="pay-row-label"><CreditCard size={15} weight="duotone" /> 결제 수단</span>
@@ -170,21 +165,12 @@ function SuccessContent() {
                 </div>
               </div>
 
-              {typeof result.balance === 'number' && (
-                <div className="pay-balance">
-                  <span className="pay-balance-icon" aria-hidden="true"><Wallet size={17} weight="duotone" /></span>
-                  <span className="pay-balance-text">
-                    충전 후 보유 머니 <strong translate="no">{result.balance.toLocaleString()}원</strong>
-                  </span>
-                </div>
-              )}
-
               <div className="pay-actions">
-                <button type="button" className="pay-btn is-primary" onClick={() => router.push('/mypage')}>
-                  마이페이지로 이동 <ArrowRight size={16} weight="bold" />
+                <button type="button" className="pay-btn is-primary" onClick={() => router.push('/mypage/status')}>
+                  진행 현황 보기 <ArrowRight size={16} weight="bold" />
                 </button>
-                <button type="button" className="pay-btn is-ghost" onClick={() => router.push('/mypage/money/history')}>
-                  <Receipt size={16} weight="bold" /> 머니 이용 내역 보기
+                <button type="button" className="pay-btn is-ghost" onClick={() => router.push('/mypage/payments')}>
+                  <Receipt size={16} weight="bold" /> 결제 내역 보기
                 </button>
               </div>
 
@@ -210,8 +196,8 @@ function SuccessContent() {
               </div>
 
               <div className="pay-actions">
-                <button type="button" className="pay-btn is-primary" onClick={() => router.push('/mypage/money/charge')}>
-                  <ArrowCounterClockwise size={16} weight="bold" /> 다시 시도하기
+                <button type="button" className="pay-btn is-primary" onClick={() => router.push('/mypage/status')}>
+                  <ArrowCounterClockwise size={16} weight="bold" /> 진행 현황에서 다시 결제하기
                 </button>
                 <button type="button" className="pay-btn is-ghost" onClick={() => router.push('/inquiry/kakaotalk')}>
                   <Headset size={16} weight="bold" /> 고객센터 문의하기
@@ -230,7 +216,7 @@ function SuccessContent() {
 
 export default function PaymentSuccessPage() {
   return (
-    <GuideLayout title="결제 처리" type="money">
+    <GuideLayout title="결제 처리" type="mypage">
       <Suspense fallback={
         <div className="pay-page">
           <div className="pay-card">
