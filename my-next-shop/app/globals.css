@@ -1578,3 +1578,12 @@ body {
 @media (max-width: 1024px) {
   .hero-chip.c4 { left: -10%; top: 42%; }
 }
+
+/* 📱 메인 배너(휴대폰): 로고(헤더) 아래 빈 공간이 너무 커서 배너 높이를 줄이고,
+   아래 페이지 표시(03/05) 자리만큼 내용을 위로 올립니다 */
+@media (max-width: 768px) {
+  .hero-banner-wrap { height: 268px; }
+  .hero-slide .banner-inner { padding-bottom: 52px; box-sizing: border-box; }
+  /* 낮아진 배너에 맞춰 AI 슬라이드 캐릭터도 살짝 줄임 (발끝이 잘리지 않게) */
+  .premium-floating-img.is-ai { height: 240px; margin: -20px 0; }
+}

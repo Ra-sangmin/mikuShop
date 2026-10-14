@@ -40,11 +40,11 @@ export default function AiSearchBanner() {
 
           <div className="aib-malls">
             {MALLS.map(m => (
-              <span key={m} className="aib-mall">
+              <span key={m} className="aib-mall" title={MALL_LABEL[m]}>
                 <span className="aib-mall-ico">
                   {m === 'rakuten' ? <span className="aib-mall-r">R</span> : <MallLogo mall={m} size={14} />}
                 </span>
-                {MALL_LABEL[m]}
+                <span className="aib-mall-name">{MALL_LABEL[m]}</span>
               </span>
             ))}
           </div>
