@@ -184,6 +184,7 @@ export default function AiSearchChat() {
     setInput('');
     setImage(null);
     setImageNotice(null);
+    setPhotoHint(false); // '사진으로 찾아보기' 안내는 첫 질문을 보내면 거둡니다
     const userId = ++idRef.current;
     const botId = ++idRef.current;
     activeBotRef.current = botId;
@@ -491,6 +492,9 @@ export default function AiSearchChat() {
           )}
           <h1 {...homeLink}>미쿠짱 <span className="ais-grad-text">AI</span> 쇼핑 비서</h1>
           <p>메루카리 · 라쿠텐 · 야후 쇼핑 · 야후 옥션을 한 번에 찾아 드려요. 한국어로 편하게 물어보세요!</p>
+          {/* 📱 휴대폰 첫 화면: 장면 그림을 글과 탭 사이의 '진짜 칸'으로 둡니다 (PC 에서는 숨김 — 카드 배경이 대신함).
+              예전엔 카드 배경 위치를 px 로 맞춰서, 글이 한 줄 더 꺾이거나 안내가 붙으면 그림이 탭과 겹쳤습니다. */}
+          {empty && <span className="ais-hero-scene" aria-hidden />}
 
           {/* 쇼핑몰 선택: 하나의 알약 안에 나란히 놓인 세그먼트. 각 몰은 실제 로고로 구분합니다. */}
           <div className="ais-seg-wrap">

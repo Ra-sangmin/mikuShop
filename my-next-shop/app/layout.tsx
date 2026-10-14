@@ -6,6 +6,7 @@ import Footer from './components/Footer';
 import { ExchangeRateProvider } from './context/ExchangeRateContext';
 import { CartProvider } from './context/CartContext';
 import { Providers } from './Providers';
+import StyledJsxRegistry from './StyledJsxRegistry';
 import { useEffect, useRef } from "react";
 
 const FORCE_TOP_KEY = 'miku:force-scroll-top';
@@ -128,6 +129,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           fontFamily: '"NanumSquareRound", sans-serif',
         }}
       >
+        <StyledJsxRegistry>
         <Providers>
           <ExchangeRateProvider>
             <CartProvider>
@@ -139,6 +141,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </CartProvider>
           </ExchangeRateProvider>
         </Providers>
+        </StyledJsxRegistry>
       </body>
     </html>
   );

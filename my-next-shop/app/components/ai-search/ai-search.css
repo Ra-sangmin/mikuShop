@@ -1342,3 +1342,57 @@
 .ais-cam-error .ais-cam-steps b, .ais-cam-error .ais-cam-note b { color: #fbcfe8; }
 .ais-cam-error .ais-cam-note { font-size: 12.5px; color: rgb(255 255 255 / .6); }
 .ais-cam-error button.is-sub { background: transparent; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .3); font-weight: 600; font-size: 13.5px; padding: 10px 16px; }
+
+/* 📱 휴대폰 첫 화면 v4: 그림·그늘을 '아래 기준'이 아니라 '위 기준'으로 고정.
+   검색창 위에 안내(사진 안내·첨부 사진)가 붙거나 예시 질문이 늘어도 그림이 탭과 겹치지 않습니다.
+   (글 끝 ≈ 181px, 탭 시작 = 글 끝 + 250px) */
+@media (max-width: 768px) {
+  .ais-page.is-empty .ais-hero.has-scene { background-position: 82% 186px; }
+  .ais-hero.has-scene::before {
+    background: linear-gradient(180deg,
+      rgb(46 26 110 / .92) 0, rgb(54 30 120 / .96) 184px,
+      rgb(72 44 150 / .55) 220px, transparent 258px,
+      transparent 380px, rgb(66 40 140 / .96) 431px, rgb(60 36 130 / .96) 100%);
+  }
+}
+
+/* 📷 '사진으로 찾아보기'로 들어왔을 때 안내 — 보라 바탕 위에서도 잘 보이게 (첫 화면 카드 안) */
+.ais-hero.has-scene .ais-attach-hint {
+  color: #fff; font-weight: 700; line-height: 1.45; word-break: keep-all;
+  background: rgb(255 255 255 / .16); border-color: rgb(255 255 255 / .38);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.ais-hero.has-scene .ais-attach-hint svg { color: #fde7f3; flex: none; }
+@media (max-width: 768px) {
+  .ais-hero.has-scene .ais-attach-hint { border-radius: 14px; padding: 8px 12px; font-size: 13px; text-align: left; }
+}
+
+/* ─────────── 📱 휴대폰 첫 화면 v5: 장면 그림 = 실제 칸(.ais-hero-scene) ───────────
+   글 길이·화면 폭·안내 문구와 상관없이 [글 → 그림 → 탭 → 검색창 → 예시] 순서가 겹치지 않습니다. */
+.ais-hero-scene { display: none; }
+@media (max-width: 768px) {
+  .ais-page.is-empty .ais-hero.has-scene { background-image: none; background-color: #3a2384; padding-bottom: 20px; }
+  .ais-hero.has-scene::before { background: linear-gradient(180deg, #2e1a6e 0%, #3a2384 45%, #3c2488 100%); }
+  .ais-hero.has-scene .ais-hero-scene {
+    display: block; align-self: stretch; height: 236px; margin: 6px -20px 0;
+    background: url('/images/miku_icon/ai-shopping-hero.webp') 72% 62% / cover no-repeat;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 80%, transparent 100%);
+            mask-image: linear-gradient(180deg, transparent 0, #000 22%, #000 80%, transparent 100%);
+  }
+  .ais-hero.has-scene .ais-seg-wrap { margin-top: 2px; padding-top: 0; }
+}
+
+/* 📱 iOS 사파리는 글자 16px 미만 입력칸을 누르면 화면을 확대해 버립니다 → 휴대폰 입력칸은 16px 이상 */
+@media (max-width: 768px) {
+  .ais-composer textarea,
+  .ais-composer-wrap.is-empty .ais-composer textarea,
+  .ais-mall-form input { font-size: 16px; }
+}
+
+/* 📱 대화 중 입력창(휴대폰): '검색하기' 글자 때문에 입력칸이 너무 좁아져(“AI 비서에게 물어…”) 화살표 아이콘만 */
+@media (max-width: 768px) {
+  .ais-composer-wrap:not(.is-empty) .ais-send { width: 44px; padding: 0; justify-content: center; flex: none; }
+  .ais-composer-wrap:not(.is-empty) .ais-send > span:last-child { display: none; }
+  .ais-composer-wrap:not(.is-empty) .ais-send.is-stop { width: auto; padding: 0 12px; }
+  .ais-composer-wrap:not(.is-empty) .ais-send.is-stop > span:last-child { display: inline; }
+}

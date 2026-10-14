@@ -1587,3 +1587,14 @@ body {
   /* 낮아진 배너에 맞춰 AI 슬라이드 캐릭터도 살짝 줄임 (발끝이 잘리지 않게) */
   .premium-floating-img.is-ai { height: 240px; margin: -20px 0; }
 }
+
+/* 📱 iPhone(사파리)은 글자 크기가 16px 미만인 입력칸을 누르면 화면을 자동 확대하고,
+   손님이 다시 손가락으로 줄여야 했습니다 (주문서·로그인·회원가입·쇼핑몰 검색 등 거의 모든 입력칸이 13~15px).
+   아이폰(터치 + -webkit-touch-callout 지원)에서만 입력칸 글자를 16px 로 맞춥니다. 안드로이드·PC 는 그대로. */
+@supports (-webkit-touch-callout: none) {
+  @media (pointer: coarse) {
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+    textarea,
+    select { font-size: 16px !important; }
+  }
+}
