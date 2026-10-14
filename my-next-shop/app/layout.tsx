@@ -132,7 +132,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ExchangeRateProvider>
             <CartProvider>
               {!isAdminPage && <Header />}
-              <main className={pathname !== '/' ? 'main-extra-gap' : undefined} style={{ flex: '1 0 auto' }}>
+              <main className={pathname === '/' ? undefined : pathname === '/ai-search' ? 'main-extra-gap main-ai-search' : 'main-extra-gap'} style={{ flex: '1 0 auto' }}>
                 {children}
               </main>
               {!isAdminPage && <Footer />}

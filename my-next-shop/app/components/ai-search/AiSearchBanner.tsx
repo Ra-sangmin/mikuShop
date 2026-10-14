@@ -32,7 +32,9 @@ export default function AiSearchBanner() {
         <div className="aib-body">
           <span className="aib-eyebrow"><AiSparkle size={12} /> NEW · AI SHOPPING CONCIERGE</span>
           <h2 className="aib-title">
-            <span className="aib-grad">AI</span> 쇼핑 비서에게 물어보세요
+            {/* 휴대폰: 큰 마크 대신 제목 왼쪽에 작은 마크 */}
+            <span className="aib-title-mark" aria-hidden><AiBotMark size={40} /></span>
+            <span><span className="aib-grad">AI</span> 쇼핑 비서에게 물어보세요</span>
           </h2>
           <p className="aib-sub">일본 4대 쇼핑몰을 한국어 한 문장이나 사진 한 장으로, 한 번에 찾아 드려요.</p>
 

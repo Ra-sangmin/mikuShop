@@ -1264,3 +1264,61 @@
 @media (prefers-reduced-motion: reduce) {
   .ais-composer-wrap:not(.is-empty) .ais-send::before, .ais-composer-wrap:not(.is-empty) .ais-send::after { animation: none; }
 }
+
+/* 메인 배너 — 제목 왼쪽 작은 마크 (휴대폰·좁은 화면에서만) */
+.aib-title-mark { display: none; }
+@media (max-width: 900px) {
+  .aib-mark { display: none; }
+  .aib-title { display: flex; align-items: center; gap: 10px; }
+  .aib-title-mark { display: inline-flex; flex: none; }
+  .aib-title-mark .ais-mark { box-shadow: 0 0 0 2px #fff, 0 8px 16px -8px rgb(139 92 246 / .6); }
+}
+@media (max-width: 380px) { .aib-title { font-size: 22px; } }
+/* 메인 배너(휴대폰): 쇼핑몰 4개를 한 줄로 — 아이콘·글씨를 조금 줄이고 점 구분선은 뺍니다 */
+@media (max-width: 900px) {
+  .aib-malls { flex-wrap: nowrap; gap: 10px; white-space: nowrap; overflow: hidden; }
+  .aib-mall { gap: 4px; font-size: 11.5px; letter-spacing: -.3px; flex: none; }
+  .aib-mall-ico { width: 18px; height: 18px; }
+  .aib-mall + .aib-mall::before { display: none; }
+}
+@media (max-width: 340px) { .aib-malls { gap: 7px; } .aib-mall { font-size: 11px; } }
+
+/* ─────────── 📸 화면 안 카메라 (AiCameraSheet) ─────────── */
+.ais-cam {
+  position: fixed; inset: 0; z-index: 10000; display: flex; flex-direction: column;
+  background: #0b0716; color: #fff; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+.ais-cam-top { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; }
+.ais-cam-x, .ais-cam-x-spacer { width: 42px; height: 42px; }
+.ais-cam-x { display: grid; place-items: center; border-radius: 50%; color: #fff; background: rgb(255 255 255 / .12); }
+.ais-cam-title { font-size: 15px; font-weight: 700; letter-spacing: -.2px; }
+.ais-cam-view { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+.ais-cam-view video { width: 100%; height: 100%; object-fit: cover; }
+.ais-cam-view video.is-mirror { transform: scaleX(-1); }
+.ais-cam-frame {
+  position: absolute; width: min(72vw, 360px); aspect-ratio: 1; border-radius: 24px; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgb(11 7 22 / .35), inset 0 0 0 2px rgb(255 255 255 / .85);
+}
+.ais-cam-loading { position: absolute; display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: rgb(255 255 255 / .85); }
+.ais-cam-error { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; }
+.ais-cam-error p { margin: 0; font-size: 14px; line-height: 1.6; color: rgb(255 255 255 / .85); word-break: keep-all; }
+.ais-cam-error button {
+  padding: 12px 20px; border-radius: 14px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, #f0959a 0%, #d27377 38%, #a855f7 100%);
+}
+.ais-cam-bottom { display: flex; align-items: center; justify-content: space-around; padding: 18px 24px 26px; }
+.ais-cam-side { width: 48px; height: 48px; }
+.ais-cam-flip { display: grid; place-items: center; border-radius: 50%; color: #fff; background: rgb(255 255 255 / .12); }
+.ais-cam-flip:disabled { opacity: .35; }
+.ais-cam-shutter {
+  width: 74px; height: 74px; border-radius: 50%; padding: 5px; display: grid; place-items: center;
+  background: linear-gradient(135deg, #f0959a 0%, #d27377 38%, #a855f7 100%);
+  box-shadow: 0 0 0 4px rgb(255 255 255 / .9);
+}
+.ais-cam-shutter span { width: 100%; height: 100%; border-radius: 50%; background: #fff; transition: transform .12s; }
+.ais-cam-shutter:active span { transform: scale(.9); }
+.ais-cam-shutter:disabled { opacity: .45; }
+
+/* /ai-search: 헤더 아래 빈 띠(다른 페이지의 탭·사이드바 자리 120px) 없이 헤더 바로 밑에서 시작 */
+.miku-header-wrapper ~ main.main-extra-gap.main-ai-search { padding-top: var(--miku-header-h, 89px); }
+@media (max-width: 768px) { .main-ai-search .ais-page.is-empty { padding-top: 16px; } }

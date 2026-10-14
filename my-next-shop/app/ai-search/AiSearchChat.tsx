@@ -10,6 +10,7 @@ import AiResultGrid, { MallLogo } from '@/app/components/ai-search/AiResultGrid'
 import AiProductDetailModal from '@/app/components/ai-search/AiProductDetailModal';
 import JaKoTranslate from '@/app/components/ai-search/JaKoTranslate';
 import AiBotMark, { AiSparkle } from '@/app/components/ai-search/AiBotMark';
+import AiCameraSheet, { canUseInPageCamera } from '@/app/components/ai-search/AiCameraSheet';
 import AiSearchProgress, { type SearchProgress } from '@/app/components/ai-search/AiSearchProgress';
 import { useAiSearch, useSuggestions } from '@/app/components/ai-search/useAiSearch';
 import { prepareSearchImage, firstImageFile, SearchImageError, type PreparedImage } from '@/app/components/ai-search/searchImage';
@@ -128,8 +129,11 @@ export default function AiSearchChat() {
       document.removeEventListener('keydown', onKey);
     };
   }, [photoMenu]);
+  // 📸 '사진 촬영'은 화면 안 카메라(AiCameraSheet)로 — capture 입력은 일부 폰에서 앨범 창이 떠서 대체용으로만 씁니다
+  const [cameraOpen, setCameraOpen] = useState(false);
   const pickPhoto = (from: 'camera' | 'album') => {
     setPhotoMenu(false);
+    if (from === 'camera' && canUseInPageCamera()) { setCameraOpen(true); return; }
     (from === 'camera' ? cameraRef : fileRef).current?.click();
   };
   // 메인 배너 '사진으로 찾아보기'(?photo=1)로 들어오면 📷 버튼을 반짝이며 안내합니다.
@@ -580,6 +584,13 @@ export default function AiSearchChat() {
       </div>
 
       <AiProductDetailModal product={selected} onClose={closeDetail} />
+      {/* 열 때마다 새로 그려서(이전 오류·상태 없이) 시작합니다 */}
+      {cameraOpen && <AiCameraSheet
+        open
+        onClose={() => setCameraOpen(false)}
+        onCapture={file => void attachImage(file)}
+        onFallback={() => cameraRef.current?.click()}
+      />}
     </div>
   );
 }
