@@ -1,53 +1,59 @@
-// 🤖 미쿠짱 AI 비서 마크 — 이모지(🤖) 대신 쓰는 전용 아이콘
+// 🤖 미쿠짱 AI 비서 마크 — 헤드셋을 쓴 '홀로그램 속 미쿠짱'(ai-shopping-assistant)으로 만든 AI 비서 아이콘
 //
-// 로즈 그라데이션 타일 + 유리 광택 + 흰 로봇 얼굴(바이저·눈빛) + 안테나 끝의 AI 반짝임.
-// 안테나 반짝임은 상품 상세의 "미쿠짱 AI 간단 요약" 아이콘과 같은 4갈래 별 모양으로 맞췄습니다.
-// size: 타일 한 변(px). 글자·아이콘은 타일 크기에 맞춰 비례로 줄어듭니다.
+// 두 가지 모양
+//  - holo  : 깊은 자줏빛 타일 + 머리 뒤로 빛나는 링(로즈→보라→하늘색) + 궤도 점 + 반짝임 → 첫 화면·배너 같은 큰 자리
+//  - aurora: 흰 바탕 + 오로라 빛 번짐 + 그라데이션 테두리 + 반짝임                       → 대화 말풍선 옆처럼 작은 자리
+//  🐛 예전엔 캐릭터를 동그란 창 안에 넣어 "망원경으로 들여다보는" 느낌이었습니다 → 창 없이 타일에 바로 세웁니다.
+//  variant 를 안 주면 aurora (사이트 전체 통일).
+//
+// 모든 치수는 em 단위이고 font-size = size(px) 라서, 어떤 크기로 써도 비율이 그대로 유지됩니다.
+// 그림은 1장(ai-miku-icon.webp, 300px · 약 20KB — ai-shopping-assistant-transparent.png 에서 얼굴·어깨만 잘라 냄)만 씁니다.
 
-export default function AiBotMark({ size = 72, animated = false }: { size?: number; animated?: boolean }) {
+const AVATAR_SRC = '/images/miku_icon/ai-miku-icon.webp';
+
+function Spark({ className }: { className: string }) {
   return (
-    <span
-      className={`ais-mark${animated ? ' is-animated' : ''}`}
-      style={{ width: size, height: size, borderRadius: Math.round(size * 0.3) }}
-      aria-hidden
-    >
-      <svg viewBox="0 0 40 40" width={Math.round(size * 0.7)} height={Math.round(size * 0.7)} className="ais-mark-svg">
-        <defs>
-          <linearGradient id="aisVisor" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#5b2436" />
-            <stop offset="100%" stopColor="#2a1320" />
-          </linearGradient>
-          <radialGradient id="aisEye" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#ffffff" />
-            <stop offset="55%" stopColor="#ffd3d6" />
-            <stop offset="100%" stopColor="#ff9aa2" stopOpacity="0" />
-          </radialGradient>
-        </defs>
+    <svg viewBox="0 0 24 24" className={className} aria-hidden>
+      <path d="M12 1.5C12.7 8 16 11.3 22.5 12 16 12.7 12.7 16 12 22.5 11.3 16 8 12.7 1.5 12 8 11.3 11.3 8 12 1.5Z" fill="currentColor" />
+    </svg>
+  );
+}
 
-        {/* 안테나 + AI 반짝임 */}
-        <line x1="20" y1="12.5" x2="20" y2="8.6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" opacity=".95" />
-        <path
-          className="ais-mark-spark"
-          d="M20 2.2 L21.15 5.35 L24.3 6.5 L21.15 7.65 L20 10.8 L18.85 7.65 L15.7 6.5 L18.85 5.35 Z"
-          fill="#fff"
-        />
+export default function AiBotMark({
+  size = 72,
+  animated = false,
+  variant,
+}: {
+  size?: number;
+  animated?: boolean;
+  variant?: 'holo' | 'aurora';
+}) {
+  // 2026-10: 밝은 오로라 모양으로 통일 (어두운 holo 는 필요할 때 variant="holo" 로만 씁니다)
+  const v = variant ?? 'aurora';
+  // eslint-disable-next-line @next/next/no-img-element
+  const girl = <img className="aim-girl" src={AVATAR_SRC} alt="" draggable={false} />;
 
-        {/* 귀 */}
-        <rect x="4.6" y="19" width="3.2" height="7" rx="1.6" fill="#fff" opacity=".85" />
-        <rect x="32.2" y="19" width="3.2" height="7" rx="1.6" fill="#fff" opacity=".85" />
-
-        {/* 머리 */}
-        <rect x="7.5" y="12.5" width="25" height="20" rx="8" fill="#fff" />
-        {/* 바이저 */}
-        <rect x="11" y="17" width="18" height="9.5" rx="4.75" fill="url(#aisVisor)" />
-        {/* 눈빛 */}
-        <circle cx="16.4" cy="21.75" r="3.2" fill="url(#aisEye)" />
-        <circle cx="23.6" cy="21.75" r="3.2" fill="url(#aisEye)" />
-        <circle className="ais-mark-eye" cx="16.4" cy="21.75" r="1.35" fill="#fff" />
-        <circle className="ais-mark-eye" cx="23.6" cy="21.75" r="1.35" fill="#fff" />
-        {/* 미소 */}
-        <path d="M17.2 29 Q20 30.6 22.8 29" stroke="#d27377" strokeWidth="1.4" fill="none" strokeLinecap="round" />
-      </svg>
+  return (
+    <span className={`ais-mark aim aim-${v}${animated ? ' is-animated' : ''}`} style={{ fontSize: size }} aria-hidden>
+      {v === 'holo' ? (
+        <>
+          <span className="aim-glow" />
+          <span className="aim-ring" />
+          {girl}
+          <span className="aim-orb" />
+          <Spark className="aim-spark" />
+        </>
+      ) : (
+        <>
+          <span className="aim-blob b1" />
+          <span className="aim-blob b2" />
+          <span className="aim-blob b3" />
+          <span className="aim-frame" />
+          {girl}
+          <Spark className="aim-spark s1" />
+          <Spark className="aim-spark s2" />
+        </>
+      )}
     </span>
   );
 }

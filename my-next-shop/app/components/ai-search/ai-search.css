@@ -769,3 +769,498 @@
 .ais-photo-menu small { font-size: 12px; color: var(--ais-sub); }
 @keyframes ais-menu-in { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .ais-photo-menu { animation: none; } }
+
+/* ─────────── 🤖 AI 비서 마크 v2 — 미쿠짱 캐릭터 (AiBotMark) ───────────
+   font-size = 아이콘 한 변(px). 안의 치수는 모두 em 이라 크기와 상관없이 비율이 같습니다.
+   예전 로봇 마크(.ais-mark 의 로즈 배경·광택)는 여기서 덮어씁니다. */
+.ais-mark.aim {
+  width: 1em; height: 1em; border-radius: .3em; display: inline-block; overflow: hidden; isolation: isolate;
+  background: none; box-shadow: none; line-height: 0;
+}
+.ais-mark.aim::before, .ais-mark.aim::after { content: none; }
+.aim-girl {
+  position: absolute; left: 50%; bottom: 0; width: .78em; height: auto; transform: translateX(-50%);
+  display: block; pointer-events: none; user-select: none;
+}
+
+/* holo — 첫 화면·배너 */
+.ais-mark.aim-holo {
+  background: radial-gradient(120% 120% at 30% 10%, #4a1d4f 0%, #24102e 55%, #120a1c 100%);
+  box-shadow: 0 .12em .3em -.12em rgb(88 28 135 / .7), inset 0 0 0 .01em rgb(255 255 255 / .12);
+}
+.aim-ring {
+  position: absolute; inset: .1em; border-radius: 50%;
+  background: conic-gradient(from 200deg, #f0959a, #e879f9, #8b5cf6, #67e8f9, #f0959a);
+  filter: drop-shadow(0 0 .06em rgb(232 121 249 / .8));
+}
+.aim-disc {
+  position: absolute; inset: .135em; border-radius: 50%; overflow: hidden;
+  background: radial-gradient(circle at 50% 35%, #fff 0%, #fde8f0 60%, #f3d5f5 100%);
+}
+.aim-disc .aim-girl { width: .66em; bottom: -.02em; }
+.aim-orb {
+  position: absolute; width: .07em; height: .07em; border-radius: 50%; top: .2em; right: .2em;
+  background: #fff; box-shadow: 0 0 .05em .02em #67e8f9;
+}
+.aim-holo .aim-spark { position: absolute; width: .16em; height: .16em; left: .08em; bottom: .1em; color: #fff; filter: drop-shadow(0 0 .04em #f0abfc); }
+
+/* aurora — 말풍선 옆 작은 아바타 */
+.ais-mark.aim-aurora { background: #fff; box-shadow: 0 .1em .26em -.12em rgb(176 87 122 / .55); }
+.aim-blob { position: absolute; border-radius: 50%; filter: blur(.09em); opacity: .85; }
+.aim-blob.b1 { width: .7em; height: .55em; left: -.12em; top: -.1em; background: #fbcfe8; }
+.aim-blob.b2 { width: .65em; height: .6em; right: -.15em; top: .05em; background: #ddd6fe; }
+.aim-blob.b3 { width: .8em; height: .45em; left: .1em; bottom: -.18em; background: #cffafe; }
+.aim-frame {
+  position: absolute; inset: 0; z-index: 2; border-radius: inherit; padding: max(1px, .02em);
+  background: linear-gradient(135deg, #f0959a, #c084fc, #67e8f9);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.aim-aurora .aim-girl { width: .76em; }
+.aim-aurora .aim-spark { position: absolute; z-index: 3; }
+.aim-aurora .aim-spark.s1 { width: .15em; height: .15em; top: .1em; right: .12em; color: #c084fc; }
+.aim-aurora .aim-spark.s2 { width: .08em; height: .08em; top: .27em; right: .08em; color: #f472b6; }
+
+/* 첫 화면 큰 마크 움직임: 떠 있기 + 링 천천히 회전 + 반짝임 */
+.ais-mark.aim.is-animated { animation: ais-float 3.2s ease-in-out infinite; }
+.ais-mark.aim.is-animated .aim-ring { animation: aim-spin 9s linear infinite; }
+.ais-mark.aim.is-animated .aim-spark { animation: ais-twinkle 2.4s ease-in-out infinite; transform-origin: center; }
+.ais-mark.aim.is-animated .aim-orb { animation: aim-pulse 2.4s ease-in-out infinite; }
+@keyframes aim-spin { to { transform: rotate(360deg); } }
+@keyframes aim-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+  .ais-mark.aim.is-animated, .ais-mark.aim.is-animated .aim-ring, .ais-mark.aim.is-animated .aim-spark, .ais-mark.aim.is-animated .aim-orb { animation: none; }
+}
+/* 첫 화면 후광도 보라 계열로 */
+.ais-page.is-empty .ais-hero-mark::before { background: radial-gradient(circle, rgb(192 132 252 / .32) 0%, rgb(240 149 154 / .18) 45%, transparent 72%); }
+
+/* ─────────── 첫 화면 장면: 홀로그램 속 미쿠짱 (ai-shopping-hero.webp) ─────────── */
+.ais-page.is-empty .ais-hero.has-scene {
+  position: relative; isolation: isolate; overflow: hidden;
+  max-width: 1200px; margin: 0 auto; min-height: 430px; padding: 64px 56px 52px;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; text-align: left;
+  border-radius: 28px;
+  background: #6f5fe0 url('/images/miku_icon/ai-shopping-hero.webp') right center / cover no-repeat;
+  box-shadow: 0 30px 60px -36px rgb(76 29 149 / .55), inset 0 0 0 1px rgb(255 255 255 / .18);
+}
+/* 왼쪽 글씨가 잘 읽히도록 보랏빛 그늘 */
+.ais-hero.has-scene::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(90deg, rgb(46 26 110 / .82) 0%, rgb(72 44 150 / .55) 34%, rgb(88 60 180 / .12) 56%, transparent 66%);
+}
+.ais-hero.has-scene .ais-hero-mark { display: none; }   /* 그림 속 미쿠짱이 대신합니다 */
+.ais-hero.has-scene .ais-eyebrow {
+  color: #fff; background: rgb(255 255 255 / .16); border: 1px solid rgb(255 255 255 / .35);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.ais-hero.has-scene h1 { color: #fff; font-size: 44px; margin: 14px 0 10px; text-shadow: 0 2px 18px rgb(30 10 80 / .45); }
+.ais-hero.has-scene h1 .ais-grad-text { background: linear-gradient(135deg, #ffd1dc 0%, #f9a8d4 40%, #a5f3fc 100%); -webkit-background-clip: text; background-clip: text; }
+.ais-hero.has-scene p { color: rgb(255 255 255 / .88); max-width: 460px; font-size: 16px; line-height: 1.6; word-break: keep-all; }
+.ais-hero.has-scene .ais-seg-wrap { justify-content: flex-start; margin-top: 26px; }
+
+@media (max-width: 768px) {
+  .ais-page.is-empty .ais-hero.has-scene {
+    min-height: 0; padding: 30px 20px 210px; align-items: center; text-align: center; border-radius: 22px;
+    background-size: auto 250px; background-position: 82% 100%; background-color: #6f5fe0;
+  }
+  /* 휴대폰: 위쪽 글씨 → 아래쪽 그림 순서라 그늘도 위에서 아래로 */
+  .ais-hero.has-scene::before { background: linear-gradient(180deg, rgb(46 26 110 / .92) 0%, rgb(72 44 150 / .7) 45%, rgb(88 60 180 / .1) 72%, transparent 80%); }
+  .ais-hero.has-scene h1 { font-size: 28px; }
+  .ais-hero.has-scene p { font-size: 14px; }
+  .ais-hero.has-scene .ais-seg-wrap { justify-content: center; margin-top: 18px; }
+}
+
+/* ─────────── AI 마크 v3: 동그란 창 없이 타일에 바로 선 헤드셋 미쿠짱 (ai-miku-icon.webp, 300×274) ─────────── */
+.ais-mark.aim .aim-girl { width: .8em; left: 50%; bottom: -.01em; transform: translateX(-47%); }
+/* holo: 링은 '창'이 아니라 머리 뒤에서 빛나는 후광 테두리 */
+.aim-holo .aim-glow {
+  position: absolute; left: 50%; top: .12em; width: .78em; height: .78em; transform: translateX(-50%); border-radius: 50%;
+  background: radial-gradient(circle, rgb(232 121 249 / .45) 0%, rgb(139 92 246 / .25) 45%, transparent 70%);
+}
+.aim-holo .aim-ring {
+  inset: auto; left: 50%; top: .09em; width: .8em; height: .8em; transform: translateX(-50%);
+  background: conic-gradient(from 200deg, #f0959a, #e879f9, #8b5cf6, #67e8f9, #f0959a);
+  -webkit-mask: radial-gradient(circle, transparent calc(50% - .028em), #000 calc(50% - .026em));
+          mask: radial-gradient(circle, transparent calc(50% - .028em), #000 calc(50% - .026em));
+  filter: drop-shadow(0 0 .05em rgb(232 121 249 / .9));
+}
+.ais-mark.aim.is-animated .aim-ring { animation: aim-spin-x 9s linear infinite; }
+@keyframes aim-spin-x { to { transform: translateX(-50%) rotate(360deg); } }
+.aim-holo .aim-orb { top: .14em; right: .14em; z-index: 2; }
+.aim-holo .aim-spark { z-index: 2; left: .07em; bottom: auto; top: .1em; }
+.aim-aurora .aim-girl { width: .84em; }
+
+/* ─────────── AI 마크 v4 (어색함 수정) ───────────
+   🐛 v3: 캐릭터가 아래로 처져 얼굴이 반쯤 가리고, 머리 위 링이 무지개처럼 떠 보였습니다.
+   → 얼굴을 타일 가운데쯤(세로 58%)에 오도록 키우고 올리고, 링은 '타일 테두리 빛'으로 바꿨습니다.
+   그림: ai-miku-icon.webp 320×287 (머리카락 가운데 = 가로 47%, 얼굴 가운데 = 세로 60%) */
+.ais-mark.aim .aim-girl { width: .92em; left: .068em; top: .08em; bottom: auto; transform: none; }
+.aim-aurora .aim-girl { width: .92em; }
+/* holo: 머리 뒤 은은한 빛 */
+.aim-holo .aim-glow {
+  left: 50%; top: .1em; width: .9em; height: .9em; transform: translateX(-50%);
+  background: radial-gradient(circle at 50% 45%, rgb(244 114 182 / .42) 0%, rgb(139 92 246 / .28) 42%, transparent 70%);
+}
+/* holo: 링 → 타일 가장자리를 도는 그라데이션 테두리 빛 */
+.aim-holo .aim-ring {
+  inset: 0; left: 0; top: 0; width: auto; height: auto; transform: none; z-index: 3; border-radius: inherit;
+  padding: max(1.5px, .022em);
+  background: conic-gradient(from 210deg, #f0959a, #e879f9, #8b5cf6, #67e8f9, #f0959a);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  filter: none; opacity: .9;
+}
+.ais-mark.aim.is-animated .aim-ring { animation: none; }
+.ais-mark.aim.is-animated .aim-glow { animation: aim-breathe 3.2s ease-in-out infinite; }
+@keyframes aim-breathe { 0%, 100% { opacity: .75; } 50% { opacity: 1; } }
+.aim-holo .aim-orb { top: .12em; right: .12em; }
+.aim-holo .aim-spark { top: .1em; left: .1em; width: .14em; height: .14em; }
+
+/* 🐛 진행 중 머리말 "「키워드」(으)로 찾고 있어요" 의 키워드가 뭉개져 보였습니다.
+   제목 글꼴(Jua)은 굵기가 400 하나뿐인데 키워드 칸에 font-weight 800 을 주어 브라우저가 가짜 굵게(번짐)로 그렸습니다.
+   → 키워드 칸만 본문 글꼴로 바꾸고 가짜 굵게를 끕니다. */
+.ais-rh-title .ais-rh-kw {
+  font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; /* 사이트 본문 글꼴 */
+  font-size: 16px; font-weight: 800; letter-spacing: -.3px; line-height: 1.3;
+  font-synthesis: none; -webkit-font-smoothing: antialiased;
+  padding: 5px 12px; margin-right: 2px; vertical-align: 1px;
+}
+@media (max-width: 768px) { .ais-rh-title .ais-rh-kw { font-size: 14.5px; padding: 4px 10px; } }
+
+/* ─────────── 'AI 비서 호출' 버튼 강조 ───────────
+   더 크게 + 로즈→바이올렛 그라데이션 + 은은히 퍼지는 빛 고리 + 주기적으로 스쳐 가는 광택 */
+.aib-cta {
+  isolation: isolate; overflow: visible; gap: 10px;
+  padding: 10px 10px 10px 18px; font-size: 16.5px; font-weight: 900; letter-spacing: -.3px; color: #fff;
+  background: linear-gradient(135deg, #f0959a 0%, #d27377 38%, #a855f7 100%);
+  box-shadow: 0 0 0 4px rgb(255 255 255 / .85), 0 16px 32px -12px rgb(139 92 246 / .75), inset 0 1px 0 rgb(255 255 255 / .35);
+}
+.aib-cta:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0 4px #fff, 0 20px 38px -12px rgb(139 92 246 / .85), inset 0 1px 0 rgb(255 255 255 / .35); }
+/* 버튼 둘레로 퍼지는 빛 고리 */
+.aib-cta::before {
+  content: ''; position: absolute; inset: -4px; z-index: -1; border-radius: inherit;
+  box-shadow: 0 0 0 0 rgb(168 85 247 / .45); animation: aib-cta-pulse 2.4s ease-out infinite;
+}
+@keyframes aib-cta-pulse { 0% { box-shadow: 0 0 0 0 rgb(168 85 247 / .45); } 70%, 100% { box-shadow: 0 0 0 14px rgb(168 85 247 / 0); } }
+/* 스쳐 가는 광택 */
+.aib-cta::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; overflow: hidden;
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / .45) 48%, transparent 66%) -150% 0 / 60% 100% no-repeat;
+  animation: aib-cta-shine 3.6s ease-in-out infinite;
+}
+@keyframes aib-cta-shine { 0%, 55% { background-position: -150% 0; } 100% { background-position: 250% 0; } }
+.aib-cta-spark { display: inline-grid; place-items: center; }
+.aib-cta-spark .ais-sparkle path { fill: #fff; }
+.aib-cta-spark .ais-sparkle { filter: drop-shadow(0 0 4px rgb(255 255 255 / .7)); }
+.aib-cta-arrow { width: 38px; height: 38px; background: rgb(255 255 255 / .25); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .45); }
+@media (max-width: 900px) { .aib-cta { justify-content: center; padding: 12px 12px 12px 20px; } .aib-cta-arrow { margin-left: auto; } }
+@media (prefers-reduced-motion: reduce) { .aib-cta::before, .aib-cta::after { animation: none; } }
+
+/* 🐛 입력창 글자가 가운데보다 아래로 내려가 보였습니다.
+   입력칸(한 줄 ≈ 36px)이 버튼(44px)보다 낮은데 아래쪽 맞춤(flex-end)이라 글자가 아래로 붙었습니다.
+   → 가운데 맞춤 + 입력칸 높이를 버튼과 같게. */
+.ais-composer { align-items: center; }
+.ais-composer textarea { align-self: center; min-height: 44px; padding: 10px 0; line-height: 24px; box-sizing: border-box; }
+.ais-composer-icon { align-self: center; }
+@media (max-width: 768px) { .ais-composer textarea { min-height: 40px; padding: 8px 0; } }
+
+/* 첫 화면 장면: 쇼핑몰 탭을 카드 아래쪽으로 — 아래 여백을 왼쪽 여백(56px)과 똑같이 맞춤.
+   글은 위에서부터, 탭은 맨 아래(margin-top: auto)에 붙입니다. */
+.ais-page.is-empty .ais-hero.has-scene { justify-content: flex-start; padding-bottom: 56px; }
+.ais-hero.has-scene .ais-seg-wrap { margin-top: auto; padding-top: 40px; margin-bottom: 0; }
+@media (max-width: 768px) {
+  .ais-page.is-empty .ais-hero.has-scene { padding-bottom: 210px; }
+  .ais-hero.has-scene .ais-seg-wrap { margin-top: 24px; padding-top: 0; }
+}
+
+/* ─────────── 첫 화면 검색창 강조 ───────────
+   장면 카드 아래쪽에 살짝 걸쳐 띄우고(겹침), 더 크게 + 천천히 도는 그라데이션 빛 테두리 + 진한 그림자.
+   보내기 버튼도 비어 있을 때 회색 대신 브랜드 색(반투명)으로 → "여기에 쓰고 누르면 된다"가 바로 보이게. */
+.ais-composer-wrap.is-empty { position: relative; z-index: 5; max-width: 920px; margin: -34px auto 0; }
+.ais-composer-wrap.is-empty .ais-composer {
+  position: relative; isolation: isolate; padding: 12px 12px 12px 18px; border-radius: 26px;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    conic-gradient(from var(--ais-spin, 0deg), #f0959a, #c084fc, #67e8f9, #f0959a) border-box;
+  box-shadow: 0 0 0 6px rgb(255 255 255 / .75), 0 24px 48px -18px rgb(76 29 149 / .45), 0 8px 18px -10px rgb(210 115 119 / .35);
+  animation: ais-border-spin 6s linear infinite;
+}
+@property --ais-spin { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@keyframes ais-border-spin { to { --ais-spin: 360deg; } }
+.ais-composer-wrap.is-empty .ais-composer:focus-within {
+  box-shadow: 0 0 0 6px rgb(192 132 252 / .22), 0 26px 52px -18px rgb(76 29 149 / .55), 0 8px 18px -10px rgb(210 115 119 / .4);
+}
+.ais-composer-wrap.is-empty .ais-composer textarea { font-size: 17px; min-height: 48px; padding: 12px 0; }
+.ais-composer-wrap.is-empty .ais-composer textarea::placeholder { color: #6b6f86; }
+.ais-composer-wrap.is-empty .ais-composer-icon { width: 40px; height: 40px; border-radius: 13px; }
+.ais-composer-wrap.is-empty .ais-camera { width: 48px; height: 48px; border-radius: 15px; }
+.ais-composer-wrap.is-empty .ais-send { height: 48px; padding: 0 22px 0 18px; font-size: 16px; border-radius: 16px; }
+/* 비어 있을 때도 버튼은 브랜드 색(흐리게) — 회색이면 "누를 수 없는 곳"처럼 보였습니다 */
+.ais-composer-wrap.is-empty .ais-send:disabled {
+  background: linear-gradient(135deg, #e3868a 0%, #c9686c 50%, #a855f7 100%); color: #fff; opacity: .55; box-shadow: none;
+}
+.ais-composer-wrap.is-empty .ais-hint { margin-top: 14px; }
+@media (max-width: 768px) {
+  .ais-composer-wrap.is-empty { margin-top: -22px; }
+  .ais-composer-wrap.is-empty .ais-composer { padding: 8px 8px 8px 12px; border-radius: 22px; box-shadow: 0 0 0 4px rgb(255 255 255 / .75), 0 18px 36px -16px rgb(76 29 149 / .45); }
+  .ais-composer-wrap.is-empty .ais-composer textarea { font-size: 15.5px; min-height: 42px; padding: 9px 0; }
+  .ais-composer-wrap.is-empty .ais-camera { width: 42px; height: 42px; }
+  .ais-composer-wrap.is-empty .ais-send { height: 42px; padding: 0 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .ais-composer-wrap.is-empty .ais-composer { animation: none; } }
+
+/* ─────────── 첫 화면: 검색창을 장면 카드 안에 ───────────
+   순서: 배지 → 제목 → 설명 → (아래쪽) 쇼핑몰 탭 → 검색창 → 안내 줄. 아래 여백은 왼쪽 여백(56px)과 같게. */
+.ais-hero.has-scene .ais-seg-wrap { padding-top: 32px; }
+.ais-hero.has-scene .ais-composer-wrap.is-empty {
+  position: relative; z-index: 2; width: min(640px, 100%); max-width: none; margin: 16px 0 0; padding: 0;
+}
+.ais-hero.has-scene .ais-composer-wrap.is-empty .ais-composer {
+  max-width: none; box-shadow: 0 0 0 5px rgb(255 255 255 / .22), 0 22px 44px -16px rgb(20 8 60 / .65);
+}
+.ais-hero.has-scene .ais-composer-wrap.is-empty .ais-composer:focus-within { box-shadow: 0 0 0 5px rgb(255 255 255 / .35), 0 24px 48px -16px rgb(20 8 60 / .7); }
+/* 어두운 장면 위 안내 줄은 밝게 */
+.ais-hero.has-scene .ais-hint { justify-content: flex-start; margin: 12px 0 0; color: rgb(255 255 255 / .78); }
+.ais-hero.has-scene .ais-hint-item.is-accent { background: rgb(255 255 255 / .16); border-color: rgb(255 255 255 / .3); color: #fff; }
+.ais-hero.has-scene .ais-hint-item.is-accent svg, .ais-hero.has-scene .ais-hint-item.is-accent b { color: #fde7f3; }
+.ais-hero.has-scene .ais-hint-dot { background: rgb(255 255 255 / .5); }
+.ais-hero.has-scene .ais-attach { margin: 0 0 8px; }
+@media (max-width: 768px) {
+  .ais-hero.has-scene .ais-seg-wrap { padding-top: 0; }
+  .ais-hero.has-scene .ais-composer-wrap.is-empty { width: 100%; margin-top: 16px; }
+}
+/* 휴대폰 장면 카드 안: 입력칸이 좁아 보내기 버튼은 화살표 아이콘만 */
+@media (max-width: 768px) {
+  .ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send { width: 42px; padding: 0; justify-content: center; }
+  .ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send > span:last-child { display: none; }
+  .ais-hero.has-scene .ais-composer-wrap.is-empty .ais-composer-icon { display: none; }
+  .ais-hero.has-scene .ais-composer-wrap.is-empty .ais-composer { padding-left: 14px; gap: 8px; }
+}
+/* 휴대폰: 그림 속 미쿠짱이 검색창과 겹치지 않도록 카드 아래 공간을 넓히고 그림을 살짝 위로 */
+@media (max-width: 768px) {
+  .ais-page.is-empty .ais-hero.has-scene { padding-bottom: 262px; background-size: auto 250px; background-position: 82% 100%; }
+  /* 그림 윗부분 경계가 보이지 않도록 그늘을 그림 위쪽에서 부드럽게 끝냄 */
+  .ais-hero.has-scene::before { background: linear-gradient(180deg, rgb(46 26 110 / .92) 0%, rgb(72 44 150 / .78) calc(100% - 270px), rgb(88 60 180 / .2) calc(100% - 205px), transparent calc(100% - 170px)); }
+}
+
+/* 첫 화면: 안내 두 줄을 장면 카드 밖(카드와 예시 질문 사이)으로 */
+.ais-hint.is-outside { justify-content: center; margin: 20px auto 0; }
+
+/* 휴대폰 첫 화면: 글·탭 → 그림 속 미쿠짱 → 검색창(카드 맨 아래) 순서.
+   그림은 검색창 바로 위 공간에 깔고, 검색창은 카드 아래에 붙입니다. */
+@media (max-width: 768px) {
+  .ais-page.is-empty .ais-hero.has-scene {
+    padding-bottom: 20px;
+    background-size: auto 240px; background-position: 82% calc(100% - 84px);
+  }
+  .ais-hero.has-scene .ais-composer-wrap.is-empty { margin-top: 236px; }
+  /* 그늘: 위쪽 글씨 부분만 진하게, 그림 부분은 투명, 검색창 뒤는 다시 살짝 */
+  .ais-hero.has-scene::before {
+    background: linear-gradient(180deg,
+      rgb(46 26 110 / .92) 0%, rgb(72 44 150 / .78) calc(100% - 340px),
+      rgb(88 60 180 / .15) calc(100% - 290px), transparent calc(100% - 250px),
+      transparent calc(100% - 135px), rgb(66 40 140 / .96) calc(100% - 78px), rgb(60 36 130 / .96) 100%);
+  }
+}
+
+/* 휴대폰 첫 화면 v2: 글 → 미쿠짱 그림 → 쇼핑몰 탭 → 검색창.
+   탭을 검색창 바로 위로 내려 "몰 고르고 → 검색" 이 한 덩어리로 보이게 합니다. */
+@media (max-width: 768px) {
+  .ais-page.is-empty .ais-hero.has-scene { background-position: 82% calc(100% - 146px); }
+  .ais-hero.has-scene .ais-seg-wrap { margin-top: 232px; padding-top: 0; }
+  .ais-hero.has-scene .ais-composer-wrap.is-empty { margin-top: 12px; }
+  .ais-hero.has-scene::before {
+    background: linear-gradient(180deg,
+      rgb(46 26 110 / .92) 0%, rgb(72 44 150 / .78) calc(100% - 400px),
+      rgb(88 60 180 / .15) calc(100% - 350px), transparent calc(100% - 310px),
+      transparent calc(100% - 200px), rgb(66 40 140 / .96) calc(100% - 140px), rgb(60 36 130 / .96) 100%);
+  }
+}
+
+/* PC 첫 화면: 검색 패널(탭+검색창)을 카드 아래쪽으로 더 내림 — 카드 높이는 그대로, 아래 여백만 줄임 */
+@media (min-width: 769px) {
+  .ais-page.is-empty .ais-hero.has-scene { padding-bottom: 36px; min-height: 540px; }
+  .ais-hero.has-scene .ais-seg-wrap { padding-top: 52px; }
+}
+
+/* 첫 화면 '검색하기' 버튼: 메인 'AI 비서 호출' 버튼과 같은 효과
+   (로즈→바이올렛 그라데이션 + 퍼지는 빛 고리 + 스쳐 가는 광택). 비어 있어도 흐리게 하지 않습니다. */
+.ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send,
+.ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send:disabled {
+  position: relative; isolation: isolate; overflow: visible; opacity: 1; font-weight: 900; letter-spacing: -.3px; color: #fff;
+  background: linear-gradient(135deg, #f0959a 0%, #d27377 38%, #a855f7 100%);
+  box-shadow: 0 12px 26px -10px rgb(139 92 246 / .75), inset 0 1px 0 rgb(255 255 255 / .35);
+}
+.ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send:not(:disabled):hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 18px 32px -10px rgb(139 92 246 / .85), inset 0 1px 0 rgb(255 255 255 / .35);
+}
+.ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+  animation: aib-cta-pulse 2.4s ease-out infinite;
+}
+.ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / .45) 48%, transparent 66%) -150% 0 / 60% 100% no-repeat;
+  animation: aib-cta-shine 3.6s ease-in-out infinite;
+}
+.ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send:disabled { cursor: default; }
+@media (prefers-reduced-motion: reduce) {
+  .ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send::before,
+  .ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send::after { animation: none; }
+}
+
+/* ─────────── 첫 화면: 장면 카드 아래 받침(트레이) ───────────
+   예시 질문·안내가 빈 바탕에 떠 보이지 않도록, 카드 밑에 살짝 깔린 흰 받침 안에 묶고
+   카드와 같은 왼쪽 선(56px)에 맞춰 정렬합니다. */
+.ais-page.is-empty .ais-thread:empty { display: none; }
+.ais-below {
+  position: relative; z-index: 0;
+  max-width: calc(1200px - 48px); margin: -30px auto 0; padding: 50px 32px 22px;
+  background: linear-gradient(180deg, #fbf8ff 0%, #fff 60%);
+  border: 1px solid rgb(139 92 246 / .12); border-top: 0; border-radius: 0 0 24px 24px;
+  box-shadow: 0 18px 36px -28px rgb(76 29 149 / .35);
+}
+.ais-page.is-empty .ais-hero.has-scene { z-index: 1; }
+.ais-below .ais-suggest { max-width: none; margin: 0; display: flex; align-items: center; gap: 14px; text-align: left; }
+.ais-below .ais-suggest-label {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; margin: 0;
+  font-size: 13px; font-weight: 800; color: #6b4fbf; letter-spacing: -.2px;
+}
+.ais-below .ais-tags { max-width: none; margin: 0; justify-content: flex-start; }
+.ais-below .ais-tag { background: #fff; box-shadow: inset 0 0 0 1px rgb(139 92 246 / .16); }
+.ais-below .ais-hint.is-outside {
+  justify-content: flex-start; max-width: none; margin: 16px 0 0; padding-top: 14px;
+  border-top: 1px dashed rgb(139 92 246 / .16);
+}
+@media (max-width: 768px) {
+  .ais-below { max-width: none; margin: -24px 10px 0; padding: 38px 16px 18px; border-radius: 0 0 20px 20px; }
+  .ais-below .ais-suggest { flex-direction: column; align-items: flex-start; gap: 10px; }
+}
+
+/* ─────────── 첫 화면 v3: 예시 질문은 카드 안 검색창 아래, 사진 안내는 📷 버튼 위 말풍선 ─────────── */
+.ais-hero.has-scene .ais-composer-wrap.is-empty .ais-composer { position: relative; }
+.ais-photo-badge {
+  position: absolute; right: 22px; top: -15px; z-index: 3;
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px 4px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; line-height: 1.3; color: #fff; white-space: nowrap; pointer-events: none;
+  background: linear-gradient(135deg, #f0959a 0%, #d27377 45%, #a855f7 100%);
+  box-shadow: 0 0 0 2px #fff, 0 8px 16px -8px rgb(139 92 246 / .8);
+}
+.ais-photo-badge b { font-weight: 800; color: #fff3c4; }
+/* 말풍선 꼬리: 📷 버튼 쪽을 가리킴 */
+.ais-photo-badge::after {
+  content: ''; position: absolute; right: 118px; bottom: -4px; width: 8px; height: 8px;
+  background: #d9787f; transform: rotate(45deg); box-shadow: 2px 2px 0 0 #fff; z-index: -1;
+}
+.ais-hero.has-scene .ais-suggest.is-in-hero {
+  position: relative; z-index: 2; display: flex; align-items: center; gap: 12px;
+  max-width: 100%; margin: 18px 0 0; text-align: left;
+}
+.ais-hero.has-scene .ais-suggest.is-in-hero .ais-suggest-label {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; margin: 0;
+  font-size: 13px; font-weight: 800; color: rgb(255 255 255 / .92); letter-spacing: -.2px;
+}
+.ais-hero.has-scene .ais-suggest.is-in-hero .ais-sparkle path { fill: #fde7f3; }
+.ais-hero.has-scene .ais-suggest.is-in-hero .ais-tags { max-width: none; margin: 0; justify-content: flex-start; gap: 8px; }
+.ais-hero.has-scene .ais-suggest.is-in-hero .ais-tag {
+  padding: 7px 13px; font-size: 13px; font-weight: 600; color: #fff;
+  background: rgb(255 255 255 / .14); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .32);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.ais-hero.has-scene .ais-suggest.is-in-hero .ais-tag:hover {
+  color: #7c3aed; background: #fff; box-shadow: 0 10px 20px -10px rgb(20 8 60 / .6);
+}
+@media (max-width: 768px) {
+  .ais-photo-badge { display: none; }
+  /* 휴대폰: 예시 질문은 한 줄로 옆으로 밀어 보기 */
+  .ais-hero.has-scene .ais-suggest.is-in-hero { flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 14px; width: 100%; }
+  .ais-hero.has-scene .ais-suggest.is-in-hero .ais-tags { flex-wrap: nowrap; overflow-x: auto; width: 100%; padding-bottom: 2px; scrollbar-width: none; }
+  .ais-hero.has-scene .ais-suggest.is-in-hero .ais-tags::-webkit-scrollbar { display: none; }
+  .ais-hero.has-scene .ais-suggest.is-in-hero .ais-tag { flex: 0 0 auto; }
+}
+/* PC: 예시 질문이 그림(미쿠짱) 위로 넘어가지 않도록 검색창 폭 안에서 줄바꿈 */
+@media (min-width: 769px) {
+  .ais-hero.has-scene .ais-suggest.is-in-hero { width: min(640px, 100%); flex-wrap: wrap; align-items: flex-start; }
+  .ais-hero.has-scene .ais-suggest.is-in-hero .ais-suggest-label { padding-top: 7px; }
+  .ais-hero.has-scene .ais-suggest.is-in-hero .ais-tags { flex: 1 1 0; min-width: 0; flex-wrap: wrap; }
+}
+.ais-photo-badge::after { right: 142px; }   /* 꼬리를 📷 버튼 가운데로 */
+@media (min-width: 769px) { .ais-hero.has-scene .ais-composer-wrap.is-empty { margin-top: 24px; } }
+/* 휴대폰 v3: 검색창 아래 예시 질문(약 77px)만큼 그림과 그늘을 위로 */
+@media (max-width: 768px) {
+  .ais-page.is-empty .ais-hero.has-scene { background-position: 82% calc(100% - 223px); }
+  .ais-hero.has-scene::before {
+    background: linear-gradient(180deg,
+      rgb(46 26 110 / .92) 0%, rgb(72 44 150 / .78) calc(100% - 477px),
+      rgb(88 60 180 / .15) calc(100% - 427px), transparent calc(100% - 387px),
+      transparent calc(100% - 277px), rgb(66 40 140 / .96) calc(100% - 217px), rgb(60 36 130 / .96) 100%);
+  }
+}
+@media (max-width: 768px) { .ais-hero.has-scene .ais-seg-wrap { margin-top: 250px; } }
+@media (max-width: 768px) {
+  .ais-hero.has-scene::before {
+    background: linear-gradient(180deg,
+      rgb(46 26 110 / .92) 0%, rgb(54 30 120 / .96) calc(100% - 466px),
+      rgb(72 44 150 / .55) calc(100% - 430px), transparent calc(100% - 392px),
+      transparent calc(100% - 277px), rgb(66 40 140 / .96) calc(100% - 217px), rgb(60 36 130 / .96) 100%);
+  }
+}
+/* PC: 예시 질문은 한 줄만 — 검색창 폭에 들어가는 만큼만 보이고, 넘치는 질문은 다음 줄로 밀려 가려집니다 */
+@media (min-width: 769px) {
+  .ais-hero.has-scene .ais-suggest.is-in-hero { flex-wrap: nowrap; align-items: center; }
+  .ais-hero.has-scene .ais-suggest.is-in-hero .ais-suggest-label { padding-top: 0; }
+  .ais-hero.has-scene .ais-suggest.is-in-hero .ais-tags { height: 32px; overflow: hidden; gap: 6px; row-gap: 20px; }
+  .ais-hero.has-scene .ais-suggest.is-in-hero .ais-tag { height: 32px; padding: 0 12px; font-size: 12.5px; }
+  .ais-hero.has-scene .ais-suggest.is-in-hero .ais-tag:hover { transform: none; }
+}
+/* PC: 탭+검색창+예시 질문 묶음을 카드 바닥 쪽으로 — 예시 질문 줄이 바닥에 거의 붙도록 */
+@media (min-width: 769px) {
+  .ais-page.is-empty .ais-hero.has-scene { padding-bottom: 18px; }
+  .ais-hero.has-scene .ais-suggest.is-in-hero { margin-top: 16px; }
+}
+
+/* ⏹ 찾는 중 '정지' 버튼: 돌아가는 고리 안에 네모(정지) 표시 — 누를 수 있다는 걸 분명히 */
+.ais-send.is-stop {
+  cursor: pointer; opacity: 1; color: #fff;
+  background: linear-gradient(135deg, #7c6bd6 0%, #5b4bb8 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .3), 0 8px 18px -8px rgb(76 29 149 / .7);
+}
+.ais-send.is-stop:hover { transform: translateY(-1px); background: linear-gradient(135deg, #6d5bd0 0%, #4c3ca8 100%); }
+.ais-stop-ico { position: relative; display: inline-grid; place-items: center; width: 18px; height: 18px; }
+.ais-stop-ico .ais-send-spin { position: absolute; inset: 0; width: 18px; height: 18px; }
+.ais-stop-ico i { width: 6px; height: 6px; border-radius: 1.5px; background: #fff; }
+/* 첫 화면 효과(빛 고리·광택)는 정지 버튼에는 쓰지 않습니다 */
+.ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send.is-stop { background: linear-gradient(135deg, #7c6bd6 0%, #5b4bb8 100%); }
+.ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send.is-stop::before,
+.ais-hero.has-scene .ais-composer-wrap.is-empty .ais-send.is-stop::after { animation: none; content: none; }
+
+/* 🏠 대화 중 위쪽 제목·마크: 누르면 처음 화면으로 */
+.ais-hero.is-compact .ais-home-link { cursor: pointer; transition: opacity .15s, transform .15s; }
+.ais-hero.is-compact .ais-home-link:hover { opacity: .8; }
+.ais-hero.is-compact h1.ais-home-link:hover { transform: translateY(-1px); }
+.ais-hero.is-compact .ais-home-link:focus-visible { outline: 2px solid var(--ais-brand); outline-offset: 4px; border-radius: 8px; }
+
+/* 대화 중 입력창 '검색하기' 버튼도 첫 화면처럼 — 비어 있어도 흐리게 하지 않고 같은 그라데이션·빛 고리·광택 */
+.ais-composer-wrap:not(.is-empty) .ais-send:not(.is-stop),
+.ais-composer-wrap:not(.is-empty) .ais-send:not(.is-stop):disabled {
+  position: relative; isolation: isolate; overflow: visible; opacity: 1; color: #fff; font-weight: 900; letter-spacing: -.3px;
+  background: linear-gradient(135deg, #f0959a 0%, #d27377 38%, #a855f7 100%);
+  box-shadow: 0 10px 22px -10px rgb(139 92 246 / .75), inset 0 1px 0 rgb(255 255 255 / .35);
+}
+.ais-composer-wrap:not(.is-empty) .ais-send:not(.is-stop):disabled { cursor: default; }
+.ais-composer-wrap:not(.is-empty) .ais-send:not(.is-stop):not(:disabled):hover {
+  transform: translateY(-2px) scale(1.03); box-shadow: 0 16px 28px -10px rgb(139 92 246 / .85), inset 0 1px 0 rgb(255 255 255 / .35);
+}
+.ais-composer-wrap:not(.is-empty) .ais-send:not(.is-stop)::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; animation: aib-cta-pulse 2.4s ease-out infinite;
+}
+.ais-composer-wrap:not(.is-empty) .ais-send:not(.is-stop)::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / .45) 48%, transparent 66%) -150% 0 / 60% 100% no-repeat;
+  animation: aib-cta-shine 3.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ais-composer-wrap:not(.is-empty) .ais-send::before, .ais-composer-wrap:not(.is-empty) .ais-send::after { animation: none; }
+}

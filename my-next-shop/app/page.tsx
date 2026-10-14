@@ -20,20 +20,8 @@ export const dynamic = "force-dynamic";
    캐릭터 주변에 띄웁니다. 색은 배너 포인트색(--hero-accent)을 따라갑니다.
    나중에 배너별 캐릭터 그림을 넣으면 <HeroProps /> 한 줄만 지우면 됩니다. */
 const HERO_PROPS: Record<HeroPropKind, React.ReactNode[]> = {
-  // AI 쇼핑 비서 — 대화 말풍선 · AI 반짝임
-  // (왼쪽 가운데 돋보기 자리에는 '사진으로 검색' 칩(c4)이 들어갑니다)
-  ai: [
-    <svg key="chat" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
-      <path d="M5 8a4 4 0 0 1 4-4h14a4 4 0 0 1 4 4v9a4 4 0 0 1-4 4h-9l-6 5v-5H9a4 4 0 0 1-4-4z" />
-      <circle cx="11" cy="12.5" r="1.4" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="12.5" r="1.4" fill="currentColor" stroke="none" />
-      <circle cx="21" cy="12.5" r="1.4" fill="currentColor" stroke="none" />
-    </svg>,
-    <svg key="spark" viewBox="0 0 32 32" fill="currentColor" stroke="none">
-      <path d="M14 3l2.6 7.4L24 13l-7.4 2.6L14 23l-2.6-7.4L4 13l7.4-2.6z" />
-      <path d="M25 19l1.2 3.3 3.3 1.2-3.3 1.2L25 28l-1.2-3.3-3.3-1.2 3.3-1.2z" opacity=".7" />
-    </svg>,
-  ],
+  // 🤖 AI 배너는 그림(ai-shopping-assistant)에 홀로그램 패널·말풍선·반짝임이 이미 들어 있어 소품을 띄우지 않습니다.
+  ai: [],
   // 배송대행 — 택배 상자 · 비행기 경로 · 방울 포장재
   delivery: [
     <svg key="box" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
@@ -92,7 +80,7 @@ const HERO_PROPS: Record<HeroPropKind, React.ReactNode[]> = {
 };
 
 /** 배너 캐릭터 그림 — 파일이 아직 없으면 기본 그림(/images/hero.png)으로 대신 보여 줍니다. */
-function HeroImage({ src }: { src: string }) {
+function HeroImage({ src, className = '' }: { src: string; className?: string }) {
   const [current, setCurrent] = useState(src);
   const imgRef = useRef<HTMLImageElement>(null);
   useEffect(() => { setCurrent(src); }, [src]);
@@ -106,7 +94,7 @@ function HeroImage({ src }: { src: string }) {
       ref={imgRef}
       src={current}
       alt="Miku"
-      className="premium-floating-img"
+      className={`premium-floating-img${className ? ` ${className}` : ''}`}
       draggable="false"
       onError={() => setCurrent(HERO_FALLBACK_IMAGE)}
     />
@@ -160,14 +148,15 @@ export default function HomePage() {
       title: <>이제는 <span className="hero-ai-word">AI</span> 시대<br />구매대행도 <span className="hero-ai-word">AI</span>로</>,
       subTitle: "NEW · 미쿠짱 AI 쇼핑 비서",
       desc: <>한국어로 한 문장만 말하거나 <b className="hero-desc-em">사진 한 장만 올리면</b> 메루카리·라쿠텐·야후 쇼핑·야후 옥션에서 딱 맞는 상품을 찾아 드려요.</>,
-      bgColor: "#EFE7FF", accent: "#8b5cf6", image: "/images/miku_icon/ai.png", // 파일을 넣기 전까지는 기본 그림으로 보입니다
+      bgColor: "#EFE7FF", accent: "#8b5cf6",
+      // 🤖 홀로그램 속 미쿠짱 (투명 배경 · webp 약 250KB, 원본 PNG 는 miku_icon/ai-shopping-assistant-transparent.png)
+      image: "/images/miku_icon/ai-shopping-assistant.webp",
       props: 'ai',
       chips: [
-        { icon: <ChatCircleDots weight="fill" />, label: '한 문장으로 검색' },
+        // 그림 속 홀로그램 패널과 겹치지 않도록 칩은 2개만 (한 문장 검색·AI 추천은 설명 문구와 그림이 대신 보여 줌)
+        { icon: <Camera weight="fill" />, label: '사진으로 검색', isNew: true },
         // 🐛 '4개 쇼핑몰 동시에' 는 길어서 오른쪽 다음 버튼(›)에 가려 잘렸습니다 → 짧게
         { icon: <Storefront weight="fill" />, label: '4개 쇼핑몰 한 번에' },
-        { icon: <Sparkle weight="fill" />, label: 'AI 추천 상품' },
-        { icon: <Camera weight="fill" />, label: '사진으로 검색', isNew: true },
       ],
       primary: { label: 'AI 비서에게 물어보기', href: '/ai-search' },
       // 📷 사진 검색 소개: /ai-search 의 📷 버튼을 강조해서 보여 줍니다 (파일 창 자동 열기는 브라우저가 막음)
@@ -476,7 +465,8 @@ export default function HomePage() {
                       <span className="hero-sparkle s1" aria-hidden="true"><Sparkle weight="fill" /></span>
                       <span className="hero-sparkle s2" aria-hidden="true"><Sparkle weight="fill" /></span>
                       <span className="hero-sparkle s3" aria-hidden="true"><Sparkle weight="fill" /></span>
-                      <HeroImage src={banner.image} />
+                      {/* 🤖 AI 배너 그림은 홀로그램 패널·바닥 링까지 들어 있어 같은 높이면 캐릭터가 작아 보입니다 → 더 크게 (is-ai) */}
+                      <HeroImage src={banner.image} className={banner.props === 'ai' ? 'is-ai' : ''} />
                       {banner.chips.map((chip, ci) => (
                         <span key={chip.label} className={`hero-chip c${ci + 1}${chip.isNew ? ' is-new' : ''}`} aria-hidden="true"><i>{chip.icon}</i>{chip.label}{chip.isNew && <em className="hero-chip-new">NEW</em>}</span>
                       ))}

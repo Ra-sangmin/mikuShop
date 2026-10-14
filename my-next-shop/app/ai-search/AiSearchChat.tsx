@@ -4,7 +4,7 @@
 //  - 기본은 4개 쇼핑몰 통합(integrated). 위 탭으로 한 몰만 골라 물어볼 수도 있습니다.
 //  - 주소에 ?q=... 가 있으면 들어오자마자 그 질문으로 검색합니다 (메인 배너에서 넘어올 때).
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AiResultGrid, { MallLogo } from '@/app/components/ai-search/AiResultGrid';
 import AiProductDetailModal from '@/app/components/ai-search/AiProductDetailModal';
@@ -19,6 +19,8 @@ import '@/app/components/ai-search/ai-search.css';
 // ✨ 이모지는 입력창 앞 AiSparkle 아이콘으로 옮겼습니다 (기기마다 이모지 모양이 달라 싸 보였음)
 const PLACEHOLDER = "AI 비서에게 물어보세요! '여름 바닷가에서 입기 좋은 시원한 5만원대 원피스 찾아줘'";
 // 휴대폰에서도 잘리지 않게 짧게 (없으면 그냥 보내도 됨)
+// 첫 화면(장면 카드 안)은 입력칸이 좁아 짧게
+const PLACEHOLDER_SCENE = "무엇이든 물어보세요 · 예: 5만원대 여름 원피스";
 const PLACEHOLDER_WITH_IMAGE = "덧붙일 말 (예: 3천엔 이하로)";
 
 type Turn =
@@ -91,6 +93,7 @@ export default function AiSearchChat() {
   const router = useRouter();
   const [mallType, setMallType] = useState<MallType>('integrated');
   const [input, setInput] = useState('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   // 📷 사진 검색: 첨부한 사진(긴 변 768px 로 줄인 것)과 안내 문구
   const [image, setImage] = useState<PreparedImage | null>(null);
   const [imageNotice, setImageNotice] = useState<string | null>(null);
@@ -117,7 +120,7 @@ export default function AiSearchChat() {
     const onDown = (e: PointerEvent) => {
       if (!photoMenuRef.current?.contains(e.target as Node)) setPhotoMenu(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setPhotoMenu(false);
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setPhotoMenu(false); };
     document.addEventListener('pointerdown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
@@ -160,6 +163,16 @@ export default function AiSearchChat() {
     }
   };
 
+  // ⏹ '정지'로 멈춘 검색의 답변 칸 id — 결과 대신 "멈췄어요" 안내를 띄우려고 기억합니다
+  const stoppedRef = useRef<number | null>(null);
+  const activeBotRef = useRef<number | null>(null);
+  const stopSearch = () => {
+    if (!loading) return;
+    stoppedRef.current = activeBotRef.current;
+    // 정지하면 처음 화면(장면 카드)으로 돌아갑니다 — goHome 이 진행 중인 검색도 끊습니다
+    goHome();
+  };
+
   /** @param img 보낼 사진. 생략하면 지금 첨부된 사진, null 이면 사진 없이 */
   const ask = async (text: string, img: PreparedImage | null = image) => {
     const q = text.trim();
@@ -169,6 +182,8 @@ export default function AiSearchChat() {
     setImageNotice(null);
     const userId = ++idRef.current;
     const botId = ++idRef.current;
+    activeBotRef.current = botId;
+    stoppedRef.current = null;
     setTurns(t => [
       ...t,
       { id: userId, role: 'user', text: q, image: img?.dataUrl },
@@ -189,11 +204,14 @@ export default function AiSearchChat() {
         patchProgress(p => ({ ...p, byMall: { ...p.byMall, [ev.mall]: { items: ev.items, done: ev.done, error: ev.error } } }));
       }
     }, img);
+    const stopped = stoppedRef.current === botId;
     setTurns(t =>
       t.map(turn =>
         turn.id !== botId
           ? turn
-          : result
+          : stopped
+            ? { id: botId, role: 'bot', text: '검색을 멈췄어요. 다른 질문으로 다시 찾아볼까요?' }
+            : result
             ? { id: botId, role: 'bot', text: result.message, result }
             : { id: botId, role: 'bot', text: errorMessage || '앗, 검색 중에 문제가 생겼어요. 잠시 후 다시 물어봐 주세요.', error: true },
       ),
@@ -239,20 +257,235 @@ export default function AiSearchChat() {
 
   const empty = turns.length === 0;
 
+  /** 🏠 대화 중 위쪽 '미쿠짱 AI 쇼핑 비서'를 누르면 처음 화면(장면 카드)으로 — 고른 쇼핑몰은 그대로 둡니다 */
+  const goHome = () => {
+    cancel();
+    setTurns([]);
+    setSelected(null);
+    setInput('');
+    setImage(null);
+    setImageNotice(null);
+    if (params.get('q')) router.replace('/ai-search', { scroll: false });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const homeLink = empty
+    ? {}
+    : {
+        role: 'button' as const,
+        tabIndex: 0,
+        title: '처음 화면으로',
+        className: 'ais-home-link',
+        onClick: goHome,
+        onKeyDown: (e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
+        },
+      };
+
+  // 🖱 PC 첫 화면: 들어오자마자 입력창에 커서를 둬서 "여기에 바로 물어보면 된다"는 걸 보여 줍니다.
+  //    (휴대폰은 키보드가 갑자기 올라오면 화면을 가리므로 하지 않음)
+  useEffect(() => {
+    if (!empty || params.get('q')) return;
+    if (window.matchMedia('(pointer: fine)').matches) inputRef.current?.focus({ preventScroll: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 입력창 — 첫 화면에서는 장면 카드 안, 대화 중에는 화면 아래(sticky)에 그립니다.
+  const hint = (
+  <>
+    {/* 입력창 아래 안내 — 이모지 대신 선 아이콘 + 두 항목을 점으로 구분 (기기마다 이모지 모양이 달라 싸 보였음) */}
+    <p className="ais-hint">
+      <span className="ais-hint-item is-accent">
+        <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden>
+          <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8A1.5 1.5 0 0 1 10.5 3.5h3a1.5 1.5 0 0 1 1.2.7L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" stroke="currentColor" strokeWidth="2" fill="none" strokeLinejoin="round" />
+          <circle cx="12" cy="12.5" r="3.2" stroke="currentColor" strokeWidth="2" fill="none" />
+        </svg>
+        사진을 올리면 <b>사진 속 상품</b>을 찾아 드려요
+      </span>
+    </p>
+  </>
+  );
+
+  const composer = (
+  <form
+    className={`ais-composer-wrap notranslate${empty ? ' is-empty' : ''}${dragOver ? ' is-drag' : ''}`}
+    translate="no"
+    onSubmit={e => {
+      e.preventDefault();
+      void ask(input);
+    }}
+    // 📷 PC: 사진을 입력창 위로 끌어다 놓아도 첨부됩니다
+    onDragOver={e => {
+      if (Array.from(e.dataTransfer.items).some(i => i.kind === 'file')) {
+        e.preventDefault();
+        setDragOver(true);
+      }
+    }}
+    onDragLeave={() => setDragOver(false)}
+    onDrop={e => {
+      const file = firstImageFile(e.dataTransfer.files);
+      setDragOver(false);
+      if (file) {
+        e.preventDefault();
+        void attachImage(file);
+      }
+    }}
+  >
+    {(image || preparing || imageNotice || photoHint) && (
+      <div className="ais-attach">
+        {photoHint && !image && !preparing && (
+          <span className="ais-attach-hint">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden>
+              <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8A1.5 1.5 0 0 1 10.5 3.5h3a1.5 1.5 0 0 1 1.2.7L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" stroke="currentColor" strokeWidth="2" fill="none" strokeLinejoin="round" />
+              <circle cx="12" cy="12.5" r="3.2" stroke="currentColor" strokeWidth="2" fill="none" />
+            </svg>
+            카메라 버튼을 눌러 상품 사진을 찍거나 앨범에서 골라 주세요
+          </span>
+        )}
+        {preparing && <span className="ais-attach-loading"><span className="ais-send-spin" aria-hidden /> 사진 준비 중…</span>}
+        {image && (
+          <div className="ais-attach-chip">
+            <img src={image.dataUrl} alt="첨부한 사진" />
+            <span>이 사진 속 상품을 찾아 드려요</span>
+            <button type="button" className="ais-attach-x" onClick={() => setImage(null)} aria-label="사진 빼기">×</button>
+          </div>
+        )}
+        {imageNotice && <span className="ais-attach-notice">{imageNotice}</span>}
+      </div>
+    )}
+    <div className="ais-composer">
+      {/* 첫 화면: 📷 버튼 위에 걸친 말풍선 — 사진 검색이 된다는 걸 버튼 가까이에서 알려 줍니다 */}
+      {empty && !image && (
+        <span className="ais-photo-badge" aria-hidden>
+          <svg viewBox="0 0 24 24" width="12" height="12">
+            <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8A1.5 1.5 0 0 1 10.5 3.5h3a1.5 1.5 0 0 1 1.2.7L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinejoin="round" />
+            <circle cx="12" cy="12.5" r="3.2" stroke="currentColor" strokeWidth="2.2" fill="none" />
+          </svg>
+          사진을 올리면 <b>사진 속 상품</b>을 찾아 드려요
+        </span>
+      )}
+      <span className="ais-composer-icon"><AiSparkle size={22} /></span>
+      <textarea
+        ref={inputRef}
+        rows={1}
+        value={input}
+        maxLength={200}
+        placeholder={image ? PLACEHOLDER_WITH_IMAGE : empty ? PLACEHOLDER_SCENE : PLACEHOLDER}
+        aria-label="AI 비서에게 질문"
+        onChange={e => setInput(e.target.value)}
+        // 📷 캡처한 사진을 Ctrl+V 로 붙여넣어도 첨부됩니다
+        onPaste={e => {
+          const file = firstImageFile(e.clipboardData?.files);
+          if (file) {
+            e.preventDefault();
+            void attachImage(file);
+          }
+        }}
+        onKeyDown={e => {
+          // Enter = 보내기, Shift+Enter = 줄바꿈 (한글 조합 중에는 보내지 않음)
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            void ask(input);
+          }
+        }}
+      />
+      {/* 📷 사진으로 찾기 — 휴대폰은 [사진 촬영] / [앨범에서 가져오기] 메뉴, PC 는 바로 파일 선택 */}
+      <div className="ais-camera-wrap" ref={photoMenuRef}>
+        <button
+          type="button"
+          className={`ais-camera${image ? ' is-on' : ''}${photoHint && !image ? ' is-hint' : ''}${photoMenu ? ' is-open' : ''}`}
+          onClick={() => (isTouch ? setPhotoMenu(v => !v) : fileRef.current?.click())}
+          disabled={preparing}
+          aria-label="사진으로 찾기"
+          aria-haspopup={isTouch ? 'menu' : undefined}
+          aria-expanded={isTouch ? photoMenu : undefined}
+          title="사진으로 찾기"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+            <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8A1.5 1.5 0 0 1 10.5 3.5h3a1.5 1.5 0 0 1 1.2.7L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
+            <circle cx="12" cy="12.5" r="3.4" stroke="currentColor" strokeWidth="1.8" fill="none" />
+          </svg>
+        </button>
+        {photoMenu && (
+          <div className="ais-photo-menu" role="menu">
+            <button type="button" role="menuitem" onClick={() => pickPhoto('camera')}>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+                <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8A1.5 1.5 0 0 1 10.5 3.5h3a1.5 1.5 0 0 1 1.2.7L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
+                <circle cx="12" cy="12.5" r="3.4" stroke="currentColor" strokeWidth="1.8" fill="none" />
+              </svg>
+              <span><b>사진 촬영</b><small>카메라로 바로 찍기</small></span>
+            </button>
+            <button type="button" role="menuitem" onClick={() => pickPhoto('album')}>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+                <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.8" fill="none" />
+                <circle cx="9" cy="10" r="1.8" fill="currentColor" />
+                <path d="M4 17l5-4.5 3.5 3 3-2.5L20 17" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
+              </svg>
+              <span><b>앨범에서 가져오기</b><small>저장된 사진·캡처 고르기</small></span>
+            </button>
+          </div>
+        )}
+      </div>
+      {/* 앨범·파일 (PC 는 이것만 씀) */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={e => {
+          void attachImage(e.target.files?.[0] ?? null);
+          e.target.value = ''; // 같은 사진을 다시 골라도 반응하도록
+        }}
+      />
+      {/* 촬영 — capture 가 있으면 휴대폰이 카메라를 바로 엽니다 */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={e => {
+          void attachImage(e.target.files?.[0] ?? null);
+          e.target.value = '';
+        }}
+      />
+      {loading ? (
+        // ⏹ 찾는 중에는 '정지' 버튼 — 누르면 진행 중인 검색을 끊습니다
+        <button className="ais-send is-stop" type="button" onClick={stopSearch} aria-label="검색 멈추기">
+          <span className="ais-stop-ico" aria-hidden>
+            <span className="ais-send-spin" />
+            <i />
+          </span>
+          <span>정지</span>
+        </button>
+      ) : (
+        <button className="ais-send" type="submit" disabled={preparing || (!input.trim() && !image)} aria-label="검색하기">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+            <path d="M12 19V5M12 5l-6 6M12 5l6 6" stroke="currentColor" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>검색하기</span>
+        </button>
+      )}
+    </div>
+    {!empty && hint}
+  </form>
+  );
+
   return (
     <div className={`ais-root ais-page${empty ? ' is-empty' : ''}`}>
       <div className="ais-page-inner">
         {/* 첫 화면은 크게, 대화가 시작되면 결과가 잘 보이도록 머리말을 작게 줄입니다 */}
         <JaKoTranslate />
-        <header className={`ais-hero notranslate${empty ? '' : ' is-compact'}`} translate="no">
+        {/* 첫 화면: '홀로그램 속 미쿠짱' 장면(ai-shopping-hero.webp)을 배경으로 깔고 왼쪽에 제목·몰 탭.
+            대화가 시작되면 장면은 접고 작은 머리말(is-compact)로 바뀝니다. */}
+        <header className={`ais-hero notranslate${empty ? ' has-scene' : ' is-compact'}`} translate="no">
           {/* 첫 화면은 크게(은은한 후광·반짝임), 대화 중에는 제목 옆 작은 마크로 */}
-          <div className="ais-hero-mark">
+          <div {...homeLink} className={`ais-hero-mark${empty ? '' : ' ais-home-link'}`}>
             <AiBotMark size={empty ? 80 : 40} animated={empty} />
           </div>
           {empty && (
             <span className="ais-eyebrow"><AiSparkle size={12} /> MIKUCHAN AI CONCIERGE</span>
           )}
-          <h1>미쿠짱 <span className="ais-grad-text">AI</span> 쇼핑 비서</h1>
+          <h1 {...homeLink}>미쿠짱 <span className="ais-grad-text">AI</span> 쇼핑 비서</h1>
           <p>메루카리 · 라쿠텐 · 야후 쇼핑 · 야후 옥션을 한 번에 찾아 드려요. 한국어로 편하게 물어보세요!</p>
 
           {/* 쇼핑몰 선택: 하나의 알약 안에 나란히 놓인 세그먼트. 각 몰은 실제 로고로 구분합니다. */}
@@ -283,6 +516,25 @@ export default function AiSearchChat() {
             </div>
           </div>
 
+          {/* 🔎 첫 화면: 검색창을 장면 카드 안(쇼핑몰 탭 바로 아래)에 둡니다 — "여기에 물어보면 된다"가 한눈에 보이도록 */}
+          {empty && composer}
+
+          {/* 첫 화면: 예시 질문을 검색창 바로 아래(장면 카드 안)에 — 눌러서 바로 검색 */}
+          {empty && tags.length > 0 && (
+            <div className="ais-suggest is-in-hero notranslate" translate="no">
+              <span className="ais-suggest-label">
+                <AiSparkle size={12} />
+                이렇게 물어보세요
+              </span>
+              <div className="ais-tags">
+                {tags.map(tag => (
+                  <button key={tag} type="button" className="ais-tag" onClick={() => ask(tag, null)}>
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </header>
 
         <section className="ais-thread" aria-live="polite">
@@ -322,183 +574,9 @@ export default function AiSearchChat() {
           <div ref={bottomRef} />
         </section>
 
-      {/* 입력창: 첫 화면에선 머리말 바로 아래(가운데), 대화 중에는 화면 아래에 붙습니다(sticky).
-          예전엔 position: fixed 라 페이지 끝의 푸터(사업자 정보)를 덮었습니다. */}
-      <form
-        className={`ais-composer-wrap notranslate${empty ? ' is-empty' : ''}${dragOver ? ' is-drag' : ''}`}
-        translate="no"
-        onSubmit={e => {
-          e.preventDefault();
-          void ask(input);
-        }}
-        // 📷 PC: 사진을 입력창 위로 끌어다 놓아도 첨부됩니다
-        onDragOver={e => {
-          if (Array.from(e.dataTransfer.items).some(i => i.kind === 'file')) {
-            e.preventDefault();
-            setDragOver(true);
-          }
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={e => {
-          const file = firstImageFile(e.dataTransfer.files);
-          setDragOver(false);
-          if (file) {
-            e.preventDefault();
-            void attachImage(file);
-          }
-        }}
-      >
-        {(image || preparing || imageNotice || photoHint) && (
-          <div className="ais-attach">
-            {photoHint && !image && !preparing && (
-              <span className="ais-attach-hint">
-                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden>
-                  <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8A1.5 1.5 0 0 1 10.5 3.5h3a1.5 1.5 0 0 1 1.2.7L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" stroke="currentColor" strokeWidth="2" fill="none" strokeLinejoin="round" />
-                  <circle cx="12" cy="12.5" r="3.2" stroke="currentColor" strokeWidth="2" fill="none" />
-                </svg>
-                카메라 버튼을 눌러 상품 사진을 찍거나 앨범에서 골라 주세요
-              </span>
-            )}
-            {preparing && <span className="ais-attach-loading"><span className="ais-send-spin" aria-hidden /> 사진 준비 중…</span>}
-            {image && (
-              <div className="ais-attach-chip">
-                <img src={image.dataUrl} alt="첨부한 사진" />
-                <span>이 사진 속 상품을 찾아 드려요</span>
-                <button type="button" className="ais-attach-x" onClick={() => setImage(null)} aria-label="사진 빼기">×</button>
-              </div>
-            )}
-            {imageNotice && <span className="ais-attach-notice">{imageNotice}</span>}
-          </div>
-        )}
-        <div className="ais-composer">
-          <span className="ais-composer-icon"><AiSparkle size={22} /></span>
-          <textarea
-            rows={1}
-            value={input}
-            maxLength={200}
-            placeholder={image ? PLACEHOLDER_WITH_IMAGE : PLACEHOLDER}
-            aria-label="AI 비서에게 질문"
-            onChange={e => setInput(e.target.value)}
-            // 📷 캡처한 사진을 Ctrl+V 로 붙여넣어도 첨부됩니다
-            onPaste={e => {
-              const file = firstImageFile(e.clipboardData?.files);
-              if (file) {
-                e.preventDefault();
-                void attachImage(file);
-              }
-            }}
-            onKeyDown={e => {
-              // Enter = 보내기, Shift+Enter = 줄바꿈 (한글 조합 중에는 보내지 않음)
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                void ask(input);
-              }
-            }}
-          />
-          {/* 📷 사진으로 찾기 — 휴대폰은 [사진 촬영] / [앨범에서 가져오기] 메뉴, PC 는 바로 파일 선택 */}
-          <div className="ais-camera-wrap" ref={photoMenuRef}>
-            <button
-              type="button"
-              className={`ais-camera${image ? ' is-on' : ''}${photoHint && !image ? ' is-hint' : ''}${photoMenu ? ' is-open' : ''}`}
-              onClick={() => (isTouch ? setPhotoMenu(v => !v) : fileRef.current?.click())}
-              disabled={loading || preparing}
-              aria-label="사진으로 찾기"
-              aria-haspopup={isTouch ? 'menu' : undefined}
-              aria-expanded={isTouch ? photoMenu : undefined}
-              title="사진으로 찾기"
-            >
-              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
-                <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8A1.5 1.5 0 0 1 10.5 3.5h3a1.5 1.5 0 0 1 1.2.7L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
-                <circle cx="12" cy="12.5" r="3.4" stroke="currentColor" strokeWidth="1.8" fill="none" />
-              </svg>
-            </button>
-            {photoMenu && (
-              <div className="ais-photo-menu" role="menu">
-                <button type="button" role="menuitem" onClick={() => pickPhoto('camera')}>
-                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
-                    <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8A1.5 1.5 0 0 1 10.5 3.5h3a1.5 1.5 0 0 1 1.2.7L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
-                    <circle cx="12" cy="12.5" r="3.4" stroke="currentColor" strokeWidth="1.8" fill="none" />
-                  </svg>
-                  <span><b>사진 촬영</b><small>카메라로 바로 찍기</small></span>
-                </button>
-                <button type="button" role="menuitem" onClick={() => pickPhoto('album')}>
-                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
-                    <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.8" fill="none" />
-                    <circle cx="9" cy="10" r="1.8" fill="currentColor" />
-                    <path d="M4 17l5-4.5 3.5 3 3-2.5L20 17" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
-                  </svg>
-                  <span><b>앨범에서 가져오기</b><small>저장된 사진·캡처 고르기</small></span>
-                </button>
-              </div>
-            )}
-          </div>
-          {/* 앨범·파일 (PC 는 이것만 씀) */}
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={e => {
-              void attachImage(e.target.files?.[0] ?? null);
-              e.target.value = ''; // 같은 사진을 다시 골라도 반응하도록
-            }}
-          />
-          {/* 촬영 — capture 가 있으면 휴대폰이 카메라를 바로 엽니다 */}
-          <input
-            ref={cameraRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
-            onChange={e => {
-              void attachImage(e.target.files?.[0] ?? null);
-              e.target.value = '';
-            }}
-          />
-          <button className="ais-send" type="submit" disabled={loading || preparing || (!input.trim() && !image)} aria-label="보내기">
-            {loading ? (
-              <span className="ais-send-spin" aria-hidden />
-            ) : (
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
-                <path d="M12 19V5M12 5l-6 6M12 5l6 6" stroke="currentColor" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
-            <span>{loading ? '찾는 중' : '보내기'}</span>
-          </button>
-        </div>
-        {/* 입력창 아래 안내 — 이모지 대신 선 아이콘 + 두 항목을 점으로 구분 (기기마다 이모지 모양이 달라 싸 보였음) */}
-        <p className="ais-hint">
-          <span className="ais-hint-item is-accent">
-            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden>
-              <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.2-1.8A1.5 1.5 0 0 1 10.5 3.5h3a1.5 1.5 0 0 1 1.2.7L15.9 6h1.6A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" stroke="currentColor" strokeWidth="2" fill="none" strokeLinejoin="round" />
-              <circle cx="12" cy="12.5" r="3.2" stroke="currentColor" strokeWidth="2" fill="none" />
-            </svg>
-            사진을 올리면 <b>사진 속 상품</b>을 찾아 드려요
-          </span>
-          <span className="ais-hint-dot" aria-hidden />
-          <span className="ais-hint-item">
-            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden>
-              <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="2" fill="none" />
-              <path d="M12 11v5M12 8h.01" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            </svg>
-            가격은 판매처 기준 엔화 · 수수료·배송비 별도
-          </span>
-        </p>
-      </form>
+      {/* 입력창(대화 중): 화면 아래에 붙습니다(sticky). 첫 화면에서는 위 장면 카드 안에 들어갑니다. */}
+      {!empty && composer}
 
-        {empty && tags.length > 0 && (
-          <div className="ais-suggest notranslate" translate="no">
-            <span className="ais-suggest-label">이렇게 물어보세요</span>
-            <div className="ais-tags">
-              {tags.map(tag => (
-                <button key={tag} type="button" className="ais-tag" onClick={() => ask(tag, null)}>
-                  <AiSparkle size={12} />
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       <AiProductDetailModal product={selected} onClose={closeDetail} />
