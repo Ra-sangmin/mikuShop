@@ -144,7 +144,7 @@ interface GeminiResponse {
   embeddings?: { values: number[] }[];
 }
 
-async function callGemini(lane: Lane, path: string, body: unknown): Promise<GeminiResponse> {
+async function callGemini(lane: Lane, path: string, body: unknown, timeoutMs = TIMEOUT_MS): Promise<GeminiResponse> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new GeminiUnavailableError('GEMINI_API_KEY 가 설정되지 않았습니다.');
 
@@ -154,7 +154,7 @@ async function callGemini(lane: Lane, path: string, body: unknown): Promise<Gemi
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
     cache: 'no-store',
   });
 
@@ -187,16 +187,16 @@ async function callGemini(lane: Lane, path: string, body: unknown): Promise<Gemi
  * 모델 이름이 들어가는 호출을 감쌉니다. 404(은퇴)이고 Google 이 대체 모델을 알려 줬으면
  * 그 모델로 바꿔 딱 한 번 다시 시도합니다. 대체 모델이 없거나 또 실패하면 그대로 던집니다(→ 폴백).
  */
-async function callWithModel(lane: Lane, build: (model: string) => { path: string; body: unknown }): Promise<GeminiResponse> {
+async function callWithModel(lane: Lane, build: (model: string) => { path: string; body: unknown }, timeoutMs?: number): Promise<GeminiResponse> {
   const first = build(activeModel[lane]);
   try {
-    return await callGemini(lane, first.path, first.body);
+    return await callGemini(lane, first.path, first.body, timeoutMs);
   } catch (e) {
     if (!(e instanceof GeminiModelRetiredError) || !e.suggested || e.suggested === activeModel[lane]) throw e;
     console.warn(`🔁 [Gemini:${lane}] 모델 ${activeModel[lane]} 은퇴 → ${e.suggested} 로 전환합니다. .env 의 GEMINI_${lane === 'chat' ? 'CHAT' : 'EMBED'}_MODEL 을 ${e.suggested} 로 바꿔 주세요.`);
     activeModel[lane] = e.suggested;
     const retry = build(activeModel[lane]);
-    return callGemini(lane, retry.path, retry.body);
+    return callGemini(lane, retry.path, retry.body, timeoutMs);
   }
 }
 
@@ -304,15 +304,65 @@ export async function analyzeQueryWithGemini(query: string): Promise<RawAnalysis
     },
   }));
 
+  const parsed = parseAnalysis(data);
+  if (!parsed?.keyword_ja?.trim()) throw new Error('[Gemini:chat] keyword_ja 가 비었습니다');
+  return parsed;
+}
+
+function parseAnalysis(data: GeminiResponse): RawAnalysis {
   const text: string = data?.candidates?.[0]?.content?.parts?.map(p => p?.text ?? '').join('') ?? '';
-  let parsed: RawAnalysis;
   try {
-    parsed = JSON.parse(text);
+    return JSON.parse(text);
   } catch {
     throw new Error(`[Gemini:chat] JSON 파싱 실패: ${text.slice(0, 120)}`);
   }
-  if (!parsed?.keyword_ja?.trim()) throw new Error('[Gemini:chat] keyword_ja 가 비었습니다');
-  return parsed;
+}
+
+// ─────────────────────────────────────────────────────────────
+// 📷 사진 검색 — 사진을 보고 같은 JSON(검색 조건)을 만듭니다. 이후 흐름은 글 검색과 똑같습니다.
+// ─────────────────────────────────────────────────────────────
+
+const IMAGE_RULES = `
+
+[사진이 함께 온 경우]
+- 사진 속 '사고 싶은 상품'을 알아보고 그 상품을 일본 쇼핑몰에서 찾을 검색어를 만든다. kind 는 "natural".
+- 브랜드·캐릭터·작품명·모델명·로고가 보이면 일본에서 통용되는 표기로 keyword_ja 앞쪽에 넣는다.
+  예) 피카츄 인형 → "ピカチュウ ぬいぐるみ", 나이키 덩크 → "ナイキ ダンク"
+- 확실히 알 수 없으면 지어내지 말고 종류·색·소재 같은 일반 명칭만 쓴다. 예) "カーディガン ベージュ ニット"
+- 상품이 여러 개면 가장 크게·가운데에 있는 것 하나만 고른다.
+- 고객 글이 있으면 그 조건(가격, 제외, "더 싼 거" 등)을 함께 반영한다. 글이 없으면 가격·제외는 null / [].
+- 사진에 살 만한 상품이 없거나(풍경·사람 얼굴·문서 등) 알아볼 수 없으면 keyword_ja 와 keyword_ko 를 빈 문자열("")로 둔다.`;
+
+/** 사진에서 상품을 못 찾음 → 화면에 "사진에서 상품을 찾지 못했어요" 를 띄웁니다. */
+export class GeminiNoProductError extends Error {
+  constructor() {
+    super('[Gemini:chat] 사진에서 상품을 찾지 못함');
+    this.name = 'GeminiNoProductError';
+  }
+}
+
+/**
+ * 사진(+ 덧붙인 글)을 분석합니다. 사진은 화면에서 긴 변 768px JPEG 로 줄여 보냅니다 (토큰·업로드 절약).
+ * @throws GeminiNoProductError 사진에서 상품을 알아보지 못함
+ * @throws GeminiRateLimitError / GeminiUnavailableError / Error — 글 분석과 같음
+ */
+export async function analyzeImageWithGemini(image: { mimeType: string; data: string }, note: string): Promise<RawAnalysis> {
+  const parts: Record<string, unknown>[] = [{ inlineData: { mimeType: image.mimeType, data: image.data } }];
+  parts.push({ text: note.trim() ? `고객 글: ${note.trim().slice(0, 200)}` : '고객 글: (없음 — 사진 속 상품을 찾아 주세요)' });
+
+  // 사진은 글보다 처리 시간이 길어 타임아웃을 넉넉히 둡니다.
+  const data = await callWithModel('chat', model => ({
+    path: `models/${model}:generateContent`,
+    body: {
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT + IMAGE_RULES }] },
+      contents: [{ role: 'user', parts }],
+      generationConfig: buildGenerationConfig(model),
+    },
+  }), Math.max(TIMEOUT_MS, 15_000));
+
+  const parsed = parseAnalysis(data);
+  if (!parsed?.keyword_ja?.trim()) throw new GeminiNoProductError();
+  return { ...parsed, kind: 'natural' };
 }
 
 // ─────────────────────────────────────────────────────────────

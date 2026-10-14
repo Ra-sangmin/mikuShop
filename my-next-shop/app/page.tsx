@@ -8,7 +8,7 @@ import {
   ChatCircleDots, ShoppingCartSimple, AirplaneTilt, Receipt, Scales, Headset, ArrowRight,
   ArrowUpRight, CaretLeft, CaretRight,
   Megaphone, CreditCard, Clock, CalendarCheck, ShieldCheck, Medal, Sparkle,
-  Package, Gavel, MagnifyingGlass, Gift, Crown, LinkSimple, Storefront,
+  Package, Gavel, MagnifyingGlass, Gift, Crown, LinkSimple, Storefront, Camera,
 } from '@phosphor-icons/react';
 
 const HERO_AUTOPLAY_MS = 5000;
@@ -20,7 +20,8 @@ export const dynamic = "force-dynamic";
    캐릭터 주변에 띄웁니다. 색은 배너 포인트색(--hero-accent)을 따라갑니다.
    나중에 배너별 캐릭터 그림을 넣으면 <HeroProps /> 한 줄만 지우면 됩니다. */
 const HERO_PROPS: Record<HeroPropKind, React.ReactNode[]> = {
-  // AI 쇼핑 비서 — 대화 말풍선 · AI 반짝임 · 돋보기(검색)
+  // AI 쇼핑 비서 — 대화 말풍선 · AI 반짝임
+  // (왼쪽 가운데 돋보기 자리에는 '사진으로 검색' 칩(c4)이 들어갑니다)
   ai: [
     <svg key="chat" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
       <path d="M5 8a4 4 0 0 1 4-4h14a4 4 0 0 1 4 4v9a4 4 0 0 1-4 4h-9l-6 5v-5H9a4 4 0 0 1-4-4z" />
@@ -31,10 +32,6 @@ const HERO_PROPS: Record<HeroPropKind, React.ReactNode[]> = {
     <svg key="spark" viewBox="0 0 32 32" fill="currentColor" stroke="none">
       <path d="M14 3l2.6 7.4L24 13l-7.4 2.6L14 23l-2.6-7.4L4 13l7.4-2.6z" />
       <path d="M25 19l1.2 3.3 3.3 1.2-3.3 1.2L25 28l-1.2-3.3-3.3-1.2 3.3-1.2z" opacity=".7" />
-    </svg>,
-    <svg key="search" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-      <circle cx="14" cy="14" r="8" /><path d="M20 20l7 7" />
-      <path d="M14 10l1 2.6 2.6 1-2.6 1-1 2.6-1-2.6-2.6-1 2.6-1z" fill="currentColor" stroke="none" />
     </svg>,
   ],
   // 배송대행 — 택배 상자 · 비행기 경로 · 방울 포장재
@@ -136,16 +133,17 @@ type HeroPropKind = 'ai' | 'delivery' | 'purchase' | 'auction' | 'benefit';
 interface Banner {
   title: React.ReactNode;
   subTitle: string;
-  desc: string;
+  desc: React.ReactNode;
   image: string;
   /** 배너 주제에 맞는 주변 소품 (캐릭터 그림이 같아도 배너마다 다르게 보이도록) */
   props: HeroPropKind;
   /** 캐릭터 주변 유리 칩 문구 3개 */
-  chips: { icon: React.ReactNode; label: string }[];
+  /** isNew = 새 기능 칩 (테두리·NEW 표시로 강조) */
+  chips: { icon: React.ReactNode; label: string; isNew?: boolean }[];
   bgColor: string;   // 배경 파스텔 색
   accent: string;    // 배지 점·장식 링에 쓰는 진한 색
   primary: { label: string; href: string };
-  secondary: { label: string; href: string };
+  secondary: { label: string; href: string; icon?: React.ReactNode };
 }
 
 // 🌟 "#d27377" → "210, 115, 119"
@@ -161,16 +159,19 @@ export default function HomePage() {
     {
       title: <>이제는 <span className="hero-ai-word">AI</span> 시대<br />구매대행도 <span className="hero-ai-word">AI</span>로</>,
       subTitle: "NEW · 미쿠짱 AI 쇼핑 비서",
-      desc: "한국어로 한 문장만 말하면 메루카리·라쿠텐·야후 쇼핑·야후 옥션에서 딱 맞는 상품을 찾아 드려요.",
+      desc: <>한국어로 한 문장만 말하거나 <b className="hero-desc-em">사진 한 장만 올리면</b> 메루카리·라쿠텐·야후 쇼핑·야후 옥션에서 딱 맞는 상품을 찾아 드려요.</>,
       bgColor: "#EFE7FF", accent: "#8b5cf6", image: "/images/miku_icon/ai.png", // 파일을 넣기 전까지는 기본 그림으로 보입니다
       props: 'ai',
       chips: [
         { icon: <ChatCircleDots weight="fill" />, label: '한 문장으로 검색' },
-        { icon: <Storefront weight="fill" />, label: '4개 쇼핑몰 동시에' },
+        // 🐛 '4개 쇼핑몰 동시에' 는 길어서 오른쪽 다음 버튼(›)에 가려 잘렸습니다 → 짧게
+        { icon: <Storefront weight="fill" />, label: '4개 쇼핑몰 한 번에' },
         { icon: <Sparkle weight="fill" />, label: 'AI 추천 상품' },
+        { icon: <Camera weight="fill" />, label: '사진으로 검색', isNew: true },
       ],
       primary: { label: 'AI 비서에게 물어보기', href: '/ai-search' },
-      secondary: { label: '예시로 검색해 보기', href: '/ai-search?q=' + encodeURIComponent('여름 바닷가에서 입기 좋은 시원한 5만원대 원피스 찾아줘') },
+      // 📷 사진 검색 소개: /ai-search 의 📷 버튼을 강조해서 보여 줍니다 (파일 창 자동 열기는 브라우저가 막음)
+      secondary: { label: '사진으로 찾아보기', href: '/ai-search?photo=1', icon: <Camera weight="bold" /> },
     },
     // 1. 구매대행 (위로 올림)
     {
@@ -459,6 +460,7 @@ export default function HomePage() {
                           onDragStart={(e) => e.preventDefault()}
                           tabIndex={index === currentBanner ? 0 : -1}
                         >
+                          {banner.secondary.icon}
                           {banner.secondary.label}
                         </Link>
                       </div>
@@ -476,7 +478,7 @@ export default function HomePage() {
                       <span className="hero-sparkle s3" aria-hidden="true"><Sparkle weight="fill" /></span>
                       <HeroImage src={banner.image} />
                       {banner.chips.map((chip, ci) => (
-                        <span key={chip.label} className={`hero-chip c${ci + 1}`} aria-hidden="true"><i>{chip.icon}</i>{chip.label}</span>
+                        <span key={chip.label} className={`hero-chip c${ci + 1}${chip.isNew ? ' is-new' : ''}`} aria-hidden="true"><i>{chip.icon}</i>{chip.label}{chip.isNew && <em className="hero-chip-new">NEW</em>}</span>
                       ))}
                       {/* 🎁 배너 주제에 맞는 소품 (캐릭터 그림이 준비되면 HERO_PROPS 를 지우면 됩니다) */}
                       <HeroProps kind={banner.props} />

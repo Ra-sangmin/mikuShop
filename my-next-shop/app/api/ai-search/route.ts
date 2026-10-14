@@ -15,6 +15,21 @@ import { NextResponse, after } from 'next/server';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
 import { runAiSearch } from '@/lib/ai-search/pipeline';
 import { isMallType } from '@/lib/ai-search/types';
+import { AiSearchUserError, type SearchImage } from '@/lib/ai-search/analyze';
+
+/** 📷 사진 검색: 받을 수 있는 형식과 크기. 화면에서 긴 변 768px JPEG 로 줄여 보내므로 보통 100~200KB 입니다. */
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGE_BASE64 = 1_400_000; // ≈ 1MB
+
+function readImage(raw: unknown): SearchImage | null | 'invalid' {
+  if (raw == null) return null;
+  const img = raw as { mimeType?: unknown; data?: unknown };
+  if (typeof img.mimeType !== 'string' || typeof img.data !== 'string') return 'invalid';
+  if (!IMAGE_TYPES.includes(img.mimeType)) return 'invalid';
+  const data = img.data.replace(/^data:[^,]+,/, '');
+  if (!data || data.length > MAX_IMAGE_BASE64 || !/^[A-Za-z0-9+/=]+$/.test(data)) return 'invalid';
+  return { mimeType: img.mimeType, data };
+}
 
 /** 크롤러 라우트를 서버 안에서 부를 주소. 프록시(Nginx 등) 뒤라도 자기 자신을 직접 부르도록 합니다. */
 function internalBaseUrl(): string {
@@ -31,7 +46,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { query?: unknown; mall_type?: unknown; stream?: unknown } | null;
+  let body: { query?: unknown; mall_type?: unknown; stream?: unknown; image?: unknown } | null;
   try {
     body = await request.json();
   } catch {
@@ -40,8 +55,23 @@ export async function POST(request: Request) {
 
   const query = typeof body?.query === 'string' ? body.query.trim() : '';
   const mallType = body?.mall_type ?? 'integrated';
+  const image = readImage(body?.image);
 
-  if (!query) return NextResponse.json({ error: '검색어를 입력해 주세요.' }, { status: 400 });
+  if (image === 'invalid') {
+    return NextResponse.json({ error: '사진은 JPG·PNG·WEBP, 1MB 이하만 올릴 수 있어요.' }, { status: 400 });
+  }
+  if (image) {
+    // 📷 사진 분석은 글보다 무거워 1인당 분당 4회로 더 좁힙니다 (위의 10회와 별도로 셉니다)
+    const imgLimit = rateLimit(`ai-search-img:${clientIp(request)}`, 4, 60_000);
+    if (!imgLimit.allowed) {
+      return NextResponse.json(
+        { error: `사진 검색이 너무 잦아요. ${imgLimit.retryAfterSeconds}초 뒤에 다시 시도해 주세요.` },
+        { status: 429, headers: { 'Retry-After': String(imgLimit.retryAfterSeconds) } },
+      );
+    }
+  }
+
+  if (!query && !image) return NextResponse.json({ error: '검색어를 입력해 주세요.' }, { status: 400 });
   if (query.length > 200) return NextResponse.json({ error: '검색어는 200자 이내로 입력해 주세요.' }, { status: 400 });
   if (!isMallType(mallType)) return NextResponse.json({ error: '지원하지 않는 쇼핑몰입니다.' }, { status: 400 });
 
@@ -71,12 +101,17 @@ export async function POST(request: Request) {
         try {
           const { response, background } = await runAiSearch({
             query, mallType, internalBaseUrl: internalBaseUrl(), onEvent: send, signal: clientGone.signal,
+            image: image ?? undefined,
           });
           send({ type: 'done', response });
           resolveBg(background);
         } catch (error) {
-          console.error('❌ [AI 검색] 스트리밍 처리 실패:', error);
-          send({ type: 'error', message: '검색 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.' });
+          if (error instanceof AiSearchUserError) {
+            send({ type: 'error', message: error.message });
+          } else {
+            console.error('❌ [AI 검색] 스트리밍 처리 실패:', error);
+            send({ type: 'error', message: '검색 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.' });
+          }
           resolveBg(null);
         } finally {
           try { controller.close(); } catch { /* 이미 닫힘 */ }
@@ -93,11 +128,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { response, background } = await runAiSearch({ query, mallType, internalBaseUrl: internalBaseUrl() });
+    const { response, background } = await runAiSearch({ query, mallType, internalBaseUrl: internalBaseUrl(), image: image ?? undefined });
     // 응답을 먼저 보내고, Qdrant 색인·RDS 저장은 그 뒤에 합니다.
     after(background);
     return NextResponse.json(response);
   } catch (error) {
+    if (error instanceof AiSearchUserError) return NextResponse.json({ error: error.message }, { status: 422 });
     console.error('❌ [AI 검색] 처리 실패:', error);
     return NextResponse.json({ error: '검색 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.' }, { status: 500 });
   }

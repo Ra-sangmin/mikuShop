@@ -1548,3 +1548,29 @@ body {
   -webkit-background-clip: text; background-clip: text; color: transparent;
   text-shadow: none !important; padding: 0 2px;
 }
+
+/* ─────────── 📷 AI 배너: 사진 검색 소개 ─────────── */
+.hero-desc-em {
+  font-weight: 800; color: #6d28d9;
+  background: linear-gradient(transparent 62%, rgba(139, 92, 246, 0.18) 62%);
+}
+.hero-cta-secondary svg { font-size: 18px; flex-shrink: 0; }
+/* 새 기능 칩: 돋보기 소품이 있던 왼쪽 가운데 자리 */
+.hero-chip.c4 { top: 40%; left: -26%; animation-delay: 3.4s; }
+.hero-chip.is-new {
+  border-color: rgba(139, 92, 246, 0.35);
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.08), 0 12px 26px -14px rgba(76, 29, 149, 0.45), inset 0 1px 0 #ffffff;
+}
+.hero-chip-new {
+  margin-left: 2px; padding: 2px 6px; border-radius: 999px;
+  font-size: 9.5px; font-weight: 900; font-style: normal; letter-spacing: 0.4px; line-height: 1.2;
+  color: #ffffff; background: linear-gradient(135deg, #e3868a, #8b5cf6);
+}
+@media (max-width: 1280px) {
+  .hero-chip.c4 { left: -18%; }
+  /* 오른쪽 칩이 다음 버튼(›)에 가리지 않도록 조금 더 안쪽으로 */
+  .hero-chip.c2 { right: -2%; }
+}
+@media (max-width: 1024px) {
+  .hero-chip.c4 { left: -10%; top: 42%; }
+}

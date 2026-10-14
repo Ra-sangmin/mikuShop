@@ -9,7 +9,8 @@
 import { createTtlCache } from '@/lib/crawler/ttlCache';
 import { getTranslatedText } from '@/lib/search-utils';
 import { getBaseExchangeRate } from '@/lib/exchangeRate';
-import { ANALYSIS_VERSION, analyzeQueryWithGemini, GeminiRateLimitError, GeminiUnavailableError, RawAnalysis } from './gemini';
+import { createHash } from 'crypto';
+import { ANALYSIS_VERSION, analyzeQueryWithGemini, analyzeImageWithGemini, GeminiNoProductError, GeminiRateLimitError, GeminiUnavailableError, RawAnalysis } from './gemini';
 import { isObviouslyKeyword, parseQueryWithRegex } from './fallback';
 import type { QueryAnalysis, SearchMode, AiSearchResponse } from './types';
 
@@ -127,5 +128,62 @@ export async function analyzeQuery(query: string): Promise<AnalyzeResult> {
 
     // ⚠️ 폴백 결과는 캐시에 넣지 않습니다. 한도가 풀리면 다음 요청은 다시 AI 로 분석되어야 합니다.
     return { mode: 'fallback', fallbackReason, analysis: await analyzeWithFallback(query) };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 📷 사진 검색
+// ─────────────────────────────────────────────────────────────
+
+/** 손님에게 그대로 보여 줄 수 있는 오류 (라우터가 이 문구를 화면에 띄웁니다) */
+export class AiSearchUserError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AiSearchUserError';
+  }
+}
+
+export interface SearchImage {
+  mimeType: string;
+  /** base64 (data: 머리 없이) */
+  data: string;
+}
+
+/**
+ * 사진(+ 덧붙인 글)을 분석합니다.
+ *  - 같은 사진·같은 글이면 10분 동안 캐시 (사진 해시 기준) → 다시 눌러도 Gemini 0회
+ *  - Gemini 를 못 쓰면: 글이 있으면 글만으로 일반 검색, 글도 없으면 안내 문구로 멈춤
+ *    (사진은 AI 없이는 읽을 수 없습니다)
+ *  - 사진은 어디에도 저장하지 않습니다. 기록에는 키워드만 남깁니다.
+ */
+export async function analyzeImageQuery(image: SearchImage, note: string): Promise<AnalyzeResult> {
+  const hash = createHash('sha1').update(image.data).digest('hex');
+  const key = `${ANALYSIS_VERSION}:img:${hash}:${note.trim().toLowerCase()}`;
+  const cached = analysisCache.get(key);
+  if (cached) return cached;
+
+  try {
+    const raw = await analyzeImageWithGemini(image, note);
+    const result: AnalyzeResult = { mode: 'ai', analysis: { ...(await fromGemini(raw)), fromImage: true } };
+    analysisCache.set(key, result);
+    return result;
+  } catch (error) {
+    if (error instanceof GeminiNoProductError) {
+      throw new AiSearchUserError('사진에서 상품을 찾지 못했어요. 상품이 크게 보이는 사진으로 다시 올리거나, 글로 물어봐 주세요.');
+    }
+    const fallbackReason: AnalyzeResult['fallbackReason'] =
+      error instanceof GeminiRateLimitError ? 'rate_limited'
+      : error instanceof GeminiUnavailableError ? 'no_api_key'
+      : 'ai_error';
+    if (fallbackReason === 'ai_error') console.error('⚠️ [AI 검색] 사진 분석 실패:', (error as Error).message);
+
+    if (note.trim()) {
+      return { mode: 'fallback', fallbackReason, analysis: await analyzeWithFallback(note) };
+    }
+    throw new AiSearchUserError(
+      fallbackReason === 'rate_limited'
+        ? '지금 AI 비서를 찾는 분이 많아 사진을 볼 수 없어요. 잠시 후 다시 시도하거나 글로 물어봐 주세요.'
+        : '사진 분석이 잠시 어려워요. 잠시 후 다시 시도하거나 글로 물어봐 주세요.',
+    );
   }
 }

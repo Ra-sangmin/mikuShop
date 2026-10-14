@@ -52,9 +52,14 @@ export function useAiSearch(mallType: MallType) {
    * 스트림을 못 쓰는 환경이면 일반 검색(search)과 같은 결과만 돌려줍니다.
    */
   const searchStream = useCallback(
-    async (query: string, onEvent: (e: AiStreamEvent) => void): Promise<AiSearchResponse | null> => {
+    async (
+      query: string,
+      onEvent: (e: AiStreamEvent) => void,
+      /** 📷 사진 검색: 긴 변 768px 로 줄인 JPEG (searchImage.ts) */
+      image?: { mimeType: string; data: string } | null,
+    ): Promise<AiSearchResponse | null> => {
       const q = query.trim();
-      if (!q) return null;
+      if (!q && !image) return null;
 
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -66,12 +71,14 @@ export function useAiSearch(mallType: MallType) {
         const res = await fetch('/api/ai-search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q, mall_type: mallType, stream: true }),
+          body: JSON.stringify({ query: q, mall_type: mallType, stream: true, ...(image ? { image: { mimeType: image.mimeType, data: image.data } } : {}) }),
           signal: controller.signal,
         });
         if (!res.ok || !res.body) {
           const data = await res.json().catch(() => null);
-          throw new Error(data?.error || '검색에 실패했어요.');
+          const message = data?.error || '검색에 실패했어요.';
+          onEvent({ type: 'error', message });
+          throw new Error(message);
         }
 
         const reader = res.body.getReader();
@@ -89,7 +96,8 @@ export function useAiSearch(mallType: MallType) {
             if (!line) continue;
             let ev: AiStreamEvent;
             try { ev = JSON.parse(line); } catch { continue; }
-            if (ev.type === 'error') throw new Error(ev.message);
+            // 오류도 화면에 알려 줍니다 (사진에서 상품을 못 찾았을 때 같은 안내 문구를 그대로 띄우려고)
+            if (ev.type === 'error') { onEvent(ev); throw new Error(ev.message); }
             if (ev.type === 'done') final = ev.response;
             onEvent(ev);
           }

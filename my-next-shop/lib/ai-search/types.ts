@@ -37,6 +37,8 @@ export interface QueryAnalysis {
   excludeJa?: string[];
   /** 화면 표시용 한국어 제외어 */
   excludeKo?: string[];
+  /** 📷 사진을 보고 만든 검색 조건이면 true (결과 머리에 '사진 검색' 표시) */
+  fromImage?: boolean;
 }
 
 /** 화면에 내려가는 상품 한 건. 4개 몰을 이 모양 하나로 맞춥니다. */

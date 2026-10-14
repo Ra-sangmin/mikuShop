@@ -41,7 +41,7 @@ export async function GET(request: Request) {
       orderBy: { _count: { query: 'desc' } },
       take: 6,
     });
-    popular = rows.map(r => r.query).filter(q => q.length <= 30);
+    popular = rows.map(r => r.query).filter(q => q.length <= 30 && !q.startsWith('[사진]'));
   } catch {
     /* 표가 아직 없거나 DB 가 바쁘면 기본 태그만 */
   }

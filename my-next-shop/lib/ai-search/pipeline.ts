@@ -10,7 +10,7 @@
 
 import prisma from '@/lib/prisma';
 import { translateBatch } from '@/lib/deepl';
-import { analyzeQuery } from './analyze';
+import { analyzeQuery, analyzeImageQuery, type SearchImage } from './analyze';
 import { embedDocuments, embedQuery, GeminiRateLimitError } from './gemini';
 import { cacheProducts, embedText, isQdrantConfigured, searchByVector } from './qdrant';
 import { mercariThumb, searchMallsLive } from './malls';
@@ -87,9 +87,12 @@ function withThumb(items: AiProduct[]): AiProduct[] {
 }
 
 export interface PipelineInput {
+  /** 검색 문장. 사진 검색이면 사진에 덧붙인 글(없으면 빈 문자열) */
   query: string;
   mallType: MallType;
   internalBaseUrl: string;
+  /** 📷 사진 검색 — 있으면 사진을 보고 검색 조건을 만듭니다 */
+  image?: SearchImage;
   /** 스트리밍: 분석·몰별 결과가 나오는 대로 알려 줍니다 (없으면 끝까지 모아서 한 번에) */
   onEvent?: (e: AiStreamEvent) => void;
   /** 손님이 페이지를 닫으면 켜지는 신호 — 메루카리·야후 옥션 크롤링을 멈춥니다 */
@@ -145,7 +148,7 @@ function buildMessage(r: Omit<AiSearchResponse, 'message' | 'tookMs'>): string {
         ? '지금 AI 비서를 찾는 분이 많아 일반 검색으로 찾아 드렸어요.'
         : 'AI 분석이 잠시 어려워 일반 검색으로 찾아 드렸어요.'
       : r.mode === 'ai'
-        ? '말씀하신 조건으로 찾아봤어요!'
+        ? (a.fromImage ? '사진 속 상품으로 찾아봤어요!' : '말씀하신 조건으로 찾아봤어요!')
         : '검색 결과예요!';
   // 화면 문구에는 일본어 검색어 대신 한국어 핵심어를 씁니다 (검색 자체는 일본어로 함)
   const kw = a.keywordKo || a.keywordJa;
@@ -153,14 +156,14 @@ function buildMessage(r: Omit<AiSearchResponse, 'message' | 'tookMs'>): string {
   return `${head} 「${kw}」${price}(으)로 ${r.items.length}개를 찾았어요.`;
 }
 
-export async function runAiSearch({ query, mallType, internalBaseUrl, onEvent, signal }: PipelineInput): Promise<PipelineOutput> {
+export async function runAiSearch({ query, mallType, internalBaseUrl, onEvent, signal, image }: PipelineInput): Promise<PipelineOutput> {
   const started = Date.now();
   const isIntegrated = mallType === 'integrated';
   const malls: Mall[] = isIntegrated ? [...MALLS] : [mallType as Mall];
   const scope = isIntegrated ? 'integrated' : 'single';
 
   // ① 분석
-  const { mode, fallbackReason, analysis } = await analyzeQuery(query);
+  const { mode, fallbackReason, analysis } = image ? await analyzeImageQuery(image, query) : await analyzeQuery(query);
   onEvent?.({ type: 'analysis', mode, fallbackReason, analysis, malls });
 
   // ② Qdrant 의미 검색 (폴백 모드면 건너뜀)
@@ -170,7 +173,8 @@ export async function runAiSearch({ query, mallType, internalBaseUrl, onEvent, s
   if (mode !== 'fallback' && isQdrantConfigured()) {
     try {
       // 원문(한국어 문장)과 일본어 키워드를 같이 넣어 의미와 단어를 모두 반영합니다 (하이브리드).
-      const vector = await embedQuery(`${query}\n${analysis.keywordJa}${analysis.category ? ` ${analysis.category}` : ''}`);
+      // 사진 검색은 문장이 없을 수 있어 한국어 핵심어로 대신합니다.
+      const vector = await embedQuery(`${query.trim() || analysis.keywordKo}\n${analysis.keywordJa}${analysis.category ? ` ${analysis.category}` : ''}`);
       queryVector = vector;
       cached = await searchByVector(vector, {
         malls,
@@ -305,7 +309,8 @@ export async function runAiSearch({ query, mallType, internalBaseUrl, onEvent, s
     }
     await upsertProductsToRds(liveItems, indexed).catch(e => console.error('❌ [AI 검색] RDS 저장 실패:', e));
     await logSearch({
-      query,
+      // 사진 검색은 '[사진]' 을 붙여 기록합니다 → 추천 태그에서 빠집니다 (사진 자체는 저장하지 않음)
+      query: image ? `[사진] ${query.trim() || analysis.keywordKo}` : query,
       mallType,
       mode,
       keywordJa: analysis.keywordJa,

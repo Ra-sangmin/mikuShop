@@ -666,3 +666,106 @@
 @media (prefers-reduced-motion: reduce) {
   .ais-progress-line, .ais-pm.is-done, .ais-progress .ais-shop-grid .ais-card-wrap, .ais-pm-spin, .ais-progress-bar i::after { animation: none; }
 }
+
+/* ─────────── 📷 사진으로 찾기 ─────────── */
+.ais-camera {
+  flex: 0 0 auto; width: 44px; height: 44px; border-radius: 14px; border: 1px solid var(--ais-line);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  background: #fff; color: var(--ais-sub); transition: color .15s, border-color .15s, background .15s;
+}
+.ais-camera:not(:disabled):hover { color: var(--ais-brand-dark); border-color: rgb(210 115 119 / .45); background: var(--ais-brand-soft); }
+.ais-camera.is-on { color: var(--ais-brand-dark); border-color: rgb(210 115 119 / .55); background: var(--ais-brand-soft); }
+.ais-camera:disabled { opacity: .5; cursor: default; }
+
+/* 첨부한 사진 미리보기 (입력창 바로 위) */
+.ais-attach { max-width: 960px; margin: 0 auto 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ais-attach-chip {
+  display: inline-flex; align-items: center; gap: 10px; padding: 6px 6px 6px 6px; border-radius: 14px;
+  background: #fff; border: 1px solid rgb(210 115 119 / .35); box-shadow: 0 6px 16px -10px rgb(15 23 42 / .25);
+  font-size: 13px; font-weight: 700; color: var(--ais-ink);
+}
+.ais-attach-chip img { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; background: #f1f5f9; }
+.ais-attach-x {
+  width: 26px; height: 26px; border-radius: 50%; border: 0; cursor: pointer; font-size: 17px; line-height: 1;
+  background: #f1f5f9; color: var(--ais-sub);
+}
+.ais-attach-x:hover { background: #e2e8f0; color: var(--ais-ink); }
+.ais-attach-loading { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ais-sub); }
+.ais-attach-loading .ais-send-spin { border-color: rgb(210 115 119 / .25); border-top-color: var(--ais-brand); }
+.ais-attach-notice { font-size: 13px; font-weight: 700; color: #b91c1c; }
+
+/* 사진을 끌어다 놓는 중 */
+.ais-composer-wrap.is-drag .ais-composer { box-shadow: 0 0 0 4px rgb(210 115 119 / .25), 0 18px 40px -20px rgb(30 20 60 / .28); }
+
+/* 대화 말풍선 안의 사진 */
+.ais-msg.user .ais-bubble.has-image { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding: 8px 8px 10px; }
+.ais-msg.user .ais-bubble.has-image > span { padding: 0 6px; }
+.ais-bubble-img { display: block; max-width: 220px; max-height: 220px; border-radius: 12px; object-fit: cover; background: #fff; }
+
+@media (max-width: 768px) {
+  .ais-camera { width: 40px; height: 40px; border-radius: 12px; }
+  .ais-bubble-img { max-width: 160px; max-height: 160px; }
+}
+
+/* ─────────── 입력창 아래 안내 (고급형) ─────────── */
+.ais-hint {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 12px;
+  max-width: 960px; margin: 10px auto 0; font-size: 12px; line-height: 1.4; color: #8b93a3; letter-spacing: -0.1px;
+}
+.ais-hint-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ais-hint-item svg { flex-shrink: 0; opacity: .75; }
+.ais-hint-item b { font-weight: 700; color: var(--ais-ink); }
+.ais-hint-item.is-accent {
+  padding: 4px 10px 4px 8px; border-radius: 999px;
+  background: linear-gradient(135deg, rgb(227 134 138 / .10), rgb(139 92 246 / .08));
+  border: 1px solid rgb(210 115 119 / .18); color: #7c5a63;
+}
+.ais-hint-item.is-accent svg { color: var(--ais-brand-dark); opacity: 1; }
+.ais-hint-item.is-accent b { color: var(--ais-brand-dark); }
+.ais-hint-dot { width: 3px; height: 3px; border-radius: 50%; background: #cbd5e1; }
+/* 휴대폰은 화면이 좁아 안내를 숨깁니다 (예전과 같음 — 위의 display:flex 가 덮어쓰지 않도록 다시 적음) */
+@media (max-width: 768px) { .ais-hint { display: none; } }
+
+/* 메인 배너 '사진으로 찾아보기'로 들어왔을 때 📷 안내 */
+.ais-attach-hint {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px;
+  font-size: 13px; font-weight: 700; color: #6d28d9;
+  background: linear-gradient(135deg, rgb(227 134 138 / .12), rgb(139 92 246 / .12));
+  border: 1px solid rgb(139 92 246 / .22);
+}
+.ais-camera.is-hint {
+  color: #fff; border-color: transparent;
+  background: linear-gradient(135deg, #e3868a, #8b5cf6);
+  animation: ais-camera-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ais-camera-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(139 92 246 / .45); }
+  50% { box-shadow: 0 0 0 8px rgb(139 92 246 / 0); }
+}
+@media (prefers-reduced-motion: reduce) { .ais-camera.is-hint { animation: none; } }
+
+/* 📷 휴대폰: [사진 촬영] / [앨범에서 가져오기] 메뉴 */
+.ais-camera-wrap { position: relative; flex: 0 0 auto; }
+.ais-camera.is-open { color: var(--ais-brand-dark); border-color: rgb(210 115 119 / .55); background: var(--ais-brand-soft); }
+.ais-photo-menu {
+  position: absolute; right: -6px; bottom: calc(100% + 10px); z-index: 60;
+  width: 228px; padding: 6px; border-radius: 16px; background: #fff;
+  border: 1px solid var(--ais-line);
+  box-shadow: 0 2px 6px rgb(15 23 42 / .06), 0 22px 44px -18px rgb(30 20 60 / .35);
+  animation: ais-menu-in .16s ease-out both;
+}
+.ais-photo-menu button {
+  width: 100%; display: flex; align-items: center; gap: 12px; padding: 11px 12px; border: 0; border-radius: 12px;
+  background: none; cursor: pointer; text-align: left; color: var(--ais-ink);
+}
+.ais-photo-menu button + button { margin-top: 2px; }
+.ais-photo-menu button:active, .ais-photo-menu button:hover { background: var(--ais-brand-soft); }
+.ais-photo-menu svg {
+  flex-shrink: 0; width: 36px; height: 36px; padding: 8px; border-radius: 11px; box-sizing: border-box;
+  color: var(--ais-brand-dark); background: linear-gradient(135deg, rgb(227 134 138 / .14), rgb(139 92 246 / .12));
+}
+.ais-photo-menu span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ais-photo-menu b { font-size: 14.5px; font-weight: 800; }
+.ais-photo-menu small { font-size: 12px; color: var(--ais-sub); }
+@keyframes ais-menu-in { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ais-photo-menu { animation: none; } }
